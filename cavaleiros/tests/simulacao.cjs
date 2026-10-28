@@ -56,7 +56,8 @@ const context = vm.createContext({ THREE, document: { createElement: el, getElem
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
     along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
-  poof: noop, ring: noop, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], blasts: [], flames: [] });
+  poof: noop, ring: noop, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], blasts: [], flames: [],
+  FX: new Proxy({}, { get: () => noop }), audio: new Proxy({}, { get: () => noop }) });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);

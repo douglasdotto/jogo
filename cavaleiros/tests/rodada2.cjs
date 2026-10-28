@@ -57,7 +57,9 @@ const context=vm.createContext({THREE,document:{createElement:el,getElementById:
   follow:new Vector3(),controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
   poof:noop,ring:noop,beam:noop,popText:noop, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
-  fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop});
+  fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
+  // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
+  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
 vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('export ',''),context);
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
@@ -66,7 +68,7 @@ vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context);
 vm.runInContext(part(source,'class Hero','// empurra unidades'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,saveAuto,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
 const t=context.t;
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
@@ -80,7 +82,7 @@ test('16 variantes, receitas e animações existentes nos GLB',()=>{
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
-    for(const clip of [v.idle,...v.attacks,'Death_A','Block_Hit','Spellcast_Raise','Cheer','Throw']) assert.ok(clips.includes(clip),v.id+': '+clip);
+    for(const clip of [v.idle,...v.attacks,'Death_A','Block_Hit',t.SKILL_MOVES[v.id][0],'Dualwield_Melee_Attack_Stab']) assert.ok(clips.includes(clip),v.id+': '+clip);
     if(v.recipe) for(const add of v.recipe.add) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
@@ -186,5 +188,30 @@ test('fase revive aliados, oferece reforço, gera chefe e termina em vitória',(
   for(const u of [...t.units])if(u.team==='skeleton')u.remove();
   Object.assign(t.game,{phase:12,state:'cleared',timer:0});t.updateGame(.1);assert.equal(t.game.over,true);
   assert.ok(elements.get('overlayText').textContent.startsWith('Vitória'));
+});
+test('manual espera o jogador; pedido sem alvo avisa e não gasta a recarga',()=>{
+  clear();context.localStorage.data={};
+  const h=new t.Hero(cfg('pyro'));assert.equal(h.auto,true);h.auto=false;h.pos.set(0,0,0);h.skillTimer=0;
+  const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,4);e.hp=1000;
+  h.busy=0;h.update(.016);assert.ok(h.skillTimer<=0);assert.ok(!h.pendingHit?.effect);
+  h.busy=0;h.pendingHit=null;assert.equal(h.requestSkill(),'ok');h.update(.016);
+  assert.ok(h.skillTimer>0);assert.ok(h.pendingHit.effect);assert.equal(h.skillMax,h.skillTimer);
+  assert.equal(h.requestSkill(),'wait');
+  e.remove();h.busy=0;h.pendingHit=null;h.skillTimer=0;assert.equal(h.requestSkill(),'ok');h.update(.016);
+  assert.ok(h.noTarget>0);assert.equal(h.wantSkill,0);assert.ok(h.skillTimer<=0);
+  h.die();assert.equal(h.requestSkill(),'off');
+});
+test('automático/manual fica salvo por variante',()=>{
+  clear();context.localStorage.data={};t.saveAuto('ninja',false);
+  assert.equal(new t.Hero(cfg('ninja')).auto,false);assert.equal(new t.Hero(cfg('cryo')).auto,true);
+  t.saveAuto('ninja',true);assert.equal(t.loadAuto('ninja'),true);
+});
+test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
+  clear();const b=new t.Hero(cfg('berserker')),a=new t.Hero(cfg('assassin'));b.pos.set(0,0,0);a.pos.set(3,0,0);
+  const e=new t.Skeleton('Warrior',1);e.spawning=false;e.pos.set(0,0,2);e.hp=1000;
+  assert.equal(b.useSkill(e),true);b.pendingHit.effect();b.pendingHit=null;assert.ok(b.furyT>0);
+  b.busy=9;b.update(.016);assert.ok(Math.abs(b.cooldown-cfg('berserker').cooldown/1.5)<1e-9);
+  assert.equal(a.useSkill(e),true);a.pendingHit.effect();assert.ok(a.pos.distanceTo(e.pos)<1.5);
+  a.pendingHit.effect();assert.ok(e.hp<1000);
 });
 console.log(results.length+' verificações passaram.');
