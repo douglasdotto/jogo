@@ -65,6 +65,8 @@ const POSTS = [[0, -1.2], [-1.7, 0], [1.7, 0], [0, 1.7]];
 const XP_LEVELS = [0, 90, 350];   // XP acumulado para Nv2 e Nv3
 
 const SKELETONS = {
+  Crossbow: { model: 'Rogue', hp: 34, dmg: 7, range: 10, speed: 0, cooldown: 2.3, weapon: 'Skeleton_Crossbow', ranged: true, attack: '2H_Ranged_Shoot' },
+  Mage: { model: 'Mage', hp: 40, dmg: 9, range: 10, speed: 0, cooldown: 2.8, weapon: 'Skeleton_Staff', ranged: true, attack: 'Spellcast_Shoot' },
   Minion:  { hp: 36, dmg: 6,  range: 1.3, speed: 1.6, cooldown: 1.4, weapon: 'Skeleton_Blade' },
   Warrior: { hp: 80, dmg: 11, range: 1.4, speed: 1.3, cooldown: 1.6, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A' },
   Rogue:   { hp: 30, dmg: 8,  range: 1.3, speed: 2.3, cooldown: 1.1, weapon: 'Skeleton_Blade', move: 'Running_C' },
@@ -351,7 +353,7 @@ const load = (file) => loader.loadAsync(`assets/${file}`);
 const assets = {};
 
 async function loadAssets() {
-  const files = [...new Set([...VARIANTS.map((h) => `${h.model}.glb`), ...CHARACTER_ASSETS.map((n) => `${n}.glb`)]), 'Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf', 'Skeleton_Quiver.gltf'];
+  const files = [...new Set([...VARIANTS.map((h) => `${h.model}.glb`), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), 'Skeleton_Mage.glb']), 'Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Crossbow.gltf', 'Skeleton_Arrow.gltf', 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
   let done = 0;
   const results = await Promise.all(files.map((f) => load(f).then((g) => {
     $('overlayText').textContent = `Carregando modelos... ${++done}/${files.length}`;
@@ -441,6 +443,7 @@ class Unit {
 
   // anda até o alvo desviando dos obstáculos que estão na frente
   moveTo(target, dt) {
+    target = world.nextWaypoint(this.pos, target);
     const dir = new THREE.Vector3().subVectors(target, this.pos).setY(0);
     const d = dir.length();
     if (d < 0.05) return;
@@ -459,7 +462,7 @@ class Unit {
     }
     dir.normalize();
     const slow = Math.min(1, d / 0.8);                        // freia chegando no ponto
-    this.vel.lerp(dir.multiplyScalar(this.speed * slow * (this.slowT > 0 ? 0.5 : 1)), Math.min(1, dt * 7));
+    this.vel.lerp(dir.multiplyScalar(this.speed * slow * (this.slowT > 0 ? 0.5 : 1) * (world.isShallow(this.pos.x, this.pos.z) ? 0.6 : 1)), Math.min(1, dt * 7));
     this.moving = true;
     this.face(tmp.copy(this.pos).add(this.vel), dt);
   }
@@ -484,6 +487,8 @@ class Unit {
 
   takeDamage(n, from, owner = null, critical = false) {
     if (this.dead || game.over) return;
+    // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
+    if (owner && !owner.ranged && owner.cfg.id !== 'viking' && owner.cfg.id !== 'iceviking' && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
     if (this.team === 'hero') {
       if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
@@ -548,8 +553,17 @@ class Unit {
     // inércia: quem não está andando vai freando; a velocidade (e o recuo) move a unidade
     if (!this.moving) this.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
     this.moving = false;
-    if (!this.dead && !game.over) this.pos.addScaledVector(this.vel, dt);
-    if (this.stats && !this.dead && !game.over) this.stats.distancia += this.vel.length() * dt;
+    if (!this.dead && !game.over) {
+      const next = this.pos.clone().addScaledVector(this.vel, dt);
+      if (world.canStep(this.pos, next)) this.pos.copy(next);
+      else this.vel.set(0, 0, 0);
+      this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
+      if (world.isShallow(this.pos.x, this.pos.z) && this.vel.lengthSq() > 0.1) {
+        this.rippleT = (this.rippleT || 0) - dt;
+        if (this.rippleT <= 0) { waterSplash(this.pos); this.rippleT = 0.45; }
+      }
+      if (this.stats) this.stats.distancia += this.vel.length() * dt;
+    }
     // "amassa" ao levar golpe e aparece com um pop (escala elástica)
     let sx = 1, sy = 1;
     if (this.squashT > 0) {
@@ -575,9 +589,9 @@ class Unit {
         const { target, effect } = this.pendingHit;
         this.pendingHit = null;
         if (effect) effect();
-        else if (this.ranged && !target.dead) fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic');
+        else if (this.ranged && !target.dead) this.team === 'skeleton' ? fireEnemyBolt(this, target) : fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic');
         else if (this.cleave) damageCleave(this, target);
-        else if (!target.dead && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos);
+        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos);
       }
     }
   }
@@ -644,7 +658,7 @@ const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 function ring(at, radius, color, life = 0.6) {
   const mesh = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }));
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.copy(at).setY(0.07);
+  mesh.position.copy(at).setY(at.y + 0.07);
   mesh.scale.setScalar(radius);
   scene.add(mesh);
   blasts.push({ mesh, t: life, life });
@@ -653,7 +667,7 @@ function ring(at, radius, color, life = 0.6) {
 function beam(start, end, color) {
   const mesh = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color, transparent: true }));
   const dir = new THREE.Vector3().subVectors(end, start);
-  mesh.position.copy(start).add(end).multiplyScalar(0.5).setY(1.3);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5).add(new THREE.Vector3(0, 1.3, 0));
   mesh.scale.y = dir.length();
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
   scene.add(mesh);
@@ -668,8 +682,8 @@ function fireBolt(from, target, kind = 'magic', angle = 0) {
     handle.position.y = -0.25;
     mesh.add(handle);
   }
-  mesh.position.copy(from.pos).setY(1.3);
-  const dir = new THREE.Vector3().subVectors(target.pos, from.pos).setY(0).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+  mesh.position.copy(from.pos).setY(from.pos.y + 1.3);
+  const dir = new THREE.Vector3().subVectors(target.pos, from.pos).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(mesh);
   bolts.push({ mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' ? 1 : from.skillPower });
@@ -682,11 +696,11 @@ function updateBolts(dt) {
     b.life -= dt;
     const piercing = b.kind === 'crossbow' || b.kind === 'ninja';
     if (piercing) {
-      const step = 18 * dt, start = b.mesh.position.clone().setY(0);
+      const step = 18 * dt, start = b.mesh.position.clone();
       b.mesh.position.addScaledVector(b.dir, step);
       for (const s of skeletonsAlive()) {
         if (s.spawning || b.hit.has(s)) continue;
-        const offset = new THREE.Vector3().subVectors(s.pos, start);
+        const offset = new THREE.Vector3().copy(s.pos).add(new THREE.Vector3(0, 1.3, 0)).sub(start);
         const along = THREE.MathUtils.clamp(offset.dot(b.dir), 0, step);
         if (offset.addScaledVector(b.dir, -along).length() > 0.45 * s.size) continue;
         heroHit(b.owner, s, b.dmg * (b.kind === 'ninja' ? 0.8 : 1) * b.power);
@@ -694,7 +708,7 @@ function updateBolts(dt) {
         if (b.kind === 'ninja') { b.life = 0; break; }
       }
     } else {
-      const goal = b.target.pos.clone().setY(1.1);
+      const goal = b.target.pos.clone().setY(b.target.pos.y + 1.1);
       const d = goal.distanceTo(b.mesh.position);
       b.mesh.position.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
       if (d <= 14 * dt + 0.25) {
@@ -704,7 +718,7 @@ function updateBolts(dt) {
         if (b.kind === 'pyro') {
           const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0xff702e, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false }));
           mesh.rotation.x = -Math.PI / 2;
-          mesh.position.copy(b.target.pos).setY(0.06);
+          mesh.position.copy(b.target.pos).setY(b.target.pos.y + 0.06);
           mesh.scale.setScalar(radius);
           for (let k = 0; k < 5; k++) {
             const flame = new THREE.Mesh(flameGeo, boltMats.pyro);
@@ -739,8 +753,44 @@ function updateBolts(dt) {
   for (let i = blasts.length - 1; i >= 0; i--) {
     const bl = blasts[i];
     bl.t -= dt;
+    if (bl.ripple) bl.mesh.scale.addScalar(dt * 1.2);
     bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
     if (bl.t <= 0) { scene.remove(bl.mesh); bl.mesh.material.dispose(); blasts.splice(i, 1); }
+  }
+}
+
+// Tiros inimigos independentes dos poderes dos heróis.
+const enemyBolts = [];
+const enemyOrbMat = new THREE.MeshBasicMaterial({ color: 0xc591ee });
+function fireEnemyBolt(from, target) {
+  const mesh = from.enemyKind === 'Crossbow' ? assets.Skeleton_Arrow.scene.clone() : new THREE.Mesh(boltGeo, enemyOrbMat);
+  mesh.position.copy(from.pos).add(new THREE.Vector3(0, 1.3, 0));
+  scene.add(mesh);
+  enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
+}
+function updateEnemyBolts(dt) {
+  if (dt <= 0) return;
+  for (let i = enemyBolts.length - 1; i >= 0; i--) {
+    const b = enemyBolts[i], goal = b.target.pos.clone().add(new THREE.Vector3(0, 1.1, 0));
+    b.life -= dt;
+    const d = b.mesh.position.distanceTo(goal);
+    if (!b.target.dead) {
+      b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), goal.clone().sub(b.mesh.position).normalize());
+      b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
+      if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos); b.life = 0; }
+    }
+    if (b.life <= 0 || b.target.dead) { scene.remove(b.mesh); enemyBolts.splice(i, 1); }
+  }
+}
+function waterSplash(at, spawn = false) {
+  ring(at.clone().setY(at.y + 0.1), spawn ? 1 : 0.45, 0xc5f2f4, spawn ? 0.7 : 0.4);
+  blasts[blasts.length - 1].ripple = true;
+  if (!spawn) return;
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(puffGeo, new THREE.MeshBasicMaterial({ color: 0xa3e4f3, transparent: true }));
+    m.position.copy(at).add(new THREE.Vector3(0, 0.15, 0)); m.scale.setScalar(0.3);
+    m.userData = { v: new THREE.Vector3((Math.random() - 0.5) * 3, 1 + Math.random(), (Math.random() - 0.5) * 3), t: 0, life: 0.6, grow: 0.3 };
+    scene.add(m); fx.push(m);
   }
 }
 
@@ -753,14 +803,14 @@ function poof(at, size = 1) {
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     const m = new THREE.Mesh(puffGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true }));
-    m.position.set(at.x + Math.cos(a) * 0.3, 0.4 + Math.random() * 0.5, at.z + Math.sin(a) * 0.3);
+    m.position.set(at.x + Math.cos(a) * 0.3, at.y + 0.4 + Math.random() * 0.5, at.z + Math.sin(a) * 0.3);
     m.userData = { v: new THREE.Vector3(Math.cos(a) * 1.8, 0.8 + Math.random(), Math.sin(a) * 1.8), t: 0, life: 0.6, grow: size };
     scene.add(m);
     fx.push(m);
   }
   for (let i = 0; i < 4; i++) {
     const m = new THREE.Mesh(starGeo, new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true }));
-    m.position.set(at.x, 1, at.z);
+    m.position.set(at.x, at.y + 1, at.z);
     m.userData = { v: new THREE.Vector3((Math.random() - 0.5) * 3, 3.5 + Math.random() * 1.5, (Math.random() - 0.5) * 3), t: 0, life: 0.85, star: true };
     scene.add(m);
     fx.push(m);
@@ -782,7 +832,7 @@ function updateFx(dt) {
 
 // texto que salta acima de uma unidade (dano, cura)
 function popText(at, text, cls) {
-  tmp.copy(at).setY(2.5).project(camera);
+  tmp.copy(at).setY(at.y + 2.5).project(camera);
   if (tmp.z > 1) return;
   const el = document.createElement('div');
   el.className = `pop ${cls}`;
@@ -1012,10 +1062,10 @@ class Hero extends Unit {
     if (this.dead || this.busy > 0 || game.over) return;
     const target = game.state === 'fight' ? nearest(this.pos, skeletonsAlive().filter((u) => !u.spawning)) : null;
     if (game.state === 'fight' && this.skillTimer <= 0 && this.useSkill(target)) return;
-    const engage = target && target.pos.distanceTo(this.post) < LEASH + this.range;
+    const engage = target && target.pos.distanceTo(this.post) < LEASH + this.range + (world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0);
     if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
-      if (d > this.range) this.moveTo(target.pos, dt);
+      if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
         const attacks = this.cfg.attacks;
@@ -1068,8 +1118,11 @@ class Skeleton extends Unit {
     const base = SKELETONS[type];
     const hpScale = (1 + (phase - 1) * 0.12) * (boss ? 9 : 1);
     const dmgScale = (1 + (phase - 1) * 0.06) * (boss ? 2.5 : 1);
-    super(assets[`Skeleton_${type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
+    super(assets[`Skeleton_${base.model || type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss;
+    this.ranged = !!base.ranged;
+    this.enemyKind = type;
+    this.attackAnim = base.attack || '1H_Melee_Attack_Chop';
     this.stunT = 0;
     this.rootT = 0;
     this.slowT = 0;
@@ -1106,6 +1159,7 @@ class Skeleton extends Unit {
     this.slowT = Math.max(0, this.slowT - dt);
     this.tauntT -= dt;
     if (this.stunT > 0) { this.pendingHit = null; this.vel.set(0, 0, 0); }
+    if (this.ranged) this.vel.set(0, 0, 0);
     this.updateCommon(dt);
     this.stars.visible = !this.dead && this.stunT > 0;
     this.stars.rotation.y += dt * 5;
@@ -1122,8 +1176,9 @@ class Skeleton extends Unit {
     const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt : nearest(this.pos, allies());
     if (target) {
       const d = target.pos.distanceTo(this.pos);
-      if (d > this.range) { if (this.rootT <= 0) this.moveTo(target.pos, dt); }
-      else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, '1H_Melee_Attack_Chop');
+      if (this.ranged) this.vel.set(0, 0, 0);
+      if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
+      else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
     }
     if (this.busy <= 0) this.locomote(this.move, 'Walking_D_Skeletons', 'Idle_Combat');
   }
@@ -1132,13 +1187,14 @@ class Skeleton extends Unit {
 // empurra unidades sobrepostas e desvia dos obstáculos
 function separate() {
   const alive = units.filter((u) => !u.dead);
+  const before = alive.map((u) => u.pos.clone());
   for (let i = 0; i < alive.length; i++) {
     for (let j = i + 1; j < alive.length; j++) {
       const a = alive[i].pos, b = alive[j].pos;
       const min = 0.45 * (alive[i].size + alive[j].size);
       const dx = b.x - a.x, dz = b.z - a.z;
       const d = Math.hypot(dx, dz);
-      if (d > 0 && d < min) {
+      if (Math.abs(a.y - b.y) < 0.85 && d > 0 && d < min) {
         const push = (min - d) / 2 / d;
         a.x -= dx * push; a.z -= dz * push;
         b.x += dx * push; b.z += dz * push;
@@ -1154,6 +1210,10 @@ function separate() {
       if (d < min) { u.pos.x = o.x + (dx / d) * min; u.pos.z = o.z + (dz / d) * min; }
     }
   }
+  alive.forEach((u, i) => {
+    if (!world.canStep(before[i], u.pos) || (u.team === 'skeleton' && u.ranged && world.groundHeight(u.pos.x, u.pos.z) < 2.95)) u.pos.copy(before[i]);
+    u.pos.y = world.groundHeight(u.pos.x, u.pos.z);
+  });
 }
 
 // ---------- fases ----------
@@ -1168,6 +1228,7 @@ function startGame() {
   evolutions.length = 0;
   pick.upgrades = [];
   pick.variants.fill(0);
+  while (enemyBolts.length) scene.remove(enemyBolts.pop().mesh);
   for (const list of [bolts, blasts, flames]) while (list.length) {
     const effect = list.pop();
     scene.remove(effect.mesh);
@@ -1197,6 +1258,8 @@ function startPhase() {
 
 function spawnSkeleton() {
   const p = game.phase;
+  const zone = world.zoneOf(p);
+  const onTop = zone?.type === 'plateau' && game.toSpawn <= 2;
   let type = 'Minion', boss = false;
   if (game.bossPending && game.toSpawn === 1) { type = 'Warrior'; boss = true; }
   else {
@@ -1204,6 +1267,7 @@ function spawnSkeleton() {
     const rogue = Math.min(0.3, 0.04 * p), warrior = Math.min(0.4, 0.06 * p);
     type = r < rogue ? 'Rogue' : r < rogue + warrior ? 'Warrior' : 'Minion';
   }
+  if (onTop) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
   const behind = p >= 4 && !boss && Math.random() < 0.25;   // nas fases mais altas, alguns vêm por trás
@@ -1212,6 +1276,12 @@ function spawnSkeleton() {
     s.pos.copy(world.along(at, (Math.random() * 2 - 1) * (ROAD - 1)));
     if (!world.obstacles.some((o) => Math.hypot(o.x - s.pos.x, o.z - s.pos.z) < o.r + 0.8)) break;
   }
+  if (zone) {
+    const points = onTop ? zone.top : zone.type === 'lake' && !boss && game.toSpawn % 3 === 0 ? zone.water : zone.ground;
+    s.pos.copy(points[game.toSpawn % points.length]);
+    if (world.isShallow(s.pos.x, s.pos.z)) waterSplash(s.pos, true);
+  }
+  s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
 }
@@ -1275,7 +1345,7 @@ function updateBars() {
   const w = innerWidth / 2, h = innerHeight / 2;
   for (const u of units) {
     if (u.dead) continue;
-    tmp.copy(u.pos).setY(2.6 * u.size).project(camera);
+    tmp.copy(u.pos).setY(u.pos.y + 2.6 * u.size).project(camera);
     const visible = tmp.z < 1;
     u.bar.style.display = visible ? '' : 'none';
     if (!visible) continue;
@@ -1292,6 +1362,7 @@ function frame() {
   for (const u of [...units]) u.update(dt);
   if (dt > 0 && !game.over) separate();
   updateBolts(dt);
+  updateEnemyBolts(dt);
   updateFx(dt);
   if (dt > 0) updateGame(dt);
   showEvolution();
