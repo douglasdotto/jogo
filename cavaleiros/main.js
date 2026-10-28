@@ -106,6 +106,9 @@ controls.maxPolarAngle = Math.PI * 0.45;
 controls.minDistance = 8;
 controls.maxDistance = 50;
 const follow = new THREE.Vector3();   // ponto que a câmera persegue
+// zoom cinematográfico: multiplica a distância escolhida pelo jogador (roda do mouse) conforme a situação
+const cam = { zoom: 1, userDist: 0, wheel: false };
+renderer.domElement.addEventListener('wheel', () => (cam.wheel = true), { passive: true });
 
 const hemi = new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8);   // sombras mais suaves
 scene.add(hemi);
@@ -2206,15 +2209,29 @@ function frame() {
   showEvolution();
   // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez
   const alive = heroes().filter((h) => !h.dead);
+  const foes = game.state === 'fight' ? skeletonsAlive().filter((s) => !s.spawning) : [];
   if (alive.length) {
     tmp.set(0, 0, 0);
     for (const h of alive) tmp.add(h.pos);
     tmp.divideScalar(alive.length).add(new THREE.Vector3(0, 0, -3));
+    // na luta o enquadramento puxa um pouco para os inimigos próximos, para mostrar os dois lados
+    const near = foes.filter((s) => s.pos.distanceTo(tmp) < 14);
+    if (near.length) {
+      const foeMid = near.reduce((v, s) => v.add(s.pos), new THREE.Vector3()).divideScalar(near.length);
+      tmp.lerp(foeMid, 0.3);
+    }
     follow.lerp(tmp, Math.min(1, real * 2));
   }
   tmp.subVectors(follow, controls.target);
   controls.target.add(tmp);
   camera.position.add(tmp);
+  // zoom cinematográfico em cima do zoom do jogador: perto na luta, longe andando, aberto com chefe
+  const wantZoom = foes.some((s) => s.boss) ? 0.95 : foes.length ? 0.78 : game.state === 'advance' ? 1.08 : 1;
+  cam.zoom += (wantZoom - cam.zoom) * Math.min(1, real * 1.5);
+  const offset = tmp.subVectors(camera.position, controls.target);
+  if (cam.userDist === 0) cam.userDist = offset.length();
+  offset.setLength(cam.userDist * cam.zoom);
+  camera.position.copy(controls.target).add(offset);
   sun.position.set(follow.x + 14, 30, follow.z + 12);
   sun.target.position.copy(follow);
   world.update(real, follow.z);
@@ -2233,6 +2250,7 @@ function frame() {
   if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
   tickHeroPanel(real);
   controls.update();
+  if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; }   // o jogador mudou o zoom
   const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
   camera.position.add(kick);
   renderer.render(scene, camera);

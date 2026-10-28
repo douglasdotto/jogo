@@ -19,6 +19,7 @@ class Vector3 {
   addScaledVector(v,k) { return this.add(v.clone().multiplyScalar(k)); }
   multiplyScalar(k) { this.x*=k; this.y*=k; this.z*=k; return this; }
   divideScalar(k) { return this.multiplyScalar(1/k); }
+  setLength(l) { const n=Math.hypot(this.x,this.y,this.z)||1; return this.multiplyScalar(l/n); }
   length() { return Math.hypot(this.x,this.y,this.z); }
   normalize() { return this.divideScalar(this.length() || 1); }
   dot(v) { return this.x*v.x+this.y*v.y+this.z*v.z; }
@@ -54,7 +55,7 @@ const context=vm.createContext({THREE,document:{createElement:el,getElementById:
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop,
   renderer:{render:noop,domElement:{addEventListener:noop}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
-  follow:new Vector3(),controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
+  follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
   poof:noop,ring:noop,beam:noop,popText:noop, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
