@@ -127,45 +127,56 @@ function showBanner(text, seconds = 2) {
 
 function setText(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 
-// tela de escolha estilo arcade: cartões com retrato, atributos e navegação pelo teclado
-const pick = { options: [], cards: [], variants: [0, 0, 0, 0], sel: 0, open: false, timer: null };
+// tela de escolha estilo arcade: grade com uma linha por classe, todas as variantes à mostra
+const pick = { options: [], cards: [], sel: 0, open: false, timer: null };
 
 function showPick(title, sub) {
   pick.mode = 'hero';
   $('banner').style.opacity = 0;   // a faixa não pode ficar embaixo do título da escolha
-  pick.options = HEROES.map((_, i) => i).filter((i) => variantsOf(i).some((v) => !isOwned(v)));
-  for (const id of pick.options) {
-    if (isOwned(variantsOf(id)[pick.variants[id]])) pick.variants[id] = variantsOf(id).findIndex((v) => !isOwned(v));
-  }
-  $('pickHint').textContent = '← → classe · ↑ ↓ variante · Enter confirmar · 1–4 escolher';
+  pick.options = HEROES.flatMap((_, classId) => variantsOf(classId));   // índice = classe * 4 + coluna
+  $('pickHint').textContent = 'Clique para escolher · setas movem · Enter confirma';
   $('pickTitle').textContent = title;
   $('pickSub').textContent = sub;
   const list = $('pickList');
   list.innerHTML = '';
-  pick.cards = pick.options.map((classId, i) => {
+  list.classList.add('grid');
+  const rows = document.createElement('div');
+  rows.className = 'pick-rows';
+  for (const hero of HEROES) {
+    const row = document.createElement('div');
+    row.className = 'pick-row';
+    row.innerHTML = `<span class="class-tag">${hero.name}</span>`;
+    rows.appendChild(row);
+  }
+  pick.cards = pick.options.map((cfg, i) => {
+    const owned = isOwned(cfg);
     const b = document.createElement('div');
-    b.className = 'card';
-    b.style.setProperty('--d', `${i * 90}ms`);
+    b.className = owned ? 'card owned' : 'card';
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-label', owned ? `${cfg.name} (já está no grupo)` : `Escolher ${cfg.name}`);
+    b.style.setProperty('--c', cfg.color[0]);
+    b.style.setProperty('--cd', cfg.color[1]);
+    b.style.setProperty('--d', `${i * 30}ms`);
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
+      <strong class="ability">${cfg.ability}</strong>${owned ? '<span class="seal">No grupo</span>' : ''}`;
+    if (!owned) b.onclick = () => confirmPick(i);
     bindCard(b, i);
-    list.appendChild(b);
+    rows.children[cfg.classId].appendChild(b);
     return b;
   });
-  pick.cards.forEach((_, i) => renderCard(i));
-  selectCard(0);
+  pick.info = document.createElement('aside');
+  pick.info.className = 'pick-info';
+  list.append(rows, pick.info);
+  selectCard(pick.options.findIndex((cfg) => !isOwned(cfg)));
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
 }
 
-function pickConfig(i) {
-  const classId = pick.options[i];
-  return variantsOf(classId)[pick.variants[classId]];
-}
-
 const isOwned = (cfg) => heroes().some((h) => h.cfg.id === cfg.id);
 
 function bindCard(b, i) {
-  b.onmouseenter = () => selectCard(i);
+  b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
   b.onpointermove = (e) => {
     const r = b.getBoundingClientRect();
     b.style.setProperty('--rx', ((0.5 - (e.clientY - r.top) / r.height) * 9) + 'deg');
@@ -175,41 +186,42 @@ function bindCard(b, i) {
   b.addEventListener('animationend', (e) => { if (e.animationName === 'rise') b.classList.add('arrived'); });
 }
 
-function renderCard(i) {
-  const cfg = pickConfig(i), b = pick.cards[i];
-  b.style.setProperty('--c', cfg.color[0]);
-  b.style.setProperty('--cd', cfg.color[1]);
+// painel de detalhes do cartão em foco: descrição, habilidade e atributos
+function renderInfo(cfg) {
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
     `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
-  b.innerHTML = `<div class="num">${i + 1}</div><span>${HEROES[cfg.classId].name}</span>
-    <button class="pick-hero" aria-label="Escolher ${cfg.name}"><div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div></button>
-    <div class="variant-nav"><button aria-label="Variante anterior">‹</button><span>${pick.variants[cfg.classId] + 1} / 4</span><button aria-label="Próxima variante">›</button></div>
-    <div class="variant-roster">${variantsOf(cfg.classId).map((v) => `<span class="${isOwned(v) ? 'owned' : ''}">${v.name}${isOwned(v) ? ' · No grupo' : ''}</span>`).join('')}</div><p>${cfg.desc}</p><strong class="ability">${cfg.ability}</strong><div class="stats">${stats}</div>`;
-  b.querySelector('.pick-hero').onclick = () => confirmPick(i);
-  const arrows = b.querySelectorAll('.variant-nav button');
-  arrows[0].onclick = () => changeVariant(i, -1);
-  arrows[1].onclick = () => changeVariant(i, 1);
+  pick.info.style.setProperty('--c', cfg.color[0]);
+  pick.info.style.setProperty('--cd', cfg.color[1]);
+  pick.info.innerHTML = `<div class="crest"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
+    <small>${HEROES[cfg.classId].name}</small><div class="ability"><b>✦ ${cfg.ability}</b>${cfg.desc}</div><div class="stats">${stats}</div>`;
 }
 
-function changeVariant(i, step) {
-  if (!pick.open) return;
-  const classId = pick.options[i];
-  if (pick.mode !== 'hero') return;
-  do { pick.variants[classId] = (pick.variants[classId] + step + 4) % 4; }
-  while (isOwned(pickConfig(i)));
-  renderCard(i);
-  selectCard(i);
+// setas na grade: ← → dentro da linha, ↑ ↓ entre linhas (coluna mais próxima), pulando quem já está no grupo
+function moveGrid(dx, dy) {
+  const free = (i) => !isOwned(pick.options[i]);
+  const r0 = Math.floor(pick.sel / 4), c0 = pick.sel % 4;
+  for (let n = 1; n < 4; n++) {
+    if (dx) {
+      const i = r0 * 4 + (c0 + dx * n + 4) % 4;
+      if (free(i)) return selectCard(i);
+    } else {
+      const r = (r0 + dy * n + 4) % 4;
+      const c = [0, 1, 2, 3].sort((a, b) => Math.abs(a - c0) - Math.abs(b - c0)).find((k) => free(r * 4 + k));
+      if (c !== undefined) return selectCard(r * 4 + c);
+    }
+  }
 }
 
 function selectCard(i) {
   pick.sel = (i + pick.cards.length) % pick.cards.length;
   pick.cards.forEach((c, k) => c.classList.toggle('sel', k === pick.sel));
+  if (pick.mode === 'hero') renderInfo(pick.options[pick.sel]);
 }
 
 function confirmPick(i) {
   if (!pick.open) return;
   if (pick.mode === 'evolution') return confirmEvolution(i);
-  const cfg = pickConfig(i);
+  const cfg = pick.options[i];
   if (isOwned(cfg) || heroes().length >= 4) return;
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
@@ -260,6 +272,7 @@ function showEvolution() {
   $('pickSub').textContent = `${cfg.names[entry.level - 1]} · Nv${entry.level} · Escolha uma melhoria`;
   $('pickHint').textContent = '← → melhoria · Enter confirmar · 1–3 escolher';
   $('pickList').innerHTML = '';
+  $('pickList').classList.remove('grid');
   pick.cards = pick.upgrades.map((option, i) => {
     const b = document.createElement('div');
     b.className = 'card evolution';
@@ -305,13 +318,15 @@ function arrangeParty() {
 
 addEventListener('keydown', (e) => {
   if (!pick.open) return;
-  if (e.key === 'ArrowLeft') selectCard(pick.sel - 1);
-  else if (e.key === 'ArrowRight') selectCard(pick.sel + 1);
-  else if (e.key === 'ArrowUp') changeVariant(pick.sel, -1);
-  else if (e.key === 'ArrowDown') changeVariant(pick.sel, 1);
+  const grid = pick.mode === 'hero';
+  if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : selectCard(pick.sel - 1);
+  else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : selectCard(pick.sel + 1);
+  else if (e.key === 'ArrowUp' && grid) moveGrid(0, -1);
+  else if (e.key === 'ArrowDown' && grid) moveGrid(0, 1);
   else if (e.key === 'Enter' || e.key === ' ') confirmPick(pick.sel);
-  else if (/^[1-4]$/.test(e.key) && +e.key <= pick.cards.length) confirmPick(+e.key - 1);
+  else if (!grid && /^[1-4]$/.test(e.key) && +e.key <= pick.cards.length) confirmPick(+e.key - 1);
   else return;
+  if (grid && e.key.startsWith('Arrow')) pick.cards[pick.sel].scrollIntoView({ block: 'nearest' });   // janelas baixas rolam a grade
   e.preventDefault();
 });
 
@@ -1232,7 +1247,6 @@ function startGame() {
   pick.open = false;
   evolutions.length = 0;
   pick.upgrades = [];
-  pick.variants.fill(0);
   while (enemyBolts.length) scene.remove(enemyBolts.pop().mesh);
   for (const list of [bolts, blasts, flames]) while (list.length) {
     const effect = list.pop();

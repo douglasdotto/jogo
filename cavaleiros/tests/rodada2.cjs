@@ -30,7 +30,8 @@ class Vector3 {
   setScalar(k) { return this.set(k,k,k); }
 }
 const noop=()=>{};
-const el=()=>({ style:{setProperty:noop}, classList:{add:noop,remove:noop,toggle:noop}, children:[],
+const el=()=>({ style:{setProperty:noop}, classList:{add:noop,remove:noop,toggle:noop}, children:[], setAttribute:noop,
+  append(...c){ this.children.push(...c); },
   appendChild(c){ this.children.push(c); }, addEventListener:noop, querySelector:()=>el(), querySelectorAll:()=>[el(),el()],
   remove:noop, firstChild:{style:{}}, innerHTML:'', textContent:'' });
 const elements=new Map();
@@ -43,14 +44,15 @@ const THREE={ Vector3, Mesh:class {constructor(){Object.assign(this,root())}}, G
   MeshBasicMaterial:class {constructor(){Object.assign(this,material())}}, MeshLambertMaterial:class {constructor(){Object.assign(this,material())}},
   AnimationMixer:class {constructor(){this.time=0}update(dt){this.time+=dt}clipAction(){return action()}stopAllAction(){}},
   AnimationClip:{findByName:(_,name)=>({name,duration:1})}, Clock:class{getDelta(){return .016}},
-  MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2 };
+  MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2, RingGeometry:class{}, DoubleSide:2 };
 const context=vm.createContext({THREE,document:{createElement:el,getElementById:(id)=>{if(!elements.has(id))elements.set(id,el());return elements.get(id)}},
   addEventListener:noop,requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
-  renderer:{render:noop}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()}},
+  newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop,
+  renderer:{render:noop,domElement:{addEventListener:noop}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()}},
   follow:new Vector3(),controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
-    tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop},
+    tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null},
   poof:noop,ring:noop,beam:noop,popText:noop, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop});
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
@@ -61,7 +63,7 @@ vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context);
 vm.runInContext(part(source,'class Hero','// empurra unidades'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,pickConfig,changeVariant,confirmPick,showEvolution,confirmEvolution,arrangeParty,damageCleave,startGame,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,damageCleave,startGame,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
 const t=context.t;
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
@@ -81,10 +83,14 @@ test('16 variantes, receitas e animações existentes nos GLB',()=>{
 });
 test('variantes repetem classe, pulam ocupadas e usam postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.ok(t.pick.options.includes(2));
-  const card=t.pick.options.indexOf(2);
-  for(let k=0;k<8;k++){t.changeVariant(card,1);assert.ok(!['pyro','arcane'].includes(t.pickConfig(card).id))}
-  assert.ok(t.pick.cards[card].innerHTML.includes('No grupo'));
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,16);
+  const at=id=>t.pick.options.findIndex(v=>v.id===id);
+  for(const id of ['pyro','arcane'])assert.ok(t.pick.cards[at(id)].innerHTML.includes('No grupo'));
+  assert.ok(!t.pick.cards[at('cryo')].innerHTML.includes('No grupo'));
+  t.confirmPick(at('pyro'));assert.equal(t.pick.open,true);
+  t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'));
+  t.moveGrid(0,1);assert.equal(t.pick.sel,at('cryo'));t.moveGrid(-1,0);assert.equal(t.pick.sel,at('necro'));
+  t.moveGrid(1,0);assert.equal(t.pick.sel,at('cryo'));
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
@@ -138,7 +144,7 @@ test('reinício limpa invocados, fila, efeitos e reabre seleção',()=>{
 test('entrada tardia recebe metade da média de XP e respeita limite de quatro',()=>{
   clear();const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('berserker'));a.xp=300;b.xp=100;
   let confirm;context.setTimeout=(fn,ms)=>{if(ms===550)confirm=fn};
-  t.showPick('','');t.confirmPick(t.pick.options.indexOf(2));assert.ok(confirm);confirm();
+  t.showPick('','');t.confirmPick(t.pick.options.findIndex(v=>v.id==='pyro'));assert.ok(confirm);confirm();
   const added=t.heroes().at(-1);assert.equal(added.xp,100);assert.equal(added.level,2);assert.equal(t.evolutions.length,1);
   t.evolutions.length=0;t.pick.open=false;t.game.paused=false;new t.Hero(cfg('assassin'));
   t.showPick('','');t.confirmPick(0);assert.equal(t.heroes().length,4);assert.equal(t.pick.open,true);
