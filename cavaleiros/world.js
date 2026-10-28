@@ -307,72 +307,127 @@ export function createWorld(scene, ROAD, PHASES) {
   }
   const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
 
-  // rochedo de pedra: anéis de contorno irregular que afinam até o topo (altura 3); a frente tem o
-  // recorte da escadaria (|x| <= 1.65, z de -9 a -3, igual à rampa da lógica)
+  // afloramento rochoso: paredes com saliências e nervuras (ruído em ângulo e altura), base larga com
+  // pedregulhos caídos, pontas de rocha na borda e uma trilha de terra entalhada na encosta.
+  // O topo onde se anda fica na altura 3 e a trilha ocupa |x| <= 1.5, z de -9 a -3 (igual à lógica).
   function rockMountain(group, gloom) {
-    const SEG = 26, rings = [[4.85, 0], [4.55, 0.8], [4.4, 1.6], [4.25, 2.35], [4.05, 2.95]];
-    const wob = rings.map((_, k) => Array.from({ length: SEG }, (_, i) => {
-      const a = (i / SEG) * Math.PI * 2;
-      return Math.sin(a * 3 + k * 0.6) * 0.3 + Math.sin(a * 7 + k) * 0.14 + range(-0.14, 0.14);
-    }));
-    const ring = rings.map(([r, y], k) => Array.from({ length: SEG }, (_, i) => {
-      const a = (i / SEG) * Math.PI * 2, rr = r + wob[k][i];
-      const v = new THREE.Vector3(Math.sin(a) * rr, y + (k > 0 && k < rings.length - 1 ? range(-0.18, 0.18) : 0), Math.cos(a) * rr);
-      if (Math.abs(v.x) <= 1.8 && v.z < -2.9) v.y = Math.min(v.y, Math.max(0, (v.z + 9) / 2) - 0.05);
-      return v;
-    }));
+    const SEG = 34, ROWS = 8, seedA = rand() * 10, seedB = rand() * 10;
+    const radiusAt = (a, t) => {   // t: 0 na base, 1 no topo
+      // a lógica trata o topo como raio 4 e contorna a ~5 m: a base não pode passar muito disso
+      const base = THREE.MathUtils.lerp(4.75, 4.1, Math.pow(t, 0.7));
+      const bulge = Math.sin(a * 3 + seedA) * 0.4 + Math.sin(a * 5 - seedB + t * 2) * 0.25 + Math.sin(a * 11 + t * 4) * 0.14;
+      const rib = Math.abs(Math.sin(a * 9 + seedB)) * 0.28;   // nervuras verticais do penhasco
+      return base + bulge * (0.55 + 0.45 * Math.sin(t * Math.PI)) - rib * t;
+    };
+    const grid = [];
+    for (let k = 0; k <= ROWS; k++) {
+      const t = k / ROWS, row = [];
+      for (let i = 0; i < SEG; i++) {
+        const a = (i / SEG) * Math.PI * 2 + (k % 2) * (Math.PI / SEG);   // linhas alternadas desencontradas
+        const r = radiusAt(a, t) + (k > 0 && k < ROWS ? range(-0.15, 0.15) : 0);
+        const v = new THREE.Vector3(Math.sin(a) * r, t * 3 - 0.25 + (k > 0 && k < ROWS ? range(-0.12, 0.12) : 0), Math.cos(a) * r);
+        if (k === ROWS) v.y = 3;
+        // recorte da trilha: a parede abre caminho até a altura da rampa
+        if (Math.abs(v.x) <= 2 && v.z < -2.8) v.y = Math.min(v.y, Math.max(-0.25, (v.z + 9) / 2 - 0.15));
+        row.push(v);
+      }
+      grid.push(row);
+    }
     const tris = [];
-    for (let k = 0; k < rings.length - 1; k++) for (let i = 0; i < SEG; i++) {
-      const j = (i + 1) % SEG, a = ring[k][i], b = ring[k][j], d = ring[k + 1][i], e = ring[k + 1][j];
+    for (let k = 0; k < ROWS; k++) for (let i = 0; i < SEG; i++) {
+      const j = (i + 1) % SEG, a = grid[k][i], b = grid[k][j], d = grid[k + 1][i], e = grid[k + 1][j];
       tris.push([a, b, d], [b, e, d]);
     }
-    const dark = new THREE.Color(0x4e4858);
-    const wall = faceted(tris, (a) => c.set(pick(stoneGrays)).multiplyScalar(0.82 + (a.y / 3) * 0.25).lerp(dark, gloom * 0.5).getHex());
-    mesh(wall, rockMat, 0, 0, 0, group);
-    // topo: leque rochoso com manchas de musgo, recortado onde chega a escadaria
-    const top = ring.at(-1).map((v) => {
-      const t = v.clone().setY(3);
-      if (Math.abs(t.x) <= 1.65 && t.z < -3) t.z = -3;
+    // estratos: faixas de pedra clara/escura conforme a altura, com variação por face
+    const bands = [0x7e7a76, 0x9a958d, 0x8b8782, 0xa8a297, 0x858a90, 0x96918a];
+    const dark = new THREE.Color(0x4a4456);
+    const wallColor = (a, b, d) => {
+      const y = (a.y + b.y + d.y) / 3;
+      return c.set(bands[Math.max(0, Math.floor((y + 0.25) / 0.55)) % bands.length]).multiplyScalar(range(0.9, 1.08)).lerp(dark, gloom * 0.5).getHex();
+    };
+    mesh(faceted(tris, wallColor), rockMat, 0, 0, 0, group);
+
+    // topo: musgo e pedra em mosaico irregular; a borda é o último anel das paredes
+    const rim = grid[ROWS].map((v) => {
+      const t = v.clone();
+      if (Math.abs(t.x) <= 1.6 && t.z < -3) t.z = -3;
       return t;
     });
-    // dois anéis internos irregulares (em vez de um leque, que fica com cara de pizza)
-    const inner = (k) => top.map((v) => v.clone().multiplyScalar(k * range(0.82, 1.15)).setY(3 + range(0, 0.1)));
-    const mid = inner(0.62), core = inner(0.28), center = new THREE.Vector3(range(-0.3, 0.3), 3.06, range(-0.3, 0.3)), capTris = [];
+    const ringIn = (k) => rim.map((v) => v.clone().multiplyScalar(k * range(0.8, 1.15)).setY(3 + range(0, 0.06)));
+    const mid = ringIn(0.6), core = ringIn(0.25), center = new THREE.Vector3(range(-0.3, 0.3), 3.04, range(-0.3, 0.3)), capTris = [];
     for (let i = 0; i < SEG; i++) {
       const j = (i + 1) % SEG;
-      capTris.push([top[i], top[j], mid[i]], [top[j], mid[j], mid[i]], [mid[i], mid[j], core[i]], [mid[j], core[j], core[i]]);
+      capTris.push([rim[i], rim[j], mid[i]], [rim[j], mid[j], mid[i]], [mid[i], mid[j], core[i]], [mid[j], core[j], core[i]]);
       if (i % 2 === 0) capTris.push([core[i], core[(i + 2) % SEG], center], [core[i], core[j], core[(i + 2) % SEG]]);
     }
-    const moss = new THREE.Color(0x86a860);
-    mesh(faceted(capTris, () => (rand() < 0.35 ? c.copy(moss) : c.set(pick(stoneGrays)).multiplyScalar(1.05)).lerp(dark, gloom * 0.45).getHex()), rockMat, 0, 0, 0, group);
+    // manchas grandes de musgo pela posição (sorteio por triângulo vira "estrela")
+    const mossA = new THREE.Color(0x8fb35a), stoneTop = new THREE.Color(0xa29d94);
+    const mossAt = (x, z) => Math.sin(x * 0.9 + seedA) + Math.sin(z * 1.1 - seedB) + Math.sin((x + z) * 0.6);
+    mesh(faceted(capTris, (a, b, d) => {
+      const x = (a.x + b.x + d.x) / 3, z = (a.z + b.z + d.z) / 3;
+      return c.copy(stoneTop).lerp(mossA, THREE.MathUtils.smoothstep(mossAt(x, z), -0.6, 0.6)).multiplyScalar(range(0.95, 1.04)).lerp(dark, gloom * 0.55).getHex();
+    }), rockMat, 0, 0, 0, group);
 
-    // escadaria de lajes de pedra no lugar da rampa
-    for (let i = 0; i < 12; i++) {
-      const zc = -9 + 0.25 + i * 0.5, h = Math.max(0.12, (zc + 0.25 + 9) / 2);
-      const step = mesh(new THREE.BoxGeometry(3.1 + range(-0.1, 0.1), h, 0.52), pick(stoneGrays), range(-0.04, 0.04), h / 2, zc, group);
-      step.rotation.y = range(-0.03, 0.03);
+    // pontas de rocha na borda (fora da trilha)
+    const shardGeo = new THREE.ConeGeometry(0.55, 1, 5);
+    for (let n = 0; n < 9; n++) {
+      const a = rand() * Math.PI * 2, r = radiusAt(a, 1) - range(0.1, 0.4);
+      const x = Math.sin(a) * r, z = Math.cos(a) * r;
+      if (Math.abs(x) < 2.6 && z < 0) continue;
+      const h = range(0.8, 2.2);
+      const s = mesh(shardGeo, pick(bands), x, 3 + h / 2 - 0.1, z, group);
+      s.scale.set(range(0.7, 1.3), h, range(0.7, 1.2));
+      s.rotation.set(range(-0.15, 0.15), rand() * 3, range(-0.15, 0.15));
     }
-    // pedras grandes margeando a escada e no pé dela
-    for (const sx of [-1, 1]) {
-      for (let z = -8.6; z < -3.2; z += 1.15) {
-        const s = range(0.55, 0.9), h = Math.max(0, (z + 9) / 2);
-        const b = mesh(boulderGeo, pick(stoneGrays), sx * (1.95 + range(0, 0.2)), h * 0.7 + s * 0.35, z, group);
-        b.scale.set(s, s * range(0.8, 1.3), s);
-        b.rotation.set(rand() * 3, rand() * 3, 0);
-      }
-      const big = mesh(boulderGeo, pick(stoneGrays), sx * 2.6, 0.45, -9.4, group);
-      big.scale.setScalar(range(1.1, 1.4));
-    }
-    // acampamento dos esqueletos no topo: pedras, ossos e estandarte roxo
-    for (const [x, z] of [[-2.4, 1.6], [2.5, 0.6], [0.6, 2.7]]) {
-      const b = mesh(boulderGeo, pick(stoneGrays), x, 3.25, z, group);
-      b.scale.setScalar(range(0.7, 1.1));
+    // pedregulhos caídos em volta da base
+    for (let n = 0; n < 22; n++) {
+      const a = rand() * Math.PI * 2, r = radiusAt(a, 0) + range(-0.2, 1.4);
+      const x = Math.sin(a) * r, z = Math.cos(a) * r;
+      if (Math.abs(x) < 2.4 && z < -2.5) continue;   // não tampa a trilha
+      const s = range(0.4, 1.3);
+      const b = mesh(boulderGeo, pick(bands), x, s * 0.25, z, group);
+      b.scale.set(s, s * range(0.6, 1), s);
       b.rotation.set(rand() * 3, rand() * 3, 0);
     }
-    mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 5), 0x4a3a32, -1.4, 4.3, 2.2, group);
-    const flag = mesh(new THREE.BoxGeometry(0.05, 0.9, 0.7), 0x5b3a7a, -1.4, 5.1, 2.6, group);
-    flag.rotation.y = 0.2;
-    for (let i = 0; i < 4; i++) mesh(new THREE.CapsuleGeometry(0.05, 0.35, 2, 5), 0xeee6d4, range(-1, 1.5), 3.1, range(-0.5, 2), group).rotation.set(Math.PI / 2, 0, rand() * 3);
+
+    // trilha de terra subindo pela encosta, com laterais de rocha até o chão
+    const path = [], pathCol = [];
+    const NZ = 10, NX = 4, W = 1.75;
+    const ph = (z) => Math.max(0, (z + 9) / 2);
+    const pt = (ix, iz) => {
+      const z = -9.4 + (iz / NZ) * 6.4, x = -W + (ix / NX) * 2 * W;
+      return new THREE.Vector3(x, ph(z) + (ix > 0 && ix < NX && iz > 0 && iz < NZ ? range(-0.04, 0.04) : 0) + 0.02, z);
+    };
+    const P = [];
+    for (let iz = 0; iz <= NZ; iz++) { P.push([]); for (let ix = 0; ix <= NX; ix++) P[iz].push(pt(ix, iz)); }
+    const dirt = [0xb08a5a, 0xa47e50, 0xbb9464, 0x9a7a52];
+    const pathTris = [];
+    for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) pathTris.push([P[iz][ix], P[iz][ix + 1], P[iz + 1][ix]], [P[iz][ix + 1], P[iz + 1][ix + 1], P[iz + 1][ix]]);
+    // laterais (saias) de rocha da trilha até o chão
+    for (const ix of [0, NX]) for (let iz = 0; iz < NZ; iz++) {
+      const a = P[iz][ix], b = P[iz + 1][ix], a0 = a.clone().setY(-0.2), b0 = b.clone().setY(-0.2);
+      pathTris.push([a0, b0, a], [b0, b, a]);
+    }
+    // rampa de pedra com uma faixa de terra no meio (só o caminho pisado é terra)
+    const isSide = (a, b, d) => Math.min(a.y, b.y, d.y) < -0.1;
+    const isPath = (a, b, d) => Math.abs((a.x + b.x + d.x) / 3) < 0.8;
+    mesh(faceted(pathTris, (a, b, d) => (!isSide(a, b, d) && isPath(a, b, d) ? c.set(pick(dirt)) : c.set(pick(bands))).lerp(dark, gloom * 0.45).getHex()), rockMat, 0, 0, 0, group);
+    // pedras grandes nas bordas da trilha quebram o contorno reto da rampa
+    for (const sx of [-1, 1]) for (let z = -9.2; z < -3.2; z += range(0.7, 1.1)) {
+      const s = range(0.5, 0.95);
+      const b = mesh(boulderGeo, pick(bands), sx * (W + range(-0.05, 0.35)), ph(z) * 0.85 + s * 0.15, z, group);
+      b.scale.set(s, s * range(0.8, 1.4), s);
+      b.rotation.set(rand() * 3, rand() * 3, 0);
+    }
+
+    // acampamento dos esqueletos no topo: ossos, fogueira apagada e estandarte roxo
+    mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 5), 0x4a3a32, -1.6, 4.3, 2, group);
+    mesh(new THREE.BoxGeometry(0.05, 0.9, 0.7), 0x5b3a7a, -1.6, 5.1, 2.4, group).rotation.y = 0.2;
+    for (let i = 0; i < 6; i++) mesh(new THREE.CapsuleGeometry(0.05, 0.35, 2, 5), 0xeee6d4, range(-1.2, 1.6), 3.08, range(-0.5, 2.2), group).rotation.set(Math.PI / 2, 0, rand() * 3);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      mesh(boulderGeo, 0x6e6a66, 1.4 + Math.cos(a) * 0.45, 3.08, 1.2 + Math.sin(a) * 0.45, group).scale.setScalar(0.25);
+    }
   }
 
   // lago cavado no chão: a água fica no nível -0.2 e o fundo (heightAt/lakeDepth) desenha a margem
