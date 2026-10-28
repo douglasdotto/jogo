@@ -25,6 +25,13 @@ const THREE={Vector3,MathUtils:{clamp:(x,a,b)=>Math.max(a,Math.min(b,x)),
   smoothstep:(x,a,b)=>{if(x<=a)return 0;if(x>=b)return 1;x=(x-a)/(b-a);return x*x*(3-2*x);}}};
 const difficulty={hp:1,dmg:1,count:1,interval:1,boss:1,heal:0.35,revive:0.4,reviveDelay:0,behind:0.25,behindFrom:4,shooters:0};
 const source=readFileSync(new URL('../world.js',import.meta.url),'utf8');
+const biomeStart=source.indexOf('const MAP_STYLES = ['),worldStart=source.indexOf('export function createWorld',biomeStart);
+if(biomeStart<0||worldStart<0)throw Error('Seleção de biomas ausente');
+const biomeApi=runInNewContext(source.slice(biomeStart,worldStart).replace('export function biomeForSeed','function biomeForSeed')+';({biomeForSeed})');
+const biomeCycle=['Pradaria','Outono','Pântano','Crepúsculo'];
+for(let seed=1;seed<=8;seed++)if(biomeApi.biomeForSeed(seed)!==biomeCycle[seed%biomeCycle.length])throw Error('Prévia de bioma diverge da semente '+seed);
+if(biomeApi.biomeForSeed(11)!=='Pradaria')throw Error('Mapa-base deixou de usar a pradaria');
+console.log('Biomas: prévia usa o mesmo ciclo determinístico da semente OK');
 const start=source.indexOf('  const zones = new Map();');
 if(start<0) throw Error('API de zonas ausente');
 const end=source.indexOf('  // ---------- rio,',start);
@@ -86,7 +93,7 @@ console.log('Movimento real: subida, descida, contorno de platôs e lagos OK');
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
 const Unit=runInNewContext(main.slice(main.indexOf('class Unit {'),main.indexOf('const skeletonsAlive ='))+';Unit',{
-  THREE,world,tmp:new Vector3(),game:{kills:0},popText:()=>{},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
+  THREE,world,tmp:new Vector3(),game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
 });
 function unit(team='hero') {
   const u=Object.create(Unit.prototype);
@@ -113,7 +120,10 @@ console.log('Combate: níveis, disparo inimigo, pausa e lentidão de 40% OK');
 const spawned=[],spawnGame={phase:3,toSpawn:2,bossPending:false};let splashes=0;
 Object.assign(world,{anchorS,along,pointAt});
 const spawn=runInNewContext(main.slice(main.indexOf('function spawnSkeleton()'),main.indexOf('function updateGame('))+';spawnSkeleton',{
-  world,game:spawnGame,ROAD:5,difficulty,waterSplash:()=>splashes++,Skeleton:class {constructor(type,phase,boss){Object.assign(this,{type,phase,boss,pos:new Vector3(),root:{rotation:{}}});spawned.push(this);}}
+  world,game:spawnGame,ROAD:5,difficulty,waterSplash:()=>splashes++,pickMonster:(_,type)=>type,waveLeader:(_,pending)=>pending?'Warrior':null,
+  linkMonsters:()=>{},units:[],heroes:()=>[],allies:()=>[],skeletonsAlive:()=>[],
+  scene:{},assets:{},ring:()=>{},beam:()=>{},poof:()=>{},popText:()=>{},showBanner:()=>{},
+  Skeleton:class {constructor(type,phase,boss){Object.assign(this,{type,phase,boss,pos:new Vector3(),root:{rotation:{}}});spawned.push(this);}}
 });
 for(const phase of [3,7,10])for(const count of [2,1]) {
   Object.assign(spawnGame,{phase,toSpawn:count});spawn();
@@ -130,15 +140,16 @@ if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alte
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};
 const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:world.zoneOf(3).top[0]}];
 const tick=runInNewContext(main.slice(main.indexOf('function updateGame('),main.indexOf('function endGame('))+';updateGame',{
-  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,showBanner:()=>{},popText:()=>{},setText:()=>{},HEROES:[{}],PHASES:12
+  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,showBanner:()=>{},popText:()=>{},setText:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12
 });
 tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador vivo');
 living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não terminou após último inimigo');
 const removed=[],enemyBolts=[{mesh:{id:'tiro'}}],resetGame={};let chose=false;
-const reset=runInNewContext(main.slice(main.indexOf('function startGame()'),main.indexOf('function startPhase()'))+';startGame',{
-  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],closeHeroPanel:()=>{},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{}}}),
+const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.indexOf('function startPhase()'))+';startGame',{
+  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
+  closeHeroPanel:()=>{},clearMonsterFx:()=>{},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
   enemyBolts,bolts:[],blasts:[],flames:[],fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
-  follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showDifficulty:()=>{chose=true;}
+  follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;}
 });
 reset();if(enemyBolts.length||removed[0]?.id!=='tiro'||resetGame.phase!==1||!chose)throw Error('Reinício deixou projétil ou não abriu escolha');
 console.log('Fases: surgimento no topo/água, chefe, último inimigo e reinício OK');

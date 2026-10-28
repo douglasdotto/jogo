@@ -538,6 +538,9 @@ const ROSTER = [['Shieldbearer', 2, 0.11, 0.025], ['Bomber', 3, 0.1, 0.025], ['G
 const GOLEM_PHASES = [4, 8];
 export function pickMonster(p, type) {
   const D = G.difficulty, variety = D.count / 1.1;
+  // Campanhas e atalhos podem começar no meio da jornada: estreias anteriores
+  // já são conhecidas e não devem ser forçadas todas na primeira onda.
+  for (const [kind, from] of ROSTER) if (p > from) mSeen.add(kind);
   for (const [kind, from] of ROSTER) if (p >= from && !mSeen.has(kind)) {
     mSeen.add(kind);
     if (p <= from + 1) G.showBanner(`Novo inimigo: ${MONSTER_TYPES[kind].name}!`, 2.5);
@@ -556,6 +559,35 @@ export function pickMonster(p, type) {
 }
 // quem fecha a onda: chefe nas fases 6 e 12, golem nas fases intermediárias
 export const waveLeader = (p, bossPending) => bossPending ? (p >= 12 ? 'Lich' : 'King') : GOLEM_PHASES.includes(p) ? 'Golem' : null;
+
+const CAMPAIGN_TACTICS = {
+  Shieldbearer: ['◈', 'Bloqueia golpes frontais; flanqueie o escudo.'],
+  Bomber: ['✹', 'Corre para explodir; elimine-o à distância ou afaste o grupo.'],
+  Ghost: ['☽', 'Atravessa a formação e persegue quem ataca de longe.'],
+  Priest: ['✚', 'Cura e revive esqueletos; tente eliminá-lo primeiro.'],
+  Golem: ['♟', 'Mini-chefe pesado; saia do círculo antes da pancada.'],
+  King: ['♜', 'Chefe de combate próximo; esquive da pancada anunciada.'],
+  Lich: ['☠', 'Chefe final com escudo, invocações e ataques marcados no chão.'],
+};
+
+/** Lista ameaças possíveis num trecho usando as mesmas fases de estreia e chefes do combate. */
+export function campaignThreats(from, to) {
+  const first = Math.max(1, Math.trunc(Number(from) || 1));
+  const last = Math.max(first, Math.trunc(Number(to) || first));
+  const found = new Map();
+  const add = (id, phase, optional = false, possible = false) => {
+    const type = MONSTER_TYPES[id];
+    const [icon, detail] = CAMPAIGN_TACTICS[id] || ['✦', 'Ameaça especial do trecho.'];
+    found.set(id, { id, name: type?.name || id, icon, detail, phase: Math.max(first, phase), optional, possible });
+  };
+
+  for (const [kind, debut] of ROSTER) if (last >= debut) add(kind, debut, false, first > debut);
+  for (const phase of GOLEM_PHASES) if (phase >= first && phase <= last) add('Golem', phase);
+  if (last >= 9 && !found.has('Golem')) add('Golem', 9, true); // só pode surgir aleatoriamente nas dificuldades altas
+  for (const phase of [6, 12]) if (phase >= first && phase <= last) add(waveLeader(phase, true), phase);
+
+  return [...found.values()].sort((a, b) => a.phase - b.phase || a.name.localeCompare(b.name, 'pt-BR'));
+}
 
 // barra grande do chefe no topo da tela
 let mBar = null;

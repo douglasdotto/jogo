@@ -1,0 +1,104 @@
+import { heroInfo, skillCooldown } from './class-info.js';
+
+// Duas técnicas complementam a habilidade assinatura de cada variante.
+// Os efeitos compartilham regras de combate, mas mantêm nomes e identidade próprios.
+const EXTRA_SKILLS = {
+  paladin: [
+    { name: 'Escudo da Luz', description: 'Protege os heróis próximos por alguns segundos.', effect: 'ward', cooldown: 18, duration: 4.5 },
+    { name: 'Renovação', description: 'Cura o grupo e explode em luz contra os inimigos ao redor.', effect: 'holy-nova', cooldown: 64, radius: 6.5, power: 2.2 },
+  ],
+  guardian: [
+    { name: 'Marca de Provocação', description: 'Atrai inimigos próximos e interrompe seus golpes.', effect: 'taunt', cooldown: 19, radius: 6, duration: 5 },
+    { name: 'Fortaleza', description: 'Cria uma proteção reforçada e chama os inimigos para si.', effect: 'bastion', cooldown: 66, radius: 7, duration: 7 },
+  ],
+  champion: [
+    { name: 'Investida', description: 'Avança contra um alvo e o golpeia com força.', effect: 'charge', cooldown: 18, power: 1.6 },
+    { name: 'Lâmina Solar', description: 'Gira em uma tempestade de cortes que empurra a horda.', effect: 'storm', cooldown: 60, radius: 6, power: 2.5, control: 'push' },
+  ],
+  king: [
+    { name: 'Ordem Real', description: 'Aumenta o dano dos heróis por vários segundos.', effect: 'rally', cooldown: 22, duration: 8, bonus: 0.25 },
+    { name: 'Julgamento Dourado', description: 'Uma onda dourada atinge todos os inimigos próximos.', effect: 'storm', cooldown: 64, radius: 7, power: 2.7, color: 0xffd84a },
+  ],
+  berserker: [
+    { name: 'Corte Sangrento', description: 'Salta sobre um inimigo e desfere um golpe devastador.', effect: 'charge', cooldown: 18, power: 1.9 },
+    { name: 'Fúria Titânica', description: 'Explode em uma onda de força ao redor do Berserker.', effect: 'storm', cooldown: 62, radius: 6, power: 2.8, control: 'push', color: 0xff4a42 },
+  ],
+  crusher: [
+    { name: 'Onda Sísmica', description: 'Abala o chão e atordoa os inimigos próximos.', effect: 'burst', cooldown: 22, radius: 4.8, power: 1.5, control: 'stun', color: 0xffb060 },
+    { name: 'Cataclismo', description: 'Uma ruptura sísmica atinge a área inteira e interrompe ataques.', effect: 'storm', cooldown: 66, radius: 7, power: 2.7, control: 'stun', color: 0xff8a30 },
+  ],
+  viking: [
+    { name: 'Lançamento Duplo', description: 'Arremessa uma sequência de machados contra o alvo.', effect: 'volley', cooldown: 20, power: 1.25, shots: 3 },
+    { name: 'Tempestade de Machados', description: 'Uma saraivada de machados busca vários inimigos.', effect: 'volley-storm', cooldown: 62, radius: 8, power: 1.7, shots: 7 },
+  ],
+  iceviking: [
+    { name: 'Avalanche', description: 'Um impacto glacial fere e desacelera um grupo.', effect: 'burst', cooldown: 23, radius: 4.5, power: 1.6, control: 'slow', color: 0x91eaff },
+    { name: 'Era Glacial', description: 'Congela uma grande área e causa dano a todos nela.', effect: 'blizzard', cooldown: 68, radius: 6.5, power: 2.2, control: 'root', color: 0x9cecff },
+  ],
+  pyro: [
+    { name: 'Onda de Brasas', description: 'Uma explosão de fogo atinge vários inimigos próximos.', effect: 'burst', cooldown: 23, radius: 5, power: 1.7, control: 'burn', color: 0xff7738 },
+    { name: 'Meteoro', description: 'Invoca um meteoro que incendeia uma grande área.', effect: 'meteor', cooldown: 66, radius: 6.5, power: 3, color: 0xff542e },
+  ],
+  arcane: [
+    { name: 'Descarga Astral', description: 'Um raio salta entre vários inimigos.', effect: 'chain', cooldown: 20, power: 1.5, jumps: 4, color: 0xb68aff },
+    { name: 'Convergência', description: 'Uma tempestade arcana atinge toda a área próxima.', effect: 'storm', cooldown: 64, radius: 7, power: 2.6, color: 0xa46cff },
+  ],
+  cryo: [
+    { name: 'Armadura de Gelo', description: 'Protege o grupo e congela quem se aproxima.', effect: 'frost-ward', cooldown: 21, radius: 4.5, duration: 5, color: 0x9deaff },
+    { name: 'Nevasca', description: 'Uma nevasca prende e fere os inimigos em grande área.', effect: 'blizzard', cooldown: 68, radius: 6.5, power: 2.1, control: 'root', color: 0x9deaff },
+  ],
+  assassin: [
+    { name: 'Dança Sombria', description: 'Desaparece e ataca o inimigo prioritário pelas costas.', effect: 'shadow', cooldown: 18, power: 2.4 },
+    { name: 'Execução', description: 'Um golpe crítico concentra todo o dano em um alvo.', effect: 'execute', cooldown: 62, power: 4.2 },
+  ],
+  crossbow: [
+    { name: 'Rajada Perfurante', description: 'Dispara uma sequência rápida de virotes.', effect: 'volley', cooldown: 20, power: 1.2, shots: 4 },
+    { name: 'Chuva de Virotes', description: 'Uma salva atinge os inimigos espalhados pela área.', effect: 'arrow-rain', cooldown: 64, radius: 8, power: 1.9, shots: 6 },
+  ],
+  ninja: [
+    { name: 'Bomba de Fumaça', description: 'Some em fumaça e atinge um alvo próximo.', effect: 'shadow', cooldown: 21, power: 1.7, color: 0x9daaff },
+    { name: 'Dança dos Fantasmas', description: 'Cortes velozes atingem todos os inimigos ao redor.', effect: 'shadow-storm', cooldown: 62, radius: 5, power: 2.3, color: 0x9daaff },
+  ],
+  necro: [
+    { name: 'Escudo Ósseo', description: 'Reveste o grupo com uma barreira de ossos.', effect: 'ward', cooldown: 24, duration: 6, color: 0x73d97e },
+    { name: 'Exército dos Mortos', description: 'Invoca quatro esqueletos para lutar ao lado do grupo.', effect: 'summon', cooldown: 70, count: 4, color: 0x73d97e },
+  ],
+  druid: [
+    { name: 'Crescimento Selvagem', description: 'Raízes prendem inimigos e curam os heróis próximos.', effect: 'roots-heal', cooldown: 23, radius: 5, power: 1.2, color: 0x80d78a },
+    { name: 'Espírito Ancestral', description: 'Uma força da floresta cura o grupo e prende os inimigos.', effect: 'nature-storm', cooldown: 68, radius: 7, power: 2, duration: 5, color: 0x80d78a },
+  ],
+  cleric: [
+    { name: 'Manto de Misericórdia', description: 'Protege os aliados próximos contra parte do dano recebido.', effect: 'ward', cooldown: 20, duration: 5.5, color: 0xffd676 },
+    { name: 'Milagre Radiante', description: 'Uma onda de luz cura o grupo e fere os inimigos próximos.', effect: 'holy-nova', cooldown: 70, radius: 7.5, power: 2.25, color: 0xffe8a3 },
+  ],
+  bard: [
+    { name: 'Refrão de Impacto', description: 'Uma batida sonora empurra os inimigos ao redor.', effect: 'burst', cooldown: 21, radius: 5, power: 1.45, control: 'push', color: 0xe9a7ff },
+    { name: 'Hino dos Campeões', description: 'Aumenta o dano de todo o grupo por vários segundos.', effect: 'rally', cooldown: 72, duration: 11, bonus: 0.3, color: 0xf2c6ff },
+  ],
+  angel: [
+    { name: 'Asas Guardiãs', description: 'Uma barreira celeste protege os aliados próximos.', effect: 'ward', cooldown: 22, duration: 5, color: 0xffe27a },
+    { name: 'Julgamento Celeste', description: 'Uma grande tempestade de luz atinge a área ao redor.', effect: 'storm', cooldown: 74, radius: 7.5, power: 2.9, color: 0xffe27a },
+  ],
+  chronist: [
+    { name: 'Fagulha do Instante', description: 'Um raio temporal salta entre vários inimigos.', effect: 'chain', cooldown: 21, power: 1.3, jumps: 4, color: 0x8feaff },
+    { name: 'Parada do Tempo', description: 'Prende e fere os inimigos em uma ampla área.', effect: 'blizzard', cooldown: 74, radius: 7, power: 1.9, duration: 3.5, control: 'root', color: 0x8feaff },
+  ],
+};
+
+export function cooldownForSkill(cfg, slot = 0, level = 1, rate = 1) {
+  if (slot === 0) return skillCooldown(cfg.id, level, rate);
+  const skill = EXTRA_SKILLS[cfg.id]?.[slot - 1];
+  if (!skill) return skillCooldown(cfg.id, level, rate);
+  const ultimate = slot === 2;
+  const reduction = ultimate ? 2 : 0.8;
+  return Math.max(ultimate ? 35 : 9, skill.cooldown - (level - 1) * reduction) * rate;
+}
+
+export function skillSetFor(cfg) {
+  const info = heroInfo(cfg);
+  const extras = EXTRA_SKILLS[cfg.id] || [];
+  return [
+    { slot: 0, name: cfg.ability, description: info.skill, effect: 'primary', ultimate: false },
+    ...extras.map((skill, index) => ({ ...skill, slot: index + 1, ultimate: index === 1 })),
+  ];
+}

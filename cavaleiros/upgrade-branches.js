@@ -1,5 +1,5 @@
 // Rotas de evolução para escolhas com estilos de jogo diferentes.
-// Cada rota pode ser escolhida novamente: os multiplicadores se acumulam por nível.
+// Cada herói pode escolher cada rota uma única vez.
 export const EVOLUTION_BRANCHES = [
   {
     id: 'damage',
@@ -29,10 +29,10 @@ const branchById = new Map(EVOLUTION_BRANCHES.map((branch) => [branch.id, branch
 /** Registra uma rota na unidade e devolve os bônus desta escolha. */
 export function applyEvolutionBranch(hero, id) {
   const branch = branchById.get(id);
-  if (!branch) return null;
+  if (!branch || hero.evolutionBranches?.[id] > 0) return null;
 
   hero.evolutionBranches ||= {};
-  hero.evolutionBranches[id] = (hero.evolutionBranches[id] || 0) + 1;
+  hero.evolutionBranches[id] = 1;
   hero.evolutionPath = id;
   return branch.bonus;
 }

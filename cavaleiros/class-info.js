@@ -1,9 +1,12 @@
 // Informações compartilhadas pela seleção e pelo painel de combate.
 export const CLASSES = [
-  { name: 'Cavaleiro', role: 'Proteção e combate próximo', summary: 'Luta na linha de frente. As variantes oferecem cura, proteção, controle ou apoio ao grupo.' },
-  { name: 'Bárbaro', role: 'Pressão e impacto', summary: 'Combina muita vida com golpes fortes. Pode acelerar ataques, atordoar ou lançar machados.' },
-  { name: 'Mago', role: 'Magia à distância', summary: 'Ataca de longe. Escolha entre dano em área, raios em cadeia, lentidão e invocações.' },
-  { name: 'Ladino', role: 'Agilidade e especialização', summary: 'Reúne estilos distintos: eliminar alvos, perfurar filas, atacar em leque ou controlar o terreno.' },
+  { name: 'Cavaleiro', role: 'Proteção e combate próximo', summary: 'Segura a linha de frente, protege aliados e interrompe avanços.' },
+  { name: 'Bárbaro', role: 'Pressão e impacto', summary: 'Combina muita vida com golpes fortes, atordoamentos e machados.' },
+  { name: 'Mago', role: 'Magia à distância', summary: 'Ataca de longe com fogo, raios, gelo e invocações.' },
+  { name: 'Ladino', role: 'Agilidade e precisão', summary: 'Elimina alvos, perfura filas e ataca de ângulos diferentes.' },
+  { name: 'Suporte', role: 'Cura e reforço do grupo', summary: 'Mantém os aliados na luta com cura, proteção e inspiração.' },
+  { name: 'Druida', role: 'Controle da natureza', summary: 'Prende ameaças com raízes e fortalece os companheiros com a natureza.' },
+  { name: 'Cronomante', role: 'Controle temporal', summary: 'Prende ameaças e ganha tempo para o grupo reagir.' },
 ];
 
 const VARIANT_INFO = {
@@ -23,7 +26,50 @@ const VARIANT_INFO = {
   crossbow: ['Tiro perfurante', 'Dispara um virote que atravessa os inimigos em linha, atingindo cada um uma vez.', 'Aproveite inimigos enfileirados na estrada. O tiro segue reto e não acompanha mudanças de direção.'],
   ninja: ['Ataque em leque', 'Lança três adagas em direções diferentes. Cada adaga acerta o primeiro inimigo que encontrar.', 'Prefira grupos espalhados à frente. O leque cobre mais espaço, mas pode deixar passar alvos isolados.'],
   druid: ['Raízes e cura', 'Prende inimigos próximos com raízes e cura a si e aos heróis na área. Precisa de inimigos próximos para ativar.', 'Combine com ataques em área. As raízes impedem movimento, mas os inimigos ainda podem atacar ao alcance.'],
+  cleric: ['Cura e proteção', 'Uma oração recupera a vida dos aliados próximos e deixa os feridos com uma breve proteção.', 'Fique perto do grupo. A técnica e a ultimate da clériga também ajudam contra grandes ondas.'],
+  bard: ['Apoio e ritmo', 'Toca um acorde que aumenta a velocidade de ataque do grupo por alguns segundos.', 'Acelere os aliados antes de uma onda ou chefe. O efeito também ajuda personagens de ataque lento.'],
+  angel: ['Dano e amparo', 'Desce em uma explosão de luz, fere inimigos ao redor e cura aliados próximos.', 'Aproxime-se de um grupo cercando os heróis para aproveitar o impacto e o auxílio.'],
+  chronist: ['Controle temporal', 'Cria um campo que prende inimigos próximos e interrompe o avanço deles.', 'Use quando vários inimigos se aproximarem; a ultimate amplia o controle para uma grande área.'],
 };
+
+const TEAM_ROLE_RULES = {
+  paladin: ['Defesa', 'Cura'], guardian: ['Defesa', 'Controle'], champion: ['Defesa', 'Área', 'Dano a chefe'], king: ['Defesa', 'Dano a chefe'],
+  berserker: ['Defesa', 'Área', 'Dano a chefe'], crusher: ['Defesa', 'Controle', 'Área', 'Dano a chefe'],
+  viking: ['Defesa', 'Dano a chefe'], iceviking: ['Defesa', 'Controle', 'Área'],
+  pyro: ['À distância', 'Área'], arcane: ['À distância', 'Área'], cryo: ['À distância', 'Controle', 'Área'],
+  assassin: ['Dano a chefe'], crossbow: ['À distância', 'Dano a chefe'], ninja: ['À distância', 'Área'], necro: ['À distância'],
+  druid: ['À distância', 'Controle', 'Cura'], cleric: ['À distância', 'Cura'], bard: ['À distância', 'Dano a chefe'],
+  angel: ['À distância', 'Cura', 'Área'], chronist: ['À distância', 'Controle'],
+};
+const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];
+const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe');
+const MISSION_ROLE_NEEDS = {
+  win: ['Defesa', 'Cura', 'Área'],
+  escort: ['Defesa', 'Cura', 'Controle'],
+  boss: ['Defesa', 'Cura', 'Dano a chefe'],
+  survive: ['Defesa', 'Cura', 'Área', 'Controle'],
+  totems: ['À distância', 'Controle', 'Área'],
+  nofall: ['Defesa', 'Cura', 'Controle'],
+  timer: ['À distância', 'Área', 'Cura'],
+};
+
+export function missionRoleNeeds(goal) {
+  return [...(MISSION_ROLE_NEEDS[goal?.type] || [])];
+}
+
+// Resume o que a equipe cobre para orientar escolhas sem bloquear composições livres.
+export function teamCoverage(configs) {
+  const members = Array.from(configs || []).filter((cfg) => cfg && cfg.id);
+  const roles = TEAM_ROLE_ORDER.map((name) => ({
+    name,
+    count: members.filter((cfg) => TEAM_ROLE_RULES[cfg.id]?.includes(name)).length,
+  }));
+  return {
+    members: members.map((cfg) => cfg.name),
+    roles,
+    missing: roles.filter((role) => TEAM_CORE_ROLES.includes(role.name) && role.count === 0).map((role) => role.name),
+  };
+}
 
 export function heroInfo(cfg) {
   const [role, skill, tip] = VARIANT_INFO[cfg.id];
@@ -31,5 +77,5 @@ export function heroInfo(cfg) {
 }
 
 export function skillCooldown(id, level = 1, rate = 1) {
-  return (({ necro: 12, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7 }[id] ?? 6) - (level - 1) * 0.7) * rate;
+  return (({ necro: 12, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 9, bard: 10, angel: 10, chronist: 8 }[id] ?? 6) - (level - 1) * 0.7) * rate;
 }

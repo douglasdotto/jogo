@@ -1,5 +1,6 @@
 // Estatísticas de cada herói na partida, o cartão que abre ao clicar nele e o resumo do fim de jogo.
-import { heroInfo, skillCooldown } from './class-info.js';
+import { heroInfo } from './class-info.js';
+import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec } from './skill-targeting.js';
 import { SYNERGIES } from './synergies.js';
 
@@ -44,6 +45,7 @@ export function tickHeroPanel(real) {
 function renderHeroPanel() {
   const h = current, c = h.cfg, s = h.stats;
   const info = heroInfo(c);
+  const skills = skillSetFor(c);
   const synergies = SYNERGIES.filter((synergy) => synergy.variants.includes(c.id));
   const next = xpLevels[h.level];
   const xpPct = next ? Math.min(100, ((h.xp - xpLevels[h.level - 1]) / (next - xpLevels[h.level - 1])) * 100) : 100;
@@ -60,25 +62,33 @@ function renderHeroPanel() {
   el.style.setProperty('--cd', c.color[1]);
   el.innerHTML = `
     <button class="close" aria-label="Fechar">✕</button>
-    <div class="hp-top">
-      <div class="portrait"><img src="${portraitOf(h)}" alt=""></div>
-      <div>
-        <div class="ribbon">${c.names ? c.names[h.level - 1] : c.name}</div>
-        <div class="lvl">Nível ${h.level}${h.dead ? ' · caído' : ''}</div>
-        <div class="xp"><i style="width:${xpPct}%"></i></div>
-        <div class="xp-txt">${next ? `XP ${Math.round(h.xp)} / ${next}` : 'Nível máximo'}</div>
+    <section class="hero-panel-main">
+      <div class="hp-top">
+        <div class="portrait"><img src="${portraitOf(h)}" alt=""></div>
+        <div class="hp-progress">
+          <div class="ribbon">${c.names ? c.names[h.level - 1] : c.name}</div>
+          <div class="lvl">Nível ${h.level}${h.dead ? ' · caído' : ''}</div>
+          <div class="xp"><i style="width:${xpPct}%"></i></div>
+          <div class="xp-txt">${next ? `XP ${Math.round(h.xp)} / ${next}` : 'Nível máximo'}</div>
+        </div>
       </div>
-    </div>
-    <div class="hero-guide"><h4>${info.name} · ${info.role}</h4><p>${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}</p></div>
-    <div class="ability"><b>${c.ability}</b>${info.skill}
-      <span class="skill-meta">${h.dead ? 'Indisponível enquanto caído' : h.skillTimer > 0 ? `Disponível em ${Math.ceil(h.skillTimer)} s` : 'Pronta para usar'} · Recarga: ${skillCooldown(c.id, h.level, h.skillRate).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s</span>
-      <span class="skill-meta">${h.auto ? 'Automático: usa quando houver uma oportunidade.' : aimSpec(h) ? 'Manual: ative pela barra ou pelas teclas 1–4 e clique no alvo. Esc cancela.' : 'Manual: ative pela barra ou pelas teclas 1–4. Efeito centrado no herói.'}</span></div>
-    <div class="hero-guide"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
-    ${synergies.length ? `<div class="hero-guide"><h4>Sinergias de grupo</h4>${synergies.map((synergy) => `<p><b>${synergy.name}</b> · ${synergy.effect}</p>`).join('')}</div>` : ''}
-    <h4>Atributos</h4>
-    <dl>${attrs.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
-    <h4>Nesta partida</h4>
-    <dl>${LABELS.map(([k, label]) => `<dt>${label}</dt><dd>${fmt(k, s[k])}</dd>`).join('')}</dl>`;
+      <div class="hero-guide hero-role"><h4>${info.name} · ${info.role}</h4><p>${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}</p></div>
+      <div class="ability skill-list"><b>Habilidades</b>${skills.map((skill) => {
+        const slot = skill.slot, timer = h.skillTimers?.[slot] ?? (slot === 0 ? h.skillTimer : 0);
+        const automatic = h.autoSkills?.[slot] ?? (slot === 0 ? h.auto : true);
+        const mode = automatic ? 'Automático' : slot === 0 && aimSpec(h) ? 'Manual · mira no alvo' : 'Manual · ativação pelo botão';
+        const state = h.dead ? 'Indisponível enquanto caído' : timer > 0 ? `Disponível em ${Math.ceil(timer)} s` : 'Pronta para usar';
+        return `<div class="skill-detail${skill.ultimate ? ' ultimate-detail' : ''}"><strong>${skill.ultimate ? '✹ Ultimate · ' : skill.slot === 1 ? '✦ Técnica · ' : '✦ '}${skill.name}</strong><span>${skill.description}</span><span class="skill-meta">${state} · Recarga: ${cooldownForSkill(c, slot, h.level, h.skillRate).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s · ${mode}</span></div>`;
+      }).join('')}</div>
+    </section>
+    <aside class="hero-panel-side">
+      <div class="hero-guide hero-tips"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
+      ${synergies.length ? `<div class="hero-guide hero-synergies"><h4>Sinergias de grupo</h4>${synergies.map((synergy) => `<p><b>${synergy.name}</b> · ${synergy.effect}</p>`).join('')}</div>` : ''}
+      <div class="hero-panel-stats">
+        <section><h4>Atributos</h4><dl class="hero-attributes">${attrs.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></section>
+        <section><h4>Nesta partida</h4><dl class="hero-match-stats">${LABELS.map(([k, label]) => `<dt>${label}</dt><dd>${fmt(k, s[k])}</dd>`).join('')}</dl></section>
+      </div>
+    </aside>`;
   el.querySelector('.close').onclick = closeHeroPanel;
 }
 

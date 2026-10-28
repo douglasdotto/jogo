@@ -38,8 +38,50 @@ function mostDangerous(sources) {
       || a.index - b.index)[0].source;
 }
 
-function tipFor({ won, heroes, dangerous, falls }) {
-  if (won) return 'Na próxima jornada, experimente outra composição para descobrir novas combinações entre as classes.';
+function objectiveTip(mission) {
+  const goal = mission?.goal;
+  if (!goal) return null;
+  if (goal.type === 'escort') {
+    return 'O aldeão ficou exposto. Intercepte inimigos perto dele e leve cura ou provocação para mantê-lo vivo.';
+  }
+  if (goal.type === 'nofall') {
+    return 'A missão exige que ninguém caia. Guarde cura, escudo ou controle para salvar o aliado que ficar com pouca vida.';
+  }
+  if (goal.type === 'timer' && number(mission.time) > number(goal.time)) {
+    return 'O limite de tempo acabou. Use dano em área nas ondas, priorize sacerdotes e arqueiros e evite perseguições longas.';
+  }
+  if (goal.type === 'totems' && number(mission.totemsDown) < number(goal.count)) {
+    const remaining = Math.max(0, number(goal.count) - number(mission.totemsDown));
+    return `Faltaram ${remaining} ${remaining === 1 ? 'totem' : 'totens'}. Destrua cada um cedo: enquanto ficam ativos, invocam reforços.`;
+  }
+  if (goal.type === 'boss' && !mission.bossDown) {
+    return 'Quando o chefe surgir, concentre o dano nele e saia das áreas marcadas antes do impacto.';
+  }
+  if (goal.type === 'survive' && number(mission.surviveRemaining) > 0) {
+    return `Faltavam ${Math.ceil(number(mission.surviveRemaining))} s para sobreviver. Não persiga longe da formação e guarde controle para grupos perigosos.`;
+  }
+  return null;
+}
+
+function tipFor({ won, heroes, dangerous, falls, mission }) {
+  if (won) {
+    if (mission?.stars != null) {
+      const stars = number(mission.stars);
+      if (mission.nextMission) {
+        return stars < 3
+          ? `Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada; confira os critérios acima para conquistar as que faltam.`
+          : `Três estrelas! ${label(mission.nextMission, 'A próxima arena')} está liberada no mapa da campanha.`;
+      }
+      const remaining = number(mission.remainingStars);
+      return remaining > 0
+        ? `Todas as arenas foram vencidas. Rejogue as missões para conquistar as ${remaining} estrelas restantes.`
+        : 'Campanha perfeita! Todas as arenas e as 24 estrelas foram conquistadas.';
+    }
+    return 'Na próxima jornada, experimente outra composição para descobrir novas combinações entre as classes.';
+  }
+
+  const objective = objectiveTip(mission);
+  if (objective) return objective;
 
   const partyDamage = heroes.reduce((sum, hero) => sum + number(hero.damage), 0);
   const partyReceived = heroes.reduce((sum, hero) => sum + number(hero.received), 0);
@@ -69,7 +111,7 @@ function tipFor({ won, heroes, dangerous, falls }) {
 }
 
 /** Produz destaques curtos sem ler ou modificar o estado da partida. */
-export function buildBattleReport({ won = false, heroes = [], falls = [], damageSources = [] } = {}) {
+export function buildBattleReport({ won = false, heroes = [], falls = [], damageSources = [], mission = null } = {}) {
   const party = Array.isArray(heroes) ? heroes.filter((hero) => hero && typeof hero === 'object') : [];
   const recordedFalls = Array.isArray(falls) ? falls : [];
   const danger = mostDangerous(damageSources);
@@ -102,6 +144,6 @@ export function buildBattleReport({ won = false, heroes = [], falls = [], damage
       text: label(bestHero.name, 'Herói sem nome'),
     });
   }
-  highlights.push({ id: 'next-try', title: won ? 'Próxima jornada' : 'Dica para a próxima tentativa', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls }) });
+  highlights.push({ id: 'next-try', title: won ? (mission?.stars != null ? 'Progresso da campanha' : 'Próxima jornada') : 'Dica para a próxima tentativa', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls, mission }) });
   return highlights;
 }

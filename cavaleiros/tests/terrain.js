@@ -24,6 +24,13 @@ export function checkTerrain(world, THREE) {
     assert(world.isShallow(edge.x, edge.z), 'surgimento na água rasa');
     assert(!world.isShallow(zone.center.x, zone.center.z), 'centro não é raso');
     assert(!world.canStep(edge, zone.center), 'água funda bloqueada');
+    for (const angle of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      const radial = zone.side.clone().multiplyScalar(Math.cos(angle)).addScaledVector(zone.fwd, Math.sin(angle));
+      const shore = zone.center.clone().addScaledVector(radial, zone.radius - 0.01);
+      const land = zone.center.clone().addScaledVector(radial, zone.radius + 0.01);
+      assert(Math.abs(world.groundHeight(shore.x, shore.z)) < 0.03, 'margem termina no nível do terreno');
+      assert(world.canStep(shore, land), 'saída do lago sem degrau na fase ' + phase);
+    }
   }
   assert(world.zoneOf(1) === null, 'fase normal preservada');
   assert(world.groundHeight(0, 0) === 0, 'chão normal');

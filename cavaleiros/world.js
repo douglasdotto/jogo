@@ -10,15 +10,66 @@ THREE.BufferGeometry.prototype.toNonIndexed = function () { return this.index ? 
 
 // pontos (x, z) por onde a estrada passa, de baixo (z positivo) para cima
 const ROUTE = [[0, 14], [2, 0], [8, -18], [4, -38], [-7, -56], [-10, -76], [-3, -96], [8, -114], [10, -134], [2, -152], [-8, -170], [-7, -190], [1, -208], [6, -228], [2, -246], [0, -264]];
+const MAP_STYLES = [
+  { name: 'Pradaria', grass: [0x76cc32, 0x5db426], sand: [0xf0b860, 0xe0a24c], cliffs: [0xdba468, 0xc98d55], bed: 0xc9a46a, dry: 0xa39a5c, gloom: 0x5e536e,
+    river: 0x5fb3e0, deep: 0x2a7fa6, shallow: 0x8fdde6, murky: 0x3e5a5a, pondLeaf: 0x6fae46, reeds: 0x6f8f3e,
+    canopy: [0x4fb82a, 0x3fa424, 0x62c834, 0x37941e, 0x58bf2c], pine: [0x6aa83f, 0x5e9e3c, 0x77b347], tuft: [0x82d63e, 0x6cc432, 0x94e04a, 0x5cb22a], modelHue: 38 },
+  { name: 'Outono', grass: [0xa5bd55, 0x829643], sand: [0xe6b96b, 0xd39b50], cliffs: [0xc99a69, 0xa97951], bed: 0xb99a6b, dry: 0xa59859, gloom: 0x6f5668,
+    river: 0x68afd0, deep: 0x2e718e, shallow: 0x98d4d6, murky: 0x566263, pondLeaf: 0x8b9c46, reeds: 0x8a8845,
+    canopy: [0x9e982f, 0xbb7c2c, 0xcc5b35, 0xc58a39, 0x7c9140], pine: [0x667f35, 0x738c3a, 0x849343], tuft: [0xa8b947, 0x8fa73e, 0xc6b44a, 0x819d3c], modelHue: 24 },
+  { name: 'Pântano', grass: [0x6aa974, 0x4e806a], sand: [0xc8ae79, 0xa48d67], cliffs: [0xa79b83, 0x837d70], bed: 0x698f86, dry: 0x8e8d65, gloom: 0x4f5660,
+    river: 0x4e9ca0, deep: 0x285f65, shallow: 0x74b9aa, murky: 0x384d4e, pondLeaf: 0x567d68, reeds: 0x71804d,
+    canopy: [0x3f7858, 0x4b8a5e, 0x68945b, 0x567d68, 0x71834f], pine: [0x3f6959, 0x517b62, 0x617e5d], tuft: [0x79a34c, 0x648a49, 0x93aa5a, 0x5e8551], modelHue: 76 },
+  { name: 'Crepúsculo', grass: [0x738da8, 0x556f90], sand: [0xd1ad88, 0xb58d79], cliffs: [0x978a9e, 0x746d88], bed: 0x677e9c, dry: 0x888b83, gloom: 0x50415f,
+    river: 0x609cc8, deep: 0x365f9a, shallow: 0x9ec4e8, murky: 0x494c68, pondLeaf: 0x5f7f8a, reeds: 0x758c91,
+    canopy: [0x4e708e, 0x5a789d, 0x7c78a5, 0x586f8a, 0x6c8ca2], pine: [0x435b7a, 0x4e6888, 0x5c7691], tuft: [0x82a6a9, 0x70958e, 0x93aaa2, 0x6c8789], modelHue: 205 },
+];
 
-export function createWorld(scene, ROAD, PHASES) {
-  let seed = 11;
-  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // fixo: o mapa é sempre igual
+function mapStyleForSeed(seedValue = 11) {
+  return MAP_STYLES[seedValue === 11 ? 0 : Math.abs(Math.trunc(seedValue)) % MAP_STYLES.length];
+}
+export function biomeForSeed(seedValue = 11) { return mapStyleForSeed(seedValue).name; }
+
+export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
+  const scene = new THREE.Group();
+  parentScene.add(scene);
+  let disposed = false, modelScenes = [];
+  let seed = seedValue;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // reprodutível para cada semente
   const range = (a, b) => a + (b - a) * rand();
   const pick = (list) => list[Math.floor(rand() * list.length)];
+  const biome = mapStyleForSeed(seedValue);
+  const terrainWarp = [rand() * 100, rand() * 100];
+
+  function releaseTrees(roots) {
+    const geometries = new Set(), materials = new Set(), textures = new Set();
+    for (const root of roots) root?.traverse?.((obj) => {
+      if (obj.geometry) geometries.add(obj.geometry);
+      for (const material of (Array.isArray(obj.material) ? obj.material : [obj.material])) {
+        if (!material) continue;
+        materials.add(material);
+        for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+      }
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) material.dispose();
+    for (const texture of textures) texture.dispose();
+  }
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    parentScene.remove(scene);
+    releaseTrees([scene, ...modelScenes]);
+    modelScenes = [];
+  }
 
   // ---------- estrada ----------
-  const curve = new THREE.CatmullRomCurve3(ROUTE.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+  // Cada missão sorteia uma estrada própria; as pontas ficam fixas para preservar entrada e castelo.
+  const route = ROUTE.map(([x, z], i) => {
+    const end = i === 0 || i === ROUTE.length - 1;
+    return [x + (end ? 0 : range(-2.6, 2.6)), z + (end ? 0 : range(-1.4, 1.4))];
+  });
+  const curve = new THREE.CatmullRomCurve3(route.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
   const L = curve.getLength();
   const clampU = (s) => THREE.MathUtils.clamp(s / L, 0, 1);
   const pointAt = (s) => curve.getPointAt(clampU(s));
@@ -59,15 +110,24 @@ export function createWorld(scene, ROAD, PHASES) {
     return Math.sin(a * 3 + zone.center.x) * 0.55 + Math.sin(a * 5 - zone.center.z) * 0.3;
   };
   const lakeDepth = (zone, x, z) => {
-    const d = Math.hypot(x - zone.center.x, z - zone.center.z) + shore(zone, x, z);
-    return -1.1 * (1 - THREE.MathUtils.smoothstep(d, 2.4, zone.radius + 0.7));
+    const radius = Math.hypot(x - zone.center.x, z - zone.center.z);
+    const d = radius + shore(zone, x, z);
+    const bowl = -1.1 * (1 - THREE.MathUtils.smoothstep(d, 2.4, zone.radius + 0.7));
+    // A margem variável precisa terminar em altura zero exatamente no limite do lago;
+    // sem a transição, a borda pode ter um degrau que bloqueia o movimento para fora.
+    const shoreline = 1 - THREE.MathUtils.smoothstep(radius, zone.radius - 0.85, zone.radius);
+    return bowl * shoreline;
   };
   function groundHeight(x, z) {
     for (const zone of zones.values()) {
       if (zone.type === 'plateau') {
-        const p = local(zone, { x, z });
-        if (inRamp(p)) return (p.z + 9) / 2;
-        if (Math.hypot(p.x, p.z) < zone.radius) return 3;
+        // Keep this hot query allocation-free; manual ground aiming can sample it
+        // hundreds of times per frame while the player moves the pointer.
+        const dx = x - zone.center.x, dz = z - zone.center.z;
+        const px = dx * zone.side.x + dz * zone.side.z;
+        const pz = dx * zone.fwd.x + dz * zone.fwd.z;
+        if (Math.abs(px) <= 1.5 && pz >= -9 && pz <= -3) return (pz + 9) / 2;
+        if (Math.hypot(px, pz) < zone.radius) return 3;
       } else if (Math.hypot(x - zone.center.x, z - zone.center.z) < zone.radius) {
         return Math.max(-0.38, lakeDepth(zone, x, z));   // na parte rasa afunda até a canela
       }
@@ -197,8 +257,8 @@ export function createWorld(scene, ROAD, PHASES) {
 
   // o caminho não aparece: perto dele o chão é plano, longe viram morros de borda irregular;
   // o rio cava um leito
-  const noise = (x, z) => ((Math.sin(x * 0.13 + z * 0.05) + Math.sin(z * 0.17 - x * 0.07) + 1.5 * Math.sin((x + z) * 0.045)) / 3.5) * 0.5 + 0.5;
-  const patch = (x, z) => ((Math.sin(x * 0.31 + z * 0.17) + Math.sin(z * 0.27 - x * 0.19) + Math.sin((x - z) * 0.11)) / 3) * 0.5 + 0.5;
+  const noise = (x, z) => ((Math.sin(x * 0.13 + z * 0.05 + terrainWarp[0]) + Math.sin(z * 0.17 - x * 0.07 + terrainWarp[1]) + 1.5 * Math.sin((x + z) * 0.045 + terrainWarp[0] - terrainWarp[1])) / 3.5) * 0.5 + 0.5;
+  const patch = (x, z) => ((Math.sin(x * 0.31 + z * 0.17 + terrainWarp[1]) + Math.sin(z * 0.27 - x * 0.19 + terrainWarp[0]) + Math.sin((x - z) * 0.11 + terrainWarp[0] + terrainWarp[1])) / 3) * 0.5 + 0.5;
   // quanto o chão é terra (e não grama): manchas soltas, mais comuns perto do caminho
   const sandAt = (x, z, d) => (1 - THREE.MathUtils.smoothstep(d, 1, ROAD + 6)) * 0.7 + (patch(x, z) - 0.5) * 1.1 + (noise(z, x) > 0.82 ? 0.4 : 0);
   const isSand = (x, z, d) => sandAt(x, z, d) > 0.42;
@@ -263,9 +323,9 @@ export function createWorld(scene, ROAD, PHASES) {
   const colors = new Float32Array(gp.count * 3);
   // paleta da referência: grama verde-limão, terra alaranjada, encostas de pedra arenosa
   // estilo Clash: grama verde forte e saturada, terra quente
-  const grassA = new THREE.Color(0x76cc32), grassB = new THREE.Color(0x5db426), sandA = new THREE.Color(0xf0b860), sandB = new THREE.Color(0xe0a24c),
-    cliffA = new THREE.Color(0xdba468), cliffB = new THREE.Color(0xc98d55), bed = new THREE.Color(0xc9a46a),
-    dry = new THREE.Color(0xa39a5c), necro = new THREE.Color(0x5e536e);
+  const grassA = new THREE.Color(biome.grass[0]), grassB = new THREE.Color(biome.grass[1]), sandA = new THREE.Color(biome.sand[0]), sandB = new THREE.Color(biome.sand[1]),
+    cliffA = new THREE.Color(biome.cliffs[0]), cliffB = new THREE.Color(biome.cliffs[1]), bed = new THREE.Color(biome.bed),
+    dry = new THREE.Color(biome.dry), necro = new THREE.Color(biome.gloom);
   const c = new THREE.Color(), grass = new THREE.Color(), sand = new THREE.Color(), cliff = new THREE.Color();
   const smooth = THREE.MathUtils.smoothstep;
   for (let i = 0; i < gp.count; i++) {
@@ -306,7 +366,8 @@ export function createWorld(scene, ROAD, PHASES) {
     return m;
   }
   const flatMat = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, ...extra });
-  const water = ribbon(riverPts, 6.5, 0, -0.25, flatMat(0x5fb3e0, { transparent: true, opacity: 0.88 }));
+  const riverTint = new THREE.Color(biome.river);
+  const water = ribbon(riverPts, 6.5, 0, -0.25, flatMat(biome.river, { transparent: true, opacity: 0.88 }));
   for (const p of riverPts) blocked.push({ x: p.x, z: p.z, r: 3.4 });
 
   // ---------- ponte ----------
@@ -484,7 +545,7 @@ export function createWorld(scene, ROAD, PHASES) {
     const R = zone.radius + 1.6;
     const geo = new THREE.CircleGeometry(R, 48);
     geo.rotateX(-Math.PI / 2);
-    const deep = new THREE.Color(0x2a7fa6), shallow = new THREE.Color(0x8fdde6), murky = new THREE.Color(0x3e5a5a);
+    const deep = new THREE.Color(biome.deep), shallow = new THREE.Color(biome.shallow), murky = new THREE.Color(biome.murky);
     const col = [], p = geo.attributes.position;
     for (let i = 0; i < p.count; i++) {
       c.copy(deep).lerp(shallow, THREE.MathUtils.smoothstep(Math.hypot(p.getX(i), p.getZ(i)), 1.5, zone.radius + 0.3)).lerp(murky, gloom * 0.6);
@@ -494,7 +555,7 @@ export function createWorld(scene, ROAD, PHASES) {
     const water = mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }), 0, -0.2, 0, group);
     water.castShadow = false;
     lakes.push(water);
-    const leaf = new THREE.Color(0x6fae46).lerp(murky, gloom * 0.5).getHex();
+    const leaf = new THREE.Color(biome.pondLeaf).lerp(murky, gloom * 0.5).getHex();
     // vitórias-régias, algumas com flor
     for (let i = 0; i < 9; i++) {
       const a = rand() * Math.PI * 2, r = range(3.3, zone.radius - 0.4);
@@ -508,7 +569,7 @@ export function createWorld(scene, ROAD, PHASES) {
       const a = rand() * Math.PI * 2, r = zone.radius + range(-0.2, 0.7);
       for (let n = 0; n < 5; n++) {
         const x = Math.cos(a) * r + range(-0.35, 0.35), z = Math.sin(a) * r + range(-0.35, 0.35), h = range(0.7, 1.2);
-        const reed = mesh(reedGeo, 0x6f8f3e, x, -0.2 + h / 2, z, group);
+        const reed = mesh(reedGeo, biome.reeds, x, -0.2 + h / 2, z, group);
         reed.scale.y = h;
         reed.rotation.z = range(-0.2, 0.2);
         if (rand() < 0.6) mesh(headGeo, 0x7a5232, x, -0.2 + h + 0.1, z, group);
@@ -1181,7 +1242,7 @@ export function createWorld(scene, ROAD, PHASES) {
   inst([new THREE.ConeGeometry(0.13, 0.4, 5).translate(0, 2.1, 0), [0xffffff]], torches, lantern, false);
 
   const trunks = [0x7a4a26, 0x6a3f20, 0x8a5a30];
-  const limes = [0x4fb82a, 0x3fa424, 0x62c834, 0x37941e, 0x58bf2c];   // copas verde-forte, estilo Clash
+  const limes = biome.canopy;   // copas variam conforme o bioma sorteado
   // árvore redonda da referência: tronco fino e alto, copa de vários blocos facetados
   const roundTrunk = mergeGeometries([
     new THREE.CylinderGeometry(0.14, 0.24, 2.6, 6).translate(0, 1.3, 0),
@@ -1210,7 +1271,7 @@ export function createWorld(scene, ROAD, PHASES) {
   };
   instanced([[roundTrunk, trunks], [roundTop, limes]], 380, treePlace(ROAD + 3, ROAD + 50));
   instanced([[roundTrunk, trunks], [roundTop, [0xffb7d5, 0xf9a3c8, 0xffc9e0, 0xffd6e8]]], 70, treePlace(ROAD + 3, ROAD + 40, 0.3));   // cerejeiras
-  instanced([[pineTrunk, trunks], [pineTop, [0x6aa83f, 0x5e9e3c, 0x77b347]]], 120, treePlace(ROAD + 6, ROAD + 55));
+  instanced([[pineTrunk, trunks], [pineTop, biome.pine]], 120, treePlace(ROAD + 6, ROAD + 55));
   // árvores secas: tronco torto com galhos, sem folhas
   const deadTree = mergeGeometries([
     new THREE.CylinderGeometry(0.12, 0.26, 2.8, 5).translate(0, 1.4, 0),
@@ -1229,7 +1290,7 @@ export function createWorld(scene, ROAD, PHASES) {
   instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 280, (o) => { const p = spot(0, ROAD + 12, 1.5); if (!p) return false; placeAt(o, p, range(0.15, 0.4)); o.scale.y *= 0.5; return true; }, false);
 
   const tuftGeo = mergeGeometries([0, 1, 2].map((i) => new THREE.ConeGeometry(0.06, 0.5, 3).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0.25, 0).toNonIndexed()));
-  instanced([tuftGeo, [0x82d63e, 0x6cc432, 0x94e04a, 0x5cb22a]], 7000, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
+  instanced([tuftGeo, biome.tuft], 7000, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
 
   const flowerGeo = new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.25, 0);
   instanced([flowerGeo, [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7]], 1600, (o) => { const p = spot(1, ROAD + 22, 1.8, false); if (!p || gloomAt(p.z) > rand() * 0.6) return false; placeAt(o, p, range(0.8, 1.3)); return true; }, false);
@@ -1309,9 +1370,11 @@ export function createWorld(scene, ROAD, PHASES) {
   const hexLoader = new GLTFLoader();
   Promise.all(HEX.map((n) => hexLoader.loadAsync(`assets/hex/${n}.gltf`).then((g) => [n, g.scene]))).then((list) => {
     const hex = Object.fromEntries(list);
+    modelScenes = list.map(([, gltfScene]) => gltfScene);
+    if (disposed) { releaseTrees(modelScenes); modelScenes = []; return; }
     const size = {};
     for (const [n, obj] of Object.entries(hex)) {
-      obj.traverse((o) => { if (o.isMesh && o.material.map) o.material.map = recolor(o.material.map, { hue: 38 }); });
+      obj.traverse((o) => { if (o.isMesh && o.material.map) o.material.map = recolor(o.material.map, { hue: biome.modelHue }); });
       size[n] = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
     }
     // cópia com sombra; nas terras escuras perde a cor como o resto do mundo
@@ -1364,7 +1427,7 @@ export function createWorld(scene, ROAD, PHASES) {
       place(pick(rocks), scene, p.x, heightAt(p.x, p.z) - 0.05, p.z, range(4, 7), range(4, 8), rand() * 6.3, p.z);
       n++;
     }
-  }).catch((e) => console.warn('modelos de montanha não carregaram', e));
+  }).catch((e) => { if (!disposed) console.warn('modelos de montanha não carregaram', e); });
 
   let time = 0;
   function update(dt, viewZ = 0) {
@@ -1383,7 +1446,7 @@ export function createWorld(scene, ROAD, PHASES) {
       u.left.rotation.y = flap; u.right.rotation.y = -flap;
     }
     lantern.emissiveIntensity = 0.9 + Math.sin(time * 9) * 0.1 + Math.sin(time * 23) * 0.05;
-    water.material.color.setHSL(0.57, 0.55, 0.56 + Math.sin(time * 1.5) * 0.02);
+    water.material.color.copy(riverTint).offsetHSL(0, 0, Math.sin(time * 1.5) * 0.02);
     for (const lake of lakes) lake.material.opacity = 0.8 + Math.sin(time * 1.8) * 0.04;
     for (const cl of clouds) { cl.position.x += dt * 0.8; if (cl.position.x > 90) cl.position.x = -90; }
     if (millBlades) millBlades.rotation.z -= dt * 0.9;
@@ -1395,5 +1458,5 @@ export function createWorld(scene, ROAD, PHASES) {
     }
   }
 
-  return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update };
+  return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update, seed: seedValue, biome: biome.name, dispose };
 }

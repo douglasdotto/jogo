@@ -6,10 +6,10 @@ export function aimSpec(h) {
     min: id.includes('viking') ? 2 : 0,
     radius: id === 'iceviking' ? (1.3 + (h.level - 1) * 0.25) * power : 0.65,
   };
-  if (['pyro', 'cryo', 'crossbow', 'ninja', 'crusher'].includes(id)) return {
+  if (['pyro', 'cryo', 'crossbow', 'ninja', 'crusher', 'angel'].includes(id)) return {
     mode: 'ground', range: id === 'crusher' ? 2.2 * power : id === 'ninja' ? 7 : h.range,
     radius: id === 'pyro' ? (1.1 + (h.level - 1) * 0.2) * power
-      : id === 'cryo' ? (1.3 + (h.level - 1) * 0.25) * power : 0,
+      : id === 'cryo' ? (1.3 + (h.level - 1) * 0.25) * power : id === 'angel' ? (3 + (h.level - 1) * 0.5) * power : 0,
   };
   return null;
 }

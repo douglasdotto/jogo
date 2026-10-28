@@ -2,22 +2,26 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { createWorld } from './world.js';
+import { createWorld, biomeForSeed } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './characters.js';
 import { LOOKS } from './looks.js';
-import { CLASSES, heroInfo, skillCooldown } from './class-info.js';
+import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
+import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec, validAim } from './skill-targeting.js';
 import { synergyDamageMultiplier, synergyDamageTakenMultiplier, SYNERGIES } from './synergies.js';
 import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './upgrade-branches.js';
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
-import { MISSIONS, goalText, starsFor, saveStars, renderCampaign, totalStars, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
-import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader } from './monsters.js';
+import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
+import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
+const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
+const RANGED_INTERCEPT = 18.5; // cobre arqueiros da onda, sem perseguição pelo mapa
+const RANGED_INTERCEPTORS = 2;
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
 
 // A classe fornece os atributos básicos; os postos são distribuídos ao entrar.
@@ -29,6 +33,12 @@ const HEROES = [
   { name: 'Mago', model: 'Mage', post: [0, 1.4], hp: 150, dmg: 28, range: 7, speed: 2.6, cooldown: 1.3, idle: 'Idle', ranged: true, splash: 1.4, attacks: ['Spellcast_Shoot'],
     weapons: ['Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'] },
   { name: 'Ladino', model: 'Rogue', post: [1.7, -0.3], hp: 180, dmg: 18, range: 1.4, speed: 4, cooldown: 0.55, idle: 'Idle', attacks: ['Dualwield_Melee_Attack_Chop', 'Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Stab'],
+    weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
+  { name: 'Suporte', model: 'Mage', post: [-1.7, 0.1], hp: 225, dmg: 27, range: 5, speed: 3, cooldown: 1.2, idle: 'Idle', ranged: true, attacks: ['Spellcast_Shoot'],
+    weapons: ['2H_Staff'] },
+  { name: 'Druida', model: 'Rogue', post: [1.7, -0.3], hp: 180, dmg: 20, range: 5.5, speed: 3, cooldown: 1.15, idle: 'Idle', ranged: true, attacks: ['Spellcast_Shoot'],
+    weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
+  { name: 'Cronomante', model: 'Rogue', post: [1.7, -0.3], hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, idle: 'Idle', ranged: true, attacks: ['Spellcast_Shoot'],
     weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
 ];
 // As receitas substituem o modelo e as peças da classe.
@@ -64,7 +74,15 @@ const VARIANTS = [
   { id: 'necro', names: ['Necromante', 'Senhor dos Ossos', 'Soberano Espectral'], desc: 'Invoca dois esqueletinhos amigos.', ability: 'Amigos do além', color: CHARACTERS[1].color,
     recipe: CHARACTERS[1], classId: 2, dmg: 24, splash: 0, stats: { Vida: 2, Força: 3, Rapidez: 2, Alcance: 5 } },
   { id: 'druid', names: ['Druida', 'Guardião do Bosque', 'Espírito da Floresta'], desc: 'Raízes prendem e a natureza cura.', ability: 'Abraço da floresta', color: CHARACTERS[0].color,
-    recipe: CHARACTERS[0], classId: 3, ranged: true, range: 6, dmg: 21, cooldown: 1, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 } },
+    recipe: CHARACTERS[0], classId: 5, ranged: true, range: 6, dmg: 21, cooldown: 1, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 } },
+  { id: 'cleric', names: ['Clériga', 'Sacerdotisa', 'Santa Guardiã'], desc: 'Orações curam e fortalecem quem está na linha de frente.', ability: 'Oração restauradora', color: CHARACTERS[4].color,
+    recipe: CHARACTERS[4], classId: 4, hp: 225, dmg: 27, range: 5, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 4 } },
+  { id: 'bard', names: ['Bardo', 'Mestre das Canções', 'Lenda Errante'], desc: 'Sua música acelera os ataques de todo o grupo.', ability: 'Acorde heroico', color: CHARACTERS[5].color,
+    recipe: CHARACTERS[5], classId: 4, hp: 220, dmg: 22, range: 5, speed: 3, cooldown: 1.15, ranged: true, idle: '2H_Melee_Idle', attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 2, Rapidez: 4, Alcance: 4 } },
+  { id: 'angel', names: ['Anjo', 'Arcanjo', 'Serafim'], desc: 'Paira acima da batalha e desce com impacto de luz para amparar o grupo.', ability: 'Descida celeste', color: CHARACTERS[6].color,
+    recipe: CHARACTERS[6], classId: 4, hp: 180, dmg: 24, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.8, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
+  { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
+    recipe: CHARACTERS[7], classId: 6, hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 5 } },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -131,13 +149,15 @@ sun.shadow.bias = -0.0005;
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 80 });
 scene.add(sun, sun.target);
 
-const world = createWorld(scene, ROAD, PHASES);
+let world = createWorld(scene, ROAD, PHASES);
 
 // ---------- interface ----------
 const $ = (id) => document.getElementById(id);
+const campaignMapSession = createCampaignMapSeedSession(MISSIONS);
 const bars = $('bars');
 let speed = 1;
 $('speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('speed').textContent = `Velocidade ${speed}x`; };
+$('autoEvolve').onclick = () => { setAutoEvolve(!autoEvolve); audio.play('click'); };
 $('restart').onclick = () => startGame();   // volta para o menu inicial
 $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');   // na campanha volta para o mapa
 
@@ -153,49 +173,110 @@ function showBanner(text, seconds = 2) {
 }
 
 function setText(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
+let goalUiRoot = null, goalUiLabel = null, goalUiFill = null, goalUiPercent = -1, goalUiText = '';
+function setGoalUI(text, progress) {
+  const root = $('goal');
+  if (root !== goalUiRoot) {
+    root.innerHTML = '<span class="goal-label"></span><span class="goal-meter" aria-hidden="true"><i></i></span>';
+    goalUiRoot = root;
+    goalUiLabel = root.querySelector('.goal-label');
+    goalUiFill = root.querySelector('.goal-meter i');
+    goalUiPercent = -1; goalUiText = '';
+    root.setAttribute('role', 'progressbar');
+    root.setAttribute('aria-valuemin', '0');
+    root.setAttribute('aria-valuemax', '100');
+  }
+  if (goalUiText !== text) {
+    goalUiText = text;
+    goalUiLabel.textContent = text;
+    root.setAttribute('aria-label', `Objetivo da missão: ${text}`);
+    root.setAttribute('aria-valuetext', text);
+  }
+  const percent = Math.round(THREE.MathUtils.clamp(progress, 0, 1) * 100);
+  if (percent !== goalUiPercent) {
+    goalUiPercent = percent;
+    goalUiFill.style.width = `${percent}%`;
+    root.setAttribute('aria-valuenow', String(percent));
+  }
+}
 
 // tela de escolha estilo arcade: grade com uma linha por classe, todas as variantes à mostra
-const pick = { options: [], cards: [], sel: 0, open: false, timer: null };
+const pick = { options: [], cards: [], classFilters: [], classRows: [], activeClass: -1, suggestedId: null, sel: 0, open: false, timer: null };
 
 function showPick(title, sub) {
   pick.mode = 'hero';
   $('banner').style.opacity = 0;   // a faixa não pode ficar embaixo do título da escolha
-  pick.options = HEROES.flatMap((_, classId) => variantsOf(classId));   // índice = classe * 4 + coluna
-  $('pickHint').textContent = 'Clique para escolher · setas movem · Enter confirma';
+  pick.options = HEROES.flatMap((_, classId) => variantsOf(classId));   // cada classe ocupa sua própria linha
+  $('pickHint').textContent = 'Escolha a classe · ← → herói · ↑ ↓ classe · Enter escolher';
+  const previousSuggestion = game.mission && game.picksLeft > 0 && !game.test
+    ? game.campaignSquadSuggestion?.[heroes().length]
+    : null;
+  pick.suggestedId = previousSuggestion;
   $('pickTitle').textContent = title;
   $('pickSub').textContent = sub;
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.add('grid');
+  const filters = document.createElement('div');
+  filters.className = 'pick-filters';
+  filters.setAttribute('role', 'group');
+  filters.setAttribute('aria-label', 'Filtrar heróis por classe');
   const rows = document.createElement('div');
   rows.className = 'pick-rows';
-  for (const hero of HEROES) {
+  pick.classFilters = [];
+  pick.classRows = [];
+  for (const [classId, hero] of HEROES.entries()) {
+    const count = variantsOf(classId).length;
+    const filter = document.createElement('button');
+    filter.type = 'button';
+    filter.className = 'pick-filter';
+    filter.setAttribute('aria-label', `${hero.name}: ${count} heróis`);
+    filter.setAttribute('aria-pressed', 'false');
+    filter.style.setProperty('--class-color', hero.color?.[0] || '#8bb9e7');
+    filter.innerHTML = `<span>${hero.name}</span><small>${count}</small>`;
+    filter.onclick = () => focusClass(classId);
+    filter.onfocus = () => focusClass(classId);
+    filters.appendChild(filter);
+    pick.classFilters.push(filter);
+
     const row = document.createElement('div');
     row.className = 'pick-row';
-    row.innerHTML = `<span class="class-tag" title="${CLASSES[HEROES.indexOf(hero)].summary}">${hero.name}</span>`;
+    row.id = `pick-class-${classId}`;
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', `Heróis da classe ${hero.name}`);
+    row.hidden = true;
+    row.style.setProperty('--class-color', hero.color?.[0] || '#8bb9e7');
     rows.appendChild(row);
+    pick.classRows.push(row);
   }
   const total = totalStars();
   pick.cards = pick.options.map((cfg, i) => {
     const owned = isOwned(cfg), open = variantOpen(cfg.id, total);
+    const className = HEROES[cfg.classId]?.name || 'Herói';
+    const suggested = cfg.id === previousSuggestion && !owned && open;
     const b = document.createElement('div');
-    b.className = owned ? 'card owned' : open ? 'card' : 'card locked';
+    b.className = `${owned ? 'card owned' : open ? 'card' : 'card locked'}${suggested ? ' suggested' : ''}`;
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', owned ? `${cfg.name} (já está no grupo)` : open ? `Escolher ${cfg.name}` : `${cfg.name} (★ ${starsToUnlock(cfg.id)} para liberar)`);
+    b.tabIndex = 0;
+    b.setAttribute('aria-pressed', 'false');
+    b.setAttribute('aria-label', `${cfg.name}, classe ${className}${suggested ? ' (sugestão da equipe anterior)' : owned ? ' (já está no grupo)' : open ? '' : ` (★ ${starsToUnlock(cfg.id)} para liberar)`}`);
+    b.setAttribute('aria-disabled', String(owned || !open));
     b.style.setProperty('--c', cfg.color[0]);
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 30}ms`);
-    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
-      <strong class="ability">${owned || open ? cfg.ability : `★ ${starsToUnlock(cfg.id)} para liberar`}</strong>${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : '<span class="lock">\u{1F512}︎</span>'}`;
-    if (!owned && open) b.onclick = () => confirmPick(i);
+    const signatureSkill = skillSetFor(cfg)[0]?.name || cfg.ability;
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill">${signatureSkill}</small></div>${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
+    b.onclick = () => selectCard(i);
+    b.onfocus = () => selectCard(i);
     bindCard(b, i);
-    rows.children[cfg.classId].appendChild(b);
+    pick.classRows[cfg.classId].appendChild(b);
     return b;
   });
   pick.info = document.createElement('aside');
   pick.info.className = 'pick-info';
-  list.append(rows, pick.info);
-  selectCard(pick.options.findIndex(isFree));
+  list.append(filters, rows, pick.info);
+  const suggestedIndex = previousSuggestion ? pick.options.findIndex((cfg) => cfg.id === previousSuggestion && isFree(cfg)) : -1;
+  selectCard(suggestedIndex >= 0 ? suggestedIndex : pick.options.findIndex(isFree));
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
@@ -203,6 +284,41 @@ function showPick(title, sub) {
 
 const isOwned = (cfg) => heroes().some((h) => h.cfg.id === cfg.id);
 const isFree = (cfg) => !isOwned(cfg) && variantOpen(cfg.id);   // pode entrar no grupo agora
+
+const CAMPAIGN_SQUAD_KEY = 'cavaleiros-equipe-campanha';
+function loadCampaignSquad() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAMPAIGN_SQUAD_KEY));
+    return Array.isArray(saved) ? saved.filter((id) => typeof id === 'string' && VARIANTS.some((cfg) => cfg.id === id)).slice(0, MAX_PARTY) : [];
+  } catch { return []; }
+}
+function rememberCampaignSquad() {
+  if (!game.mission || game.test) return;
+  const saved = loadCampaignSquad();
+  heroes().slice(0, MAX_PARTY).forEach((hero, i) => { saved[i] = hero.cfg.id; });
+  try { localStorage.setItem(CAMPAIGN_SQUAD_KEY, JSON.stringify(saved.slice(0, MAX_PARTY))); } catch {}
+}
+
+function setPickClass(classId) {
+  pick.activeClass = classId;
+  pick.classRows.forEach((row, i) => { row.hidden = i !== classId; });
+  pick.classFilters.forEach((button, i) => {
+    const active = i === classId;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+}
+
+function focusClass(classId) {
+  const row = pick.options.map((cfg, i) => cfg.classId === classId ? i : -1).filter((i) => i >= 0);
+  if (!row.length) return;
+  const sameClass = pick.options[pick.sel]?.classId === classId;
+  const preferred = sameClass ? Math.max(0, row.indexOf(pick.sel)) : 0;
+  const available = row.filter((i) => isFree(pick.options[i]));
+  const choices = available.length ? available : row;
+  const selected = choices.sort((a, b) => Math.abs(row.indexOf(a) - preferred) - Math.abs(row.indexOf(b) - preferred))[0];
+  selectCard(selected);
+}
 
 // recordes por dificuldade (melhor fase e abates), guardados no navegador quando der
 const RECORDS_KEY = 'cavaleiros-recordes';
@@ -212,7 +328,7 @@ function loadRecords() {
 
 // devolve true quando a partida que acabou virou o novo recorde do nível
 function saveRecord(won) {
-  if (game.start > 1 || game.mission) return false;   // o atalho ?fase=N não vale recorde; a campanha usa estrelas
+  if (game.start > 1 || game.mission || game.test) return false;   // atalhos de teste e campanha não gravam recordes
   const records = loadRecords(), old = records[difficulty.id];
   const now = { phase: game.phase, kills: game.kills, won };
   const better = !old || (won && !old.won) || (won === !!old.won && (now.phase > old.phase || (now.phase === old.phase && now.kills > old.kills)));
@@ -224,13 +340,54 @@ function saveRecord(won) {
 
 // habilidade automática ou manual, lembrada por variante quando der
 const AUTO_KEY = 'cavaleiros-auto';
-function loadAuto(id) {
-  try { return JSON.parse(localStorage.getItem(AUTO_KEY))?.[id] ?? true; } catch { return true; }
+const AUTO_EVOLVE_KEY = 'cavaleiros-auto-evoluir';
+let autoEvolve = loadAutoEvolve();
+function loadAutoEvolve() {
+  try { return localStorage.getItem(AUTO_EVOLVE_KEY) === 'true'; } catch { return false; }
 }
-function saveAuto(id, on) {
+function saveAutoEvolve() {
+  try { localStorage.setItem(AUTO_EVOLVE_KEY, String(autoEvolve)); } catch {}
+}
+function paintAutoEvolve() {
+  const button = $('autoEvolve');
+  button.textContent = autoEvolve ? 'Autoevoluir: sim' : 'Autoevoluir: não';
+  button.setAttribute('aria-pressed', String(autoEvolve));
+  button.setAttribute('aria-label', autoEvolve
+    ? 'Autoevolução ligada. Clique para escolher as melhorias manualmente.'
+    : 'Autoevolução desligada. Clique para permitir escolhas automáticas.');
+  button.title = autoEvolve
+    ? 'Escolhe automaticamente as rotas de evolução dos heróis.'
+    : 'Quando ligada, escolhe automaticamente as rotas de evolução dos heróis.';
+}
+function setAutoEvolve(enabled) {
+  autoEvolve = !!enabled;
+  saveAutoEvolve();
+  paintAutoEvolve();
+}
+paintAutoEvolve();
+
+function loadAuto(id) {
+  try {
+    const value = JSON.parse(localStorage.getItem(AUTO_KEY))?.[id];
+    return typeof value === 'boolean' ? value : value?.[0] ?? true;
+  } catch { return true; }
+}
+function loadAutoSlot(id, slot = 0) {
+  try {
+    const value = JSON.parse(localStorage.getItem(AUTO_KEY))?.[id];
+    return Array.isArray(value) ? value[slot] ?? true : value ?? true;
+  } catch { return true; }
+}
+function saveAuto(id, on, slot = null) {
   try {
     const all = JSON.parse(localStorage.getItem(AUTO_KEY)) || {};
-    all[id] = on;
+    if (slot == null) all[id] = on; // compatibilidade com preferências antigas e chamadas existentes
+    else {
+      const current = all[id];
+      const slots = Array.isArray(current) ? [...current] : [typeof current === 'boolean' ? current : true, true, true];
+      slots[slot] = on;
+      all[id] = slots;
+    }
     localStorage.setItem(AUTO_KEY, JSON.stringify(all));
   } catch {}
 }
@@ -287,21 +444,26 @@ function showCampaign() {
   game.paused = true;   // sem grupo ainda: a partida não pode correr por trás do mapa
   $('pick').classList.add('hidden');
   const root = $('campaign');
+  const mapSeeds = campaignMapSession.get();
   renderCampaign(root, (m) => {
     game.mission = m;
+    // Cada missão da campanha recebe seu próprio cenário; a jornada completa mantém o mapa-base.
+    world.dispose?.();
+    world = createWorld(scene, ROAD, PHASES, mapSeeds.get(m.id));
     root.classList.add('hidden');
     showDifficulty();
-  });
+  }, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to));
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
-  back.onclick = () => showMenu();
+  back.onclick = () => { campaignMapSession.reset(); showMenu(); };
   root.querySelector('.camp-head')?.prepend(back);
   root.classList.remove('hidden');
 }
 
 // dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão
 function showDifficulty() {
+  if (typeof preloadBattleAssets === 'function') preloadBattleAssets();
   pick.mode = 'difficulty';
   $('banner').style.opacity = 0;
   pick.options = DIFFICULTIES;
@@ -341,9 +503,15 @@ function confirmDifficulty(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   const m = game.mission;
+  if (m) campaignMapSession.reset();   // a próxima visita à campanha começa uma nova combinação de mapas
+  if (!m && world.seed != null && world.seed !== 11) {
+    world.dispose?.();
+    world = createWorld(scene, ROAD, PHASES, 11);
+  }
   // ?fase=N também vale na campanha, dentro do trecho da missão
   const asked = +new URLSearchParams(location.search).get('fase');
   placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
+  game.campaignSquadSuggestion = m && !game.test ? loadCampaignSquad() : [];
   game.picksLeft = m ? m.heroes : 0;
   pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
     : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
@@ -366,41 +534,105 @@ function bindCard(b, i) {
 // painel de detalhes do cartão em foco: descrição, habilidade e atributos
 function renderInfo(cfg) {
   const info = heroInfo(cfg);
+  const skills = skillSetFor(cfg);
+  const currentTeam = heroes().map((hero) => hero.cfg);
+  const alreadySelected = currentTeam.some((member) => member.id === cfg.id);
+  const teamLimit = game.mission && game.picksLeft > 0 ? Math.min(MAX_PARTY, game.mission.heroes) : MAX_PARTY;
+  const canAddCandidate = !alreadySelected && currentTeam.length < teamLimit && variantOpen(cfg.id);
+  const projectedTeam = canAddCandidate ? [...currentTeam, cfg] : currentTeam;
+  const team = teamCoverage(projectedTeam);
+  const objective = game.mission?.goal;
+  const priorityRoles = missionRoleNeeds(objective);
+  const uncoveredPriorities = priorityRoles.filter((name) => !team.roles.find((role) => role.name === name)?.count);
+  const nextHint = objective
+    ? uncoveredPriorities.length
+      ? projectedTeam.length >= teamLimit ? `Esta formação ainda não cobre: ${uncoveredPriorities.join(' · ')}.` : `Para esta missão, priorize: ${uncoveredPriorities.join(' · ')}.`
+      : 'A equipe cobre os papéis prioritários da missão.'
+    : team.missing.length
+      ? projectedTeam.length >= teamLimit ? `Equipe completa; sem cobertura de: ${team.missing.join(' · ')}.` : `Nas próximas vagas, priorize: ${team.missing.join(' · ')}.`
+      : 'A equipe já cobre os papéis essenciais.';
+  const teamHint = alreadySelected
+    ? 'Este herói já está na equipe.'
+    : !variantOpen(cfg.id)
+      ? `Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para adicionar ${cfg.name}.`
+      : currentTeam.length >= teamLimit
+        ? 'A equipe está completa.'
+        : nextHint;
+  const teamRoles = team.roles.map((role) => `<span class="${role.count ? 'covered' : ''}${priorityRoles.includes(role.name) ? ' priority' : ''}">${role.name}<b>${role.count}</b></span>`).join('');
+  const teamMembers = projectedTeam.length
+    ? projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}">${member.name}${canAddCandidate && member.id === cfg.id ? '<small>em foco</small>' : ''}</span>`).join('')
+    : '<span class="empty">Ainda sem aliados</span>';
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
     `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
-  pick.info.innerHTML = `<div class="crest"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
-    <small>${info.name} · ${cfg.ranged ? 'À distância' : 'Corpo a corpo'}</small>
-    <div class="hero-guide"><h4>${info.role}</h4><p>${CLASSES[cfg.classId].summary}</p></div>
-    <div class="ability"><b>✦ ${cfg.ability}</b>${info.skill}<span class="skill-meta">Recarga no nível 1: ${skillCooldown(cfg.id)} s</span></div>
-    <div class="hero-guide"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
-    <div class="stats">${stats}</div>
-    <dl class="hero-numbers"><dt>Vida inicial</dt><dd>${cfg.hp}</dd><dt>Dano por golpe</dt><dd>${cfg.dmg}</dd><dt>Intervalo de ataque</dt><dd>${cfg.cooldown.toLocaleString('pt-BR')} s</dd><dt>Alcance básico</dt><dd>${cfg.range.toLocaleString('pt-BR')} m</dd></dl>
-    <p class="guide-note">Valores do nível 1. Evoluções e melhorias alteram os atributos.</p>
+  pick.info.innerHTML = `<div class="hero-profile"><div class="crest"><img src="${cfg.portrait}" alt=""></div>
+      <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? 'À distância' : 'Corpo a corpo'}</small><div class="ribbon">${cfg.name}</div>
+        <span class="hero-role-pill">${info.role}</span></div></div>
+    <div class="hero-overview"><p>${CLASSES[cfg.classId].summary}</p></div>
+    <section class="ability skill-list" aria-label="Habilidades do herói"><header><b>Habilidades</b><span>3 poderes</span></header>${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : ''}"><span class="skill-kind">${skill.ultimate ? 'ULTIMATE' : skill.slot === 1 ? 'TÉCNICA' : 'BÁSICA'}</span><strong>${skill.name}</strong><span class="skill-copy">${skill.description}</span><span class="skill-meta">Recarga · ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
+    <div class="pick-team-status"><span>Equipe <b>${projectedTeam.length}/${teamLimit}</b></span><p>${teamHint}</p></div>
+    <details class="hero-more"><summary>Ver atributos e equipe</summary><div class="hero-more-content">
+      <div class="stats">${stats}</div>
+      <dl class="hero-numbers"><dt>Vida</dt><dd>${cfg.hp}</dd><dt>Dano por golpe</dt><dd>${cfg.dmg}</dd><dt>Intervalo</dt><dd>${cfg.cooldown.toLocaleString('pt-BR')} s</dd><dt>Alcance</dt><dd>${cfg.range.toLocaleString('pt-BR')} m</dd></dl>
+      <div class="hero-guide hero-tips"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
+      <section class="party-composition" aria-label="Composição e cobertura da equipe">
+      <header><b>${canAddCandidate ? 'Equipe se escolher' : 'Equipe atual'}</b><span>${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span></header>
+      ${objective ? `<div class="party-objective"><b>Objetivo</b><span>${goalText(objective)}</span></div>` : ''}
+      <div class="party-members">${teamMembers}</div>
+      <div class="party-roles">${teamRoles}</div>
+    </section>
+      <p class="guide-note">Valores do nível 1. Evoluções e melhorias alteram os atributos.</p>
+    </div></details>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}`;
+  const selectButton = document.createElement('button');
+  selectButton.type = 'button';
+  selectButton.className = 'hero-select-btn';
+  selectButton.disabled = !canAddCandidate;
+  selectButton.textContent = alreadySelected ? 'Já está na equipe' : !variantOpen(cfg.id) ? 'Herói bloqueado' : `Escolher ${cfg.name}`;
+  selectButton.setAttribute('aria-label', canAddCandidate ? `Escolher ${cfg.name}` : selectButton.textContent);
+  selectButton.onclick = () => confirmPick(pick.sel);
+  pick.info.appendChild(selectButton);
 }
 
 // setas na grade: ← → dentro da linha, ↑ ↓ entre linhas (coluna mais próxima), pulando quem já está no grupo
 function moveGrid(dx, dy) {
   const free = (i) => isFree(pick.options[i]);
-  const r0 = Math.floor(pick.sel / 4), c0 = pick.sel % 4;
-  for (let n = 1; n < 4; n++) {
-    if (dx) {
-      const i = r0 * 4 + (c0 + dx * n + 4) % 4;
+  const rows = HEROES.map((_, classId) => pick.options
+    .map((cfg, i) => cfg.classId === classId ? i : -1).filter((i) => i >= 0));
+  const r0 = rows.findIndex((row) => row.includes(pick.sel));
+  const c0 = rows[r0]?.indexOf(pick.sel) ?? 0;
+  if (r0 < 0) return;
+  if (dx) {
+    const row = rows[r0];
+    for (let n = 1; n < row.length; n++) {
+      const i = row[(c0 + dx * n + row.length) % row.length];
       if (free(i)) return selectCard(i);
-    } else {
-      const r = (r0 + dy * n + 4) % 4;
-      const c = [0, 1, 2, 3].sort((a, b) => Math.abs(a - c0) - Math.abs(b - c0)).find((k) => free(r * 4 + k));
-      if (c !== undefined) return selectCard(r * 4 + c);
     }
+    return;
+  }
+  for (let n = 1; n < rows.length; n++) {
+    const r = (r0 + dy * n + rows.length) % rows.length;
+    const candidates = rows[r].filter(free);
+    const i = candidates.sort((a, b) => Math.abs(rows[r].indexOf(a) - c0) - Math.abs(rows[r].indexOf(b) - c0))[0];
+    if (i !== undefined) return selectCard(i);
   }
 }
 
 function selectCard(i) {
   pick.sel = (i + pick.cards.length) % pick.cards.length;
-  pick.cards.forEach((c, k) => c.classList.toggle('sel', k === pick.sel));
-  if (pick.mode === 'hero') renderInfo(pick.options[pick.sel]);
+  pick.cards.forEach((c, k) => {
+    const selected = k === pick.sel;
+    c.classList.toggle('sel', selected);
+    c.setAttribute('aria-pressed', String(selected));
+  });
+  if (pick.mode === 'hero') {
+    setPickClass(pick.options[pick.sel].classId);
+    $('pickHint').textContent = pick.options[pick.sel].id === pick.suggestedId
+      ? 'Sugestão da equipe · passe para prévia · clique em Escolher ou Enter'
+      : 'Passe para prévia · clique em Escolher · setas navegam · Enter confirma';
+    renderInfo(pick.options[pick.sel]);
+  }
 }
 
 function confirmPick(i) {
@@ -410,7 +642,7 @@ function confirmPick(i) {
   if (pick.mode === 'difficulty') return confirmDifficulty(i);
   if (pick.mode === 'mode') return confirmMode(i);
   const cfg = pick.options[i];
-  if (!isFree(cfg) || heroes().length >= 4) return;
+  if (!isFree(cfg) || heroes().length >= MAX_PARTY) return;
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   for (let k = 0; k < 10; k++) {   // corações saindo do cartão escolhido
@@ -431,13 +663,18 @@ function confirmPick(i) {
     h.gainXp(xp);
     h.busy = h.once('Cheer') * 0.6;
     if (first) {
+      rememberCampaignSquad();
       autoUpgrade();   // a missão já começa no nível certo, sem telas de evolução
       if (--game.picksLeft > 0) return showPick(pickTitle(), pickSub());
       return startMission();
     }
-    if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
-    game.paused = false;
-    audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
+    const begin = () => {
+      if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
+      game.paused = false;
+      audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
+    };
+    if (typeof withBattleAssets === 'function') return withBattleAssets(begin);
+    begin();
   }, 550);
 }
 
@@ -528,12 +765,22 @@ function confirmRelic(i) {
 
 function showEvolution() {
   if (!evolutions.length || pick.open || game.paused || game.over) return;
+  if (autoEvolve) {
+    while (evolutions.length && !game.over) {
+      const entry = evolutions.shift();
+      const option = chooseAutoEvolution(entry.hero);
+      if (!option) continue;
+      applyUpgrade(entry.hero, option);
+      popText(entry.hero.pos, option.name + '!', 'evolve');
+    }
+    return;
+  }
   const entry = evolutions[0], h = entry.hero, cfg = h.cfg;
   pick.mode = 'evolution';
   $('banner').style.opacity = 0;
   pick.open = true;
   game.paused = true;
-  pick.upgrades = EVOLUTION_BRANCHES;
+  pick.upgrades = availableEvolutionBranches(h);
   $('pickTitle').textContent = 'Evolução!';
   $('pickSub').textContent = `${cfg.names[entry.level - 1]} · Nv${entry.level} · Escolha uma melhoria`;
   $('pickHint').textContent = '← → melhoria · Enter confirmar · 1–3 escolher';
@@ -556,8 +803,35 @@ function showEvolution() {
   $('pick').classList.remove('hidden');
 }
 
+function chooseAutoEvolution(hero) {
+  const controlEffects = new Set(['taunt', 'bastion', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm']);
+  const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon']);
+  const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist']);
+  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro']);
+  const skills = skillSetFor(hero.cfg);
+  const control = skills.filter((skill) => skill.control || controlEffects.has(skill.effect)).length
+    + Number(controlSignatures.has(hero.cfg.id));
+  const support = skills.filter((skill) => supportEffects.has(skill.effect)).length
+    + Number(supportSignatures.has(hero.cfg.id));
+  const available = availableEvolutionBranches(hero);
+  if (!available.length) return null;
+  const ranks = hero.evolutionBranches || {};
+  const scores = {
+    damage: 1.2 - (ranks.damage || 0) * 0.12,
+    control: 0.7 + control * 0.75 - (ranks.control || 0) * 0.12,
+    support: 0.7 + support * 0.75 - (ranks.support || 0) * 0.12,
+  };
+  return available.reduce((best, branch) => scores[branch.id] > scores[best.id] ? branch : best, available[0]);
+}
+
+function availableEvolutionBranches(hero) {
+  return EVOLUTION_BRANCHES.filter((branch) => !(hero.evolutionBranches?.[branch.id] > 0));
+}
+
 function confirmEvolution(i) {
-  const h = evolutions.shift().hero, option = pick.upgrades[i];
+  const entry = evolutions[0], option = pick.upgrades[i];
+  if (!entry || !option || (EVOLUTION_BRANCHES.some((branch) => branch.id === option.id) && entry.hero.evolutionBranches?.[option.id])) return;
+  const h = evolutions.shift().hero;
   applyUpgrade(h, option);
   popText(h.pos, option.name + '!', 'evolve');
   pick.open = false;
@@ -588,7 +862,7 @@ function applyUpgrade(h, option) {
   if (option.id === 'dmg') h.dmg *= 1.2;
   if (option.id === 'haste') h.haste *= 1.2;
   if (option.id === 'range') h.range *= 1.2;
-  if (option.id === 'skill') { h.skillRate *= 0.75; h.skillPower *= 1.25; h.skillTimer *= 0.75; }
+  if (option.id === 'skill') { h.skillRate *= 0.75; h.skillPower *= 1.25; for (let slot = 0; slot < 3; slot++) { h.skillTimers[slot] *= 0.75; h.skillMaxes[slot] *= 0.75; } }
   if (option.id === 'shield') h.damageTaken *= 0.8;
 }
 
@@ -607,6 +881,18 @@ addEventListener('keydown', (e) => {
   if (!pick.open) return;
   if (e.key === 'Escape' && pick.mode === 'difficulty') return game.mission ? showCampaign() : showMenu();
   const grid = pick.mode === 'hero';
+  const classFilter = grid ? e.target.closest?.('.pick-filter') : null;
+  if (classFilter) {
+    if (e.key === 'Enter' || e.key === ' ') return; // o botão de classe não confirma a escolha do herói
+    const filterIndex = pick.classFilters.indexOf(classFilter);
+    const direction = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+    if (direction) {
+      pick.classFilters[(filterIndex + direction + pick.classFilters.length) % pick.classFilters.length]?.focus();
+      e.preventDefault();
+    } else if (e.key.startsWith('Arrow')) e.preventDefault();
+    return;
+  }
+  if (grid && e.target.closest?.('.hero-select-btn, .hero-more summary') && (e.key === 'Enter' || e.key === ' ')) return;
   if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : selectCard(pick.sel - 1);
   else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : selectCard(pick.sel + 1);
   else if (e.key === 'ArrowUp' && grid) moveGrid(0, -1);
@@ -614,12 +900,25 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'Enter' || e.key === ' ') confirmPick(pick.sel);
   else if (!grid && /^[1-4]$/.test(e.key) && +e.key <= pick.cards.length) confirmPick(+e.key - 1);
   else return;
-  if (grid && e.key.startsWith('Arrow')) pick.cards[pick.sel].scrollIntoView({ block: 'nearest' });   // janelas baixas rolam a grade
+  if (grid && e.key.startsWith('Arrow')) {
+    pick.cards[pick.sel].scrollIntoView({ block: 'nearest' });
+    pick.cards[pick.sel].focus({ preventScroll: true });
+  }
   e.preventDefault();
 });
 
 // retrato de cada herói: o próprio modelo 3D renderizado numa imagem
-function renderPortraits() {
+function canvasImageURL(canvas) {
+  if (!canvas.toBlob || !URL.createObjectURL) return Promise.resolve(canvas.toDataURL());
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error('Não foi possível preparar o retrato do herói.'));
+      try { resolve(URL.createObjectURL(blob)); } catch (error) { reject(error); }
+    }, 'image/png');
+  });
+}
+
+async function renderPortraits() {
   const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
   r.setSize(336, 336);
   const sc = new THREE.Scene();
@@ -630,6 +929,9 @@ function renderPortraits() {
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   cam.position.set(1.4, 1.9, 4.2);
   cam.lookAt(0, 1.15, 0);
+  const portraitCount = VARIANTS.length * 3;
+  $('overlayText').textContent = `Preparando heróis... 0/${portraitCount}`;
+  let rendered = 0;
   for (const cfg of VARIANTS) {
     const built = cfg.built;
     const model = SkeletonUtils.clone(built.scene);
@@ -647,7 +949,10 @@ function renderPortraits() {
       model.scale.setScalar(1 + (level - 1) * 0.08);
       halo.visible = level === 3;
       r.render(sc, cam);
-      cfg.portraits.push(r.domElement.toDataURL());
+      cfg.portraits.push(await canvasImageURL(r.domElement));
+      rendered++;
+      $('overlayText').textContent = `Preparando heróis... ${rendered}/${portraitCount}`;
+      if (rendered % 6 === 0 && rendered < portraitCount) await new Promise((resolve) => setTimeout(resolve, 0));
     }
     cfg.portrait = cfg.portraits[0];
     sc.remove(model);
@@ -655,47 +960,76 @@ function renderPortraits() {
   r.dispose();
 }
 
-// ---------- barra de habilidades: um botão por herói (clique ou teclas 1–4) ----------
+// ---------- barra de habilidades: três botões por herói, incluindo ultimate ----------
 let skillKey = '', skillItems = [];
+const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F']];
+const SKILL_GLYPHS = {
+  paladin: ['✚', '⬟', '☼'], guardian: ['⛨', '⚑', '♜'], champion: ['⚔', '➶', '✦'],
+  berserker: ['♨', '⚔', '✹'], crusher: ['⬟', '✹', '☄'], viking: ['⚒', '➶', '✹'],
+  pyro: ['♨', '♨', '☄'], arcane: ['⚡', '✺', '✷'], cryo: ['❄', '⛨', '❆'],
+  assassin: ['✦', '⚔', '☠'], crossbow: ['➶', '⇶', '✹'], ninja: ['✧', '☯', '✴'],
+  king: ['♛', '✦', '☀'], iceviking: ['❄', '➶', '❆'], necro: ['☠', '♟', '☥'],
+  druid: ['❀', '❧', '☘'], cleric: ['✚', '⛨', '☼'], bard: ['♫', '♪', '♬'],
+  angel: ['✧', '⛨', '☼'], chronist: ['⌛', '⚡', '◷'],
+};
 
 function buildSkillBar(party) {
   const bar = $('skills');
   bar.innerHTML = '';
-  skillItems = party.map((h, i) => {
-    const b = document.createElement('div');
-    b.className = 'skill';
-    b.setAttribute('role', 'button');
-    b.style.setProperty('--c', h.cfg.color[0]);
-    b.style.setProperty('--cd', h.cfg.color[1]);
-    b.title = `${h.cfg.name} — ${h.cfg.ability}: ${heroInfo(h.cfg).skill} (tecla ${i + 1})`;
-    b.innerHTML = `<span class="key">${i + 1}</span><button class="auto" title="Automático: a habilidade sai sozinha. Manual: espera você.">AUTO</button>
-      <div class="face"><img alt=""><div class="cd"></div><b class="secs"></b></div><div class="name">${h.cfg.ability}</div>`;
-    const it = { h, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
-    b.onclick = () => pressSkill(it);
-    it.auto.onclick = (e) => {
-      e.stopPropagation();
-      h.auto = !h.auto;
-      h.manualTarget = null;
-      h.wantSkill = 0;
-      if (aiming?.hero === h) cancelAim();
-      saveAuto(h.cfg.id, h.auto);
-      audio.play('click');
-    };
-    bar.appendChild(b);
-    return it;
+  skillItems = [];
+  party.forEach((h, heroIndex) => {
+    const group = document.createElement('div');
+    group.className = 'skillGroup';
+    group.style.setProperty('--c', h.cfg.color[0]);
+    group.style.setProperty('--cd', h.cfg.color[1]);
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', h.cfg.name);
+    const heroMark = SKILL_GLYPHS[h.cfg.id]?.[0] || '✦';
+    group.innerHTML = `<div class="skillHero"><span class="skillHeroMark" aria-hidden="true">${heroMark}</span><span class="skillHeroName">${h.cfg.name}</span><span class="skillHeroCount">3 HABILIDADES</span></div><div class="skillSlots"></div>`;
+    const slots = group.querySelector('.skillSlots');
+    for (const skill of skillSetFor(h.cfg)) {
+      const slot = skill.slot, key = SKILL_KEYS[slot][heroIndex];
+      const b = document.createElement('div');
+      b.className = `skill slot-${slot}${skill.ultimate ? ' ultimate' : ''}`;
+      b.setAttribute('role', 'button');
+      b.setAttribute('tabindex', '0');
+      b.setAttribute('aria-label', `${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : 'habilidade'}. Tecla ${key}.`);
+      b.style.setProperty('--c', h.cfg.color[0]);
+      b.style.setProperty('--cd', h.cfg.color[1]);
+      b.title = `${h.cfg.name} — ${skill.name}: ${skill.description} (tecla ${key})`;
+      const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
+      const kind = skill.ultimate ? 'ULTIMATE' : slot === 0 ? 'ASSINATURA' : 'TÉCNICA';
+      b.innerHTML = `<span class="key">${key}</span><button class="auto" title="Alternar uso automático desta habilidade" aria-label="Alternar automático">AUTO</button>
+        <div class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><div class="cd"></div><b class="secs"></b></div>
+        <div class="name"><small>${kind}</small><b>${skill.name}</b></div>`;
+      const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
+      b.onclick = () => pressSkill(it);
+      it.auto.onclick = (e) => {
+        e.stopPropagation();
+        h.autoSkills[slot] = !h.autoSkills[slot];
+        h.skillTargets[slot] = null;
+        h.skillRequests[slot] = 0;
+        if (aiming?.hero === h && slot === 0) cancelAim();
+        saveAuto(h.cfg.id, h.autoSkills[slot], slot);
+        audio.play('click');
+      };
+      slots.appendChild(b);
+      skillItems.push(it);
+    }
+    bar.appendChild(group);
   });
 }
 
 function pressSkill(it) {
-  const h = it.h;
-  if (!h.auto && aimSpec(h) && !h.dead && !game.over && !game.paused && h.skillTimer <= 0 && game.state === 'fight') {
+  const { h, slot } = it;
+  if (!h.autoSkills[slot] && slot === 0 && aimSpec(h) && !h.dead && !game.over && !game.paused && h.skillTimers[slot] <= 0 && game.state === 'fight') {
     if (aiming?.hero === h) cancelAim();
-    else beginAim(h);
+    else beginAim(h, slot);
     audio.play('click');
     return;
   }
   cancelAim();
-  const r = it.h.requestSkill();
+  const r = h.requestSkill(null, slot);
   audio.play('click');
   if (r !== 'ok') it.nopeT = performance.now() + 400;   // caído ou recarregando: o botão balança
 }
@@ -705,26 +1039,29 @@ function updateSkillBar() {
   if (key !== skillKey) { skillKey = key; buildSkillBar(party); }
   const now = performance.now();
   for (const it of skillItems) {
-    const h = it.h;
+    const { h, slot } = it;
     if (it.level !== h.level) { it.level = h.level; it.img.src = h.cfg.portraits?.[h.level - 1] || h.cfg.portrait; }
-    const ready = !h.dead && h.skillTimer <= 0;
-    const p = (h.dead ? 1 : THREE.MathUtils.clamp(h.skillTimer / h.skillMax, 0, 1)).toFixed(3);
+    const timer = h.skillTimers[slot], max = h.skillMaxes[slot];
+    const ready = !h.dead && timer <= 0;
+    const p = (h.dead ? 1 : THREE.MathUtils.clamp(timer / max, 0, 1)).toFixed(3);
     if (p !== it.p) { it.p = p; it.cd.style.setProperty('--p', p); }
-    const secs = h.dead ? 'Caído' : ready ? '' : String(Math.ceil(h.skillTimer));
+    const secs = h.dead ? 'Caído' : ready ? '' : String(Math.ceil(timer));
     if (it.secs.textContent !== secs) it.secs.textContent = secs;
-    const auto = h.auto ? 'AUTO' : 'MANUAL';
+    const auto = h.autoSkills[slot] ? 'AUTO' : 'MANUAL';
     if (it.auto.textContent !== auto) it.auto.textContent = auto;
     it.b.classList.toggle('ready', ready);
+    it.b.classList.toggle('cooling', !ready && !h.dead);
     it.b.classList.toggle('down', h.dead);
-    it.b.classList.toggle('manual', !h.auto);
-    it.b.classList.toggle('aiming', aiming?.hero === h);
+    it.b.classList.toggle('manual', !h.autoSkills[slot]);
+    it.b.classList.toggle('aiming', aiming?.hero === h && slot === 0);
     it.b.classList.toggle('nope', h.noTarget > 0 || now < it.nopeT);
   }
 }
 
 addEventListener('keydown', (e) => {
-  if (pick.open || game.over || e.repeat || !/^[1-4]$/.test(e.key)) return;
-  const it = skillItems[+e.key - 1];
+  if (pick.open || game.over || e.repeat || !/^[1-4qwerasdf]$/i.test(e.key)) return;
+  const key = e.key.toUpperCase();
+  const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
 });
 
@@ -742,15 +1079,73 @@ paintMute();
 const loader = new GLTFLoader();
 const load = (file) => loader.loadAsync(`assets/${file}`);
 const assets = {};
+const assetKey = (file) => file.replace(/\.(glb|gltf)$/, '');
+const BATTLE_ASSET_FILES = ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Crossbow.gltf',
+  'Skeleton_Arrow.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
+let battleAssetsPromise = null, battleAssetsReady = false, battleLoadingVisible = false, battleGateId = 0;
+let battleLoadProgress = { done: 0, total: BATTLE_ASSET_FILES.length };
+
+async function loadAssetFiles(files, onProgress = null) {
+  const missing = [...new Set(files)].filter((file) => !assets[assetKey(file)]);
+  let done = 0;
+  const results = await Promise.all(missing.map((file) => load(file).then((gltf) => {
+    onProgress?.(++done, missing.length);
+    return gltf;
+  })));
+  missing.forEach((file, i) => { assets[assetKey(file)] = results[i]; });
+  return missing.length;
+}
+
+function ensureBattleAssets() {
+  if (battleAssetsReady) return Promise.resolve();
+  if (battleAssetsPromise) return battleAssetsPromise;
+  const missing = BATTLE_ASSET_FILES.filter((file) => !assets[assetKey(file)]);
+  if (!missing.length) { battleAssetsReady = true; return Promise.resolve(); }
+  battleLoadProgress = { done: 0, total: missing.length };
+  battleAssetsPromise = loadAssetFiles(missing, (done, total) => {
+    battleLoadProgress = { done, total };
+    if (battleLoadingVisible) $('overlayText').textContent = `Preparando batalha... ${done}/${total}`;
+  }).then(() => { battleAssetsReady = true; });
+  battleAssetsPromise = battleAssetsPromise.catch((error) => { battleAssetsPromise = null; throw error; });
+  return battleAssetsPromise;
+}
+
+function preloadBattleAssets() {
+  ensureBattleAssets().catch((error) => console.warn('Não foi possível antecipar os modelos da batalha:', error));
+}
+
+function withBattleAssets(ready) {
+  if (battleAssetsReady) return ready();
+  const request = ++battleGateId;
+  battleLoadingVisible = true;
+  game.paused = true;
+  const pending = ensureBattleAssets();
+  if (battleAssetsReady) { battleLoadingVisible = false; return ready(); }
+  $('overlayBtn').hidden = true;
+  $('overlayText').textContent = `Preparando batalha... ${battleLoadProgress.done}/${battleLoadProgress.total}`;
+  $('overlay').classList.remove('hidden');
+  return pending.then(() => {
+    if (request !== battleGateId) return;
+    battleLoadingVisible = false;
+    $('overlay').classList.add('hidden');
+    $('overlayBtn').hidden = true;
+    $('overlayBtn').textContent = 'Jogar de novo';
+    $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');
+    ready();
+  }, (error) => {
+    if (request !== battleGateId) return;
+    battleLoadingVisible = false;
+    console.error('Falha ao preparar a batalha:', error);
+    $('overlayText').textContent = 'Não foi possível preparar a batalha. Verifique sua conexão e tente novamente.';
+    $('overlayBtn').textContent = 'Tentar novamente';
+    $('overlayBtn').hidden = false;
+    $('overlayBtn').onclick = () => withBattleAssets(ready);
+  });
+}
 
 async function loadAssets() {
-  const files = [...new Set([...VARIANTS.map((h) => `${h.model}.glb`), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), 'Skeleton_Mage.glb']), 'Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Crossbow.gltf', 'Skeleton_Arrow.gltf', 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
-  let done = 0;
-  const results = await Promise.all(files.map((f) => load(f).then((g) => {
-    $('overlayText').textContent = `Carregando modelos... ${++done}/${files.length}`;
-    return g;
-  })));
-  files.forEach((f, i) => (assets[f.replace(/\.(glb|gltf)$/, '')] = results[i]));
+  const files = [...new Set([...VARIANTS.map((h) => `${h.model}.glb`), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
+  await loadAssetFiles(files, (done, total) => { $('overlayText').textContent = `Carregando modelos... ${done}/${total}`; });
   // Monta cada receita uma vez; retratos e unidades reaproveitam suas peças.
   // variantes comuns ganham as cores e acessórios de looks.js
   for (const cfg of VARIANTS) {
@@ -793,6 +1188,10 @@ class Unit {
     this.bar = document.createElement('div');
     this.bar.className = `hp ${team === 'hero' ? 'ally' : ''}`;
     this.bar.innerHTML = '<i></i>';
+    this.barVisible = null;
+    this.barScreenX = null;
+    this.barScreenY = null;
+    this.barHealthWidth = null;
     bars.appendChild(this.bar);
     scene.add(this.root);
     units.push(this);
@@ -880,7 +1279,7 @@ class Unit {
   takeDamage(n, from, owner = null, critical = false) {
     if (this.dead || game.over) return;
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
-    if (owner && !owner.ranged && owner.cfg.id !== 'viking' && owner.cfg.id !== 'iceviking' && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
+    if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
     if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
       if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
@@ -1017,6 +1416,51 @@ const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', pyro: 'fire', cryo: '
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
 const allies = () => units.filter((u) => u.team !== 'skeleton');
+let activeTargetContext = null;
+const frameTargetContext = { party: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [] };
+
+function makeTargetContext(reuse = null) {
+  const goal = game.mission?.goal;
+  const party = reuse ? reuse.party : heroes();
+  if (reuse) {
+    party.length = 0;
+    for (const unit of units) if (unit.team === 'hero') party.push(unit);
+  }
+  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
+  const friends = reuse ? reuse.friends : villager ? [...party, villager] : party;
+  if (reuse) {
+    friends.length = 0;
+    for (const hero of party) friends.push(hero);
+    if (villager) friends.push(villager);
+  }
+  const skeletons = reuse ? reuse.skeletons : skeletonsAlive();
+  if (reuse) {
+    skeletons.length = 0;
+    for (const unit of units) if (unit.team === 'skeleton' && !unit.dead) skeletons.push(unit);
+  }
+  const attackableSkeletons = reuse ? reuse.attackableSkeletons : skeletons.filter((unit) => !unit.spawning);
+  if (reuse) {
+    attackableSkeletons.length = 0;
+    for (const unit of skeletons) if (!unit.spawning) attackableSkeletons.push(unit);
+  }
+  const alliedUnits = reuse ? reuse.alliedUnits : units.filter((unit) => unit.team !== 'skeleton');
+  if (reuse) {
+    alliedUnits.length = 0;
+    for (const unit of units) if (unit.team !== 'skeleton') alliedUnits.push(unit);
+  }
+  const context = reuse || {};
+  context.goal = goal;
+  context.party = party;
+  context.friends = friends;
+  context.villager = villager;
+  context.plateauBonus = world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0;
+  context.skeletons = skeletons;
+  context.attackableSkeletons = attackableSkeletons;
+  context.alliedUnits = alliedUnits;
+  return context;
+}
+
+const targetContext = () => activeTargetContext || makeTargetContext();
 
 function applySynergy(attack, owner, target, damage) {
   const members = heroes();
@@ -1085,32 +1529,52 @@ function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
-function canHeroReachTarget(hero, target) {
-  const goal = game.mission?.goal;
-  const plateauBonus = world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0;
+function canHeroReachTarget(hero, target, context = targetContext()) {
+  const { goal, plateauBonus, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
   if (fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5) return true;
 
+  // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
+  // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.
+  // O raio segue limitado, e totens têm uma regra própria abaixo.
+  if (target.team === 'skeleton' && target.ranged && !target.mobile && !target.totem
+    && fromPost <= RANGED_INTERCEPT) {
+    let otherInterceptors = 0;
+    for (const ally of party) if (ally !== hero && !ally.dead && ally.targetFocus === target) otherInterceptors++;
+    if (otherInterceptors < RANGED_INTERCEPTORS) return true;
+  }
+
   // Na escolta, o grupo pode sair um pouco da formação para tirar um inimigo do aldeão.
-  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
-  if (villager && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
+  const interceptLimit = LEASH + hero.range + plateauBonus + 5;
+  if (villager && fromPost <= interceptLimit
+    && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
+
+  // Na missão sem quedas, permite uma interceptação curta para salvar um herói
+  // crítico ou interromper um golpe já preparado contra qualquer aliado.
+  const threatenedHero = target.pendingHit?.target?.team === 'hero';
+  let nearCriticalHero = false;
+  if (goal?.type === 'nofall') for (const ally of party) {
+    if (!ally.dead && ally.hp / ally.maxHp <= 0.45 && tacticalDistance(ally.pos, target.pos) <= 4.5) { nearCriticalHero = true; break; }
+  }
+  if (goal?.type === 'nofall' && fromPost <= interceptLimit && (threatenedHero || nearCriticalHero)) return true;
 
   // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão.
   return goal?.type === 'totems' && target.totem && fromPost <= LEASH + hero.range + 5;
 }
 
-function heroTargetScore(hero, target) {
-  const goal = game.mission?.goal;
-  const distance = tacticalDistance(hero.pos, target.pos);
-  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
+function heroTargetScore(hero, target, from = hero.pos, context = targetContext()) {
+  const { goal, friends, party, villager } = context;
+  const distance = tacticalDistance(from, target.pos);
   let score = distance;
+  let distanceToVulnerable = Infinity;
 
   if (target.boss) score -= goal?.type === 'boss' ? 12 : 3.5;
   if (target.totem) score -= goal?.type === 'totems' ? 12 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
 
   if (target.enemyKind === 'Bomber') {
-    const nearby = allies().filter((ally) => !ally.dead).reduce((best, ally) => Math.min(best, tacticalDistance(ally.pos, target.pos)), Infinity);
+    let nearby = Infinity;
+    for (const ally of friends) if (!ally.dead) nearby = Math.min(nearby, tacticalDistance(ally.pos, target.pos));
     score -= nearby < 7 ? 4 + (7 - nearby) * 0.45 : 1;
   }
 
@@ -1120,33 +1584,150 @@ function heroTargetScore(hero, target) {
     const missingHealth = 1 - Math.max(0, threatenedAlly.hp) / threatenedAlly.maxHp;
     score -= 3 + missingHealth * 2 + (goal?.type === 'nofall' ? 4 : 0);
   }
+  if (goal?.type === 'nofall') {
+    for (const ally of party) if (!ally.dead && ally.hp / ally.maxHp <= 0.45) {
+      distanceToVulnerable = Math.min(distanceToVulnerable, tacticalDistance(ally.pos, target.pos));
+    }
+    if (distanceToVulnerable < 6) score -= 1.5 + (6 - distanceToVulnerable) * 0.75;
+  }
+  let distanceToVillager = Infinity;
   if (villager) {
-    const toVillager = tacticalDistance(villager.pos, target.pos);
+    distanceToVillager = tacticalDistance(villager.pos, target.pos);
+    const toVillager = distanceToVillager;
     if (target.pendingHit?.target === villager) score -= 11;
     else if (toVillager < 12) score -= (12 - toVillager) * 0.8;
+  }
+
+  // Evita gastar golpes em um alvo quase derrotado quando outro aliado já o
+  // está finalizando. Chefes, sacerdotes, bombardeiros e ameaças objetivas
+  // continuam concentrando o grupo.
+  const healthRatio = target.maxHp > 0 ? Math.max(0, target.hp / target.maxHp) : 1;
+  const urgentTarget = target.boss || target.totem || target.ranged
+    || target.enemyKind === 'Priest' || target.enemyKind === 'Bomber' || target.pendingHit
+    || (villager && distanceToVillager < 12)
+    || (goal?.type === 'nofall' && distanceToVulnerable < 6);
+  if (!urgentTarget && healthRatio < 0.55) {
+    let commitment = 0;
+    for (const ally of party) {
+      if (ally === hero || ally.dead) continue;
+      if (ally.pendingHit?.target === target) commitment += 1.5;
+      else if (ally.targetFocus === target && tacticalDistance(ally.pos, target.pos) <= ally.range + 2) commitment += 0.55;
+    }
+    if (commitment > 0) {
+      const finishPressure = (0.55 - healthRatio) / 0.55;
+      score += Math.min(3.4, commitment * 1.35) * finishPressure;
+    }
   }
 
   return score;
 }
 
-function chooseHeroTarget(hero, candidates, dt) {
+function highestPriorityHeroTarget(hero, candidates, from = hero.pos, context = targetContext()) {
+  let best = null, bestScore = Infinity;
+  for (const target of candidates) {
+    const score = heroTargetScore(hero, target, from, context);
+    if (score < bestScore) { best = target; bestScore = score; }
+  }
+  return best;
+}
+
+function skillTargetScore(hero, target, candidates, context = targetContext()) {
+  let score = heroTargetScore(hero, target, hero.pos, context);
+  const id = hero.cfg.id;
+
+  if (['pyro', 'cryo', 'iceviking'].includes(id)) {
+    const radius = id === 'pyro'
+      ? (1.1 + (hero.level - 1) * 0.2) * hero.skillPower
+      : (1.3 + (hero.level - 1) * 0.25) * hero.skillPower;
+    const group = candidates.filter((other) => other !== target && tacticalDistance(other.pos, target.pos) <= radius + 0.4).length;
+    score -= Math.min(5, group * 1.7);
+  } else if (id === 'crossbow' || id === 'ninja') {
+    const dx = target.pos.x - hero.pos.x, dz = target.pos.z - hero.pos.z;
+    const length = Math.hypot(dx, dz) || 1;
+    const ux = dx / length, uz = dz / length;
+    const maxTravel = id === 'ninja' ? 9 : hero.range + 3.6;
+    let hits = 1;
+    for (const other of candidates) {
+      if (other === target) continue;
+      const ox = other.pos.x - hero.pos.x, oz = other.pos.z - hero.pos.z;
+      const along = ox * ux + oz * uz;
+      const side = Math.abs(ox * uz - oz * ux);
+      if (id === 'crossbow') {
+        if (along > 0 && along <= maxTravel && side <= 0.45 * other.size) hits++;
+      } else {
+        for (const angle of [-0.22, 0, 0.22]) {
+          const ca = Math.cos(angle), sa = Math.sin(angle);
+          const fx = ux * ca + uz * sa, fz = uz * ca - ux * sa;
+          const hitAlong = ox * fx + oz * fz;
+          const hitSide = Math.abs(ox * fz - oz * fx);
+          if (hitAlong > 0 && hitAlong <= maxTravel && hitSide <= 0.45 * other.size) { hits++; break; }
+        }
+      }
+    }
+    score -= Math.min(5, (hits - 1) * 1.7);
+  }
+  return score;
+}
+
+function bestSkillTarget(hero, candidates, context = targetContext()) {
+  let best = null, bestScore = Infinity;
+  for (const target of candidates) {
+    const score = skillTargetScore(hero, target, candidates, context);
+    if (score < bestScore) { best = target; bestScore = score; }
+  }
+  return best;
+}
+
+function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
-  const eligible = candidates.filter((target) => !target.dead && !target.spawning && canHeroReachTarget(hero, target));
-  if (!eligible.length) {
+  let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
+  for (const target of candidates) {
+    if (target.dead || target.spawning || !canHeroReachTarget(hero, target, context)) continue;
+    const score = heroTargetScore(hero, target, hero.pos, context);
+    if (target === hero.targetFocus) { focused = target; focusedScore = score; }
+    if (score < bestScore) { best = target; bestScore = score; }
+  }
+  if (!best) {
     hero.targetFocus = null;
     hero.targetFocusT = 0;
     return null;
   }
 
-  let best = eligible[0], bestScore = heroTargetScore(hero, best);
-  for (let i = 1; i < eligible.length; i++) {
-    const score = heroTargetScore(hero, eligible[i]);
-    if (score < bestScore) { best = eligible[i]; bestScore = score; }
-  }
-
-  const focused = eligible.find((target) => target === hero.targetFocus);
   // Mantém o foco por um instante, exceto quando surge uma ameaça claramente mais urgente.
-  if (focused && hero.targetFocusT > 0 && best !== focused && bestScore > heroTargetScore(hero, focused) - 3.5) best = focused;
+  const { goal, villager, party, friends } = context;
+  const urgentEscortTarget = villager
+    && (best.pendingHit?.target === villager || tacticalDistance(villager.pos, best.pos) <= 4.5);
+  let urgentNoFallTarget = goal?.type === 'nofall' && best.pendingHit?.target?.team === 'hero';
+  if (goal?.type === 'nofall' && !urgentNoFallTarget) for (const ally of party) {
+    if (!ally.dead && ally.hp / ally.maxHp <= 0.45 && tacticalDistance(ally.pos, best.pos) <= 4.5) { urgentNoFallTarget = true; break; }
+  }
+  const urgentAllyThreat = best.pendingHit?.target?.team === 'hero' || best.pendingHit?.target?.team === 'villager';
+  const urgentPriest = best.enemyKind === 'Priest';
+  const urgentBomber = best.enemyKind === 'Bomber'
+    && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
+  const urgentObjectiveTarget = (goal?.type === 'boss' && best.boss)
+    || (goal?.type === 'totems' && best.totem)
+    || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
+  let criticalAllyNearFocus = false;
+  if (focused && goal?.type === 'nofall') for (const ally of party) {
+    if (!ally.dead && ally.hp / ally.maxHp <= 0.45 && tacticalDistance(ally.pos, focused.pos) <= 6) { criticalAllyNearFocus = true; break; }
+  }
+  let finishingHit = false, allyEngagedOnFocus = false;
+  if (focused && focused.maxHp > 0 && focused.hp / focused.maxHp < 0.45) for (const ally of party) {
+    if (ally === hero || ally.dead) continue;
+    if (ally.pendingHit?.target === focused) { finishingHit = true; break; }
+    if (ally.targetFocus === focused && tacticalDistance(ally.pos, focused.pos) <= ally.range + 2) allyEngagedOnFocus = true;
+  }
+  const focusHealthRatio = focused?.maxHp > 0 ? focused.hp / focused.maxHp : 1;
+  const supportedFocus = focused && (finishingHit && focusHealthRatio < 0.45
+    || allyEngagedOnFocus && focusHealthRatio < 0.22)
+    && !focused.boss && !focused.totem && !focused.ranged
+    && focused.enemyKind !== 'Priest' && focused.enemyKind !== 'Bomber' && !focused.pendingHit
+    && !(villager && tacticalDistance(villager.pos, focused.pos) < 12) && !criticalAllyNearFocus
+    && party.some((ally) => ally !== hero && !ally.dead
+      && (ally.pendingHit?.target === focused || ally.targetFocus === focused));
+  if (focused && hero.targetFocusT > 0 && best !== focused && !urgentObjectiveTarget && !supportedFocus
+    && bestScore > focusedScore - 3.5) best = focused;
   if (hero.targetFocus !== best) {
     hero.targetFocus = best;
     hero.targetFocusT = 1.1;
@@ -1432,8 +2013,12 @@ const SKILL_ART = {
   iceviking: { color: 0x58aaca, accent: 0xffffff, glyph: iceGeo, scale: 2 },
   necro:     { color: 0x22e050, accent: 0xd8ffe0, glyph: skullGeo, scale: 2.2 },
   druid:     { color: 0x5fbf2a, accent: 0xc8f07a, glyph: leafGeo, scale: 3.5 },
+  cleric:    { color: 0xffe8a3, accent: 0xfffbeb, glyph: crystalGeo, scale: 1.3 },
+  bard:      { color: 0xe9a7ff, accent: 0xffe27a, glyph: arcGeo, scale: 0.8 },
+  angel:     { color: 0xffe27a, accent: 0xffc6ed, glyph: crystalGeo, scale: 1.55 },
+  chronist:  { color: 0x8feaff, accent: 0xb6a4ff, glyph: boltGeo, scale: 1.8 },
 };
-const TARGETED_SKILLS = new Set(['assassin', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja']);
+const TARGETED_SKILLS = new Set(['assassin', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
 let shakeK = 0;
 const jolt = new THREE.Vector3();
 
@@ -1527,12 +2112,13 @@ function column(at, color, radius, height, life, o = {}) {
 }
 
 // Um selo flutuante mostra qual energia está sendo reunida para cada herói.
-function skillSigil(h, life, art, active) {
+function skillSigil(h, life, art, active, ultimate = false) {
   const seal = new THREE.Group();
   const ground = new THREE.Mesh(groundGeo, glow(art.color, 0.12, false));
   const outer = new THREE.Mesh(thinRingGeo, glow(art.color, 0.9));
   const inner = new THREE.Mesh(hexGeo, glow(art.accent, 0.8, false));
   const crest = new THREE.Mesh(art.glyph, glow(art.accent, 0.95));
+  const ultRing = ultimate ? new THREE.Mesh(thinRingGeo, glow(0xffe27a, 0.9)) : null;
   ground.rotation.x = outer.rotation.x = inner.rotation.x = -Math.PI / 2;
   ground.position.y = 0.03;
   outer.position.y = 0.06;
@@ -1540,6 +2126,7 @@ function skillSigil(h, life, art, active) {
   crest.position.y = 1.75;
   crest.rotation.x = h.cfg.id === 'cryo' || h.cfg.id === 'iceviking' ? 0.25 : 0;
   seal.add(ground, outer, inner, crest);
+  if (ultRing) { ultRing.rotation.x = -Math.PI / 2; ultRing.position.y = 0.1; seal.add(ultRing); }
   const motes = [];
   for (let i = 0; i < 3; i++) {
     const mote = new THREE.Mesh(sparkGeo, glow(i === 1 ? art.accent : art.color));
@@ -1558,6 +2145,11 @@ function skillSigil(h, life, art, active) {
     inner.scale.setScalar(0.8 + Math.sin(k * Math.PI) * 0.32);
     inner.rotation.z -= dt * 2.6;
     inner.material.opacity = 0.8 * Math.sin(Math.PI * k);
+    if (ultRing) {
+      ultRing.scale.setScalar((0.75 + k * 1.9) * pulse);
+      ultRing.rotation.z -= dt * 3.5;
+      ultRing.material.opacity = 0.9 * Math.sin(Math.PI * k);
+    }
     crest.position.set(Math.sin(h.root.rotation.y) * 0.35, 1.7 + Math.sin(e.t * 7) * 0.12, Math.cos(h.root.rotation.y) * 0.35);
     crest.rotation.y += dt * (h.cfg.id === 'ninja' ? 8 : 2.5);
     crest.rotation.z = Math.sin(e.t * 5) * 0.15;
@@ -1627,19 +2219,21 @@ function charge(h, duration) {
   const color = art.color;
   const life = Math.max(0.08, duration);
   const pending = h.pendingHit;
+  const ultimate = !!pending.skill?.ultimate;
   const active = () => !h.dead && units.includes(h) && h.pendingHit === pending;
-  skillSigil(h, life, art, active);
+  skillSigil(h, life, art, active, ultimate);
   if (pending.target && TARGETED_SKILLS.has(h.cfg.id)) {
     targetLock(pending.target, life, art, active);
     castLink(h, pending.target, life, art, active);
   }
   // Trajetórias curvas, em vez de faíscas retas: convergem à frente do peito.
-  for (let i = 0; i < 10; i++) {
+  const sparkCount = ultimate ? 16 : 10;
+  for (let i = 0; i < sparkCount; i++) {
     const spark = new THREE.Mesh(sparkGeo, glow(i % 3 ? color : 0xffffff));
-    const angle = i / 10 * TAU;
+    const angle = i / sparkCount * TAU;
     addFx(spark, life, (e, dt, k) => {
       if (!active()) { e.done = true; return; }
-      const radius = 1.7 * (1 - k) ** 1.4;
+      const radius = (ultimate ? 2.15 : 1.7) * (1 - k) ** 1.4;
       const a = angle + k * Math.PI * 1.3;
       const forward = 0.45 * k;
       spark.position.set(h.pos.x + Math.cos(a) * radius + Math.sin(h.root.rotation.y) * forward,
@@ -1652,7 +2246,7 @@ function charge(h, duration) {
 }
 
 // Pulso breve na liberação, sem encobrir os combatentes.
-function release(h) {
+function release(h, ultimate = false) {
   const art = SKILL_ART[h.cfg.id] || { color: h.cfg.color[0], accent: 0xffffff, glyph: shellGeo, scale: 0.5 };
   const color = art.color;
   const origin = h.pos.clone().setY(h.pos.y + 1.15);
@@ -1673,6 +2267,11 @@ function release(h) {
   });
   burst(origin, [art.color, art.accent, 0xffffff], 8, 5, { life: 0.42, size: 1.25 });
   wave(h.pos, color, 0.65, 1.9, 0.38, { opacity: 0.65 });
+  if (ultimate) {
+    wave(h.pos, art.accent, 0.35, 6.2, 0.82, { geo: ringGeo, opacity: 0.82, spin: 3.5 });
+    wave(h.pos, art.color, 0.55, 4.8, 0.68, { delay: 0.08, geo: ringGeo, opacity: 0.72, spin: -2.5 });
+    burst(origin, [art.color, art.accent, 0xfff2b0, 0xffffff], 18, 7, { life: 0.68, size: 1.35 });
+  }
   for (let i = 0; i < 2; i++) {
     const arc = new THREE.Mesh(arcGeo, glow(color, 0.8));
     arc.rotation.set(-Math.PI / 2 + (i ? 0.5 : -0.5), h.root.rotation.y, i * Math.PI);
@@ -1978,6 +2577,19 @@ function royal(h, party) {
   }
 }
 
+// Bardo: pulsos violeta e pequenas notas luminosas percorrem o grupo.
+function song(h, party) {
+  for (let i = 0; i < 3; i++) wave(h.pos, i === 1 ? 0xffe27a : 0xe9a7ff, 0.35, 6.2, 0.95, { delay: i * 0.16, opacity: 0.65 });
+  for (const friend of party) {
+    column(friend.pos, 0xe9a7ff, 0.32, 2.6, 0.95, { follow: friend });
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU + h.age;
+      const at = friend.pos.clone().add(V(Math.cos(a) * 0.55, 1.15 + i * 0.18, Math.sin(a) * 0.55));
+      particle(sparkGeo, i === 1 ? 0xffe27a : 0xf4c6ff, at, V(0, 1.6, 0), 0.8, { size: 1.2, delay: i * 0.08 });
+    }
+  }
+}
+
 // Druida: raízes saindo do chão em volta do inimigo preso
 function roots(enemy) {
   const n = 3 + Math.floor(Math.random() * 3), g = new THREE.Group();
@@ -2084,7 +2696,7 @@ function cameraJolt(real) {
   return jolt.set(rnd(), rnd() * 0.6, rnd()).multiplyScalar(shakeK);
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, roots, leaves, dress, trail, column };
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column };
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -2101,11 +2713,22 @@ class Hero extends Unit {
     this.damageTaken = 1;
     this.royalT = 0;
     this.royalBonus = 0;
+    this.songT = 0;
+    this.songHaste = 1;
     this.formation = POSTS[Math.min(3, heroes().length - 1)];
-    this.skillTimer = 2;
-    this.skillMax = 2;      // recarga cheia, para o arco da barra de habilidades
-    this.auto = loadAuto(cfg.id);
-    this.wantSkill = 0;     // tempo em que o pedido do jogador ainda vale
+    this.skillTimers = [2, 4, 8];
+    this.skillMaxes = [2, 4, 8];
+    this.autoSkills = [0, 1, 2].map((slot) => loadAutoSlot(cfg.id, slot));
+    this.skillRequests = [0, 0, 0];
+    this.skillTargets = [null, null, null];
+    // aliases preservam compatibilidade com código e salvamentos da habilidade original.
+    Object.defineProperties(this, {
+      skillTimer: { get: () => this.skillTimers[0], set: (value) => { this.skillTimers[0] = value; } },
+      skillMax: { get: () => this.skillMaxes[0], set: (value) => { this.skillMaxes[0] = value; } },
+      auto: { get: () => this.autoSkills[0], set: (value) => { this.autoSkills[0] = value; } },
+      wantSkill: { get: () => this.skillRequests[0], set: (value) => { this.skillRequests[0] = value; } },
+      manualTarget: { get: () => this.skillTargets[0], set: (value) => { this.skillTargets[0] = value; } },
+    });
     this.noTarget = 0;
     this.targetFocus = null;
     this.targetFocusT = 0;
@@ -2113,6 +2736,7 @@ class Hero extends Unit {
     this.guardT = 0;
     this.dodgeTimer = 2;
     this.age = 0;
+    this.hover = cfg.id === 'angel' ? 0.52 : 0;
     for (const relic of game.relics || []) applyRelicToHero(this, relic);
     this.aura = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: cfg.color[1], side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false }));
     this.aura.rotation.x = -Math.PI / 2;
@@ -2127,7 +2751,7 @@ class Hero extends Unit {
     game.roster ||= [];
     game.roster.push(this);
     this.trinkets = [];   // acessórios animados (orbe, estrelinhas, chamas)
-    this.root.traverse((o) => { if (o.userData.spin || o.userData.orbit || o.userData.flicker) this.trinkets.push(o); });
+    this.root.traverse((o) => { if (o.userData.spin || o.userData.orbit || o.userData.flicker || o.userData.wingFlap) this.trinkets.push(o); });
     this.levelLabel = document.createElement('span');
     this.levelLabel.textContent = 'Nv1';
     this.bar.appendChild(this.levelLabel);
@@ -2157,7 +2781,7 @@ class Hero extends Unit {
       this.levelLabel.title = this.cfg.names[this.level - 1];
       this.aura.visible = !this.dead;
       this.halo.visible = !this.dead && this.level === 3;
-      this.skillTimer = Math.min(this.skillTimer, 1);
+      for (let slot = 0; slot < 3; slot++) this.skillTimers[slot] = Math.min(this.skillTimers[slot], 1);
       this.popT = 0;
       audio.play('levelup');
       poof(this.pos, 1.5);
@@ -2167,7 +2791,8 @@ class Hero extends Unit {
     }
   }
 
-  useSkill(target, manual = false) {
+  useSkill(target, manual = false, force = false, slot = 0) {
+    if (slot > 0) return this.useExtraSkill(slot, target, force);
     if (manual && !validAim(this, target)) return false;
     const id = this.cfg.id, level = this.level;
     const power = this.skillPower;
@@ -2177,17 +2802,88 @@ class Hero extends Unit {
     if (id === 'paladin') {
       const reach = (5 + level) * power;
       const friends = heroes().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= reach);
-      if (!friends.length) return false;
+      const healAmount = scaleBranchEffect(this, 'support', 32 + level * 10) * power;
+      const missing = friends.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
+      const urgent = friends.some((h) => h.hp / h.maxHp <= 0.55);
+      if (!friends.length || (!force && !urgent && missing < healAmount * 0.75)) return false;
       effect = () => {
         const healed = [];
         for (const h of friends) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
-          const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', 32 + level * 10) * power);
+          const heal = Math.min(h.maxHp - h.hp, healAmount);
           h.hp += heal;
           this.stats.cura += heal;
           healed.push(h);
           popText(h.pos, '+' + Math.round(heal), 'heal');
         }
         FX.holyLight(this, healed, reach);
+      };
+    } else if (id === 'cleric') {
+      const reach = (5.5 + level * 0.35) * power;
+      const friends = heroes().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach);
+      const wounded = friends.filter((h) => h.hp < h.maxHp);
+      const healAmount = scaleBranchEffect(this, 'support', 24 + level * 8) * power;
+      const missing = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
+      const urgent = wounded.some((h) => h.hp / h.maxHp <= 0.6);
+      if (!friends.length || (!force && !urgent && missing < healAmount * 0.75)) return false;
+      effect = () => {
+        const healed = [];
+        const protection = scaleBranchEffect(this, 'control', 2.5 + (level - 1) * 0.4) * power;
+        for (const h of friends) {
+          h.guardT = Math.max(h.guardT, protection);
+          const heal = Math.min(h.maxHp - h.hp, healAmount);
+          if (heal > 0) { h.hp += heal; this.stats.cura += heal; healed.push(h); popText(h.pos, '+' + Math.round(heal), 'heal'); }
+        }
+        this.guardT = Math.max(this.guardT, protection);
+        FX.holyLight(this, healed, reach);
+        FX.dome(this, reach * 0.72);
+      };
+    } else if (id === 'bard') {
+      const party = heroes().filter((h) => !h.dead);
+      if (!party.length || (!force && !target)) return false;
+      effect = () => {
+        const duration = (6 + level * 0.5) * power;
+        for (const h of party) {
+          h.songT = Math.max(h.songT, duration);
+          h.songHaste = Math.min(h.songHaste || 1, 0.78);
+          popText(h.pos, 'Ritmo!', 'evolve');
+        }
+        wave(this.pos, 0xe9a7ff, 0.2, 7, 0.85);
+        burst(this.pos, [0xf2c6ff, 0xffe27a, 0xffffff], 24, 4.5);
+        FX.song(this, party);
+      };
+    } else if (id === 'angel') {
+      if (!target) return false;
+      const reach = 5.5;
+      effect = () => {
+        const center = target.pos.clone();
+        const healed = [];
+        for (const h of heroes()) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
+          const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', 18 + level * 5) * power);
+          if (heal > 0) { h.hp += heal; this.stats.cura += heal; healed.push(h); popText(h.pos, '+' + Math.round(heal), 'heal'); }
+        }
+        for (const enemy of skeletonsAlive()) if (!enemy.spawning && enemy.pos.distanceTo(center) <= radius + 1.6 * (enemy.size - 1)) {
+          heroHit(this, enemy, this.dmg * (1.05 + level * 0.08) * power, center);
+          enemy.vel.add(new THREE.Vector3(0, 0.7, 0));
+        }
+        column(center, 0xffe27a, 1.1, 8, 1.1);
+        wave(center, 0xfff4bd, 0.3, radius, 0.75);
+        burst(center, [0xffe27a, 0xffffff, 0xffc6ed], 26, 5);
+        FX.holyLight(this, healed, reach);
+      };
+    } else if (id === 'chronist') {
+      if (!nearby.length) return false;
+      effect = () => {
+        const duration = scaleBranchEffect(this, 'control', 2.3 + (level - 1) * 0.35) * power;
+        for (const enemy of nearby) if (!enemy.dead) {
+          enemy.rootT = Math.max(enemy.rootT || 0, duration);
+          enemy.pendingHit = null;
+          enemy.vel.set(0, 0, 0);
+          heroHit(this, enemy, this.dmg * 0.55 * power);
+          FX.roots(enemy);
+        }
+        wave(this.pos, 0x8feaff, 0.2, radius, 0.8);
+        burst(this.pos, [0x8feaff, 0xb6a4ff, 0xffffff], 22, 3.5);
+        FX.zigzag(this.pos, target?.pos || this.pos, 0.15);
       };
     } else if (id === 'guardian') {
       if (!nearby.length) return false;
@@ -2198,7 +2894,10 @@ class Hero extends Unit {
       };
     } else if (id === 'champion' || id === 'crusher') {
       if (manual && id === 'crusher') this.face(target.pos, 1);
-      if (!nearby.some((s) => id === 'champion' || inMeleeArc(this, s, 2.2 * power))) return false;
+      const skillTargets = nearby.filter((s) => id === 'champion' || inMeleeArc(this, s, 2.2 * power));
+      const urgent = skillTargets.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind)
+        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      if (!skillTargets.length || (!force && skillTargets.length < 2 && !urgent)) return false;
       if (id === 'crusher') this.vel.add(tmp.subVectors(target ? target.pos : this.pos, this.pos).setY(0).normalize().multiplyScalar(2.5));   // salta para a frente
       effect = () => {
         for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(this.pos) <= radius) {
@@ -2219,7 +2918,8 @@ class Hero extends Unit {
       };
     } else if (id === 'assassin') {
       // salta pelas sombras até as costas do alvo e crava as adagas
-      if (!manual) target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));
+      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+        && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));
       if (!target) return false;
       effect = () => {
         if (target.dead) return;
@@ -2238,7 +2938,8 @@ class Hero extends Unit {
         } };
       };
     } else if (id === 'viking' || id === 'iceviking') {
-      if (!manual) target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
+      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+        && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
       if (!target) return false;
       effect = () => fireBolt(this, target, id, 0, true);
     } else if (id === 'arcane') {
@@ -2253,10 +2954,14 @@ class Hero extends Unit {
           hit.add(next);
           heroHit(this, next, this.dmg * 0.9);
           at = next.pos;
-          next = nearest(at, skeletonsAlive().filter((s) => !s.spawning && !hit.has(s) && s.pos.distanceTo(at) < 4 + level));
+          next = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning && !hit.has(s) && s.pos.distanceTo(at) < 4 + level), at);
         }
       };
     } else if (id === 'pyro' || id === 'cryo' || id === 'crossbow' || id === 'ninja') {
+      if (!manual) {
+        const reach = id === 'ninja' ? 7 : this.range;
+        target = bestSkillTarget(this, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach));
+      }
       if (!target || target.pos.distanceTo(this.pos) > (id === 'ninja' ? 7 : this.range)) return false;
       effect = () => {
         if (id === 'ninja') for (const angle of [-0.22, 0, 0.22]) fireBolt(this, target, id, angle, true);
@@ -2281,7 +2986,14 @@ class Hero extends Unit {
         FX.summon(this, [-1, 1].map((side) => new Minion(this, side)));
       };
     } else if (id === 'druid') {
-      if (!nearby.length) return false;
+      const friends = heroes().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= radius);
+      const missing = friends.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
+      const healAmount = scaleBranchEffect(this, 'support', 20) * power;
+      const urgentHeal = friends.some((h) => h.hp / h.maxHp <= 0.6) || missing >= healAmount * 0.75;
+      const valuableControl = nearby.length >= 2 || nearby.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind)
+        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      if (!friends.length && !nearby.length) return false;
+      if (!force && !urgentHeal && !valuableControl) return false;
       effect = () => {
         for (const enemy of skeletonsAlive()) if (!enemy.spawning && enemy.pos.distanceTo(this.pos) <= radius) {
           enemy.rootT = scaleBranchEffect(this, 'control', 1.5) * power;
@@ -2289,7 +3001,7 @@ class Hero extends Unit {
           FX.roots(enemy);
         }
         for (const h of heroes()) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
-          const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', 20) * power);
+          const heal = Math.min(h.maxHp - h.hp, healAmount);
           h.hp += heal;
           this.stats.cura += heal;
           if (heal > 0) popText(h.pos, '+' + Math.round(heal), 'heal');
@@ -2304,18 +3016,190 @@ class Hero extends Unit {
     this.busy = this.once(anim, pace);
     this.pendingHit = { target, effect, t: this.busy * at };
     FX.charge(this, this.pendingHit.t);
-    this.skillTimer = this.skillMax = skillCooldown(id, level, this.skillRate);
+    this.skillTimers[0] = this.skillMaxes[0] = cooldownForSkill(this.cfg, 0, level, this.skillRate);
+    this.stats.habilidades++;
+    return true;
+  }
+
+  useExtraSkill(slot, target, force = false) {
+    const skill = skillSetFor(this.cfg)[slot];
+    if (!skill || slot < 1) return false;
+    const level = this.level, power = this.skillPower;
+    const color = skill.color || this.cfg.color[0];
+    const radius = (skill.radius || (slot === 2 ? 6 : 4.5)) * (0.9 + 0.1 * power);
+    const enemies = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= radius + 0.4 * (s.size - 1));
+    const party = heroes().filter((h) => !h.dead);
+    const friends = party.filter((h) => h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5));
+    const wounded = friends.filter((h) => h.hp < h.maxHp);
+    const missingHp = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
+    const criticalAlly = friends.some((h) => h.hp / h.maxHp <= 0.42);
+    const urgentEnemy = enemies.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind)
+      || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+    const targetPool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= Math.max(9, this.range));
+    target ||= highestPriorityHeroTarget(this, targetPool);
+    if (target?.dead || !skeletonsAlive().includes(target)) target = null;
+
+    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm'].includes(skill.effect);
+    if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
+    if (!force && slot === 1 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35) return false;
+    if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
+    const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain'].includes(skill.effect);
+    if (needsTarget && !target) return false;
+    const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
+    if (areaEffects.includes(skill.effect) && !enemies.length && !(supportSkill && (criticalAlly || missingHp > this.maxHp * 0.35))) return false;
+
+    const damageOne = (enemy, multiplier = 1) => {
+      if (enemy && !enemy.dead) heroHit(this, enemy, this.dmg * power * (skill.power || 1) * multiplier);
+    };
+    const control = (enemy) => {
+      if (!enemy || enemy.dead) return;
+      const controlType = skill.control || (['blizzard', 'roots-heal', 'nature-storm'].includes(skill.effect) ? 'root' : null);
+      if (controlType === 'stun') { enemy.stunT = Math.max(enemy.stunT || 0, scaleBranchEffect(this, 'control', 1.35 + (level - 1) * 0.2) * power); enemy.pendingHit = null; }
+      if (controlType === 'root') { enemy.rootT = Math.max(enemy.rootT || 0, scaleBranchEffect(this, 'control', skill.duration || 2.8) * power); enemy.pendingHit = null; }
+      if (controlType === 'slow') enemy.slowT = Math.max(enemy.slowT || 0, scaleBranchEffect(this, 'control', skill.duration || 3.5) * power);
+      if (controlType === 'burn') {
+        enemy.burnT = Math.max(enemy.burnT || 0, scaleBranchEffect(this, 'control', skill.duration || 3.2) * power);
+        enemy.burnTick = Math.min(enemy.burnTick || 0.5, 0.35);
+        enemy.burnDmg = Math.max(enemy.burnDmg || 0, this.dmg * power * (skill.power || 1) * 0.08);
+        enemy.burnOwner = this;
+        column(enemy.pos, color, 0.35, 2.2, 0.55, { follow: enemy });
+      }
+      if (skill.control === 'push') enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(5));
+      if (skill.effect === 'taunt' || skill.effect === 'bastion') { enemy.taunt = this; enemy.tauntT = skill.duration * power; enemy.pendingHit = null; }
+    };
+    const healFriends = (amount, reach = radius) => {
+      const healed = [];
+      for (const h of party) if (h.pos.distanceTo(this.pos) <= reach) {
+        const heal = Math.min(h.maxHp - h.hp, amount);
+        if (heal > 0) { h.hp += heal; this.stats.cura += heal; healed.push(h); popText(h.pos, '+' + Math.round(heal), 'heal'); }
+      }
+      return healed;
+    };
+    const damageAreaNow = (multiplier = 1) => {
+      for (const enemy of enemies) { damageOne(enemy, multiplier); control(enemy); }
+    };
+    let effect;
+    switch (skill.effect) {
+      case 'ward': case 'frost-ward': case 'bastion': {
+        const duration = scaleBranchEffect(this, 'control', skill.duration || 5) * power;
+        effect = () => {
+          for (const h of party) if (h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5)) h.guardT = Math.max(h.guardT, duration);
+          if (skill.effect === 'bastion') { this.guardT = Math.max(this.guardT, duration); for (const enemy of enemies) control(enemy); }
+          if (skill.effect === 'frost-ward') for (const enemy of enemies) { enemy.slowT = Math.max(enemy.slowT, duration * 0.65); damageOne(enemy, 0.35); }
+          FX.dome(this, radius);
+          if (skill.effect === 'frost-ward') { FX.iceFan(this, target || this); burst(this.pos, color, 18, 4); }
+        };
+        break;
+      }
+      case 'taunt':
+        if (!enemies.length) return false;
+        effect = () => { this.guardT = Math.max(this.guardT, scaleBranchEffect(this, 'control', skill.duration) * power); for (const enemy of enemies) control(enemy); FX.dome(this, radius); burst(this.pos, color, 16, 3); };
+        break;
+      case 'holy-nova': {
+        const heal = scaleBranchEffect(this, 'support', 28 + level * 5) * power;
+        if (!enemies.length && !wounded.length) return false;
+        effect = () => { const healed = healFriends(heal, Math.max(radius, 6.5)); damageAreaNow(0.8); FX.holyLight(this, healed, radius); wave(this.pos, color, 0.2, radius, 0.75); burst(this.pos, color, 28, 5); };
+        break;
+      }
+      case 'rally': {
+        const duration = (skill.duration || 8) * power;
+        effect = () => { for (const h of party) { h.royalT = Math.max(h.royalT, duration); h.royalBonus = Math.max(h.royalBonus, skill.bonus || 0.25); }
+          popText(this.pos, 'Ordem real!', 'evolve'); FX.royal(this, party); FX.dome(this, 4.5); };
+        break;
+      }
+      case 'charge': case 'shadow': case 'execute': {
+        if (!target) return false;
+        effect = () => {
+          if (target.dead) return;
+          const from = this.pos.clone();
+          if (skill.effect === 'shadow' || skill.effect === 'execute') {
+            const dir = tmp.subVectors(target.pos, this.pos).setY(0).normalize();
+            const behind = target.pos.clone().addScaledVector(dir, 0.65 + 0.35 * target.size);
+            const dest = world.canStep(target.pos, behind) ? behind : target.pos.clone().addScaledVector(dir, -(0.65 + 0.35 * target.size));
+            this.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z));
+            FX.shadowStep(from, this.pos);
+          } else this.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(6));
+          this.face(target.pos, 1);
+          const finisher = skill.effect === 'execute' && target.hp / target.maxHp <= 0.45 ? 1.8 : 1;
+          damageOne(target, finisher);
+          FX.slashX(target, this); burst(target.pos, color, 14, 3.5);
+        };
+        break;
+      }
+      case 'volley': case 'volley-storm': case 'arrow-rain': {
+        const shots = skill.shots || 4;
+        const sorted = [...(skill.effect === 'volley' ? [target] : enemies)].filter(Boolean)
+          .sort((a, b) => heroTargetScore(this, a) - heroTargetScore(this, b));
+        if (!sorted.length) return false;
+        effect = () => {
+          const count = skill.effect === 'volley' ? shots : Math.min(shots, sorted.length);
+          for (let i = 0; i < count; i++) {
+            const enemy = skill.effect === 'volley' ? target : sorted[i];
+            if (enemy.dead) continue;
+            FX.zigzag(this.pos, enemy.pos, i * 0.04); damageOne(enemy, skill.effect === 'volley' ? 1 / shots : 0.75);
+          }
+          if (skill.effect !== 'volley') { wave(this.pos, color, 0.2, radius, 0.55); burst(this.pos, color, shots * 3, 4); }
+        };
+        break;
+      }
+      case 'chain': {
+        if (!target) return false;
+        effect = () => {
+          let at = this.pos, next = target; const hit = new Set();
+          for (let i = 0; i < (skill.jumps || 4) && next && !next.dead; i++) {
+            FX.zigzag(at, next.pos, i * 0.06); hit.add(next); damageOne(next, 1 - i * 0.08); at = next.pos;
+            next = highestPriorityHeroTarget(this, enemies.filter((enemy) => !hit.has(enemy) && enemy.pos.distanceTo(at) < 5), at);
+          }
+          burst(target.pos, color, 12, 3);
+        };
+        break;
+      }
+      case 'burst': case 'storm': case 'blizzard': case 'meteor': case 'shadow-storm': case 'roots-heal': case 'nature-storm': {
+        if (skill.effect === 'roots-heal' || skill.effect === 'nature-storm') {
+          const heal = scaleBranchEffect(this, 'support', skill.effect === 'roots-heal' ? 16 : 26) * power;
+          effect = () => { const healed = healFriends(heal, radius); damageAreaNow(skill.effect === 'roots-heal' ? 0.55 : 1);
+            for (const enemy of enemies) FX.roots(enemy); FX.leaves(this, radius); FX.holyLight(this, healed, radius); wave(this.pos, color, 0.2, radius, 0.7); };
+        } else if (skill.effect === 'shadow-storm') {
+          effect = () => { for (const enemy of enemies) { damageOne(enemy); FX.slashX(enemy, this); } FX.whirl(this, radius); burst(this.pos, color, 22, 4); };
+        } else {
+          effect = () => { damageAreaNow(skill.effect === 'meteor' ? 1 : 0.8);
+            if (skill.effect === 'meteor') { column(this.pos, color, radius * 0.55, 6, 0.9); FX.quake(this, radius * 0.35); }
+            else if (skill.effect === 'blizzard') FX.iceFan(this, target || this);
+            else if (skill.effect === 'storm') FX.whirl(this, radius);
+            else FX.quake(this, radius * 0.35);
+            wave(this.pos, color, 0.2, radius, 0.7); burst(this.pos, color, skill.effect === 'meteor' ? 32 : 22, 5);
+          };
+        }
+        break;
+      }
+      case 'summon':
+        effect = () => {
+          for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
+          FX.summon(this, [-1.5, -0.5, 0.5, 1.5].map((side) => new Minion(this, side)));
+          burst(this.pos, color, 20, 3);
+        };
+        break;
+      default: return false;
+    }
+
+    const [anim, pace, at, sound] = SKILL_MOVES[this.cfg.id];
+    this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
+    this.busy = this.once(anim, pace * (skill.ultimate ? 0.82 : 0.92));
+    const hitAt = this.busy * at;
+    this.pendingHit = { target, skill, slot, effect: () => { audio.play(sound); FX.release(this, skill.ultimate); effect(); }, t: hitAt };
+    FX.charge(this, hitAt);
+    this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
     this.stats.habilidades++;
     return true;
   }
 
   // pedido do jogador (botão ou tecla): vale por um instante, até o golpe atual terminar
-  requestSkill(target = null) {
+  requestSkill(target = null, slot = 0) {
     if (this.dead || game.over || game.paused) return 'off';
-    if (this.skillTimer > 0) return 'wait';
+    if (this.skillTimers[slot] > 0) return 'wait';
     if (game.state !== 'fight') { this.missSkill(); return 'none'; }
-    this.manualTarget = target;
-    this.wantSkill = 2;
+    this.skillTargets[slot] = target;
+    this.skillRequests[slot] = 2;
     return 'ok';
   }
 
@@ -2338,6 +3222,8 @@ class Hero extends Unit {
     this.halo.visible = this.level === 3;
     this.guardT = 0;
     this.royalT = 0;
+    this.songT = 0;
+    this.songHaste = 1;
     this.furyT = 0;
     this.hp = this.maxHp * difficulty.revive;
     this.bar.style.display = '';
@@ -2348,40 +3234,57 @@ class Hero extends Unit {
 
   update(dt) {
     if (dt <= 0) return;
-    this.skillTimer -= dt;
+    for (let slot = 0; slot < 3; slot++) {
+      this.skillTimers[slot] -= dt;
+      this.skillRequests[slot] -= dt;
+      if (this.skillRequests[slot] <= 0) this.skillTargets[slot] = null;
+    }
     this.dodgeTimer -= dt;
     this.guardT -= dt;
     this.royalT -= dt;
+    this.songT -= dt;
+    if (this.songT <= 0) this.songHaste = 1;
     this.furyT -= dt;
-    this.wantSkill -= dt;
-    if (this.wantSkill <= 0) this.manualTarget = null;
     this.noTarget -= dt;
     this.age += dt;
+    if (this.cfg.id === 'angel') this.hover = 0.52 + Math.sin(this.age * 2.2) * 0.06;
     if (!this.dead && game.state === 'fight') this.stats.tempo += dt;   // para o dano por segundo
     for (const o of this.trinkets) {
       if (o.userData.spin) { o.rotation.y += dt * 2; o.position.y = 0.1 + Math.sin(this.age * 3) * 0.05; }
       if (o.userData.orbit) o.rotation.y += dt * 1.5;
       if (o.userData.flicker) o.scale.y = 1 + Math.sin(this.age * 14) * 0.15;
+      if (o.userData.wingFlap) o.rotation.z = o.userData.wingFlap * (0.12 + Math.sin(this.age * 5.5) * 0.16);
     }
     const rage = !this.dead && this.cfg.id === 'berserker' && (this.hp < this.maxHp * 0.5 || this.furyT > 0);
-    this.cooldown = this.cfg.cooldown / this.haste / (rage ? 1.5 * this.skillPower : 1);
-    this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0);
+    this.cooldown = this.cfg.cooldown / this.haste / (this.songT > 0 ? this.songHaste : 1) / (rage ? 1.5 * this.skillPower : 1);
+    this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0 || this.songT > 0);
     this.aura.material.color.set(rage ? 0xff4242 : this.cfg.color[1]);
     this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     this.updateCommon(dt);
     if (this.dead || this.busy > 0 || game.over) return;
     const escape = game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
-    if (escape) { this.moveTo(escape, dt); this.locomote('Running_A', 'Walking_A', this.cfg.idle); return; }
-    const target = game.state === 'fight' ? chooseHeroTarget(this, skeletonsAlive(), dt) : null;
+    const move = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Running_A';
+    const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Walking_A';
+    if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
+    const target = game.state === 'fight'
+      ? chooseHeroTarget(this, activeTargetContext?.skeletons ?? skeletonsAlive(), dt) : null;
     // no manual a habilidade fica carregada esperando o jogador pedir
-    if (game.state === 'fight' && this.skillTimer <= 0 && (this.auto || this.wantSkill > 0)) {
-      const asked = this.wantSkill > 0;
-      const chosen = this.manualTarget;
-      this.wantSkill = 0;
-      this.manualTarget = null;
-      if (this.useSkill(chosen || target, !!chosen)) return;
-      if (asked) this.missSkill();
+    if (game.state === 'fight') {
+      const requested = this.skillRequests.findIndex((time, slot) => time > 0 && this.skillTimers[slot] <= 0);
+      if (requested >= 0) {
+        const chosen = this.skillTargets[requested];
+        this.skillRequests[requested] = 0;
+        this.skillTargets[requested] = null;
+        if (this.useSkill(chosen || target, !!chosen, true, requested)) return;
+        this.missSkill();
+      } else {
+        // A IA reserva a ultimate para chefes, perigo real, grupo cercado ou aliados feridos.
+        for (const slot of [2, 1, 0]) {
+          if (this.skillTimers[slot] > 0 || !this.autoSkills[slot]) continue;
+          if (this.useSkill(target, false, false, slot)) return;
+        }
+      }
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
     const engage = target && canHeroReachTarget(this, target);
@@ -2398,7 +3301,7 @@ class Hero extends Unit {
     } else {
       this.face(target ? target.pos : tmp.copy(this.post).addScaledVector(this.fwd, 10), dt);
     }
-    if (this.busy <= 0) this.locomote('Running_A', 'Walking_A', this.cfg.idle);
+    if (this.busy <= 0) this.locomote(move, walk, this.cfg.idle);
   }
 }
 
@@ -2420,6 +3323,10 @@ const SKILL_MOVES = {
   iceviking: ['Throw', 1.4, 0.45, 'axe'],
   necro: ['Spellcast_Long', 1.8, 0.5, 'summon'],
   druid: ['Spellcast_Raise', 1.6, 0.45, 'heal'],
+  cleric: ['Spellcast_Long', 1.8, 0.45, 'heal'],
+  bard: ['Cheer', 1.6, 0.3, 'shout'],
+  angel: ['Spellcast_Raise', 1.8, 0.42, 'heal'],
+  chronist: ['Spellcast_Raise', 1.6, 0.42, 'zap'],
 };
 
 class Minion extends Unit {
@@ -2446,7 +3353,8 @@ class Minion extends Unit {
     this.life -= dt;
     if (this.dead || this.life <= 0) { poof(this.pos, 0.7); this.remove(); return; }
     if (this.busy > 0) return;
-    const target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning));
+    const targets = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
+    const target = nearest(this.pos, targets);
     if (target && game.state === 'fight') {
       if (target.pos.distanceTo(this.pos) > this.range) this.moveTo(target.pos, dt);
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) this.attack(target, '1H_Melee_Attack_Chop');
@@ -2463,6 +3371,7 @@ class Skeleton extends Unit {
     const dmgScale = (1 + (phase - 1) * 0.06) * D.dmg * (boss ? 2.5 * D.boss : 1);
     super(assets[`Skeleton_${base.model || type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss || !!base.heavy;   // o golem é pesado como um chefe, mas sem a vida de chefe
+    this.phaseBoss = !!boss;             // só o chefe da fase encerra objetivos de chefe na campanha
     this.ranged = !!base.ranged;
     this.mobile = !!base.mobile;       // atiradores que andam (sacerdote, lich)
     this.phasing = !!base.phasing;     // atravessa obstáculos e o grupo
@@ -2472,6 +3381,10 @@ class Skeleton extends Unit {
     this.stunT = 0;
     this.rootT = 0;
     this.slowT = 0;
+    this.burnT = 0;
+    this.burnTick = 0;
+    this.burnDmg = 0;
+    this.burnOwner = null;
     this.tauntT = 0;
     this.stars = new THREE.Group();
     for (let i = 0; i < 3; i++) {
@@ -2509,6 +3422,12 @@ class Skeleton extends Unit {
     if (this.rootT > 0) this.vel.set(0, 0, 0);
     this.stunT = Math.max(0, this.stunT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
+    this.burnT = Math.max(0, this.burnT - dt);
+    this.burnTick -= dt;
+    if (this.burnT > 0 && this.burnTick <= 0 && this.burnOwner && !this.dead) {
+      this.takeDamage(this.burnDmg, this.pos, this.burnOwner);
+      this.burnTick = 0.65;
+    }
     this.root.rotation.z = this.rootT > 0 && !this.dead ? Math.sin(this.rootT * 45) * 0.05 : 0;   // preso pelos galhos: treme tentando se soltar
     this.tauntT -= dt;
     if (this.stunT > 0) { this.pendingHit = null; this.vel.set(0, 0, 0); }
@@ -2527,7 +3446,8 @@ class Skeleton extends Unit {
     this.kind?.tick?.(this, dt);   // recargas, flutuar e investida dos tipos novos
     if (this.stunT > 0 || this.busy > 0) return;
     this.spawning = false;
-    const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt : nearest(this.pos, allies());
+    const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt
+      : nearest(this.pos, activeTargetContext?.alliedUnits ?? allies());
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
       return;
@@ -2607,30 +3527,98 @@ function separatePair(a, b, ia, ib) {
   }
 }
 
+const SEPARATION_CELL_SIZE = 3;
+const separationAlive = [], separationCandidates = [], separationCellX = [], separationCellZ = [];
+const separationGrid = new Map(), separationGridPool = [];
+const obstacleGrid = new Map(), obstacleGridPool = [];
+const obstacleOrder = new Map();
+let obstacleGridWorld = null, obstacleGridSource = null, obstacleGridMargin = -1;
+
+function recycleGrid(grid, pool) {
+  for (const bucket of grid.values()) { bucket.length = 0; pool.push(bucket); }
+  grid.clear();
+}
+
+function cellKey(x, z) { return `${x},${z}`; }
+
+function addToGrid(grid, pool, x, z, value) {
+  const key = cellKey(x, z);
+  let bucket = grid.get(key);
+  if (!bucket) { bucket = pool.pop() || []; grid.set(key, bucket); }
+  bucket.push(value);
+}
+
+function indexObstacles(margin) {
+  if (obstacleGridWorld === world && obstacleGridSource === world.obstacles && obstacleGridMargin >= margin) return;
+  recycleGrid(obstacleGrid, obstacleGridPool);
+  obstacleOrder.clear();
+  obstacleGridWorld = world;
+  obstacleGridSource = world.obstacles;
+  obstacleGridMargin = margin;
+  for (let i = 0; i < world.obstacles.length; i++) {
+    const obstacle = world.obstacles[i];
+    obstacleOrder.set(obstacle, i);
+    const radius = obstacle.r + margin;
+    const minX = Math.floor((obstacle.x - radius) / SEPARATION_CELL_SIZE);
+    const maxX = Math.floor((obstacle.x + radius) / SEPARATION_CELL_SIZE);
+    const minZ = Math.floor((obstacle.z - radius) / SEPARATION_CELL_SIZE);
+    const maxZ = Math.floor((obstacle.z + radius) / SEPARATION_CELL_SIZE);
+    for (let x = minX; x <= maxX; x++) for (let z = minZ; z <= maxZ; z++) addToGrid(obstacleGrid, obstacleGridPool, x, z, obstacle);
+  }
+}
+
 function separate() {
-  const alive = units.filter((u) => !u.dead && !u.phasing);   // fantasmas passam pelo grupo
+  separationAlive.length = 0;
+  let obstacleMargin = 0, pairCellRange = 1;
+  for (const unit of units) if (!unit.dead && !unit.phasing) {
+    separationAlive.push(unit);   // fantasmas passam pelo grupo
+    obstacleMargin = Math.max(obstacleMargin, 0.53 * unit.size);
+  }
+  if (!separationAlive.length) return;
+  pairCellRange = Math.max(1, Math.ceil(obstacleMargin * 2 / SEPARATION_CELL_SIZE));
+  indexObstacles(obstacleMargin);
   // Alternate unit and world collisions: a push off a rock must not create a
-  // fresh overlap with a nearby unit, and vice versa.
+  // fresh overlap with a nearby unit, and vice versa. Rebuild the unit grid on
+  // every pass because the previous pass may have moved units into new cells.
   for (let pass = 0; pass < 4; pass++) {
-    for (let i = 0; i < alive.length; i++) {
-      for (let j = i + 1; j < alive.length; j++) separatePair(alive[i], alive[j], i + 1, j + 1);
+    recycleGrid(separationGrid, separationGridPool);
+    for (let i = 0; i < separationAlive.length; i++) {
+      const unit = separationAlive[i];
+      const x = separationCellX[i] = Math.floor(unit.pos.x / SEPARATION_CELL_SIZE);
+      const z = separationCellZ[i] = Math.floor(unit.pos.z / SEPARATION_CELL_SIZE);
+      addToGrid(separationGrid, separationGridPool, x, z, i);
     }
-    for (let i = 0; i < alive.length; i++) {
-      const u = alive[i];
-      for (let oi = 0; oi < world.obstacles.length; oi++) {
-        const o = world.obstacles[oi], min = o.r + 0.53 * u.size;
+    for (let i = 0; i < separationAlive.length; i++) {
+      separationCandidates.length = 0;
+      const x = separationCellX[i], z = separationCellZ[i];
+      for (let dx = -pairCellRange; dx <= pairCellRange; dx++) for (let dz = -pairCellRange; dz <= pairCellRange; dz++) {
+        const bucket = separationGrid.get(cellKey(x + dx, z + dz));
+        if (bucket) for (const j of bucket) if (j > i) separationCandidates.push(j);
+      }
+      separationCandidates.sort((a, b) => a - b);
+      for (const j of separationCandidates) separatePair(separationAlive[i], separationAlive[j], i + 1, j + 1);
+    }
+    for (let i = 0; i < separationAlive.length; i++) {
+      const u = separationAlive[i];
+      const candidates = obstacleGrid.get(cellKey(
+        Math.floor(u.pos.x / SEPARATION_CELL_SIZE),
+        Math.floor(u.pos.z / SEPARATION_CELL_SIZE),
+      ));
+      if (candidates) for (const o of candidates) {
+        const min = o.r + 0.53 * u.size;
         let dx = u.pos.x - o.x, dz = u.pos.z - o.z;
         if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
         let distance = Math.hypot(dx, dz);
         if (distance >= min) continue;
         if (distance < 0.001) {
+          const oi = obstacleOrder.get(o) ?? 0;
           const angle = ((i + 1) * 0.754877666 + (oi + 1) * 0.569840291) * Math.PI * 2;
           dx = Math.cos(angle); dz = Math.sin(angle); distance = 0;
         } else { dx /= distance; dz /= distance; }
         collisionMove(u, dx * (min - distance), dz * (min - distance));
       }
     }
-    for (const u of alive) u.pos.y = world.groundHeight(u.pos.x, u.pos.z) + (u.hover || 0);
+    for (const u of separationAlive) u.pos.y = world.groundHeight(u.pos.x, u.pos.z) + (u.hover || 0);
   }
 }
 
@@ -2640,6 +3628,8 @@ const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false
 
 // view: 'menu' (tela inicial) ou 'map' (mapa da campanha)
 function startGame(view = 'menu') {
+  battleGateId++;
+  battleLoadingVisible = false;
   if (aiming) cancelAim();
   clearTimeout(pick.timer);
   clearTimeout(showBanner.t);
@@ -2660,11 +3650,15 @@ function startGame(view = 'menu') {
   closeHeroPanel();
   $('overlayStats').innerHTML = '';
   $('overlayStars').innerHTML = '';
+  $('overlayBtn').hidden = true;
+  $('overlayBtn').textContent = 'Jogar de novo';
+  $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');
   while (units.length) units[0].remove();
   game.mission = null;
   clearMonsterFx();   // avisos, covas e barra do chefe
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   placeParty(THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES));
+  $('overlay').classList.remove('results');
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
@@ -2673,24 +3667,30 @@ function startGame(view = 'menu') {
 // põe o grupo (e a câmera) na fase inicial e zera a partida; game.mission continua
 function placeParty(first) {
   const m = game.mission;
+  const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
-    test: new URLSearchParams(location.search).has('fase') });
+    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
   camera.position.set(follow.x, 23, follow.z + 21);
   $('goal').classList.toggle('hidden', !m);
-  if (m) setText('goal', goalText(m.goal));
+  if (m) setGoalUI(goalText(m.goal), 0);
   $('goal').classList.remove('warn', 'done');
 }
 
 // grupo inicial escolhido: começa a missão (o aldeão entra junto na escolta)
 function startMission() {
-  const m = game.mission;
-  if (m.goal.type === 'escort') game.villager = new Villager();
-  showBanner(`${m.name}: ${goalText(m.goal)}`, 3);
-  game.paused = false;
+  const begin = () => {
+    const m = game.mission;
+    if (!m) return;
+    if (m.goal.type === 'escort') game.villager = new Villager();
+    showBanner(`${m.name} · ${world.biome}`, 3);
+    game.paused = false;
+  };
+  if (typeof withBattleAssets === 'function') return withBattleAssets(begin);
+  begin();
 }
 
 function startPhase() {
@@ -2831,17 +3831,35 @@ function placeTotem(k) {
 
 const clockText = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
+function missionProgress(goal, villager = game.villager, skeletons = skeletonsAlive()) {
+  const mission = game.mission;
+  if (!mission) return 0;
+  const phaseCount = Math.max(1, mission.to - mission.from + 1);
+  const phaseProgress = THREE.MathUtils.clamp((game.phase - mission.from + Number(game.state === 'cleared')) / phaseCount, 0, 1);
+  if (goal.type === 'escort') return villager ? THREE.MathUtils.clamp(villager.hp / villager.maxHp, 0, 1) : 0;
+  if (goal.type === 'boss') return game.bossDown ? 1 : phaseProgress;
+  if (goal.type === 'survive') {
+    if (game.phase < goal.phase) return 0;
+    if (game.phase > goal.phase || game.surviveT <= 0) return 1;
+    return THREE.MathUtils.clamp(1 - game.surviveT / goal.time, 0, 1);
+  }
+  if (goal.type === 'totems') return THREE.MathUtils.clamp(game.totemsDown / goal.count, 0, 1);
+  if (goal.type === 'timer') return THREE.MathUtils.clamp(game.missionT / goal.time, 0, 1);
+  return phaseProgress;
+}
+
 // regras da missão a cada quadro; devolve true se a missão acabou em derrota
 function campaignTick(dt, skeletons) {
   const goal = game.mission.goal;
   for (const h of heroes()) { if (h.dead && !h.fell) game.falls++; h.fell = h.dead; }
-  game.missionT += dt;
+  const finalPhaseCleared = game.state === 'cleared' && game.phase >= game.last;
+  if (!finalPhaseCleared) game.missionT += dt;
   const fail = (text) => (endGame(text, false), true);
   if (goal.type === 'nofall' && game.falls) return fail('Um herói caiu! A regra era ninguém cair.');
   if (goal.type === 'escort' && game.villager?.dead) return fail('O aldeão caiu! Proteja-o até o fim.');
-  if (goal.type === 'timer' && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
+  if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
   if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
-    const boss = units.find((u) => u.boss);
+    const boss = units.find((u) => u.phaseBoss);
     if (boss) game.bossSeen = true;
     if (game.bossSeen && (!boss || boss.dead) && game.state === 'fight' && !game.bossDown) {
       game.bossDown = true;
@@ -2866,17 +3884,19 @@ function campaignTick(dt, skeletons) {
     }
   }
   // indicador no HUD
-  const v = game.villager, left = goal.time - game.missionT;
-  const text = {
-    win: `Vença até a fase ${game.mission.to}`,
-    escort: v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão',
-    boss: game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`,
-    survive: game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!',
-    totems: `Totens ${game.totemsDown}/${goal.count}`,
-    nofall: `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`,
-    timer: `Tempo ${clockText(Math.max(0, left))}`,
-  }[goal.type];
-  setText('goal', text);
+  const v = game.villager;
+  let text, left = Infinity;
+  switch (goal.type) {
+    case 'win': text = `Vença até a fase ${game.mission.to}`; break;
+    case 'escort': text = v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão'; break;
+    case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`; break;
+    case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!'; break;
+    case 'totems': text = `Totens ${game.totemsDown}/${goal.count}`; break;
+    case 'nofall': text = `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`; break;
+    case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
+    default: text = goalText(goal);
+  }
+  setGoalUI(text, missionProgress(goal, v, skeletons));
   $('goal').classList.toggle('warn', (goal.type === 'escort' && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
   $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
   return false;
@@ -2885,13 +3905,19 @@ function campaignTick(dt, skeletons) {
 // fim da missão: estrelas animadas, gravação e aviso de variante nova
 function missionEnd(won) {
   const party = heroes();
-  const hpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
-  const stars = starsFor({ won, falls: game.falls, hpRatio });
+  const hpRatio = game.missionHpRatio ?? party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
+  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal };
+  const stars = starsFor(result);
+  const conditions = starConditions(result);
   const before = totalStars();
   const best = !game.test && saveStars(game.mission.id, stars);
+  const bestTime = !game.test && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
   const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
   const row = `<span class="stars big">${[1, 2, 3].map((k) => `<i class="${k <= stars ? 'on' : ''}">★</i>`).join('')}</span>`;
-  $('overlayStars').innerHTML = row + (best && stars ? '<div class="star-best">Novo melhor resultado!</div>' : '') + (game.test ? '<div class="star-best">Atalho ?fase: estrelas não contam</div>' : '')
+  const criteria = `<ul class="star-criteria" aria-label="Critérios das estrelas">${conditions.map((condition) => `<li class="${condition.achieved ? 'earned' : 'missed'}"><span aria-hidden="true">${condition.achieved ? '✓' : '○'}</span><span>${condition.label}</span></li>`).join('')}</ul>`;
+  $('overlayStars').innerHTML = row + criteria + (best && stars ? '<div class="star-best">Novo melhor resultado!</div>' : '')
+    + (bestTime ? `<div class="star-best">Novo recorde · ${difficulty.name} · ${clockText(game.missionT)}</div>` : '')
+    + (game.test ? '<div class="star-best">Modo de teste: estrelas e recordes não contam</div>' : '')
     + fresh.map((cfg) => `<div class="unlock" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"><img src="${cfg.portrait}" alt=""><span><b>Nova variante liberada!</b>${cfg.name}</span></div>`).join('');
   return stars;
 }
@@ -2908,7 +3934,8 @@ function spawnSkeleton() {
     const rogue = Math.min(0.3, 0.04 * p), warrior = Math.min(0.4, 0.06 * p);
     type = r < rogue ? 'Rogue' : r < rogue + warrior ? 'Warrior' : 'Minion';
     type = pickMonster(p, type);   // tipos novos entram aos poucos
-    if (p >= 2 && Math.random() < difficulty.shooters) type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
+    if (p >= 2 && ['Minion', 'Warrior', 'Rogue'].includes(type) && Math.random() < difficulty.shooters)
+      type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
   if (onTop && !lead) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
@@ -2946,6 +3973,10 @@ function updateGame(dt) {
       game.spawnTimer -= dt;
       if (game.spawnTimer <= 0) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
     } else if (!skeletons.length) {
+      if (game.mission && game.phase >= game.last) {
+        const party = heroes();
+        game.missionHpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
+      }
       showBanner(`Fase ${game.phase} vencida!`, 2.5);
       for (const h of heroes()) {
         if (h.dead) {
@@ -2981,7 +4012,7 @@ function updateGame(dt) {
   setText('wave', `Fase ${game.phase}/${game.last}`);
   setText('left', `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
   setText('kills', `Abates: ${game.kills}`);
-  setText('party', `Heróis: ${heroes().length}/${HEROES.length}`);
+  setText('party', `Heróis: ${heroes().length}/${MAX_PARTY}`);
 }
 
 function endGame(text, won = false) {
@@ -2990,40 +4021,87 @@ function endGame(text, won = false) {
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
   $('overlayText').textContent = text + (saveRecord(won) ? ` · Novo recorde no ${difficulty.name}!` : '');
-  if (game.mission) missionEnd(won);
+  const missionStars = game.mission ? missionEnd(won) : null;
+  const nextMission = game.mission && won && !game.test
+    ? MISSIONS.find((mission, index) => unlocked(index) && starsOf(mission.id) === 0)?.name || null
+    : null;
   const party = game.roster;
   const report = buildBattleReport({
     won,
     heroes: party.map((h) => ({ name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
     falls: game.fallLog,
     damageSources: Object.values(game.damageSources),
+    mission: game.mission ? {
+      goal: game.mission.goal,
+      time: game.missionT,
+      bossDown: game.bossDown,
+      totemsDown: game.totemsDown,
+      surviveRemaining: game.surviveT,
+      stars: won && !game.test ? missionStars : null,
+      nextMission,
+      remainingStars: won && !game.test && game.mission ? MISSIONS.length * 3 - totalStars() : null,
+    } : null,
   });
   $('overlayStats').innerHTML = summaryHTML(party, report);
   $('overlayBtn').textContent = game.mission ? 'Voltar ao mapa' : 'Jogar de novo';
   $('overlayBtn').hidden = false;
+  $('overlay').classList.add('results');
   $('overlay').classList.remove('hidden');
 }
 
 function updateBars() {
+  // These overlays sit behind menus and reports, so don't keep projecting units
+  // or writing layout styles while the player is choosing or reading results.
+  if (game.paused || game.over) return;
   const w = innerWidth / 2, h = innerHeight / 2;
   for (const u of units) {
     if (u.dead) continue;
     tmp.copy(u.pos).setY(u.pos.y + 2.6 * u.size).project(camera);
     const visible = tmp.z < 1;
-    u.bar.style.display = visible ? '' : 'none';
+    const wasVisible = u.barVisible;
+    if (wasVisible !== visible) {
+      u.bar.style.display = visible ? '' : 'none';
+      u.barVisible = visible;
+    }
     if (!visible) continue;
-    u.bar.style.transform = `translate(${tmp.x * w + w}px, ${-tmp.y * h + h}px)`;
-    u.bar.firstChild.style.width = `${(u.hp / u.maxHp) * 100}%`;
+    const x = tmp.x * w + w, y = -tmp.y * h + h;
+    if (wasVisible !== true || u.barScreenX == null || Math.abs(x - u.barScreenX) >= 0.5 || Math.abs(y - u.barScreenY) >= 0.5) {
+      u.bar.style.transform = `translate(${x}px, ${y}px)`;
+      u.barScreenX = x;
+      u.barScreenY = y;
+    }
+    const healthWidth = (u.hp / u.maxHp) * 100;
+    if (u.barHealthWidth !== healthWidth) {
+      u.bar.firstChild.style.width = `${healthWidth}%`;
+      u.barHealthWidth = healthWidth;
+    }
   }
 }
 
 // ---------- laço principal ----------
 const clock = new THREE.Clock();
+// Buffers reutilizáveis do quadro: evita alocar arrays de unidades/alvos a 60 Hz.
+const frameUnits = [], frameHeroes = [], frameFoes = [], frameNearFoes = [];
+const frameFoeCenter = new THREE.Vector3();
 function frame() {
   const real = Math.min(clock.getDelta(), 0.05);
   const dt = game.paused ? 0 : real * speed;
   if (dt > 0 && !game.over) game.runTime += dt;
-  for (const u of [...units]) u.update(dt);
+  const updateCount = units.length;
+  frameUnits.length = updateCount;
+  for (let i = 0; i < updateCount; i++) frameUnits[i] = units[i];
+  if (game.state === 'fight' && !game.paused && !game.over) activeTargetContext = makeTargetContext(frameTargetContext);
+  else {
+    activeTargetContext = null;
+    frameTargetContext.party.length = 0;
+    frameTargetContext.friends.length = 0;
+    frameTargetContext.skeletons.length = 0;
+    frameTargetContext.attackableSkeletons.length = 0;
+    frameTargetContext.alliedUnits.length = 0;
+  }
+  for (let i = 0; i < updateCount; i++) frameUnits[i].update(dt);
+  frameUnits.length = 0;
+  activeTargetContext = null;
   if (dt > 0 && !game.over) separate();
   updateBolts(dt);
   updateEnemyBolts(dt);
@@ -3032,17 +4110,30 @@ function frame() {
   if (dt > 0) updateGame(dt);
   showEvolution();
   // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez
-  const alive = heroes().filter((h) => !h.dead);
-  const foes = game.state === 'fight' ? skeletonsAlive().filter((s) => !s.spawning) : [];
-  if (alive.length) {
+  frameHeroes.length = 0;
+  frameFoes.length = 0;
+  let bossVisible = false;
+  for (const unit of units) {
+    if (unit.dead) continue;
+    if (unit.team === 'hero') frameHeroes.push(unit);
+    else if (game.state === 'fight' && unit.team === 'skeleton' && !unit.spawning) {
+      frameFoes.push(unit);
+      if (unit.boss) bossVisible = true;
+    }
+  }
+  frameNearFoes.length = 0;
+  if (frameHeroes.length) {
     tmp.set(0, 0, 0);
-    for (const h of alive) tmp.add(h.pos);
-    tmp.divideScalar(alive.length).add(new THREE.Vector3(0, 0, -3));
+    for (const h of frameHeroes) tmp.add(h.pos);
+    tmp.divideScalar(frameHeroes.length);
+    tmp.z -= 3;
     // na luta o enquadramento puxa um pouco para os inimigos próximos, para mostrar os dois lados
-    const near = foes.filter((s) => s.pos.distanceTo(tmp) < 14);
-    if (near.length) {
-      const foeMid = near.reduce((v, s) => v.add(s.pos), new THREE.Vector3()).divideScalar(near.length);
-      tmp.lerp(foeMid, 0.3);
+    for (const foe of frameFoes) if (foe.pos.distanceTo(tmp) < 14) frameNearFoes.push(foe);
+    if (frameNearFoes.length) {
+      frameFoeCenter.set(0, 0, 0);
+      for (const foe of frameNearFoes) frameFoeCenter.add(foe.pos);
+      frameFoeCenter.divideScalar(frameNearFoes.length);
+      tmp.lerp(frameFoeCenter, 0.3);
     }
     follow.lerp(tmp, Math.min(1, real * 2));
   }
@@ -3050,7 +4141,7 @@ function frame() {
   controls.target.add(tmp);
   camera.position.add(tmp);
   // zoom cinematográfico em cima do zoom do jogador: perto na luta, longe andando, aberto com chefe
-  const wantZoom = foes.some((s) => s.boss) ? 0.95 : foes.length ? 0.78 : game.state === 'advance' ? 1.08 : 1;
+  const wantZoom = bossVisible ? 0.95 : frameFoes.length ? 0.78 : game.state === 'advance' ? 1.08 : 1;
   cam.zoom += (wantZoom - cam.zoom) * Math.min(1, real * 1.5);
   const offset = tmp.subVectors(camera.position, controls.target);
   if (cam.userDist === 0) cam.userDist = offset.length();
@@ -3090,6 +4181,11 @@ function frame() {
 let aiming = null;
 const aimRay = new THREE.Raycaster();
 const aimPointer = new THREE.Vector2();
+const aimScreen = new THREE.Vector3();
+const aimGroundHit = new THREE.Vector3();
+// Reused while the cursor moves over terrain. It is safe to hand this to a
+// skill because a successful cast closes the aim before the next frame.
+const aimGroundTarget = { pos: new THREE.Vector3(), dead: false, size: 1, groundTarget: true };
 const aimGroup = new THREE.Group();
 const aimMaterial = new THREE.MeshBasicMaterial({ color: 0x73d4ff, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
 const aimRange = new THREE.Mesh(new THREE.RingGeometry(0.985, 1, 80), aimMaterial);
@@ -3118,7 +4214,21 @@ function beginAim(hero) {
   cancelAim();
   hero.wantSkill = 0;
   hero.manualTarget = null;
-  aiming = { hero, controlsEnabled: controls.enabled, pointer: null, target: null };
+  const spec = aimSpec(hero);
+  const modeHint = spec.mode === 'enemy' ? 'Clique em um inimigo' : 'Clique no chão para mirar';
+  const baseMessage = `${hero.cfg.ability} · ${modeHint} · Alcance ${spec.range.toLocaleString('pt-BR')} m · Esc / botão direito cancela`;
+  aiming = {
+    hero,
+    controlsEnabled: controls.enabled,
+    pointerX: null,
+    pointerY: null,
+    target: null,
+    spec,
+    specLevel: hero.level,
+    specPower: hero.skillPower,
+    baseMessage,
+    hintState: null,
+  };
   controls.enabled = false;
   renderer.domElement.style.cursor = 'crosshair';
   aimHint.hidden = false;
@@ -3127,31 +4237,44 @@ function beginAim(hero) {
 
 function updateAim() {
   if (!aiming) return;
-  const h = aiming.hero, spec = aimSpec(h);
+  const h = aiming.hero;
   if (h.auto || h.dead || !units.includes(h) || game.paused || game.over || game.state !== 'fight' || h.skillTimer > 0) return cancelAim();
+  if (aiming.specLevel !== h.level || aiming.specPower !== h.skillPower) {
+    aiming.spec = aimSpec(h);
+    aiming.specLevel = h.level;
+    aiming.specPower = h.skillPower;
+    if (aiming.spec) {
+      const modeHint = aiming.spec.mode === 'enemy' ? 'Clique em um inimigo' : 'Clique no chão para mirar';
+      aiming.baseMessage = `${h.cfg.ability} · ${modeHint} · Alcance ${aiming.spec.range.toLocaleString('pt-BR')} m · Esc / botão direito cancela`;
+      aiming.hintState = null;
+    }
+  }
+  const spec = aiming.spec;
+  if (!spec) return cancelAim();
   aimGroup.visible = true;
   aimRange.position.copy(h.pos).setY(h.pos.y + 0.12);
   aimRange.scale.setScalar(spec.range);
   let target = null;
-  const pointer = aiming.pointer;
-  if (pointer) {
-    const bounds = renderer.domElement.getBoundingClientRect();
-    aimPointer.set((pointer.x - bounds.left) / bounds.width * 2 - 1, -(pointer.y - bounds.top) / bounds.height * 2 + 1);
+  if (aiming.pointerX != null && aiming.pointerY != null) {
+    const pointerX = aiming.pointerX, pointerY = aiming.pointerY;
+    aimPointer.set(pointerX / innerWidth * 2 - 1, -(pointerY / innerHeight) * 2 + 1);
     aimRay.setFromCamera(aimPointer, camera);
     if (spec.mode === 'enemy') {
       let best = 45;
-      for (const enemy of skeletonsAlive()) {
-        if (enemy.spawning) continue;
-        const screen = enemy.pos.clone().add(new THREE.Vector3(0, enemy.size, 0)).project(camera);
-        if (screen.z < -1 || screen.z > 1) continue;
-        const distance = Math.hypot((screen.x + 1) * bounds.width / 2 + bounds.left - pointer.x,
-          (1 - screen.y) * bounds.height / 2 + bounds.top - pointer.y);
+      for (const enemy of units) {
+        if (enemy.team !== 'skeleton' || enemy.dead || enemy.spawning) continue;
+        aimScreen.copy(enemy.pos);
+        aimScreen.y += enemy.size;
+        aimScreen.project(camera);
+        if (aimScreen.z < -1 || aimScreen.z > 1) continue;
+        const distance = Math.hypot((aimScreen.x + 1) * innerWidth / 2 - pointerX,
+          (1 - aimScreen.y) * innerHeight / 2 - pointerY);
         if (distance < best) { best = distance; target = enemy; }
       }
     } else {
       // Procura a primeira interseção com a altura lógica do terreno, inclusive platôs.
       const ray = aimRay.ray;
-      const hit = new THREE.Vector3();
+      const hit = aimGroundHit;
       let previous = ray.origin.y - world.groundHeight(ray.origin.x, ray.origin.z);
       for (let distance = 0.5; distance <= 250; distance += 0.5) {
         ray.at(distance, hit);
@@ -3165,7 +4288,8 @@ function updateAim() {
           }
           ray.at(high, hit);
           hit.y = world.groundHeight(hit.x, hit.z);
-          target = { pos: hit.clone(), dead: false, size: 1, groundTarget: true };
+          aimGroundTarget.pos.copy(hit);
+          target = aimGroundTarget;
           break;
         }
         previous = above;
@@ -3186,12 +4310,15 @@ function updateAim() {
     aimLine.geometry.computeBoundingSphere();
     aimLine.material.color.copy(aimArea.material.color);
   }
-  const message = `${h.cfg.ability} · ${spec.mode === 'enemy' ? 'Clique em um inimigo' : 'Clique no chão para mirar'} · Alcance ${spec.range.toLocaleString('pt-BR')} m${target && !valid ? ' · Fora do alcance ou alvo inválido' : ''} · Esc / botão direito cancela`;
-  if (aimHint.textContent !== message) aimHint.textContent = message;
+  const hintState = target && !valid ? 'invalid' : target ? 'valid' : 'empty';
+  if (aiming.hintState !== hintState) {
+    aiming.hintState = hintState;
+    aimHint.textContent = `${aiming.baseMessage}${hintState === 'invalid' ? ' · Fora do alcance ou alvo inválido' : ''}`;
+  }
 }
 
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (aiming) aiming.pointer = { x: e.clientX, y: e.clientY };
+  if (aiming) { aiming.pointerX = e.clientX; aiming.pointerY = e.clientY; }
 });
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (!aiming || e.button !== 2) return;
@@ -3212,12 +4339,17 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (e.button !== 0) return;
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
   if (aiming) {
-    aiming.pointer = { x: e.clientX, y: e.clientY };
+    aiming.pointerX = e.clientX;
+    aiming.pointerY = e.clientY;
     updateAim();
     if (!aiming) return;
     const { hero, target } = aiming;
     if (!validAim(hero, target)) { audio.play('click'); return; }
-    const result = hero.requestSkill(target);
+    // Ground preview is shared scratch state; snapshot it for the delayed cast.
+    const committedTarget = target?.groundTarget
+      ? { pos: target.pos.clone(), dead: false, size: 1, groundTarget: true }
+      : target;
+    const result = hero.requestSkill(committedTarget);
     if (result === 'ok') cancelAim();
     return;
   }
@@ -3234,7 +4366,7 @@ addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (aiming) { cancelAim(); return; }
   closeHeroPanel();
-  if (!$('campaign').classList.contains('hidden')) showMenu();   // Esc no mapa volta ao menu
+  if (!$('campaign').classList.contains('hidden')) { campaignMapSession.reset(); showMenu(); }   // Esc no mapa volta ao menu
 });
 
 addEventListener('resize', () => {
@@ -3245,7 +4377,7 @@ addEventListener('resize', () => {
 
 try {
   await loadAssets();
-  renderPortraits();
+  await renderPortraits();
   startGame();
   frame();
 } catch (error) {

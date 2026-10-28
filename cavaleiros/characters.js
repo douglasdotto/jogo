@@ -5,11 +5,12 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 // receitas: base = modelo de partida; hide = peças da base que somem; add = peças de outros modelos;
 // paint = mudança de cor por peça (hue gira o tom, tint pinta por cima mantendo a sombra);
-// extras = acessórios feitos aqui, presos a um osso
+// shape = proporções das malhas; extras = roupas e acessórios presos a um osso
 export const CHARACTERS = [
   {
     id: 'druida', name: 'Druida', desc: 'Guardião da floresta com cajado de galhos.', color: ['#a8e07a', '#5a9e3a'],
     base: 'Rogue',
+    shape: silhouette('Rogue', { torso: 0.96, arms: 0.94, legs: 0.97, height: 1.03, depth: 0.94 }),
     hide: ['Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable', 'Rogue_Cape'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }, { from: 'Mage', part: '2H_Staff' }],
     paint: {
@@ -17,28 +18,26 @@ export const CHARACTERS = [
       Rogue_LegLeft: { hue: -40 }, Rogue_LegRight: { hue: -40 },
       Mage_Cape: { tint: '#5fae3e', amount: 0.85 }, '2H_Staff': { tint: '#8a5a2e', amount: 0.6 },
     },
-    extras: [{ type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }],
+    extras: [{ type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }, { type: 'leafMantle', bone: 'chest' }],
   },
   {
     id: 'necromante', name: 'Necromante', desc: 'Mago esqueleto que brinca com magia verde.', color: ['#c9a3ff', '#6b3fa0'],
-    base: 'Mage',
-    hide: ['Mage_Head', 'Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    base: 'Skeleton_Mage',
+    shape: silhouette('Skeleton_Mage', { torso: 0.91, arms: 0.93, legs: 0.95, height: 1.05, depth: 0.91 }),
+    hide: [],
     add: [
-      { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Skull' }, { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Jaw' },
-      { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Eyes' }, { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Hat' },
+      { from: 'Mage', part: 'Mage_Cape' },
       { from: 'Skeleton_Staff', part: 'Skeleton_Staff', bone: 'handslotr', rot: [0, Math.PI, 0] },   // cajado de osso
     ],
     paint: {
-      Mage_Body: { tint: '#4a3366', amount: 0.8 }, Mage_ArmLeft: { tint: '#4a3366', amount: 0.8 }, Mage_ArmRight: { tint: '#4a3366', amount: 0.8 },
-      Mage_LegLeft: { tint: '#2e2240', amount: 0.8 }, Mage_LegRight: { tint: '#2e2240', amount: 0.8 },
-      Mage_Cape: { tint: '#6fe08a', amount: 0.75 }, '2H_Staff': { tint: '#e8e0c8', amount: 0.7 },
-      Skeleton_Mage_Hat: { tint: '#7a4fc4', amount: 0.8 },
+      Mage_Cape: { tint: '#39254e', amount: 0.86 }, Skeleton_Mage_Hat: { tint: '#6d43a6', amount: 0.72 },
     },
     extras: [{ type: 'orb', bone: 'handslotl' }, { type: 'skull', bone: 'handslotr', y: 1.38 }],   // caveira na ponta do cajado
   },
   {
     id: 'rei', name: 'Rei Dourado', desc: 'Armadura de ouro, coroa e espadão.', color: ['#ffe07a', '#d19a1c'],
     base: 'Knight',
+    shape: silhouette('Knight', { torso: 1.12, arms: 1.08, legs: 1.06, height: 1, depth: 1.1 }),
     hide: ['Knight_Helmet', 'Knight_Cape', '1H_Sword', '1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield'],
     add: [{ from: 'Barbarian', part: 'Barbarian_Cape' }],
     paint: {
@@ -51,6 +50,7 @@ export const CHARACTERS = [
   {
     id: 'viking', name: 'Viking do Gelo', desc: 'Bárbaro do norte com elmo de chifres.', color: ['#a8e4ff', '#3f8fc4'],
     base: 'Barbarian',
+    shape: silhouette('Barbarian', { torso: 1.08, arms: 1.08, legs: 1.05, height: 1, depth: 1.08 }),
     hide: ['Barbarian_Hat', 'Barbarian_Cape', '1H_Axe', '1H_Axe_Offhand', 'Barbarian_Round_Shield', 'Mug'],
     add: [{ from: 'Knight', part: 'Knight_Helmet' }, { from: 'Knight', part: 'Knight_Cape' }],
     paint: {
@@ -60,7 +60,66 @@ export const CHARACTERS = [
     },
     extras: [{ type: 'horns', bone: 'head' }],
   },
+  {
+    id: 'cleric', name: 'Clériga', desc: 'Clériga de túnica leve e cajado sagrado.', color: ['#fff0dc', '#d89b61'],
+    base: 'Mage',
+    shape: silhouette('Mage', { torso: 0.97, arms: 0.96, legs: 0.98, height: 1.02, depth: 0.96 }),
+    hide: ['Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    add: [{ from: 'Mage', part: '2H_Staff', bone: 'handslotr', rot: [0, Math.PI, 0] }],
+    paint: {
+      Mage_Body: { tint: '#f4edda', amount: 0.8 }, Mage_ArmLeft: { tint: '#f4edda', amount: 0.76 }, Mage_ArmRight: { tint: '#f4edda', amount: 0.76 },
+      Mage_LegLeft: { tint: '#e4d8bb', amount: 0.74 }, Mage_LegRight: { tint: '#e4d8bb', amount: 0.74 },
+      Mage_Cape: { tint: '#fff0dc', amount: 0.68 }, '2H_Staff': { tint: '#d3a64a', amount: 0.58 },
+    },
+    extras: [{ type: 'robeSkirt', bone: 'hips' }, { type: 'clericStole', bone: 'chest' }, { type: 'crossBadge', bone: 'chest' }],
+  },
+  {
+    id: 'bard', name: 'Bardo', desc: 'Cantor de guerra que inspira os aliados.', color: ['#f4c6ff', '#875ac7'],
+    base: 'Rogue',
+    shape: silhouette('Rogue', { torso: 0.92, arms: 0.93, legs: 0.98, height: 1.05, depth: 0.91 }),
+    hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
+    add: [{ from: 'Barbarian', part: 'Barbarian_Cape' }],
+    paint: {
+      Rogue_Body: { tint: '#59477c', amount: 0.82 }, Rogue_ArmLeft: { tint: '#59477c', amount: 0.7 }, Rogue_ArmRight: { tint: '#59477c', amount: 0.7 },
+      Rogue_LegLeft: { tint: '#33284e', amount: 0.78 }, Rogue_LegRight: { tint: '#33284e', amount: 0.78 }, Barbarian_Cape: { tint: '#bd5cbb', amount: 0.78 },
+    },
+    extras: [{ type: 'lute', bone: 'handslotr' }, { type: 'travelHat', bone: 'head' }, { type: 'feather', bone: 'head', color: 0xffd676, y: 1.2 }, { type: 'luteStrap', bone: 'chest' }],
+  },
+  {
+    id: 'angel', name: 'Anjo', desc: 'Mensageiro celeste que paira com asas de luz.', color: ['#fff4b5', '#d8a632'],
+    base: 'Mage',
+    shape: silhouette('Mage', { torso: 0.98, arms: 0.96, legs: 0.97, height: 1.06, depth: 0.96 }),
+    hide: ['Mage_Hat', 'Mage_Cape', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    add: [{ from: 'Mage', part: 'Mage_Cape' }, { from: 'Mage', part: '1H_Wand' }],
+    paint: {
+      Mage_Body: { tint: '#fff0c2', amount: 0.88 }, Mage_ArmLeft: { tint: '#fff0c2', amount: 0.82 }, Mage_ArmRight: { tint: '#fff0c2', amount: 0.82 },
+      Mage_LegLeft: { tint: '#d8d2bd', amount: 0.75 }, Mage_LegRight: { tint: '#d8d2bd', amount: 0.75 }, Mage_Cape: { tint: '#ffe27a', amount: 0.7 },
+    },
+    extras: [{ type: 'halo', bone: 'head' }, { type: 'wings', bone: 'chest' }],
+  },
+  {
+    id: 'chronist', name: 'Cronomante', desc: 'Ladino arcano que dobra o tempo ao redor.', color: ['#a8d9ff', '#4968c7'],
+    base: 'Rogue',
+    shape: silhouette('Rogue', { torso: 0.93, arms: 0.93, legs: 0.97, height: 1.06, depth: 0.93 }),
+    hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
+    add: [{ from: 'Mage', part: 'Mage_Cape' }, { from: 'Mage', part: '2H_Staff', bone: 'handslotr', rot: [0, Math.PI, 0] }],
+    paint: {
+      Rogue_Body: { tint: '#394b83', amount: 0.82 }, Rogue_ArmLeft: { tint: '#394b83', amount: 0.76 }, Rogue_ArmRight: { tint: '#394b83', amount: 0.76 },
+      Rogue_LegLeft: { tint: '#232a50', amount: 0.82 }, Rogue_LegRight: { tint: '#232a50', amount: 0.82 }, Mage_Cape: { tint: '#526ed4', amount: 0.85 },
+      '2H_Staff': { tint: '#9ddcff', amount: 0.6 },
+    },
+    extras: [{ type: 'stars', bone: 'head', color: 0xa8d9ff }, { type: 'orb', bone: 'handslotl', color: 0xb9e8ff, glow: 0x5075ff }],
+  },
 ];
+
+// proporções leves nas malhas de corpo, braços e pernas; mantém os ossos livres para as animações
+function silhouette(model, { torso = 1, arms = 1, legs = 1, height = 1, depth = 1 } = {}) {
+  return {
+    [`${model}_Body`]: [torso, height, depth],
+    [`${model}_ArmLeft`]: [arms, height, depth], [`${model}_ArmRight`]: [arms, height, depth],
+    [`${model}_LegLeft`]: [legs, height, depth], [`${model}_LegRight`]: [legs, height, depth],
+  };
+}
 
 // arquivos que as receitas usam
 export const CHARACTER_ASSETS = ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Skeleton_Mage'];   // .glb; o cajado de osso (Skeleton_Staff.gltf) vem à parte
@@ -98,6 +157,14 @@ export function applyLook(root, assets, r) {
     if (!skinned && scale) copy.scale.multiplyScalar(scale);
     if (!skinned && pos) copy.position.add(new THREE.Vector3(...pos));
     (skinned ? rig : root.getObjectByName(clean(src.parent.name))).add(copy);
+  }
+
+  // proporções aplicadas às malhas, não aos ossos: os clipes GLB também animam a escala dos ossos
+  for (const [part, factors] of Object.entries(r.shape || {})) {
+    const mesh = root.getObjectByName(part);
+    if (!mesh?.isSkinnedMesh || !mesh.scale) continue;
+    const [x = 1, y = 1, z = 1] = factors;
+    mesh.scale.set(mesh.scale.x * x, mesh.scale.y * y, mesh.scale.z * z);
   }
 
   for (const [part, op] of Object.entries(r.paint || {})) {
@@ -181,6 +248,67 @@ const ACCESSORIES = {
     g.position.set(0, 0.95, 0);
     return g;
   },
+  // halo dourado suspenso acima da cabeça: silhueta própria para o anjo
+  halo({ color = 0xffdf82, y = 1.22 } = {}) {
+    const g = new THREE.Group();
+    const mat = lambert(color, { emissive: 0xa66b16, emissiveIntensity: 0.38 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.045, 7, 24), mat);
+    ring.rotation.x = Math.PI / 2;
+    g.add(ring);
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2;
+      const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.055), mat);
+      spark.position.set(Math.cos(a) * 0.43, 0.02, Math.sin(a) * 0.43);
+      g.add(spark);
+    }
+    g.position.set(0, y, 0);
+    g.userData.orbit = true;
+    return g;
+  },
+  // chapéu de viajante com aba larga; usado pelo bardo para não repetir a silhueta do mago
+  travelHat({ color = 0x7c482e, band = 0xd9ae56 } = {}) {
+    const g = new THREE.Group();
+    const felt = lambert(color), trim = lambert(band);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.47, 0.075, 12), felt);
+    brim.position.y = 0.9;
+    g.add(brim);
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.32, 0.38, 10), felt);
+    crown.position.set(0, 1.11, -0.015);
+    g.add(crown);
+    const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(0.325, 0.325, 0.07, 10), trim);
+    ribbon.position.y = 0.99;
+    g.add(ribbon);
+    g.rotation.z = -0.08;
+    return g;
+  },
+  // elmo fechado de fortaleza: perfil largo e pesado para o guardião, diferente do elmo emplumado do paladino
+  greathelm({ color = 0x7890ad, trim = 0xc8d9ec, slit = 0x17243a } = {}) {
+    const g = new THREE.Group();
+    const steel = lambert(color), edge = lambert(trim), dark = lambert(slit);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.62), steel);
+    dome.scale.set(1.12, 0.95, 1.02);
+    dome.position.y = 0.18;
+    g.add(dome);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.77, 0.11, 0.12), edge);
+    brow.position.set(0, 0.08, 0.31);
+    g.add(brow);
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.38, 0.1), steel);
+    face.position.set(0, -0.13, 0.31);
+    g.add(face);
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.045, 0.025), dark);
+    visor.position.set(0, -0.035, 0.37);
+    g.add(visor);
+    for (const s of [-1, 1]) {
+      const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.42, 0.18), steel);
+      cheek.position.set(s * 0.31, -0.2, 0.13);
+      cheek.rotation.z = -s * 0.12;
+      g.add(cheek);
+    }
+    const neckGuard = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.31, 0.16, 10), edge);
+    neckGuard.position.y = -0.38;
+    g.add(neckGuard);
+    return g;
+  },
   horns() {
     const g = new THREE.Group();
     for (const s of [-1, 1]) {
@@ -243,6 +371,25 @@ const ACCESSORIES = {
     g.rotation.x = -0.15;
     return g;
   },
+  // folhas grandes sobre os ombros dão ao druida uma silhueta natural além da coroa de galhos
+  leafMantle() {
+    const g = new THREE.Group();
+    const mats = [lambert(0x3d8738), lambert(0x71b64a), lambert(0x9cc85c)];
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.15, 7, 5), mats[(i + (side > 0 ? 1 : 0)) % mats.length]);
+        leaf.scale.set(0.7, 1.55 - i * 0.1, 0.38);
+        leaf.position.set(side * (0.27 + i * 0.11), 0.34 - i * 0.055, -0.04 - i * 0.025);
+        leaf.rotation.z = -side * (0.36 + i * 0.085);
+        leaf.rotation.x = -0.18;
+        g.add(leaf);
+      }
+    }
+    const seed = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), lambert(0xf1d47a, { emissive: 0x805515, emissiveIntensity: 0.18 }));
+    seed.position.set(0, 0.28, 0.31);
+    g.add(seed);
+    return g;
+  },
   orb({ color = 0x7dffa0, glow = 0x2fbf5a } = {}) {
     const g = new THREE.Group();
     const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), new THREE.MeshLambertMaterial({ color, emissive: glow, emissiveIntensity: 1 }));
@@ -283,6 +430,39 @@ const ACCESSORIES = {
     }
     return g;
   },
+  // pele grossa em volta dos ombros, usada para deixar o viking do gelo mais robusto
+  furMantle({ color = 0xd9e4ed } = {}) {
+    const g = new THREE.Group(), fur = lambert(color), shadow = lambert(0x8196a8);
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.17, 7, 5), i % 3 === 0 ? shadow : fur);
+      tuft.scale.set(1.18, 0.82, 0.9);
+      tuft.position.set(Math.cos(a) * 0.38, 0.28 + Math.sin(a) * 0.07, Math.sin(a) * 0.22);
+      tuft.rotation.z = Math.sin(a) * 0.28;
+      g.add(tuft);
+    }
+    return g;
+  },
+  // ombreiras de cristal em leque; dão ao criomante um contorno largo sem repetir a capa do piromante
+  iceMantle({ color = 0xb9efff, shadow = 0x69b8d8 } = {}) {
+    const g = new THREE.Group(), crystal = lambert(color, { emissive: 0x317fa5, emissiveIntensity: 0.3 }), dark = lambert(shadow);
+    for (const s of [-1, 1]) {
+      const pad = new THREE.Mesh(new THREE.OctahedronGeometry(0.31, 0), dark);
+      pad.scale.set(1.5, 0.78, 1.08);
+      pad.position.set(s * 0.42, 0.28, 0.02);
+      pad.rotation.z = -s * 0.22;
+      g.add(pad);
+      for (let i = 0; i < 3; i++) {
+        const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.17 + (i === 1 ? 0.04 : 0), 0), crystal);
+        shard.scale.set(0.78, 1.95 - i * 0.18, 0.9);
+        shard.position.set(s * (0.29 + i * 0.14), 0.44 - i * 0.035, -0.02);
+        shard.rotation.z = -s * (0.42 + i * 0.16);
+        shard.rotation.x = 0.18;
+        g.add(shard);
+      }
+    }
+    return g;
+  },
   // cachecol no pescoço (osso da cabeça, embaixo)
   scarf({ color = 0xd94f4f } = {}) {
     const g = new THREE.Group();
@@ -297,13 +477,13 @@ const ACCESSORIES = {
     return g;
   },
   // coroa de cristais de gelo
-  iceCrown({ radius = 0.36, y = 0.95, n = 6 } = {}) {
+  iceCrown({ radius = 0.36, y = 0.95, n = 6, height = 1 } = {}) {
     const g = new THREE.Group();
     const mat = new THREE.MeshLambertMaterial({ color: 0xc8f4ff, emissive: 0x3aa8d8, emissiveIntensity: 0.5, flatShading: true });
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), mat);
-      c.scale.set(0.7, 2 + (i % 2), 0.7);
+      c.scale.set(0.7, (2 + (i % 2)) * height, 0.7);
       c.position.set(Math.cos(a) * radius, y, Math.sin(a) * radius);
       c.rotation.z = Math.cos(a) * 0.3;
       c.rotation.x = -Math.sin(a) * 0.3;
@@ -325,13 +505,61 @@ const ACCESSORIES = {
     return g;
   },
   // pena atrás da orelha
-  feather({ color = 0xff8a3d } = {}) {
+  feather({ color = 0xff8a3d, y = 0.75 } = {}) {
     const g = new THREE.Group();
     const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), lambert(color));
     f.scale.set(0.5, 2.6, 0.9);
-    f.position.set(0.42, 0.75, -0.1);
+    f.position.set(0.42, y, -0.1);
     f.rotation.z = -0.6;
     g.add(f);
+    return g;
+  },
+  // pequena lira feita de formas simples, presa à mão do bardo
+  lute() {
+    const g = new THREE.Group(), wood = lambert(0x9a5738), goldMat = lambert(0xffd676), string = lambert(0xfff0c2);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), wood);
+    body.scale.set(0.95, 1.05, 0.46); body.position.y = -0.02; g.add(body);
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.075), wood); neck.position.set(0, 0.27, 0); neck.rotation.z = -0.2; g.add(neck);
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.035, 0.035), goldMat); bridge.position.set(0, 0.01, 0.09); g.add(bridge);
+    const soundHole = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 5, 12), goldMat);
+    soundHole.position.set(0, -0.11, 0.09); g.add(soundHole);
+    for (let i = -2; i <= 2; i++) {
+      const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.37, 4), string);
+      wire.position.set(i * 0.025, 0.14, 0.075); g.add(wire);
+      const peg = new THREE.Mesh(new THREE.SphereGeometry(0.025, 5, 4), goldMat);
+      peg.position.set(i % 2 ? -0.07 : 0.07, 0.44 + Math.floor(i / 2) * 0.025, 0);
+      g.add(peg);
+    }
+    g.position.set(0.05, 0.05, 0.06); g.rotation.z = -0.15;
+    return g;
+  },
+  wings() {
+    const g = new THREE.Group();
+    const featherMat = lambert(0xfffbeb, { emissive: 0x8a7540, emissiveIntensity: 0.18 });
+    const tipMat = lambert(0xffe8a0, { emissive: 0xb88932, emissiveIntensity: 0.22 });
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Group();
+      // duas camadas abertas em leque, maiores nas pontas para ler como asa mesmo à distância
+      for (let i = 0; i < 9; i++) {
+        const feather = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), i >= 7 ? tipMat : featherMat);
+        feather.scale.set(0.54, 2.15 - i * 0.12, 0.34);
+        feather.position.set(side * (0.12 + i * 0.105), 0.2 - i * 0.048, -0.04 - i * 0.01);
+        feather.rotation.z = -side * (0.2 + i * 0.078);
+        wing.add(feather);
+      }
+      for (let i = 0; i < 6; i++) {
+        const covert = new THREE.Mesh(new THREE.SphereGeometry(0.1, 7, 5), featherMat);
+        covert.scale.set(0.58, 1.3, 0.3);
+        covert.position.set(side * (0.12 + i * 0.115), 0.06 - i * 0.022, 0.035);
+        covert.rotation.z = -side * (0.18 + i * 0.09);
+        wing.add(covert);
+      }
+      wing.position.set(side * 0.25, 0.1, -0.3);
+      wing.rotation.y = side * -0.28;
+      wing.userData.wingFlap = side;
+      g.add(wing);
+    }
+    g.scale.set(1.62, 1.36, 1.05);
     return g;
   },
   // chaminhas saindo do chapéu
@@ -397,6 +625,66 @@ const ACCESSORIES = {
       g.add(ray);
     }
     g.position.set(0, y, z);
+    return g;
+  },
+  // estola clara cruzando o peito, com borda dourada; distingue a clériga do mago de túnica
+  clericStole({ color = 0xf9f2df, trim = 0xd6ae56 } = {}) {
+    const g = new THREE.Group(), cloth = lambert(color), goldMat = lambert(trim);
+    for (const side of [-1, 1]) {
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.68, 0.04), cloth);
+      panel.position.set(side * 0.11, 0.01, 0.29);
+      panel.rotation.z = side * -0.16;
+      g.add(panel);
+      const piping = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.62, 0.02), goldMat);
+      piping.position.set(side * 0.11, 0.01, 0.315);
+      piping.rotation.z = side * -0.16;
+      g.add(piping);
+    }
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.035, 6, 14), cloth);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.set(0, 0.34, 0.04);
+    g.add(collar);
+    return g;
+  },
+  // túnica longa e aberta na barra: altera o contorno do corpo, não só os detalhes da roupa
+  robeSkirt({ color = 0xf3ecda, trim = 0xd6ae56, height = 0.9, flare = 0.48 } = {}) {
+    const g = new THREE.Group(), cloth = lambert(color), goldMat = lambert(trim);
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.24, flare, height, 10, 1), cloth);
+    skirt.position.y = -height * 0.43;
+    g.add(skirt);
+    const hem = new THREE.Mesh(new THREE.TorusGeometry(flare * 0.98, 0.025, 5, 14), goldMat);
+    hem.rotation.x = Math.PI / 2;
+    hem.position.y = -height * 0.88;
+    g.add(hem);
+    const front = new THREE.Mesh(new THREE.BoxGeometry(0.19, height * 0.74, 0.035), goldMat);
+    front.position.set(0, -height * 0.42, flare * 0.47);
+    g.add(front);
+    return g;
+  },
+  // cruz pequena no alto do peito em vez de um medalhão genérico
+  crossBadge({ color = 0xd6ae56 } = {}) {
+    const g = new THREE.Group(), mat = lambert(color, { emissive: 0x765018, emissiveIntensity: 0.18 });
+    const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.24, 0.045), mat);
+    const horizontal = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.07, 0.045), mat);
+    vertical.position.set(0, 0.13, 0.365);
+    horizontal.position.set(0, 0.16, 0.365);
+    g.add(vertical, horizontal);
+    return g;
+  },
+  // bandoleira e bolsa de instrumento, para dar ao bardo um perfil de viajante
+  luteStrap({ color = 0x633a2a, buckle = 0xe2bd63 } = {}) {
+    const g = new THREE.Group(), leather = lambert(color), metal = lambert(buckle);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.82, 0.035), leather);
+    strap.position.set(0.03, 0.02, 0.29);
+    strap.rotation.z = -0.45;
+    g.add(strap);
+    const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.13), leather);
+    pouch.position.set(-0.31, -0.23, 0.2);
+    pouch.rotation.z = -0.1;
+    g.add(pouch);
+    const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.025), metal);
+    clasp.position.set(-0.31, -0.2, 0.275);
+    g.add(clasp);
     return g;
   },
   // colar de dentes em volta do pescoço
