@@ -156,6 +156,39 @@ export function createWorld(scene, ROAD, PHASES) {
   const roadDist = (x, z) => distTo(roadPts, x, z);
   const riverDist = (x, z) => distTo(riverPts, x, z);
 
+  // ---------- locais dos marcos de cada região (fixos, longe da área de luta) ----------
+  const castleAt = pointAt(L - 10);
+  const sites = {};
+  const siteList = [];
+  // procura perto da fase um ponto a ≥ gap m do caminho, fora do rio, das zonas e de outros marcos
+  function site(name, phase, ds, side, r, gap = 9) {
+    for (const k of [0, 5, -5, 10, -10, 15, -15, 20]) {
+      const s = anchorS(phase) + ds + k;
+      for (let lat = gap + r; lat < gap + r + 12; lat += 1.5) {
+        const p = along(s, side * lat);
+        if (roadDist(p.x, p.z) < gap + r - 0.3) continue;
+        if (riverDist(p.x, p.z) < r + 5 || p.distanceTo(castleAt) < 24 + r) break;
+        if ([...zones.values()].some((zn) => Math.hypot(p.x - zn.center.x, p.z - zn.center.z) < zn.radius + 8 + r)) break;
+        if (siteList.some((o) => Math.hypot(p.x - o.x, p.z - o.z) < o.r + r + 2)) continue;
+        const st = { x: p.x, z: p.z, r, look: pointAt(s) };
+        sites[name] = st;
+        siteList.push(st);
+        return;
+      }
+    }
+  }
+  site('praca', 2, 0, -1, 6);
+  site('moinho', 4, 2, -1, 4);
+  site('campos', 5, 0, 1, 8);
+  site('carroca', 6, -4, -1, 3);
+  site('arcos', 7, 0, -1, 6);
+  site('muro', 8, 0, 1, 7);
+  site('estatua', 9, 0, 1, 4);
+  site('cemiterio', 10, 0, -1, 8);
+  site('obelisco1', 11, -6, 1, 3);
+  site('obelisco2', 11, 6, -1, 3);
+  site('caldeirao', 12, -10, 1, 3);
+
   // o caminho não aparece: perto dele o chão é plano, longe viram morros de borda irregular;
   // o rio cava um leito
   const noise = (x, z) => ((Math.sin(x * 0.13 + z * 0.05) + Math.sin(z * 0.17 - x * 0.07) + 1.5 * Math.sin((x + z) * 0.045)) / 3.5) * 0.5 + 0.5;
@@ -171,6 +204,10 @@ export function createWorld(scene, ROAD, PHASES) {
       const dz = Math.hypot(x - zone.center.x, z - zone.center.z);
       if (dz < 12) h = 0;
       if (zone.type === 'lake' && dz < zone.radius + 2) h = Math.min(h, lakeDepth(zone, x, z));
+    }
+    for (const st of siteList) {   // chão plano embaixo dos marcos
+      const ds = Math.hypot(x - st.x, z - st.z);
+      if (ds < st.r + 7) h *= THREE.MathUtils.smoothstep(ds, st.r + 1, st.r + 7);
     }
     const dr = riverDist(x, z);
     if (dr < 4) h = THREE.MathUtils.lerp(-0.8, h, (dr / 4) ** 2);
@@ -200,6 +237,7 @@ export function createWorld(scene, ROAD, PHASES) {
     for (const p of zone.ground) blocked.push({ x: p.x, z: p.z, r: 1.5 });
     if (zone.ramp) blocked.push({ x: zone.ramp.bottom.x, z: zone.ramp.bottom.z, r: 3 });
   }
+  for (const st of siteList) blocked.push({ x: st.x, z: st.z, r: st.r + 1.5 });
   const isFree = (x, z, r = 0) => !blocked.some((b) => Math.hypot(b.x - x, b.z - z) < b.r + r);
 
   // ---------- chão ----------
@@ -615,13 +653,13 @@ export function createWorld(scene, ROAD, PHASES) {
   const et = tangentAt(endS);
   castle.rotation.y = Math.atan2(-et.x, -et.z);   // +z local aponta para quem chega pela estrada
   scene.add(castle);
-  const cstone = 0x9a9488, red = 0xa8332f;
+  const cstone = 0x8a8590, red = 0x6a2d55;   // pedra fria e telhados cor de ameixa
   for (const sx of [-1, 1]) {
     const tx = sx * (ROAD + 1.4);
     mesh(new THREE.CylinderGeometry(1.8, 2, 7, 10), cstone, tx, 3.5, 0, castle);
     mesh(new THREE.ConeGeometry(2.3, 3, 10), red, tx, 8.5, 0, castle);
     mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 4), darkWood, tx, 10.8, 0, castle);
-    mesh(new THREE.BoxGeometry(0.05, 0.6, 1), red, tx, 11.4, 0.5, castle);
+    mesh(new THREE.BoxGeometry(0.05, 0.6, 1), 0x6b3fa0, tx, 11.4, 0.5, castle);
     mesh(new THREE.BoxGeometry(16, 5, 1.6), cstone, sx * (ROAD + 10.5), 2.5, 0, castle);
     for (let x = ROAD + 3.5; x < ROAD + 18; x += 1.6) mesh(new THREE.BoxGeometry(0.9, 0.7, 1.6), cstone, sx * x, 5.3, 0, castle);
     mesh(new THREE.CylinderGeometry(1.6, 1.8, 6, 10), cstone, sx * (ROAD + 19), 3, 0, castle);
@@ -633,7 +671,37 @@ export function createWorld(scene, ROAD, PHASES) {
     mesh(new THREE.CylinderGeometry(1.5, 1.6, 12, 10), cstone, sx * 5, 6, -12, castle);
     mesh(new THREE.ConeGeometry(1.9, 3.2, 10), red, sx * 5, 13.6, -12, castle);
   }
-  mesh(new THREE.ConeGeometry(5.5, 4, 4), 0x7d2a27, 0, 11, -12, castle).rotation.y = Math.PI / 4;
+  mesh(new THREE.ConeGeometry(5.5, 4, 4), 0x4a2342, 0, 11, -12, castle).rotation.y = Math.PI / 4;
+  // castelo do necromante: janelas com brilho roxo, estandartes e cristais
+  const crystalMat = mat(0xc89cff, { emissive: 0x8a3ff0, emissiveIntensity: 0.9 });
+  const winGlow = mat(0x9b6bff, { emissive: 0x7a3fd1, emissiveIntensity: 1 });
+  const crystalGeo = new THREE.OctahedronGeometry(0.5, 0);
+  const floaters = [];   // cristais que flutuam e giram
+  const win = (x, y, z, parent = castle) => { mesh(new THREE.BoxGeometry(0.45, 0.8, 0.12), winGlow, x, y, z, parent).castShadow = false; };
+  for (const sx of [-1, 1]) {
+    win(sx * (ROAD + 1.4), 4.8, 1.85); win(sx * (ROAD + 1.4), 2.6, 1.95);
+    win(sx * (ROAD + 19), 4, 1.7);
+    win(sx * 5, 9, -10.45); win(sx * 5, 6, -10.45);
+    for (const x of [1.5, 3]) win(sx * x, 6.5, -7.95);
+    for (const x of [ROAD + 6, ROAD + 14]) {   // estandartes roxos pendurados no muro
+      mesh(new THREE.BoxGeometry(1.1, 2.6, 0.06), 0x4b2470, sx * x, 3.4, 0.83, castle);
+      mesh(new THREE.BoxGeometry(0.4, 0.4, 0.04), crystalMat, sx * x, 3.6, 0.88, castle).rotation.z = Math.PI / 4;
+      mesh(new THREE.BoxGeometry(1.3, 0.12, 0.12), darkWood, sx * x, 4.75, 0.85, castle);
+    }
+    for (const [x, z, s] of [[ROAD + 5, 4, 1.6], [ROAD + 13, 3, 1.2], [ROAD + 21, 2.5, 1]]) {   // tufos de cristais
+      for (let k = 0; k < 3; k++) {
+        const cr = mesh(crystalGeo, crystalMat, sx * x + range(-0.7, 0.7), 0, z + range(-0.6, 0.6), castle);
+        cr.scale.set(s * 0.7, s * range(1.6, 2.6), s * 0.7);
+        cr.position.y = cr.scale.y * 0.35;
+        cr.rotation.set(range(-0.3, 0.3), rand() * 3, range(-0.3, 0.3));
+        cr.castShadow = false;
+      }
+    }
+  }
+  const bigCrystal = mesh(crystalGeo, crystalMat, 0, 15, -12, castle);
+  bigCrystal.scale.set(1.6, 3, 1.6);
+  bigCrystal.castShadow = false;
+  floaters.push({ m: bigCrystal, y: 15, ph: 0 });
   blocked.push({ x: castle.position.x, z: castle.position.z, r: 26 });
 
   // ---------- natureza instanciada (muitas cópias baratas) ----------
@@ -671,6 +739,434 @@ export function createWorld(scene, ROAD, PHASES) {
     return p;
   }
   const placeAt = (o, p, scale, yOff = 0) => { o.position.set(p.x, p.y + yOff * scale, p.z); o.rotation.set(0, rand() * 6.3, 0); o.scale.setScalar(scale); };
+
+  // ---------- regiões com marcos ----------
+  // peças a partir de geometrias unitárias reaproveitadas (só a escala muda)
+  const ub = new THREE.BoxGeometry(1, 1, 1), uc = new THREE.CylinderGeometry(0.5, 0.5, 1, 8), uc12 = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
+  const blk = (parent, color, w, h, d, x, y, z, geo = ub) => { const m = mesh(geo, color, x, y, z, parent); m.scale.set(w, h, d); return m; };
+  const deadTone = new THREE.Color(0x6e6878);
+  const tone = (hex, g) => new THREE.Color(hex).lerp(deadTone, Math.min(1, g)).getHex();   // cor apagada pelas trevas
+  function siteGroup(st) {
+    const g = new THREE.Group();
+    g.position.set(st.x, 0, st.z);
+    faceTo(g, st.look.x, st.look.z);   // +z local olha para o caminho
+    scene.add(g);
+    g.updateMatrixWorld(true);
+    return g;
+  }
+  const toWorld = (g, x, z, y = 0) => g.localToWorld(new THREE.Vector3(x, y, z));
+  const solid = (g, x, z, r) => { const p = toWorld(g, x, z); obstacles.push({ x: p.x, z: p.z, r }); };
+  // cópias instanciadas a partir de uma lista { p, ry, rx, rz, s }
+  const inst = (parts, list, material = null, shadow = true) => {
+    if (!list.length) return;
+    let i = 0;
+    instanced(parts, list.length, (o) => {
+      const t = list[i++];
+      if (!t) return false;
+      o.position.copy(t.p);
+      o.rotation.set(t.rx || 0, t.ry ?? rand() * 6.3, t.rz || 0);
+      if (Array.isArray(t.s)) o.scale.set(...t.s); else o.scale.setScalar(t.s || 1);
+      return true;
+    }, shadow, material);
+  };
+  const whiteMat = (extra = {}) => new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, ...extra });
+
+  // plaquinha de madeira com texto pintado (CanvasTexture pequena)
+  function signTex(text, w, h) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const x = cv.getContext('2d');
+    x.fillStyle = '#d2a465'; x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#7a4e26'; x.lineWidth = 6; x.strokeRect(3, 3, w - 6, h - 6);
+    x.fillStyle = '#4a2c14'; x.font = `bold ${Math.round(h * 0.62)}px sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, w / 2, h / 2 + 3);
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  const boardGeo = new THREE.PlaneGeometry(1, 1);
+  function signPost(x, z, lookX, lookZ, text, width = 0.6) {
+    const g = new THREE.Group();
+    g.position.set(x, heightAt(x, z), z);
+    faceTo(g, lookX, lookZ);
+    scene.add(g);
+    blk(g, darkWood, 0.14, 1.7, 0.14, 0, 0.85, 0);
+    blk(g, wood, width + 0.12, 0.6, 0.1, 0, 1.45, 0.12);   // placa presa na frente do poste
+    const face = new THREE.Mesh(boardGeo, new THREE.MeshLambertMaterial({ map: signTex(text, Math.round(64 * width / 0.48), 64) }));
+    face.scale.set(width, 0.48, 1);
+    face.position.set(0, 1.45, 0.176);
+    g.add(face);
+    obstacles.push({ x, z, r: 0.3 });
+    blocked.push({ x, z, r: 0.9 });
+  }
+
+  // ----- 1. Vila: praça com fonte, feira e bandeirolas -----
+  if (sites.praca) {
+    const st = sites.praca, g = siteGroup(st);
+    blk(g, 0xd8ccb4, 11, 0.1, 11, 0, 0.05, 0, uc12);   // chão de pedrinhas
+    blk(g, 0xc4b79d, 11.6, 0.06, 11.6, 0, 0.03, 0, uc12);
+    // fonte de pedra com duas bacias
+    blk(g, 0x9d988f, 3, 0.6, 3, 0, 0.3, 0, uc12);
+    blk(g, 0x5fb3e0, 2.6, 0.05, 2.6, 0, 0.6, 0, uc12);
+    blk(g, 0x9d988f, 0.45, 1.5, 0.45, 0, 1.1, 0, uc);
+    blk(g, 0xa9a399, 1.4, 0.25, 1.4, 0, 1.8, 0, uc12);
+    blk(g, 0x7fc4ea, 1.15, 0.05, 1.15, 0, 1.93, 0, uc12);
+    blk(g, 0xa9a399, 0.3, 0.4, 0.3, 0, 2.1, 0, uc);
+    for (let k = 0; k < 4; k++) {   // biquinhas de água caindo
+      const a = k * Math.PI / 2 + 0.4;
+      blk(g, mat(0x9fd8ff, { transparent: true, opacity: 0.75 }), 0.08, 1.2, 0.08, Math.cos(a) * 0.62, 1.2, Math.sin(a) * 0.62, uc).castShadow = false;
+    }
+    solid(g, 0, 0, 1.7);
+    // barraquinhas de feira com toldo listrado
+    const awnings = [0xe8414a, 0x4f8fd6, 0xf5b942, 0x8bc34a];
+    const goods = [0xe8414a, 0xff8c3a, 0xf5d142, 0x9fd04a, 0xb46ad9];
+    [-2.3, -0.9, 0.9, 2.3].forEach((a, i) => {
+      const s = new THREE.Group();
+      s.position.set(Math.sin(a) * 4, 0, -Math.cos(a) * 4 * 0.95);
+      g.add(s);
+      faceTo(s, 0, 0);
+      blk(s, wood, 1.9, 0.8, 0.8, 0, 0.5, 0.2);
+      blk(s, darkWood, 2, 0.08, 0.9, 0, 0.92, 0.2);
+      for (const sx of [-0.9, 0.9]) { blk(s, darkWood, 0.1, 2.2, 0.1, sx, 1.1, 0.55); blk(s, darkWood, 0.1, 2.5, 0.1, sx, 1.25, -0.2); }
+      for (let k = 0; k < 5; k++) {   // listras do toldo
+        const strip = blk(s, k % 2 ? 0xfff6e6 : awnings[i], 0.44, 0.06, 1.3, -0.88 + k * 0.44, 2.35, 0.3);
+        strip.rotation.x = -0.28;
+      }
+      for (let k = 0; k < 4; k++) mesh(boulderGeo, goods[(i + k) % goods.length], -0.6 + k * 0.4, 1.05, 0.25 + (k % 2) * 0.15, s).scale.setScalar(0.28);
+      blk(s, 0xb08850, 0.5, 0.35, 0.4, 0.95, 0.18, 0.9);   // caixote de frutas
+      const w = toWorld(g, s.position.x, s.position.z);
+      obstacles.push({ x: w.x, z: w.z, r: 1.1 });
+    });
+    // bandeirolas entre postes em volta da praça
+    const posts = [0.8, 2.35, 3.95, 5.5].map((a) => [Math.cos(a) * 5.4, Math.sin(a) * 5.4]);
+    const flags = [];
+    posts.forEach(([x, z], k) => {
+      blk(g, darkWood, 0.14, 3, 0.14, x, 1.5, z);
+      blk(g, 0xe8414a, 0.3, 0.2, 0.3, x, 3.05, z, uc);
+      const [x2, z2] = posts[(k + 1) % posts.length];
+      const len = Math.hypot(x2 - x, z2 - z), ry = g.rotation.y + Math.atan2(x2 - x, z2 - z);
+      for (let t = 0.06; t < 0.97; t += 0.075) {
+        const p = toWorld(g, x + (x2 - x) * t, z + (z2 - z) * t, 2.85 - Math.sin(t * Math.PI) * 0.55);
+        flags.push({ p, ry: ry + Math.PI / 2 });
+      }
+      const rope = blk(g, 0x5e3b1d, 0.03, 0.03, len, (x + x2) / 2, 2.6, (z + z2) / 2);
+      rope.rotation.y = Math.atan2(x2 - x, z2 - z);
+      rope.castShadow = false;
+    });
+    const flagGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.17, 0, 0), new THREE.Vector3(0.17, 0, 0), new THREE.Vector3(0, -0.36, 0)]);
+    flagGeo.computeVertexNormals();
+    inst([flagGeo, [0xe8414a, 0xf5d142, 0x4f8fd6, 0x8bc34a, 0xff9ec7, 0xffffff]], flags, whiteMat({ side: THREE.DoubleSide }), false);
+  }
+  // plaquinha na entrada da vila
+  { const p = along(5, -(ROAD + 1.8)), look = pointAt(0); signPost(p.x, p.z, look.x, look.z, 'Vila', 0.9); }
+
+  // ----- 2. Fazendas: moinho, plantações, espantalho e carroça -----
+  let millBlades = null;
+  if (sites.moinho) {
+    const g = siteGroup(sites.moinho);
+    blk(g, stone, 3.9, 0.7, 3.9, 0, 0.35, 0, uc);
+    mesh(new THREE.CylinderGeometry(1.3, 1.8, 5, 8), 0xf1e3c6, 0, 3, 0, g);
+    mesh(new THREE.ConeGeometry(1.75, 1.9, 8), 0xa8432f, 0, 6.45, 0, g);
+    blk(g, darkWood, 0.8, 1.3, 0.2, 0, 1.25, 1.75);
+    blk(g, glow, 0.4, 0.45, 0.1, 0, 3.4, 1.53).castShadow = false;
+    blk(g, darkWood, 0.35, 0.35, 0.9, 0, 4.9, 1.55, uc).rotation.x = Math.PI / 2;   // eixo
+    millBlades = new THREE.Group();
+    millBlades.position.set(0, 4.9, 2.05);
+    g.add(millBlades);
+    for (let k = 0; k < 4; k++) {   // pás de madeira com vela de pano
+      const arm = new THREE.Group();
+      arm.rotation.z = k * Math.PI / 2;
+      millBlades.add(arm);
+      blk(arm, darkWood, 0.14, 3.4, 0.1, 0, 1.75, 0);
+      blk(arm, 0xf6eedc, 0.75, 2.5, 0.04, 0.45, 2.05, 0.04);
+      for (const y of [1.1, 2, 2.9]) blk(arm, wood, 0.8, 0.06, 0.06, 0.45, y, 0.08);
+    }
+    blk(g, 0xd9c79e, 0.6, 0.5, 0.45, 1.1, 0.95, 1.6);   // sacos de farinha
+    blk(g, 0xe3d3ab, 0.5, 0.45, 0.4, -1.05, 0.92, 1.65);
+    solid(g, 0, 0, 2.1);
+  }
+  if (sites.campos) {
+    const g = siteGroup(sites.campos);
+    const wheat = [], cabbage = [];
+    blk(g, 0x9a6a3a, 12.4, 0.06, 9.4, 0, 0.03, -0.3);   // terra arada
+    for (let row = 0; row < 6; row++) {
+      const z = -4.3 + row * 1.6, isWheat = row % 3 !== 1;
+      blk(g, 0x86592e, 12, 0.14, 0.9, 0, 0.07, z);   // leira
+      for (let x = -5.7; x <= 5.7; x += isWheat ? 0.3 : 0.75) {
+        if (Math.abs(x - 1.5) < 0.6 && row === 2) continue;   // lugar do espantalho
+        if (!isWheat) { cabbage.push({ p: toWorld(g, x + range(-0.06, 0.06), z, 0.12), s: range(0.8, 1.2), rx: range(-0.2, 0.2) }); continue; }
+        for (const dz of [-0.22, 0.22]) wheat.push({ p: toWorld(g, x + range(-0.08, 0.08), z + dz, 0.12), s: range(0.85, 1.2) });
+      }
+    }
+    const wheatGeo = mergeGeometries([-2, -1, 0, 1, 2].map((i) => mergeGeometries([
+      new THREE.CylinderGeometry(0.025, 0.03, 0.75, 3).translate(0, 0.37, 0).toNonIndexed(),
+      new THREE.CylinderGeometry(0.07, 0.04, 0.3, 4).translate(0, 0.86, 0).toNonIndexed(),   // espiga
+    ]).rotateZ(i * 0.18).rotateX((i % 2) * 0.2).translate(i * 0.06, 0, (i % 2) * 0.05)));
+    inst([wheatGeo, [0xe8c35a, 0xdcb44a, 0xf0d070, 0xe0bc52]], wheat, null, false);
+    inst([new THREE.IcosahedronGeometry(0.28, 0).translate(0, 0.18, 0), [0x7fbf4a, 0x93cf5a, 0x6aa83f, 0xa5d64c]], cabbage);
+    // espantalho
+    const sc = new THREE.Group();
+    sc.position.set(1.5, 0, -1.1);
+    g.add(sc);
+    blk(sc, darkWood, 0.12, 2.4, 0.12, 0, 1.2, 0);
+    blk(sc, darkWood, 1.8, 0.1, 0.1, 0, 1.7, 0);
+    blk(sc, 0x4f8fd6, 0.7, 0.8, 0.35, 0, 1.55, 0);   // camisa
+    for (const sx of [-1, 1]) blk(sc, 0xe0c060, 0.25, 0.25, 0.25, sx * 0.95, 1.7, 0, uc);   // palha nas mangas
+    mesh(new THREE.IcosahedronGeometry(0.3, 1), 0xe8d2a0, 0, 2.25, 0, sc);
+    mesh(new THREE.ConeGeometry(0.45, 0.5, 8), 0x8a5a2e, 0, 2.6, 0, sc);
+    blk(sc, 0x8a5a2e, 0.9, 0.05, 0.9, 0, 2.38, 0, uc12);
+    // cerca nos três lados longe do caminho
+    const corners = [[-6.4, 4.4], [-6.4, -5], [6.4, -5], [6.4, 4.4]].map(([x, z]) => toWorld(g, x, z));
+    for (let k = 0; k < 3; k++) fence(corners[k].x, corners[k].z, corners[k + 1].x, corners[k + 1].z);
+  }
+  if (sites.carroca) {
+    const st = sites.carroca, g = siteGroup(st);
+    blk(g, wood, 2.4, 0.2, 1.4, 0, 0.75, 0);
+    for (const sz of [-1, 1]) blk(g, darkWood, 2.4, 0.35, 0.08, 0, 0.98, sz * 0.68);
+    for (const sz of [-1, 1]) {
+      const wh = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.12, 10), darkWood, -0.3, 0.55, sz * 0.8, g);
+      wh.rotation.x = Math.PI / 2;
+      blk(g, 0x3a3a3a, 0.2, 0.2, 0.16, -0.3, 0.55, sz * 0.8, uc).rotation.x = Math.PI / 2;
+      const shaft = blk(g, wood, 1.6, 0.08, 0.08, 1.9, 0.5, sz * 0.4);
+      shaft.rotation.z = -0.25;
+    }
+    blk(g, 0xe0c060, 2.1, 0.7, 1.25, 0, 1.2, 0);   // feno
+    blk(g, 0xe8cc6a, 1.4, 0.45, 0.9, -0.1, 1.75, 0).rotation.y = 0.1;
+    solid(g, 0, 0, 1.6);
+    for (const [x, z] of [[-1.8, 1.4], [1.2, -1.6]]) { const p = toWorld(g, x, z); hay(p.x, p.z); }
+  }
+
+  // ----- 3. Ruínas antigas: arcos, colunas, muro com hera, torre caída e estátua -----
+  const rubble = [], ivy = [];
+  const ruinStone = (z) => tone(0xb5ad9e, gloomAt(z) * 0.6);
+  function column(g, color, x, z, h, broken = false) {
+    blk(g, color, 1, 0.3, 1, x, 0.15, z);
+    blk(g, color, 0.75, h, 0.75, x, 0.3 + h / 2, z, uc);
+    if (!broken) blk(g, color, 1, 0.3, 1, x, 0.45 + h, z);
+    else blk(g, color, 0.7, 0.3, 0.7, x, 0.4 + h, z, uc).rotation.set(0.3, 0, 0.25);   // topo lascado
+    solid(g, x, z, 0.6);
+  }
+  if (sites.arcos) {
+    const st = sites.arcos, g = siteGroup(st), col = ruinStone(st.z);
+    column(g, col, -3.2, 0, 3.2); column(g, col, -0.8, 0, 3.2);
+    blk(g, col, 3.4, 0.6, 1, -2, 3.95, 0);   // arco inteiro
+    column(g, col, 1.4, -0.3, 3.2); column(g, col, 3.8, -0.3, 1.1, true);
+    const fallen = blk(g, col, 3.2, 0.55, 0.95, 2.9, 0.3, 1.6);   // verga caída
+    fallen.rotation.set(0, 0.5, 0.12);
+    column(g, col, -2.5, -3.2, 1.6, true); column(g, col, 0.3, -3.4, 0.8, true); column(g, col, 3, -3, 2.3, true);
+    for (const [x, z, ry] of [[-1, -2, 0.4], [1.8, -4.2, 1.9]]) {   // tambores de coluna caídos
+      const d = blk(g, col, 0.72, 1.1, 0.72, x, 0.36, z, uc);
+      d.rotation.set(0, ry, Math.PI / 2);
+    }
+    for (let k = 0; k < 14; k++) rubble.push({ p: toWorld(g, range(-5, 5), range(-5, 4)), s: range(0.3, 0.8), rx: rand() * 3 });
+    for (const [x, z, y] of [[-2, 0, 4.3], [-3.2, 0, 3.7], [1.4, -0.3, 3.7]]) ivy.push({ p: toWorld(g, x, z, y), s: [1.3, 0.5, 1.1] });
+  }
+  if (sites.muro) {
+    const st = sites.muro, g = siteGroup(st), col = ruinStone(st.z);
+    // muro com o topo irregular e buracos
+    for (let x = -5.5; x <= 5.5; x += 1) {
+      if (rand() < 0.15) continue;
+      const h = range(0.6, 2.8);
+      const b = blk(g, rand() < 0.5 ? col : tone(0xa39c8e, gloomAt(st.z) * 0.6), 1.02, h, 0.9, x, h / 2, -2.5);
+      b.rotation.y = range(-0.04, 0.04);
+      if (rand() < 0.6) ivy.push({ p: toWorld(g, x + range(-0.3, 0.3), -2.02, range(0.4, h)), s: [range(0.9, 1.4), range(1, 1.8), 0.35], ry: g.rotation.y });
+      solid(g, x, -2.5, 0.6);
+    }
+    // torre de vigia caída: toco de pé, corpo deitado e telhado tombado
+    mesh(new THREE.CylinderGeometry(1.4, 1.6, 1.8, 8), col, -4, 0.9, 2.2, g);
+    for (let k = 0; k < 4; k++) blk(g, col, 0.5, 0.45, 0.5, -4 + Math.cos(k * 1.6) * 1.1, 2, 2.2 + Math.sin(k * 1.6) * 1.1);
+    const body = mesh(new THREE.CylinderGeometry(1.25, 1.35, 5, 8), col, -0.1, 1.25, 2.4, g);
+    body.rotation.set(0, 0, Math.PI / 2 - 0.04);
+    for (let k = 0; k < 3; k++) blk(g, 0x2a2433, 0.5, 0.16, 0.1, -1.6 + k * 1.4, 1.3, 3.68);   // seteiras
+    for (const x of [-1.8, 1.6]) blk(g, tone(0x8f8778, gloomAt(st.z) * 0.6), 2.75, 0.3, 2.75, x, 1.25, 2.4, uc).rotation.z = Math.PI / 2 - 0.04;   // anéis de pedra
+    const roof = mesh(new THREE.ConeGeometry(1.7, 2, 8), tone(0xa8432f, gloomAt(st.z) * 0.8), 3.6, 1.1, 3.4, g);
+    roof.rotation.set(0.3, 0, -Math.PI / 2 - 0.35);
+    for (const x of [-2.3, -0.1, 2.1]) solid(g, x, 2.4, 1.3);
+    solid(g, -4, 2.2, 1.7); solid(g, 3.6, 3.4, 1.2);
+    for (let k = 0; k < 16; k++) rubble.push({ p: toWorld(g, range(-6, 6), range(-1.5, 5.5)), s: range(0.3, 0.9), rx: rand() * 3 });
+  }
+  if (sites.estatua) {
+    const st = sites.estatua, g = siteGroup(st), col = tone(0xcfc8ba, gloomAt(st.z) * 0.6);
+    blk(g, ruinStone(st.z), 1.7, 1.1, 1.7, -1, 0.55, -0.6);
+    blk(g, ruinStone(st.z), 1.9, 0.2, 1.9, -1, 1.15, -0.6);
+    for (const sx of [-0.25, 0.25]) blk(g, col, 0.3, 0.4, 0.4, -1 + sx, 1.45, -0.6);   // só os pés ficaram
+    // cavaleiro de pedra tombado no chão
+    const kn = new THREE.Group();
+    kn.position.set(1, 0.4, 0.7);
+    kn.rotation.set(0, 0.6, Math.PI / 2);
+    g.add(kn);
+    blk(kn, col, 0.9, 1.5, 0.6, 0, 0, 0);
+    for (const sx of [-0.22, 0.22]) blk(kn, col, 0.32, 0.9, 0.36, sx, -1.1, 0);
+    blk(kn, col, 0.12, 1.8, 0.08, 0.6, 0.4, 0.35);   // espada
+    blk(kn, col, 0.7, 0.8, 0.12, -0.2, 0.1, 0.36);    // escudo
+    mesh(new THREE.IcosahedronGeometry(0.38, 1), col, 2.5, 0.35, 1.9, g);   // cabeça rolou para longe
+    ivy.push({ p: toWorld(g, 1, 0.7, 0.8), s: [1.2, 0.4, 0.9] }, { p: toWorld(g, -1, -0.6, 1.25), s: [0.9, 0.35, 0.9] });
+    solid(g, -1, -0.6, 1.3); solid(g, 1, 0.7, 1.1);
+  }
+  inst([boulderGeo, stoneGrays], rubble);
+  inst([new THREE.IcosahedronGeometry(0.4, 0), [0x6f9a3c, 0x5e8a34, 0x7fa848]], ivy, null, false);
+
+  // ----- 4. Terras do necromante: cemitério, obeliscos, espinhos de osso e caldeirão -----
+  const iron = mat(0x2e2a36);
+  const tomb = mergeGeometries([
+    new THREE.BoxGeometry(0.55, 0.6, 0.14).translate(0, 0.3, 0),
+    new THREE.CylinderGeometry(0.275, 0.275, 0.14, 8, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 0.6, 0),
+  ].map((g) => g.toNonIndexed()));
+  if (sites.cemiterio) {
+    const st = sites.cemiterio, g = siteGroup(st), gl = gloomAt(st.z);
+    const W = 6, back = -5.5, front = 4.5, bars = [], stones = [];
+    const barGeo = mergeGeometries([
+      new THREE.BoxGeometry(0.07, 1.4, 0.07).translate(0, 0.7, 0).toNonIndexed(),
+      new THREE.ConeGeometry(0.07, 0.22, 4).translate(0, 1.5, 0).toNonIndexed(),
+    ]);
+    const side = (x0, z0, x1, z1, gate = false) => {
+      const len = Math.hypot(x1 - x0, z1 - z0), ry = g.rotation.y + Math.atan2(x1 - x0, z1 - z0);
+      for (let t = 0; t <= len; t += 0.45) {
+        const x = x0 + (x1 - x0) * t / len, z = z0 + (z1 - z0) * t / len;
+        if (gate && Math.abs(x) < 1.3) continue;
+        bars.push({ p: toWorld(g, x, z), ry, rz: range(-0.05, 0.05) });
+        if (Math.round(t / 0.45) % 4 === 0) solid(g, x, z, 0.4);
+      }
+      for (const y of [0.25, 1.2]) {
+        if (gate) for (const sx of [-1, 1]) blk(g, iron, W - 1.3, 0.07, 0.07, sx * (W + 1.3) / 2, y, z0);
+        else { const r = blk(g, iron, 0.07, 0.07, len, (x0 + x1) / 2, y, (z0 + z1) / 2); r.rotation.y = Math.atan2(x1 - x0, z1 - z0); }
+      }
+    };
+    side(-W, back, W, back); side(-W, back, -W, front); side(W, back, W, front); side(-W, front, W, front, true);
+    // portão de ferro entreaberto entre pilares de pedra
+    const dark = tone(0x7a7784, gl * 0.5);
+    for (const sx of [-1, 1]) {
+      blk(g, dark, 0.6, 2.1, 0.6, sx * 1.6, 1.05, front);
+      mesh(new THREE.ConeGeometry(0.45, 0.5, 4), dark, sx * 1.6, 2.35, front, g).rotation.y = Math.PI / 4;
+      const leaf = new THREE.Group();
+      leaf.position.set(sx * 1.3, 0, front);
+      leaf.rotation.y = sx * 0.55;
+      g.add(leaf);
+      for (let k = 0; k < 4; k++) blk(leaf, iron, 0.06, 1.7, 0.06, -sx * (0.15 + k * 0.3), 0.9, 0);
+      for (const y of [0.3, 1.5]) blk(leaf, iron, 1.2, 0.07, 0.07, -sx * 0.6, y, 0);
+    }
+    const arch = blk(g, iron, 3.2, 0.1, 0.1, 0, 2.3, front);
+    arch.castShadow = false;
+    mesh(new THREE.IcosahedronGeometry(0.2, 1), 0xeee6d4, 0, 2.5, front, g);   // caveira no alto do portão
+    // mausoléu no fundo
+    blk(g, dark, 4.2, 0.4, 3.6, 0, 0.2, -3.2);
+    blk(g, tone(0x8a8794, gl * 0.4), 3.4, 2.6, 2.8, 0, 1.7, -3.4);
+    const shape = new THREE.Shape([new THREE.Vector2(-2.1, 0), new THREE.Vector2(2.1, 0), new THREE.Vector2(0, 1.2)]);
+    const roofGeo = new THREE.ExtrudeGeometry(shape, { depth: 3.4, bevelEnabled: false });
+    roofGeo.translate(0, 0, -1.7);
+    mesh(roofGeo, 0x4a4555, 0, 3, -3.2, g);
+    for (const sx of [-1, 1]) column(g, dark, sx * 1.35, -1.75, 2.2);
+    blk(g, 0x1e1a24, 1, 1.8, 0.1, 0, 1.3, -1.97);
+    blk(g, crystalMat, 0.12, 1.6, 0.11, 0, 1.3, -1.95).castShadow = false;   // fresta de luz roxa na porta
+    blk(g, crystalMat, 0.4, 0.4, 0.1, 0, 3.5, -1.5).rotation.z = Math.PI / 4;
+    solid(g, 0, -3.2, 2.4);
+    // lápides em fileiras tortas
+    for (let row = 0; row < 3; row++) for (let k = 0; k < 6; k++) {
+      const x = -4.6 + k * 1.85;
+      if (Math.abs(x) < 1 || rand() < 0.15) continue;
+      stones.push({ p: toWorld(g, x + range(-0.2, 0.2), 2.6 - row * 1.7 + range(-0.2, 0.2)), ry: g.rotation.y + range(-0.25, 0.25), rz: range(-0.18, 0.18), s: range(0.9, 1.3) });
+    }
+    inst([barGeo, [0xffffff]], bars, new THREE.MeshLambertMaterial({ color: 0x2e2a36, flatShading: true }), false);
+    inst([tomb, [0x8a8794, 0x9a97a4, 0x7a7784]], stones);
+  }
+  for (const name of ['obelisco1', 'obelisco2']) {
+    const st = sites[name];
+    if (!st) continue;
+    const g = siteGroup(st);
+    blk(g, 0x4a4555, 1.8, 0.5, 1.8, 0, 0.25, 0);
+    blk(g, 0x55505f, 1.4, 0.3, 1.4, 0, 0.65, 0);
+    const shaft = mesh(new THREE.CylinderGeometry(0.32, 0.6, 4.6, 4), 0x3d3848, 0, 3.1, 0, g);
+    shaft.rotation.y = Math.PI / 4;
+    mesh(new THREE.ConeGeometry(0.32, 0.7, 4), 0x3d3848, 0, 5.75, 0, g).rotation.y = Math.PI / 4;
+    for (let k = 0; k < 4; k++) {   // runas brilhando nas faces
+      const a = k * Math.PI / 2;
+      const y = 1.8 + (k % 2) * 0.8, d = (0.6 - (y - 0.8) / 4.6 * 0.28) * 0.707 + 0.02;   // encostada na face afunilada
+      const r = blk(g, crystalMat, 0.12, 0.5, 0.04, Math.sin(a) * d, y, Math.cos(a) * d);
+      r.rotation.y = a; r.castShadow = false;
+    }
+    const top = mesh(crystalGeo, crystalMat, 0, 6.9, 0, g);
+    top.scale.set(0.8, 1.4, 0.8);
+    top.castShadow = false;
+    floaters.push({ m: top, y: 6.9, ph: st.x });
+    for (let k = 0; k < 6; k++) {   // cristais brotando na base
+      const a = k * 1.05 + rand() * 0.5, cr = mesh(crystalGeo, crystalMat, Math.cos(a) * range(1.1, 1.6), 0, Math.sin(a) * range(1.1, 1.6), g);
+      cr.scale.set(range(0.35, 0.6), range(0.9, 1.8), range(0.35, 0.6));
+      cr.position.y = cr.scale.y * 0.3;
+      cr.rotation.set(range(-0.4, 0.4), rand() * 3, range(-0.4, 0.4));
+      cr.castShadow = false;
+    }
+    solid(g, 0, 0, 1.2);
+  }
+  // espinhos de osso saindo do chão, em touceiras
+  const spikes = [];
+  for (let tries = 0; tries < 400 && spikes.length < 110; tries++) {
+    const p = spot(ROAD + 6, ROAD + 24, 1.2);
+    if (!p || gloomAt(p.z) < 0.6 + rand() * 0.2) continue;
+    for (let k = 3 + Math.floor(rand() * 3); k > 0; k--) {
+      const q = p.clone().add(new THREE.Vector3(range(-1, 1), -0.1, range(-1, 1)));
+      spikes.push({ p: q, s: [range(0.7, 1.1), range(0.6, 1.5), range(0.7, 1.1)], rx: range(-0.45, 0.45), rz: range(-0.45, 0.45) });
+    }
+    blocked.push({ x: p.x, z: p.z, r: 1.8 });
+  }
+  const spikeGeo = mergeGeometries([
+    new THREE.ConeGeometry(0.22, 1.7, 5).translate(0, 0.85, 0).toNonIndexed(),
+    new THREE.CylinderGeometry(0.3, 0.32, 0.18, 5).translate(0, 0.08, 0).toNonIndexed(),
+  ]);
+  inst([spikeGeo, [0xeee6d4, 0xdcd3bf, 0xcfc6b0]], spikes, whiteMat());
+  // caldeirão borbulhando sobre o fogo
+  const bubbles = [];
+  if (sites.caldeirao) {
+    const g = siteGroup(sites.caldeirao);
+    const pot = mesh(new THREE.SphereGeometry(0.9, 10, 7, 0, Math.PI * 2, 0.9, Math.PI - 0.9), mat(0x2a2830, { side: THREE.DoubleSide }), 0, 1.25, 0, g);
+    pot.castShadow = true;
+    const rim = mesh(new THREE.TorusGeometry(0.71, 0.08, 5, 12), 0x3a3842, 0, 1.81, 0, g);
+    rim.rotation.x = Math.PI / 2;
+    const brew = mat(0x9dff6a, { emissive: 0x3fd13f, emissiveIntensity: 0.9 });
+    const liquid = mesh(new THREE.CircleGeometry(0.7, 12), brew, 0, 1.73, 0, g);
+    liquid.rotation.x = -Math.PI / 2;
+    liquid.castShadow = false;
+    for (let k = 0; k < 3; k++) { const a = k * 2.1; const leg = blk(g, 0x2a2830, 0.12, 0.9, 0.12, Math.cos(a) * 0.62, 0.4, Math.sin(a) * 0.62); leg.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3); }
+    for (const ry of [0.3, 1.9]) blk(g, 0x5a3a20, 0.18, 1.2, 0.18, 0, 0.1, 0, uc).rotation.set(Math.PI / 2, 0, ry);   // lenha
+    for (let k = 0; k < 4; k++) {
+      const f = mesh(new THREE.ConeGeometry(0.16, 0.5, 5), lantern, Math.cos(k * 1.6) * 0.25, 0.35, Math.sin(k * 1.6) * 0.25, g);
+      f.castShadow = false;
+    }
+    const bubbleGeo = new THREE.IcosahedronGeometry(0.09, 0);
+    for (let k = 0; k < 9; k++) {
+      const b = mesh(bubbleGeo, brew, 0, 1.75, 0, g);
+      b.castShadow = false;
+      b.userData = { ph: k / 9, a: rand() * 6.3, r: range(0.1, 0.5) };
+      bubbles.push(b);
+    }
+    for (const [x, z] of [[1.3, 0.6], [-1.2, 0.9]]) {   // caveiras
+      mesh(new THREE.IcosahedronGeometry(0.2, 1), 0xeee6d4, x, 0.18, z, g);
+      for (const ex of [-0.07, 0.07]) blk(g, 0x1e1a24, 0.06, 0.06, 0.04, x + ex, 0.22, z + 0.18).castShadow = false;
+    }
+    solid(g, 0, 0, 1.3);
+  }
+
+  // ----- 5. Caminho: placa com o número de cada fase e tochas nas regiões claras -----
+  for (let ph = 1; ph <= PHASES; ph++) {
+    const zn = zones.get(ph), side = zn ? (zn.type === 'plateau' ? -1 : 1) : (ph % 2 ? 1 : -1);
+    const s = anchorS(ph) - 4, p = along(s, side * (ROAD + 1.4)), look = pointAt(s - 8);
+    signPost(p.x, p.z, look.x, look.z, String(ph), ph > 9 ? 0.7 : 0.5);
+  }
+  const torches = [];
+  for (let s = 18, k = 0; s < L - 40; s += 13, k++) {
+    if (Math.abs(s - crossS) < 9) continue;
+    const p = along(s, (k % 2 ? 1 : -1) * (ROAD + 1.7));
+    if (gloomAt(p.z) > 0.3 || roadDist(p.x, p.z) < ROAD + 1.2 || !isFree(p.x, p.z, 0.6)) continue;
+    p.y = heightAt(p.x, p.z);
+    torches.push({ p, s: 1, ry: 0 });
+    obstacles.push({ x: p.x, z: p.z, r: 0.3 });
+    blocked.push({ x: p.x, z: p.z, r: 0.9 });
+  }
+  const torchGeo = mergeGeometries([
+    new THREE.CylinderGeometry(0.07, 0.09, 1.7, 6).translate(0, 0.85, 0).toNonIndexed(),
+    new THREE.CylinderGeometry(0.17, 0.1, 0.25, 6).translate(0, 1.8, 0).toNonIndexed(),
+  ]);
+  inst([torchGeo, [0x5e3b1d, 0x6b4423]], torches);
+  inst([new THREE.ConeGeometry(0.13, 0.4, 5).translate(0, 2.1, 0), [0xffffff]], torches, lantern, false);
 
   const trunks = [0x8a6a4a, 0x7a5c3e, 0x9b8a7a];
   const limes = [0xa5d64c, 0x95c843, 0xb5de5a, 0x86bb3c, 0x9fd04a];
@@ -728,10 +1224,6 @@ export function createWorld(scene, ROAD, PHASES) {
 
   // ---------- terras do necromante: lápides, ossos e cogumelos brilhantes ----------
   const darkSpot = (min, max, minGloom) => { const p = spot(min, max, 1.5); return p && gloomAt(p.z) > minGloom + rand() * 0.25 ? p : null; };
-  const tomb = mergeGeometries([
-    new THREE.BoxGeometry(0.55, 0.6, 0.14).translate(0, 0.3, 0),
-    new THREE.CylinderGeometry(0.275, 0.275, 0.14, 8, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 0.6, 0),
-  ].map((g) => g.toNonIndexed()));
   const cross = mergeGeometries([new THREE.BoxGeometry(0.12, 0.85, 0.1).translate(0, 0.42, 0), new THREE.BoxGeometry(0.5, 0.1, 0.1).translate(0, 0.6, 0)]);
   const tombPlace = (o) => { const p = darkSpot(ROAD + 1.5, ROAD + 16, 0.45); if (!p) return false; placeAt(o, p, range(0.8, 1.2)); o.rotation.z = range(-0.15, 0.15); return true; };
   instanced([tomb, [0x8a8794, 0x9a97a4, 0x7a7784]], 70, tombPlace);
@@ -818,6 +1310,13 @@ export function createWorld(scene, ROAD, PHASES) {
     water.material.color.setHSL(0.57, 0.55, 0.56 + Math.sin(time * 1.5) * 0.02);
     for (const lake of lakes) lake.material.opacity = 0.8 + Math.sin(time * 1.8) * 0.04;
     for (const cl of clouds) { cl.position.x += dt * 0.8; if (cl.position.x > 90) cl.position.x = -90; }
+    if (millBlades) millBlades.rotation.z -= dt * 0.9;
+    for (const f of floaters) { f.m.position.y = f.y + Math.sin(time * 1.6 + f.ph) * 0.25; f.m.rotation.y += dt * 0.8; }
+    for (const b of bubbles) {   // bolhas sobem, crescem e estouram
+      const u = b.userData, t = (time * 0.7 + u.ph) % 1;
+      b.position.set(Math.cos(u.a + t) * u.r, 1.75 + t * 0.9, Math.sin(u.a + t) * u.r);
+      b.scale.setScalar(t < 0.85 ? 0.6 + t * 1.2 : 0.01);
+    }
   }
 
   return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update };
