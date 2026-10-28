@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cavaleiros",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["cavaleiros/server.js"],
+      "port": 8080
+    }
+  ]
+}

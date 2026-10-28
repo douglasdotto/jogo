@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cavaleiros vs Esqueletos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Fredoka:wght@500;700&family=MedievalSharp&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2228; font-family: 'Fredoka', system-ui, sans-serif; color: #f1ecdc; }
+    canvas { display: block; }
+    #hud { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .chip { background: #fff6e0; color: #6b3f17; padding: 6px 14px; border-radius: 999px; font-size: 16px; font-weight: 500; border: 3px solid #e8c88f; box-shadow: 0 3px 0 rgba(107, 63, 23, .35); }
+    button { font-family: inherit; background: #ff8a5b; color: #fff; border: 0; border-radius: 999px; padding: 7px 16px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #c4572e; transition: transform .1s; }
+    button:hover { background: #ff9d73; transform: translateY(-1px); }
+    button:active { transform: translateY(3px); box-shadow: 0 1px 0 #c4572e; }
+    /* números de dano e corações */
+    .pop { position: absolute; transform: translate(-50%, -50%); font: 700 24px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 5px #d1342b; paint-order: stroke fill; animation: popUp .9s ease-out forwards; }
+    .pop.hurt { color: #ffe1e1; -webkit-text-stroke-color: #8a1c1c; font-size: 20px; }
+    .pop.heal { color: #ff6fa8; -webkit-text-stroke-color: #fff; font-size: 34px; }
+    @keyframes popUp { 0% { transform: translate(-50%, -50%) scale(.3); } 20% { transform: translate(-50%, -60%) scale(1.3); }
+      40% { transform: translate(-50%, -70%) scale(1); } 100% { transform: translate(-50%, -180%) scale(.9); opacity: 0; } }
+    /* ---------- escolha de herói: arcade medieval ---------- */
+    /* fofo com toque medieval: céu pastel, cartões redondinhos, cor própria de cada herói (--c) */
+    #pick { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 22px; align-items: center; justify-content: center; overflow: hidden;
+      background: radial-gradient(ellipse at center, rgba(20, 14, 30, .35), rgba(20, 14, 30, .7)); font-family: 'Fredoka', sans-serif; }
+    #pick.hidden { display: none; }
+    #pick::before, #pick::after { content: ''; position: absolute; inset: -50%; pointer-events: none; opacity: .35;
+      background-image: radial-gradient(circle, #fff 0 3px, transparent 4px), radial-gradient(circle, #fff7b8 0 2px, transparent 3px);
+      background-size: 90px 90px, 130px 130px; background-position: 0 0, 40px 60px; animation: drift 18s linear infinite; }
+    #pick::after { animation-duration: 28s; opacity: .25; background-size: 150px 150px, 70px 70px; }
+    #pickTitle { position: relative; padding: 0 44px; font-size: 46px; font-weight: 700; color: #fff; -webkit-text-stroke: 8px #4a2c1a; paint-order: stroke fill;
+      text-shadow: 0 6px 0 rgba(0, 0, 0, .3); animation: drop .6s cubic-bezier(.2, 1.8, .4, 1); }
+    #pickTitle::before, #pickTitle::after { content: '♛'; position: absolute; top: 50%; transform: translateY(-50%); font-size: 30px; color: #ffe066; -webkit-text-stroke: 5px #4a2c1a; }
+    #pickTitle::before { left: 0; } #pickTitle::after { right: 0; }
+    #pickSub { margin-top: -10px; font-size: 19px; font-weight: 500; color: #fff3d6; text-shadow: 0 2px 0 rgba(0, 0, 0, .5); }
+    #pickList { position: relative; display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+    .card { position: relative; width: 196px; padding: 14px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;
+      font-family: inherit; color: #6b4a3a; background: #fffaf2; border: 5px solid var(--c); border-radius: 30px;
+      box-shadow: 0 8px 0 var(--cd), 0 14px 24px rgba(120, 80, 120, .25); transition: transform .2s cubic-bezier(.2, 1.8, .4, 1), box-shadow .2s, opacity .25s, filter .25s;
+      animation: rise .55s backwards cubic-bezier(.2, 1.7, .4, 1), wobble 3.2s ease-in-out infinite; animation-delay: var(--d), calc(var(--d) * 4); }
+    .card:hover, .card.sel { transform: translateY(-14px) scale(1.07) rotate(-1.5deg); animation: none; box-shadow: 0 12px 0 var(--cd), 0 0 0 7px #fff, 0 0 36px 10px var(--c); }
+    .card.sel .portrait img { animation: bob .8s ease-in-out infinite; }
+    .card .num { position: absolute; top: -16px; left: -14px; width: 40px; height: 44px; display: grid; place-items: center; font-size: 20px; font-weight: 700; color: #fff;
+      background: var(--cd); clip-path: polygon(50% 100%, 0 70%, 0 0, 100% 0, 100% 70%); }
+    .card .portrait { width: 160px; height: 160px; border-radius: 50%; overflow: hidden; border: 5px solid #fff;
+      background: radial-gradient(circle at 50% 40%, #fff 0%, var(--c) 75%); box-shadow: 0 0 0 4px var(--c); }
+    .card .portrait img { width: 100%; height: 100%; display: block; }
+    .card .ribbon { margin-top: -20px; padding: 3px 22px 5px; font-size: 22px; font-weight: 700; color: #fff; background: var(--cd); border-radius: 999px;
+      border: 3px solid #fff; box-shadow: 0 3px 0 rgba(0, 0, 0, .12); }
+    .card p { margin: 0; min-height: 36px; font-size: 14px; line-height: 1.25; text-align: center; }
+    .stats { width: 100%; display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; font-size: 13px; font-weight: 500; }
+    .pips { display: flex; gap: 4px; }
+    .pips i { width: 11px; height: 11px; border-radius: 50%; background: #efe3d3; }
+    .pips i.on { background: var(--cd); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .15); }
+    .pips.hearts i { width: auto; height: auto; background: none; box-shadow: none; font-style: normal; font-size: 14px; line-height: 11px; color: #efe3d3; }
+    .pips.hearts i::before { content: '♥'; }
+    .pips.hearts i.on { color: #ff5d8f; }
+    .card.chosen { animation: chosen .5s forwards; }
+    .card.gone { opacity: 0; transform: scale(.8) translateY(30px); }
+    .burst { position: absolute; left: 50%; top: 40%; font-size: 26px; color: #ff5d8f; pointer-events: none; animation: burst .8s ease-out forwards; }
+    #pickHint { padding: 6px 18px; font-size: 15px; font-weight: 500; color: #9a5a7a; background: #fff; border-radius: 999px; animation: breathe 1.6s ease-in-out infinite; }
+    @keyframes rise { from { opacity: 0; transform: translateY(90px) scale(.6); } }
+    @keyframes drop { from { opacity: 0; transform: translateY(-70px) scale(1.4); } }
+    @keyframes wobble { 0%, 100% { rotate: -1deg; } 50% { rotate: 1deg; } }
+    @keyframes bob { 50% { transform: translateY(-6px) scale(1.05); } }
+    @keyframes breathe { 50% { transform: scale(1.06); } }
+    @keyframes drift { to { transform: translate(90px, -180px); } }
+    @keyframes chosen { 40% { transform: translateY(-30px) scale(1.18) rotate(3deg); } 100% { transform: translateY(-20px) scale(1.1); } }
+    @keyframes burst { from { transform: translate(-50%, -50%) scale(.3); opacity: 1; } to { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1.2); opacity: 0; } }
+    .hp.boss { width: 90px; height: 8px; margin-left: -45px; }
+    #banner { position: absolute; top: 16%; width: 100%; text-align: center; font: 700 56px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 9px #6b3f17; paint-order: stroke fill;
+      text-shadow: 0 6px 0 rgba(0, 0, 0, .25); pointer-events: none; opacity: 0; transition: opacity .4s; }
+    #banner.show { animation: bannerPop .5s cubic-bezier(.2, 1.8, .4, 1); }
+    @keyframes bannerPop { from { transform: scale(.3) rotate(-6deg); } }
+    #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; background: rgba(10, 10, 12, .65); font-size: 22px; }
+    #overlay.hidden { display: none; }
+    #bars { position: absolute; inset: 0; pointer-events: none; }
+    .hp { position: absolute; width: 40px; height: 6px; margin-left: -22px; background: rgba(60, 30, 20, .55); border: 2px solid #fff; border-radius: 99px; overflow: hidden; }
+    .hp > i { display: block; height: 100%; background: #ff5d6c; border-radius: 99px; }
+    .hp.ally > i { background: #5fd35f; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="bars"></div>
+  <div id="hud">
+    <span class="chip" id="wave">Fase 1</span>
+    <span class="chip" id="left">Esqueletos: 0</span>
+    <span class="chip" id="kills">Abates: 0</span>
+    <span class="chip" id="party">Heróis: 0/4</span>
+    <button id="speed">Velocidade 1x</button>
+    <button id="restart">Reiniciar</button>
+  </div>
+  <div id="banner"></div>
+  <div id="pick" class="hidden">
+    <span id="pickTitle"></span>
+    <span id="pickSub"></span>
+    <div id="pickList"></div>
+    <span id="pickHint">◄ ► escolher · Enter confirmar</span>
+  </div>
+  <div id="overlay"><span id="overlayText">Carregando modelos...</span><button id="overlayBtn" hidden>Jogar de novo</button></div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
