@@ -867,4 +867,37 @@ test('chefes e golem fecham as ondas certas; tipos novos entram aos poucos',()=>
   assert.equal(t.pickMonster(2,'Minion'),'Shieldbearer');for(let i=0;i<50;i++)assert.ok(['Minion','Shieldbearer'].includes(t.pickMonster(2,'Minion')));
   t.clearMonsterFx();const seen=new Set();for(let i=0;i<300;i++)seen.add(t.pickMonster(12,'Minion'));for(const k of ['Shieldbearer','Bomber','Ghost'])assert.ok(seen.has(k),k);
 });
+test('relatório de batalha registra golpes corpo a corpo e tiros inimigos',()=>{
+  clear();t.clearMonsterFx();const h=hero('king',0,0);h.hp=h.maxHp=10000;
+  const melee=foe('Warrior',0,1);melee.pendingHit={target:h,t:0};melee.update(.01);
+  const total=()=>Object.values(t.game.damageSources).reduce((n,s)=>n+s.hits,0);
+  assert.equal(total(),1);assert.equal(h.lastHit,melee);
+  const archer=foe('Mage',0,6);context.fireEnemyBolt(archer,h);for(let i=0;i<20&&total()<2;i++)context.updateEnemyBolts(.05);
+  assert.equal(total(),2);assert.equal(h.lastHit,archer);clear();
+});
+test('saves antigos mantêm liberada a missão que já tem estrelas',()=>{
+  const previousLocation=context.location,previousStorage=context.localStorage.data;
+  try {
+    context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:3,fazendas:2,ruinas:2,'lago-sombrio':1})};
+    const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
+    assert.equal(t.unlocked(i('lago')),true);assert.equal(t.unlocked(i('ruinas')),true);assert.equal(t.unlocked(i('lago-sombrio')),true);
+    assert.equal(t.unlocked(i('cemiterio')),true);assert.equal(t.unlocked(i('castelo')),false);
+  } finally { context.location=previousLocation;context.localStorage.data=previousStorage; }
+});
+test('primário do Necromante não desfaz o Exército dos Mortos',()=>{
+  clear();const necro=hero('necro',0,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
+  const cast=slot=>{assert.equal(necro.useSkill(e,false,true,slot),true);necro.pendingHit.effect();necro.pendingHit=null};
+  const mine=()=>t.units.filter(u=>u.summoner===necro);
+  cast(2);assert.equal(mine().length,4);cast(0);assert.equal(mine().length,6);
+  cast(0);assert.equal(mine().length,6);assert.equal(mine().filter(u=>u.ultimate).length,4);clear();
+});
+test('brado do Rei não reduz o Hino do Bardo e o bônus zera ao expirar',()=>{
+  clear();const king=hero('king',0,0),bard=hero('bard',1,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
+  assert.equal(bard.useSkill(e,false,true,2),true);bard.pendingHit.effect();bard.pendingHit=null;
+  const song=bard.royalT;assert.equal(bard.royalBonus,.3);
+  assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;
+  assert.equal(bard.royalBonus,.3);assert.equal(bard.royalT,song);
+  bard.update(song+1);assert.ok(bard.royalT<=0);assert.equal(bard.royalBonus,0);
+  assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;assert.equal(bard.royalBonus,.2);clear();
+});
 console.log(results.length+' verificações passaram.');

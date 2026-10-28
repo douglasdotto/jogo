@@ -93,7 +93,7 @@ export function saveMissionRecord(id, result) {
 // ?tudo=1 na URL libera todas as missões e variantes (para testar)
 export const allOpen = () => { try { return new URLSearchParams(location.search).get('tudo') === '1'; } catch { return false; } };
 export const starsOf = (id) => read()[id] || 0;
-export const unlocked = (i) => i === 0 || allOpen() || starsOf(MISSIONS[i - 1].id) > 0;
+export const unlocked = (i) => i === 0 || allOpen() || starsOf(MISSIONS[i - 1].id) > 0 || starsOf(MISSIONS[i].id) > 0;   // saves antigos: missão nova no meio não bloqueia quem já tem estrelas
 export const totalStars = () => MISSIONS.reduce((s, m) => s + starsOf(m.id), 0);
 
 // Uma variante por classe começa liberada. As demais entram no fluxo de estrelas até 23.
