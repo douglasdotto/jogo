@@ -79,6 +79,31 @@
     .hp { position: absolute; width: 40px; height: 6px; margin-left: -22px; background: rgba(60, 30, 20, .55); border: 2px solid #fff; border-radius: 99px; overflow: hidden; }
     .hp > i { display: block; height: 100%; background: #ff5d6c; border-radius: 99px; }
     .hp.ally > i { background: #5fd35f; }
+    .hp.ally { overflow: visible; }
+    .hp.ally > span { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 13px; color: #fff; text-shadow: 0 1px 3px #432d37, 1px 0 2px #432d37; }
+    .pop.crit { font-size: 38px; color: #ffe066; }
+    .pop.evolve { font-size: 28px; color: #fff1a1; -webkit-text-stroke-color: #9a6be0; }
+    .card { box-sizing: content-box; }
+    .card .pick-hero { display: flex; flex-direction: column; align-items: center; padding: 0; background: transparent; box-shadow: none; border-radius: 20px; }
+    .card .pick-hero:hover { transform: none; }
+    .variant-nav { display: flex; align-items: center; gap: 12px; }
+    .variant-nav button { background: var(--cd); box-shadow: 0 3px 0 var(--c); font-size: 24px; line-height: 24px; padding: 1px 13px 4px; }
+    .variant-nav span { font-size: 13px; }
+    .ability { color: var(--cd); font-size: 14px; text-align: center; }
+    button:focus-visible { outline: 3px solid #6b3f17; outline-offset: 4px; }
+    @media (max-width: 1050px), (max-height: 760px) {
+      #pick { gap: 14px; overflow-y: auto; justify-content: flex-start; padding: 24px 12px; box-sizing: border-box; }
+      #pickTitle { font-size: 32px; text-align: center; }
+      #pickSub { text-align: center; }
+      #pickList { gap: 18px; }
+      .card { width: 160px; gap: 6px; }
+      .card .portrait { width: 124px; height: 124px; }
+      .card .ribbon { font-size: 18px; padding-inline: 14px; }
+      #pickHint { text-align: center; font-size: 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #pick *, #pick::before, #pick::after, #banner.show { animation: none !important; }
+    }
   </style>
   <script type="importmap">
     { "imports": {
@@ -102,7 +127,7 @@
     <span id="pickTitle"></span>
     <span id="pickSub"></span>
     <div id="pickList"></div>
-    <span id="pickHint">◄ ► escolher · Enter confirmar</span>
+    <span id="pickHint">← → classe · ↑ ↓ variante · Enter confirmar · 1–4 escolher</span>
   </div>
   <div id="overlay"><span id="overlayText">Carregando modelos...</span><button id="overlayBtn" hidden>Jogar de novo</button></div>
   <script type="module" src="main.js"></script>

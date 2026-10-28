@@ -9,22 +9,48 @@ const PHASES = 12;          // a última fase fica no topo, no castelo
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
 
-// cada herói usa um modelo diferente; "hide" esconde as armas que não usa.
-// "post" é a posição na formação: [lado, frente(-)/trás(+)]
+// cada classe tem seu posto: [lado, frente(-)/trás(+)].
 const HEROES = [
-  { name: 'Cavaleiro', desc: 'Espada e escudo. Equilibrado.', stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 1 }, color: ['#8ec5ff', '#4f8fd6'], model: 'Knight', post: [0, -0.8], hp: 240, dmg: 30, range: 1.5, speed: 3.2, cooldown: 0.85, idle: 'Idle',
-    hide: ['1H_Sword_Offhand', '2H_Sword', 'Badge_Shield', 'Rectangle_Shield', 'Spike_Shield'],
-    attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal'] },
-  { name: 'Bárbaro', desc: 'Machado pesado. Acerta vários de uma vez.', stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, color: ['#ffbf8a', '#e8803f'], model: 'Barbarian', post: [-1.7, -0.3], hp: 260, dmg: 34, range: 1.7, speed: 2.8, cooldown: 1.4, idle: '2H_Melee_Idle', cleave: 1.2,
-    hide: ['1H_Axe_Offhand', 'Barbarian_Round_Shield', '1H_Axe', 'Mug'],
-    attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Spin'] },
-  { name: 'Mago', desc: 'Bolas de magia de longe que explodem.', stats: { Vida: 2, Força: 4, Rapidez: 2, Alcance: 5 }, color: ['#d4b3ff', '#9a6be0'], model: 'Mage', post: [0, 1.4], hp: 150, dmg: 28, range: 7, speed: 2.6, cooldown: 1.3, idle: 'Idle', ranged: true, splash: 1.4,
-    hide: ['Spellbook', 'Spellbook_open', '1H_Wand'],
-    attacks: ['Spellcast_Shoot'] },
-  { name: 'Ladino', desc: 'Duas facas. O mais rápido.', stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 1 }, color: ['#9fe39a', '#4fb24a'], model: 'Rogue', post: [1.7, -0.3], hp: 180, dmg: 18, range: 1.4, speed: 4, cooldown: 0.55, idle: 'Idle',
-    hide: ['1H_Crossbow', '2H_Crossbow', 'Throwable'],
-    attacks: ['Dualwield_Melee_Attack_Chop', 'Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Stab'] },
+  { name: 'Cavaleiro', model: 'Knight', post: [0, -0.8], hp: 240, dmg: 30, range: 1.5, speed: 3.2, cooldown: 0.85, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal'],
+    weapons: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'] },
+  { name: 'Bárbaro', model: 'Barbarian', post: [-1.7, -0.3], hp: 260, dmg: 34, range: 1.7, speed: 2.8, cooldown: 1.4, idle: '2H_Melee_Idle', cleave: 1.2, attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Spin'],
+    weapons: ['1H_Axe_Offhand', 'Barbarian_Round_Shield', '1H_Axe', '2H_Axe', 'Mug'] },
+  { name: 'Mago', model: 'Mage', post: [0, 1.4], hp: 150, dmg: 28, range: 7, speed: 2.6, cooldown: 1.3, idle: 'Idle', ranged: true, splash: 1.4, attacks: ['Spellcast_Shoot'],
+    weapons: ['Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'] },
+  { name: 'Ladino', model: 'Rogue', post: [1.7, -0.3], hp: 180, dmg: 18, range: 1.4, speed: 4, cooldown: 0.55, idle: 'Idle', attacks: ['Dualwield_Melee_Attack_Chop', 'Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Stab'],
+    weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
 ];
+// variantes compartilham o posto e o modelo da classe.
+const VARIANTS = [
+  { id: 'paladin', names: ['Paladino', 'Paladino Real', 'Santo Guerreiro'], desc: 'Cura os amigos próximos.', ability: 'Círculo de cura', color: ['#a9e9bc', '#55a77b'],
+    use: ['1H_Sword', 'Round_Shield'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 }, classId: 0 },
+  { id: 'guardian', names: ['Guardião', 'Guardião Real', 'Muralha Viva'], desc: 'Atrai inimigos e reduz o dano.', ability: 'Provocar', color: ['#9fcfff', '#568ccc'],
+    use: ['1H_Sword', 'Rectangle_Shield'], stats: { Vida: 5, Força: 2, Rapidez: 2, Alcance: 1 }, hp: 300, dmg: 24, classId: 0 },
+  { id: 'champion', names: ['Campeão', 'Campeão Real', 'Lâmina Solar'], desc: 'Gira e empurra os inimigos.', ability: 'Turbilhão', color: ['#ffe59b', '#c99a3e'],
+    use: ['2H_Sword'], stats: { Vida: 4, Força: 5, Rapidez: 3, Alcance: 2 }, dmg: 36, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice'], classId: 0 },
+  { id: 'berserker', names: ['Berserker', 'Fera Rubra', 'Fúria Titã'], desc: 'Pouca vida, golpes mais rápidos.', ability: 'Fúria', color: ['#ffb2b2', '#ce5f63'],
+    use: ['1H_Axe', '1H_Axe_Offhand'], stats: { Vida: 5, Força: 4, Rapidez: 4, Alcance: 1 }, cooldown: 0.9, cleave: 0, attacks: ['Dualwield_Melee_Attack_Slice'], classId: 1 },
+  { id: 'crusher', names: ['Esmagador', 'Quebra-rochas', 'Abala-terra'], desc: 'Pancada que deixa todos zonzos.', ability: 'Terremoto', color: ['#ffbf8a', '#d88950'],
+    use: ['2H_Axe'], stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, classId: 1 },
+  { id: 'viking', names: ['Viking', 'Jarl Valente', 'Rei do Norte'], desc: 'Arremessa um machado à distância.', ability: 'Machado voador', color: ['#b8dfe5', '#5b9dab'],
+    use: ['1H_Axe', 'Barbarian_Round_Shield'], stats: { Vida: 5, Força: 4, Rapidez: 3, Alcance: 3 }, cleave: 0, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop'], classId: 1 },
+  { id: 'pyro', names: ['Piromante', 'Chama Viva', 'Fênix Solar'], desc: 'Bolas de fogo deixam chamas no chão.', ability: 'Chão em chamas', color: ['#ffc6a4', '#dc8757'],
+    use: ['2H_Staff'], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, classId: 2 },
+  { id: 'arcane', names: ['Arcano', 'Sábio Astral', 'Mestre Estelar'], desc: 'Um raio salta entre os inimigos.', ability: 'Raio em cadeia', color: ['#d4b3ff', '#9a6be0'],
+    use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, classId: 2 },
+  { id: 'cryo', names: ['Criomante', 'Sábio Glacial', 'Coração Polar'], desc: 'Gelo deixa os esqueletos lentinhos.', ability: 'Onda de gelo', color: ['#b9efff', '#58aaca'],
+    use: ['1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, classId: 2 },
+  { id: 'assassin', names: ['Assassino', 'Sombra Ágil', 'Sombra Real'], desc: 'Golpes críticos e esquivas ligeiras.', ability: 'Passo das sombras', color: ['#d1b7df', '#9974b5'],
+    use: ['Knife', 'Knife_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, classId: 3 },
+  { id: 'crossbow', names: ['Besteiro', 'Mira de Águia', 'Flecha Real'], desc: 'Virotes atravessam a fila.', ability: 'Tiro perfurante', color: ['#c9eaa4', '#84ac50'],
+    use: ['2H_Crossbow'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 }, ranged: true, range: 7, cooldown: 1.05, attacks: ['2H_Ranged_Shoot'], classId: 3 },
+  { id: 'ninja', names: ['Ninja', 'Vento Noturno', 'Lua Silenciosa'], desc: 'Lança três adagas em leque.', ability: 'Leque de adagas', color: ['#b6c5f4', '#768ac6'],
+    use: ['Knife', 'Throwable'], stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 4 }, model: 'Rogue_Hooded', classId: 3 },
+].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
+  hide: HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
+}));
+const XP_LEVELS = [0, 90, 350];   // XP acumulado para Nv2 e Nv3
+
 const SKELETONS = {
   Minion:  { hp: 36, dmg: 6,  range: 1.3, speed: 1.6, cooldown: 1.4, weapon: 'Skeleton_Blade' },
   Warrior: { hp: 80, dmg: 11, range: 1.4, speed: 1.3, cooldown: 1.6, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A' },
@@ -82,34 +108,57 @@ function showBanner(text, seconds = 2) {
 function setText(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 
 // tela de escolha estilo arcade: cartões com retrato, atributos e navegação pelo teclado
-const pick = { options: [], cards: [], sel: 0, open: false };
+const pick = { options: [], cards: [], variants: [0, 0, 0, 0], sel: 0, open: false, timer: null };
 
 function showPick(title, sub) {
-  const owned = heroes().map((h) => h.cfg);
-  pick.options = HEROES.filter((h) => !owned.includes(h));
+  const owned = heroes().map((h) => h.cfg.classId);
+  pick.options = HEROES.map((_, i) => i).filter((i) => !owned.includes(i));
   $('pickTitle').textContent = title;
   $('pickSub').textContent = sub;
   const list = $('pickList');
   list.innerHTML = '';
-  pick.cards = pick.options.map((cfg, i) => {
-    const b = document.createElement('button');
+  pick.cards = pick.options.map((classId, i) => {
+    const b = document.createElement('div');
     b.className = 'card';
     b.style.setProperty('--d', `${i * 90}ms`);
-    b.style.setProperty('--c', cfg.color[0]);
-    b.style.setProperty('--cd', cfg.color[1]);
-    const stats = Object.entries(cfg.stats).map(([label, n]) =>
-      `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
-    b.innerHTML = `<div class="num">${i + 1}</div><div class="portrait"><img src="${cfg.portrait}" alt=""></div>
-      <div class="ribbon">${cfg.name}</div><p>${cfg.desc}</p><div class="stats">${stats}</div>`;
     b.onmouseenter = () => selectCard(i);
-    b.onclick = () => confirmPick(i);
     list.appendChild(b);
     return b;
   });
+  pick.cards.forEach((_, i) => renderCard(i));
   selectCard(0);
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
+}
+
+function pickConfig(i) {
+  const classId = pick.options[i];
+  return VARIANTS[classId * 3 + pick.variants[classId]];
+}
+
+function renderCard(i) {
+  const cfg = pickConfig(i), b = pick.cards[i];
+  b.style.setProperty('--c', cfg.color[0]);
+  b.style.setProperty('--cd', cfg.color[1]);
+  const stats = Object.entries(cfg.stats).map(([label, n]) =>
+    `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
+  b.innerHTML = `<div class="num">${i + 1}</div><span>${HEROES[cfg.classId].name}</span>
+    <button class="pick-hero" aria-label="Escolher ${cfg.name}"><div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div></button>
+    <div class="variant-nav"><button aria-label="Variante anterior">‹</button><span>${pick.variants[cfg.classId] + 1} / 3</span><button aria-label="Próxima variante">›</button></div>
+    <p>${cfg.desc}</p><strong class="ability">${cfg.ability}</strong><div class="stats">${stats}</div>`;
+  b.querySelector('.pick-hero').onclick = () => confirmPick(i);
+  const arrows = b.querySelectorAll('.variant-nav button');
+  arrows[0].onclick = () => changeVariant(i, -1);
+  arrows[1].onclick = () => changeVariant(i, 1);
+}
+
+function changeVariant(i, step) {
+  if (!pick.open) return;
+  const classId = pick.options[i];
+  pick.variants[classId] = (pick.variants[classId] + step + 3) % 3;
+  renderCard(i);
+  selectCard(i);
 }
 
 function selectCard(i) {
@@ -120,7 +169,7 @@ function selectCard(i) {
 function confirmPick(i) {
   if (!pick.open) return;
   pick.open = false;
-  const cfg = pick.options[i];
+  const cfg = pickConfig(i);
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   for (let k = 0; k < 10; k++) {   // corações saindo do cartão escolhido
     const h = document.createElement('span');
@@ -131,7 +180,7 @@ function confirmPick(i) {
     h.style.setProperty('--y', `${Math.sin(a) * 130}px`);
     pick.cards[i].appendChild(h);
   }
-  setTimeout(() => {
+  pick.timer = setTimeout(() => {
     $('pick').classList.add('hidden');
     const h = new Hero(cfg);
     h.busy = h.once('Cheer') * 0.6;
@@ -144,6 +193,8 @@ addEventListener('keydown', (e) => {
   if (!pick.open) return;
   if (e.key === 'ArrowLeft') selectCard(pick.sel - 1);
   else if (e.key === 'ArrowRight') selectCard(pick.sel + 1);
+  else if (e.key === 'ArrowUp') changeVariant(pick.sel, -1);
+  else if (e.key === 'ArrowDown') changeVariant(pick.sel, 1);
   else if (e.key === 'Enter' || e.key === ' ') confirmPick(pick.sel);
   else if (/^[1-4]$/.test(e.key) && +e.key <= pick.cards.length) confirmPick(+e.key - 1);
   else return;
@@ -162,7 +213,7 @@ function renderPortraits() {
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   cam.position.set(1.4, 1.9, 4.2);
   cam.lookAt(0, 1.15, 0);
-  for (const cfg of HEROES) {
+  for (const cfg of VARIANTS) {
     const model = SkeletonUtils.clone(assets[cfg.model].scene);
     model.traverse((o) => { if (cfg.hide.includes(o.name)) o.visible = false; });
     const mixer = new THREE.AnimationMixer(model);
@@ -182,7 +233,7 @@ const load = (file) => loader.loadAsync(`assets/${file}`);
 const assets = {};
 
 async function loadAssets() {
-  const files = [...HEROES.map((h) => `${h.model}.glb`), 'Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
+  const files = [...new Set(VARIANTS.map((h) => `${h.model}.glb`)), 'Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
   let done = 0;
   const results = await Promise.all(files.map((f) => load(f).then((g) => {
     $('overlayText').textContent = `Carregando modelos... ${++done}/${files.length}`;
@@ -282,7 +333,7 @@ class Unit {
     }
     dir.normalize();
     const slow = Math.min(1, d / 0.8);                        // freia chegando no ponto
-    this.vel.lerp(dir.multiplyScalar(this.speed * slow), Math.min(1, dt * 7));
+    this.vel.lerp(dir.multiplyScalar(this.speed * slow * (this.slowT > 0 ? 0.5 : 1)), Math.min(1, dt * 7));
     this.moving = true;
     this.face(tmp.copy(this.pos).add(this.vel), dt);
   }
@@ -297,19 +348,30 @@ class Unit {
   }
 
   attack(target, name) {
-    const dur = this.once(name, 1.3);
+    const dur = this.once(name, 1.3 * (this.team === 'hero' ? this.cfg.cooldown / this.cooldown : 1));
     this.busy = dur * 0.9;
     this.attackTimer = this.cooldown;
     this.pendingHit = { target, t: dur * 0.4 };
     if (!this.ranged) this.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(2.2));   // passo à frente
   }
 
-  takeDamage(n, from) {
+  takeDamage(n, from, owner = null, critical = false) {
     if (this.dead) return;
+    if (this.team === 'hero') {
+      if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
+        this.dodgeTimer = 7 - this.level;
+        this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
+        this.pendingHit = null;
+        popText(this.pos, 'Esquiva!', 'heal');
+        return;
+      }
+      if (this.guardT > 0) n *= 0.6;
+    }
     this.hp -= n;
+    if (owner) this.lastHit = owner;
     this.flash = 0.14;
     this.squashT = 0.25;
-    popText(this.pos, Math.round(n), this.team === 'hero' ? 'hurt' : 'dmg');
+    popText(this.pos, Math.round(n), this.team === 'hero' ? 'hurt' : critical ? 'crit' : 'dmg');
     if (from) {   // recua com o impacto
       const k = (this.boss ? 0.6 : this.team === 'hero' ? 1.6 : 3.2);
       this.vel.add(tmp.subVectors(this.pos, from).setY(0).normalize().multiplyScalar(k));
@@ -325,12 +387,19 @@ class Unit {
     this.once(this.team === 'hero' ? 'Death_A' : 'Death_C_Skeletons');
     this.deadTime = 0;
     this.bar.style.display = 'none';
-    if (this.team === 'skeleton') game.kills++;
+    if (this.team === 'skeleton') {
+      game.kills++;
+      for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
+    }
+    if (this.aura) this.aura.visible = false;
+    if (this.halo) this.halo.visible = false;
   }
 
   remove() {
     scene.remove(this.root);
     this.bar.remove();
+    for (const m of this.mats) m.dispose();
+    if (this.aura) this.aura.material.dispose();
     units.splice(units.indexOf(this), 1);
   }
 
@@ -364,11 +433,12 @@ class Unit {
     if (this.pendingHit) {
       this.pendingHit.t -= dt;
       if (this.pendingHit.t <= 0) {
-        const { target } = this.pendingHit;
+        const { target, effect } = this.pendingHit;
         this.pendingHit = null;
-        if (this.ranged) fireBolt(this, target);
-        else if (this.cleave) damageArea(this.pos, this.range + this.cleave, this.dmg);
-        else if (!target.dead && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) target.takeDamage(this.dmg, this.pos);
+        if (effect) effect();
+        else if (this.ranged && !target.dead) fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic');
+        else if (this.cleave) damageArea(this.pos, this.range + this.cleave, this.dmg, this);
+        else if (!target.dead && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team === 'hero' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos);
       }
     }
   }
@@ -377,9 +447,18 @@ class Unit {
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
 
-function damageArea(center, radius, dmg) {
-  for (const s of skeletonsAlive()) if (s.pos.distanceTo(center) <= radius + 0.4 * (s.size - 1)) s.takeDamage(dmg, center);
+function damageArea(center, radius, dmg, owner = null) {
+  for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(center) <= radius + 0.4 * (s.size - 1)) {
+    if (owner) heroHit(owner, s, dmg, center);
+    else s.takeDamage(dmg, center);
+  }
 }
+
+function heroHit(owner, target, dmg, center = owner.pos) {
+  const critical = owner.cfg.id === 'assassin' && Math.random() < 0.25 + (owner.level - 1) * 0.05;
+  target.takeDamage(dmg * (critical ? 2 : 1), center, owner, critical);
+}
+
 
 function nearest(from, list) {
   let best = null, bd = Infinity;
@@ -391,44 +470,120 @@ function nearest(from, list) {
   return best;
 }
 
-// bola de magia do mago: voa até o alvo e explode, acertando quem estiver perto
-const bolts = [];
+// projéteis e áreas usam geometrias compartilhadas, sem luzes extras.
+const bolts = [], blasts = [], flames = [];
 const boltGeo = new THREE.SphereGeometry(0.2, 10, 10);
-const boltMat = new THREE.MeshBasicMaterial({ color: 0xb06cff });
-const blastGeo = new THREE.SphereGeometry(1, 14, 10);
+const bladeGeo = new THREE.ConeGeometry(0.09, 0.65, 4);
+const axeGeo = new THREE.BoxGeometry(0.45, 0.12, 0.3);
+const handleGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.7, 5);
+const flameGeo = new THREE.ConeGeometry(0.2, 0.65, 5);
+const groundGeo = new THREE.CircleGeometry(1, 24);
+const ringGeo = new THREE.RingGeometry(0.75, 1, 32);
+const haloGeo = new THREE.TorusGeometry(0.35, 0.06, 6, 24);
+const beamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
+const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, crossbow: 0xffed9e, ninja: 0xc7d0ff };
+const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
+const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
-function fireBolt(from, target) {
-  const mesh = new THREE.Mesh(boltGeo, boltMat);
-  mesh.position.copy(from.pos).setY(1.4);
+function ring(at, radius, color, life = 0.6) {
+  const mesh = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.copy(at).setY(0.07);
+  mesh.scale.setScalar(radius);
   scene.add(mesh);
-  bolts.push({ mesh, target, dmg: from.dmg, splash: from.cfg.splash });
+  blasts.push({ mesh, t: life, life });
 }
 
-const blasts = [];
+function beam(start, end, color) {
+  const mesh = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color, transparent: true }));
+  const dir = new THREE.Vector3().subVectors(end, start);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5).setY(1.3);
+  mesh.scale.y = dir.length();
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  scene.add(mesh);
+  blasts.push({ mesh, t: 0.25, life: 0.25 });
+}
+
+function fireBolt(from, target, kind = 'magic', angle = 0) {
+  const mesh = new THREE.Mesh(kind === 'viking' ? axeGeo : kind === 'crossbow' || kind === 'ninja' ? bladeGeo : boltGeo, boltMats[kind] || boltMats[from.cfg.id] || boltMats.arcane);
+  if (kind === 'viking') {
+    const handle = new THREE.Mesh(handleGeo, boltMats.viking);
+    handle.position.y = -0.25;
+    mesh.add(handle);
+  }
+  mesh.position.copy(from.pos).setY(1.3);
+  const dir = new THREE.Vector3().subVectors(target.pos, from.pos).setY(0).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  scene.add(mesh);
+  bolts.push({ mesh, target, owner: from, kind, dir, hit: new Set(), life: 1, dmg: from.dmg, level: from.level });
+}
+
 function updateBolts(dt) {
+  if (dt <= 0) return;
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i];
-    tmp.copy(b.target.pos).setY(1);
-    const d = tmp.distanceTo(b.mesh.position);
-    if (b.target.dead || d < 0.3) {
-      damageArea(b.target.pos, b.splash, b.dmg);
-      const blast = new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xc58cff, transparent: true, opacity: 0.6 }));
-      blast.position.copy(b.mesh.position);
-      blast.userData.t = 0;
-      scene.add(blast);
-      blasts.push(blast);
-      scene.remove(b.mesh);
-      bolts.splice(i, 1);
-      continue;
+    b.life -= dt;
+    const piercing = b.kind === 'crossbow' || b.kind === 'ninja';
+    if (piercing) {
+      const step = 18 * dt, start = b.mesh.position.clone().setY(0);
+      b.mesh.position.addScaledVector(b.dir, step);
+      for (const s of skeletonsAlive()) {
+        if (s.spawning || b.hit.has(s)) continue;
+        const offset = new THREE.Vector3().subVectors(s.pos, start);
+        const along = THREE.MathUtils.clamp(offset.dot(b.dir), 0, step);
+        if (offset.addScaledVector(b.dir, -along).length() > 0.45 * s.size) continue;
+        heroHit(b.owner, s, b.dmg);
+        b.hit.add(s);
+        if (b.kind === 'ninja') { b.life = 0; break; }
+      }
+    } else {
+      const goal = b.target.pos.clone().setY(1.1);
+      const d = goal.distanceTo(b.mesh.position);
+      b.mesh.position.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
+      if (d <= 14 * dt + 0.25) {
+        const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0 : b.kind === 'viking' ? 0 : 1.5 + (b.level - 1) * 0.3;
+        if (radius) damageArea(b.target.pos, radius, b.dmg, b.owner);
+        else if (!b.target.dead) heroHit(b.owner, b.target, b.dmg * (b.kind === 'viking' ? 1.8 : 1));
+        if (b.kind === 'pyro') {
+          const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0xff702e, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false }));
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.position.copy(b.target.pos).setY(0.06);
+          mesh.scale.setScalar(radius);
+          for (let k = 0; k < 5; k++) {
+            const flame = new THREE.Mesh(flameGeo, boltMats.pyro);
+            const a = k * Math.PI * 2 / 5;
+            flame.position.set(Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0.18);
+            flame.rotation.x = Math.PI / 2;
+            mesh.add(flame);
+          }
+          scene.add(mesh);
+          flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.35, t: 3 + b.level, tick: 0 });
+        }
+        if (b.kind === 'cryo') for (const s of skeletonsAlive()) if (s.pos.distanceTo(b.target.pos) <= radius) s.slowT = 3 + (b.level - 1) * 0.5;
+        ring(b.target.pos, Math.max(0.5, radius), colors[b.kind] || 0xc999ff);
+        b.life = 0;
+      }
     }
-    b.mesh.position.add(tmp.sub(b.mesh.position).multiplyScalar(Math.min(1, (14 * dt) / d)));
+    if (b.kind === 'viking') b.mesh.rotateZ(dt * 18);
+    if (b.life <= 0) { scene.remove(b.mesh); bolts.splice(i, 1); }
+  }
+  for (let i = flames.length - 1; i >= 0; i--) {
+    const f = flames[i];
+    f.t -= dt; f.tick -= dt;
+    f.mesh.rotation.z += dt;
+    f.mesh.children.forEach((m, k) => m.scale.setScalar(0.8 + Math.sin(f.t * 9 + k) * 0.2));
+    f.mesh.material.opacity = Math.min(0.7, f.t * 0.7);
+    if (f.tick <= 0 && dt > 0) {
+      damageArea(f.mesh.position, f.radius, f.dmg * 0.5, f.owner);
+      f.tick += 0.5;
+    }
+    if (f.t <= 0) { scene.remove(f.mesh); f.mesh.material.dispose(); flames.splice(i, 1); }
   }
   for (let i = blasts.length - 1; i >= 0; i--) {
     const bl = blasts[i];
-    bl.userData.t += dt;
-    bl.scale.setScalar(0.3 + bl.userData.t * 4);
-    bl.material.opacity = 0.6 - bl.userData.t * 2;
-    if (bl.material.opacity <= 0) { scene.remove(bl); bl.material.dispose(); blasts.splice(i, 1); }
+    bl.t -= dt;
+    bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
+    if (bl.t <= 0) { scene.remove(bl.mesh); bl.mesh.material.dispose(); blasts.splice(i, 1); }
   }
 }
 
@@ -485,6 +640,24 @@ class Hero extends Unit {
   constructor(cfg) {
     super(assets[cfg.model], cfg, 'hero');
     this.cfg = cfg;
+    this.level = 1;
+    this.xp = 0;
+    this.skillTimer = 2;
+    this.guardT = 0;
+    this.dodgeTimer = 2;
+    this.age = 0;
+    this.aura = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: cfg.color[1], side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false }));
+    this.aura.rotation.x = -Math.PI / 2;
+    this.aura.position.y = 0.05;
+    this.aura.visible = false;
+    this.halo = new THREE.Mesh(haloGeo, goldMat);
+    this.halo.rotation.x = Math.PI / 2;
+    this.halo.position.y = 2.5;
+    this.halo.visible = false;
+    this.root.add(this.aura, this.halo);
+    this.levelLabel = document.createElement('span');
+    this.levelLabel.textContent = 'Nv1';
+    this.bar.appendChild(this.levelLabel);
     this.ranged = !!cfg.ranged;
     this.cleave = cfg.cleave || 0;
     this.root.traverse((o) => { if (cfg.hide.includes(o.name)) o.visible = false; });
@@ -497,6 +670,99 @@ class Hero extends Unit {
     this.loop(cfg.idle);
   }
 
+  gainXp(n) {
+    this.xp += n;
+    while (this.level < 3 && this.xp >= XP_LEVELS[this.level]) {
+      const oldName = this.cfg.names[this.level - 1], oldHp = this.maxHp;
+      this.level++;
+      this.maxHp = Math.round(this.cfg.hp * (1 + (this.level - 1) * 0.25));
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp - oldHp);
+      this.dmg = this.cfg.dmg * (1 + (this.level - 1) * 0.22);
+      this.size = 1 + (this.level - 1) * 0.08;
+      this.levelLabel.textContent = 'Nv' + this.level;
+      this.levelLabel.title = this.cfg.names[this.level - 1];
+      this.aura.visible = !this.dead;
+      this.halo.visible = !this.dead && this.level === 3;
+      this.skillTimer = Math.min(this.skillTimer, 1);
+      this.popT = 0;
+      poof(this.pos, 1.5);
+      ring(this.pos, 2, this.cfg.color[0], 1);
+      popText(this.pos, this.cfg.names[this.level - 1] + '!', 'evolve');
+      showBanner(oldName + ' evoluiu para ' + this.cfg.names[this.level - 1] + '!', 3);
+    }
+  }
+
+  useSkill(target) {
+    const id = this.cfg.id, level = this.level;
+    const radius = 3 + (level - 1) * 0.5;
+    const nearby = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= radius);
+    let anim = 'Spellcast_Raise', effect;
+    if (id === 'paladin') {
+      const friends = heroes().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= 5 + level);
+      if (!friends.length) return false;
+      effect = () => {
+        for (const h of friends) if (!h.dead && h.pos.distanceTo(this.pos) <= 5 + level) {
+          const heal = Math.min(h.maxHp - h.hp, 32 + level * 10);
+          h.hp += heal;
+          popText(h.pos, '+' + Math.round(heal), 'heal');
+        }
+        ring(this.pos, 5 + level, 0x6eea90, 1);
+      };
+    } else if (id === 'guardian') {
+      if (!nearby.length) return false;
+      anim = 'Block';
+      effect = () => {
+        this.guardT = 4 + (level - 1);
+        for (const s of nearby) if (!s.dead) { s.taunt = this; s.tauntT = this.guardT; s.pendingHit = null; }
+        ring(this.pos, radius, this.cfg.color[0], 1);
+      };
+    } else if (id === 'champion' || id === 'crusher') {
+      if (!nearby.length) return false;
+      anim = id === 'champion' ? '2H_Melee_Attack_Spin' : '2H_Melee_Attack_Chop';
+      effect = () => {
+        for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(this.pos) <= radius) {
+          heroHit(this, s, this.dmg * 1.3);
+          if (id === 'champion') s.vel.add(new THREE.Vector3().subVectors(s.pos, this.pos).setY(0).normalize().multiplyScalar(6 + level));
+          else { s.stunT = 1.5 + (level - 1) * 0.25; s.pendingHit = null; s.vel.set(0, 0, 0); }
+        }
+        ring(this.pos, radius, this.cfg.color[0]);
+      };
+    } else if (id === 'viking') {
+      target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
+      if (!target) return false;
+      anim = 'Throw';
+      effect = () => fireBolt(this, target, 'viking');
+    } else if (id === 'arcane') {
+      if (!target || target.pos.distanceTo(this.pos) > this.range) return false;
+      anim = 'Spellcast_Shoot';
+      effect = () => {
+        let at = this.pos;
+        const hit = new Set();
+        let next = target;
+        for (let i = 0; i < 3 + (level - 1); i++) {
+          if (!next || next.dead) break;
+          beam(at, next.pos, colors.arcane);
+          hit.add(next);
+          heroHit(this, next, this.dmg * 1.15);
+          at = next.pos;
+          next = nearest(at, skeletonsAlive().filter((s) => !s.spawning && !hit.has(s) && s.pos.distanceTo(at) < 4 + level));
+        }
+      };
+    } else if (id === 'pyro' || id === 'cryo' || id === 'crossbow' || id === 'ninja') {
+      if (!target || target.pos.distanceTo(this.pos) > (id === 'ninja' ? 7 : this.range)) return false;
+      anim = id === 'ninja' ? 'Throw' : id === 'crossbow' ? '2H_Ranged_Shoot' : 'Spellcast_Shoot';
+      effect = () => {
+        if (id === 'ninja') for (const angle of [-0.22, 0, 0.22]) fireBolt(this, target, id, angle);
+        else fireBolt(this, target, id);
+      };
+    } else return false;
+    this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
+    this.busy = this.once(anim, 1.4);
+    this.pendingHit = { target, effect, t: this.busy * 0.4 };
+    this.skillTimer = (id === 'paladin' ? 8 : id === 'guardian' ? 9 : 6) - (level - 1) * 0.7;
+    return true;
+  }
+
   // posição na formação em volta do ponto "s" da estrada
   setAnchor(s) {
     this.fwd.copy(world.tangentAt(s));
@@ -507,6 +773,9 @@ class Hero extends Unit {
 
   revive() {
     this.dead = false;
+    this.aura.visible = this.level > 1;
+    this.halo.visible = this.level === 3;
+    this.guardT = 0;
     this.hp = this.maxHp * 0.4;
     this.bar.style.display = '';
     this.current = null;
@@ -515,9 +784,21 @@ class Hero extends Unit {
   }
 
   update(dt) {
+    if (dt <= 0) return;
+    this.skillTimer -= dt;
+    this.dodgeTimer -= dt;
+    this.guardT -= dt;
+    this.age += dt;
+    const rage = !this.dead && this.cfg.id === 'berserker' && this.hp < this.maxHp * 0.5;
+    this.cooldown = this.cfg.cooldown / (1 + (this.level - 1) * 0.15) / (rage ? 1.6 + (this.level - 1) * 0.15 : 1);
+    this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0);
+    this.aura.material.color.set(rage ? 0xff4242 : this.cfg.color[1]);
+    this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
+    this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     this.updateCommon(dt);
-    if (this.dead || this.busy > 0) return;
+    if (this.dead || this.busy > 0 || game.over) return;
     const target = game.state === 'fight' ? nearest(this.pos, skeletonsAlive().filter((u) => !u.spawning)) : null;
+    if (game.state === 'fight' && this.skillTimer <= 0 && this.useSkill(target)) return;
     const engage = target && target.pos.distanceTo(this.post) < LEASH + this.range;
     if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
@@ -543,6 +824,17 @@ class Skeleton extends Unit {
     const dmgScale = (1 + (phase - 1) * 0.06) * (boss ? 2.5 : 1);
     super(assets[`Skeleton_${type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss;
+    this.stunT = 0;
+    this.slowT = 0;
+    this.tauntT = 0;
+    this.stars = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const star = new THREE.Mesh(starGeo, goldMat);
+      star.position.set(Math.cos(i * Math.PI * 2 / 3) * 0.45, 2.1, Math.sin(i * Math.PI * 2 / 3) * 0.45);
+      this.stars.add(star);
+    }
+    this.stars.visible = false;
+    this.root.add(this.stars);
     this.move = base.move || 'Walking_D_Skeletons';
     this.speed *= 0.85 + Math.random() * 0.3;   // cada esqueleto num ritmo um pouco diferente
     if (boss) { this.size = 1.7; this.root.scale.setScalar(this.size); this.range += 0.6; this.bar.classList.add('boss'); }
@@ -560,15 +852,25 @@ class Skeleton extends Unit {
   }
 
   update(dt) {
+    if (dt <= 0) return;
+    this.stunT = Math.max(0, this.stunT - dt);
+    this.slowT = Math.max(0, this.slowT - dt);
+    this.tauntT -= dt;
+    if (this.stunT > 0) { this.pendingHit = null; this.vel.set(0, 0, 0); }
     this.updateCommon(dt);
+    this.stars.visible = !this.dead && this.stunT > 0;
+    this.stars.rotation.y += dt * 5;
+    for (const m of this.mats) if (m.emissive && !this.flashOn) m.emissive.setHex(this.slowT > 0 ? 0x246d99 : 0);
+
     if (this.dead) {
       this.deadTime += dt;
       if (this.deadTime > 1) { poof(this.pos, this.size); this.remove(); }   // some numa nuvenzinha
       return;
     }
+    if (game.over || this.stunT > 0) return;
     if (this.busy > 0) return;
     this.spawning = false;
-    const target = nearest(this.pos, heroes());
+    const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt : nearest(this.pos, heroes());
     if (target) {
       const d = target.pos.distanceTo(this.pos);
       if (d > this.range) this.moveTo(target.pos, dt);
@@ -610,8 +912,19 @@ function separate() {
 const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: 0, over: false, paused: false };
 
 function startGame() {
+  clearTimeout(pick.timer);
+  clearTimeout(showBanner.t);
+  $('banner').style.opacity = 0;
+  pick.open = false;
+  pick.variants.fill(0);
+  for (const list of [bolts, blasts, flames]) while (list.length) {
+    const effect = list.pop();
+    scene.remove(effect.mesh);
+    if (list !== bolts) effect.mesh.material.dispose();
+  }
+  while (fx.length) { const m = fx.pop(); scene.remove(m); m.material.dispose(); }
+  bars.querySelectorAll('.pop').forEach((el) => el.remove());
   while (units.length) units[0].remove();
-  while (bolts.length) scene.remove(bolts.pop().mesh);
   Object.assign(game, { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(1), over: false });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
@@ -666,6 +979,8 @@ function updateGame(dt) {
       for (const h of heroes()) {
         if (h.dead) h.revive();
         else h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.35);
+        h.gainXp(12);
+        h.guardT = 0;
         popText(h.pos, '♥', 'heal');
         h.busy = h.once('Cheer');
       }
@@ -718,9 +1033,9 @@ function updateBars() {
 const clock = new THREE.Clock();
 function frame() {
   const real = Math.min(clock.getDelta(), 0.05);
-  const dt = game.paused ? 0 : real * speed;
+  const dt = game.paused || game.over ? 0 : real * speed;
   for (const u of [...units]) u.update(dt);
-  separate();
+  if (dt > 0) separate();
   updateBolts(dt);
   updateFx(dt);
   updateGame(dt);
