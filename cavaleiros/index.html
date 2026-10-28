@@ -313,6 +313,26 @@
     #overlayStats th { background: #1a5fbf; color: #fff; }
     #overlayStats td { border-top-color: rgba(255, 255, 255, .12); }
     #overlayStats td.top { color: var(--gold); }
+    /* cartões grandes (dificuldade e evolução) no mesmo estilo: azul-marinho com moldura na cor do cartão */
+    #pickList:not(.grid) .card { color: #fff; border: 4px solid var(--outline); border-radius: 16px;
+      background: linear-gradient(170deg, color-mix(in srgb, var(--c, #6cb6ff) 55%, #1f3156), #1f3156 65%);
+      box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--cd, #2f6fd0) 80%, #fff 0%), inset 0 3px 0 rgba(255, 255, 255, .2), 0 5px 0 var(--outline), 0 14px 26px rgba(0, 0, 0, .5); }
+    #pickList:not(.grid) .card::before { display: none; }
+    #pickList:not(.grid) .card:hover, #pickList:not(.grid) .card.sel { box-shadow: 0 0 0 4px var(--gold), 0 0 26px 6px rgba(255, 212, 74, .7), inset 0 3px 0 rgba(255, 255, 255, .2), 0 5px 0 var(--outline); }
+    #pickList:not(.grid) .card .ribbon { font-family: 'Lilita One', sans-serif; font-weight: 400; color: #fff; -webkit-text-stroke: 4px var(--outline); paint-order: stroke fill;
+      background: linear-gradient(color-mix(in srgb, var(--c, #6cb6ff) 70%, #fff), var(--cd, #2f6fd0)); border: 3px solid var(--outline); border-radius: 10px; clip-path: none; }
+    #pickList:not(.grid) .card p { color: #dbeaff; font-family: 'Lilita One', sans-serif; font-weight: 400; -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill; }
+    #pickList:not(.grid) .card .num { font-family: 'Lilita One', sans-serif; background: linear-gradient(#ff6a7a, #c22a46); border: 3px solid var(--outline); box-shadow: 0 3px 0 var(--outline); }
+    .card.diff .medal { border: 4px solid var(--outline); box-shadow: inset 0 4px 0 rgba(255, 255, 255, .35), inset 0 -5px 0 rgba(0, 0, 0, .2), 0 4px 0 var(--outline);
+      -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+    .card.diff .record { font-family: 'Lilita One', sans-serif; font-weight: 400; color: #fff; -webkit-text-stroke: 2.5px var(--outline); paint-order: stroke fill;
+      background: rgba(0, 0, 0, .3); border: 2px solid rgba(255, 255, 255, .2); border-radius: 10px; }
+    .card.diff .record.won { color: var(--gold); background: rgba(0, 0, 0, .35); border-color: var(--gold); }
+    #pickList:not(.grid) .card .portrait { border-radius: 14px; clip-path: none; background: linear-gradient(170deg, var(--c), var(--cd)); padding: 4px; border: 3px solid var(--outline); }
+    #pickList:not(.grid) .card .portrait img { border-radius: 10px; clip-path: none; }
+    .upgrade { font-family: 'Lilita One', sans-serif; font-weight: 400; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill;
+      background: linear-gradient(#7cc8ff, #1d6fd6); border: 3px solid var(--outline); border-radius: 12px; }
+    .upgrade span { -webkit-text-stroke-width: 2px; }
   </style>
   <script type="importmap">
     { "imports": {

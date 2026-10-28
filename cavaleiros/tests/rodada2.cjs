@@ -77,7 +77,7 @@ function test(name,fn){fn();results.push(name);console.log('OK:',name)}
 function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10});}
 test('16 variantes, receitas e animações existentes nos GLB',()=>{
   assert.equal(t.VARIANTS.length,16);
-  const glb=n=>{const b=fs.readFileSync(path.join(dir,'assets',n+'.glb'));return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
+  const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
     for(const clip of [v.idle,...v.attacks,'Death_A','Block_Hit','Spellcast_Raise','Cheer','Throw']) assert.ok(clips.includes(clip),v.id+': '+clip);
