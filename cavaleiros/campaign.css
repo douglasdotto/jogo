@@ -94,3 +94,7 @@
 .hero-numbers dd { margin: 0; color: #fff; font-weight: 700; }
 .guide-note { margin: 0; color: #cfe6ff; font: 500 11px/1.4 'Fredoka', sans-serif; }
 #heroPanel .hero-guide h4 { margin-top: 12px; }
+
+#aimHint { position: fixed; z-index: 30; left: 50%; bottom: 155px; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+  padding: 10px 16px; border: 2px solid #73d4ff; border-radius: 12px; color: #fff; background: rgba(15, 30, 55, .94); text-align: center; font: 500 14px/1.5 'Fredoka', sans-serif; pointer-events: none; }
+.skill.aiming { outline: 3px solid #75ffad; outline-offset: 4px; }

@@ -6,6 +6,7 @@ import { createWorld } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './characters.js';
 import { LOOKS } from './looks.js';
 import { CLASSES, heroInfo, skillCooldown } from './class-info.js';
+import { aimSpec, validAim } from './skill-targeting.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
 import { MISSIONS, goalText, starsFor, saveStars, renderCampaign, totalStars, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
@@ -590,6 +591,9 @@ function buildSkillBar(party) {
     it.auto.onclick = (e) => {
       e.stopPropagation();
       h.auto = !h.auto;
+      h.manualTarget = null;
+      h.wantSkill = 0;
+      if (aiming?.hero === h) cancelAim();
       saveAuto(h.cfg.id, h.auto);
       audio.play('click');
     };
@@ -599,6 +603,14 @@ function buildSkillBar(party) {
 }
 
 function pressSkill(it) {
+  const h = it.h;
+  if (!h.auto && aimSpec(h) && !h.dead && !game.over && !game.paused && h.skillTimer <= 0 && game.state === 'fight') {
+    if (aiming?.hero === h) cancelAim();
+    else beginAim(h);
+    audio.play('click');
+    return;
+  }
+  cancelAim();
   const r = it.h.requestSkill();
   audio.play('click');
   if (r !== 'ok') it.nopeT = performance.now() + 400;   // caído ou recarregando: o botão balança
@@ -621,6 +633,7 @@ function updateSkillBar() {
     it.b.classList.toggle('ready', ready);
     it.b.classList.toggle('down', h.dead);
     it.b.classList.toggle('manual', !h.auto);
+    it.b.classList.toggle('aiming', aiming?.hero === h);
     it.b.classList.toggle('nope', h.noTarget > 0 || now < it.nopeT);
   }
 }
@@ -1833,7 +1846,8 @@ class Hero extends Unit {
     }
   }
 
-  useSkill(target) {
+  useSkill(target, manual = false) {
+    if (manual && !validAim(this, target)) return false;
     const id = this.cfg.id, level = this.level;
     const power = this.skillPower;
     const radius = (3 + (level - 1) * 0.5) * power;
@@ -1862,6 +1876,7 @@ class Hero extends Unit {
         FX.dome(this, radius);
       };
     } else if (id === 'champion' || id === 'crusher') {
+      if (manual && id === 'crusher') this.face(target.pos, 1);
       if (!nearby.some((s) => id === 'champion' || inMeleeArc(this, s, 2.2 * power))) return false;
       if (id === 'crusher') this.vel.add(tmp.subVectors(target ? target.pos : this.pos, this.pos).setY(0).normalize().multiplyScalar(2.5));   // salta para a frente
       effect = () => {
@@ -1883,7 +1898,7 @@ class Hero extends Unit {
       };
     } else if (id === 'assassin') {
       // salta pelas sombras até as costas do alvo e crava as adagas
-      target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));
+      if (!manual) target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));
       if (!target) return false;
       effect = () => {
         if (target.dead) return;
@@ -1902,7 +1917,7 @@ class Hero extends Unit {
         } };
       };
     } else if (id === 'viking' || id === 'iceviking') {
-      target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
+      if (!manual) target = nearest(this.pos, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
       if (!target) return false;
       effect = () => fireBolt(this, target, id, 0, true);
     } else if (id === 'arcane') {
@@ -1974,10 +1989,11 @@ class Hero extends Unit {
   }
 
   // pedido do jogador (botão ou tecla): vale por um instante, até o golpe atual terminar
-  requestSkill() {
+  requestSkill(target = null) {
     if (this.dead || game.over || game.paused) return 'off';
     if (this.skillTimer > 0) return 'wait';
     if (game.state !== 'fight') { this.missSkill(); return 'none'; }
+    this.manualTarget = target;
     this.wantSkill = 2;
     return 'ok';
   }
@@ -2017,6 +2033,7 @@ class Hero extends Unit {
     this.royalT -= dt;
     this.furyT -= dt;
     this.wantSkill -= dt;
+    if (this.wantSkill <= 0) this.manualTarget = null;
     this.noTarget -= dt;
     this.age += dt;
     if (!this.dead && game.state === 'fight') this.stats.tempo += dt;   // para o dano por segundo
@@ -2039,8 +2056,10 @@ class Hero extends Unit {
     // no manual a habilidade fica carregada esperando o jogador pedir
     if (game.state === 'fight' && this.skillTimer <= 0 && (this.auto || this.wantSkill > 0)) {
       const asked = this.wantSkill > 0;
+      const chosen = this.manualTarget;
       this.wantSkill = 0;
-      if (this.useSkill(target)) return;
+      this.manualTarget = null;
+      if (this.useSkill(chosen || target, !!chosen)) return;
       if (asked) this.missSkill();
     }
     // atiradores não saem do lugar: o grupo vai até eles
@@ -2240,6 +2259,7 @@ const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false
 
 // view: 'menu' (tela inicial) ou 'map' (mapa da campanha)
 function startGame(view = 'menu') {
+  if (aiming) cancelAim();
   clearTimeout(pick.timer);
   clearTimeout(showBanner.t);
   $('banner').style.opacity = 0;
@@ -2672,9 +2692,125 @@ function frame() {
   camera.position.sub(kick);
   updateBars();
   updateSkillBar();
+  updateAim();
   audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
   requestAnimationFrame(frame);
 }
+
+// Mira manual: alcance azul, alvo válido verde e alvo inválido vermelho.
+let aiming = null;
+const aimRay = new THREE.Raycaster();
+const aimPointer = new THREE.Vector2();
+const aimGroup = new THREE.Group();
+const aimMaterial = new THREE.MeshBasicMaterial({ color: 0x73d4ff, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+const aimRange = new THREE.Mesh(new THREE.RingGeometry(0.985, 1, 80), aimMaterial);
+const aimArea = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), aimMaterial.clone());
+aimRange.rotation.x = aimArea.rotation.x = -Math.PI / 2;
+const aimLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0x75ffad, depthTest: false, transparent: true, opacity: 0.9 }));
+aimGroup.add(aimRange, aimArea, aimLine);
+aimGroup.visible = false;
+aimGroup.renderOrder = 10;
+scene.add(aimGroup);
+const aimHint = document.createElement('div');
+aimHint.id = 'aimHint';
+aimHint.setAttribute('role', 'status');
+aimHint.hidden = true;
+document.body.appendChild(aimHint);
+
+function cancelAim() {
+  if (aiming) controls.enabled = aiming.controlsEnabled;
+  aiming = null;
+  aimGroup.visible = false;
+  aimHint.hidden = true;
+  renderer.domElement.style.cursor = '';
+}
+
+function beginAim(hero) {
+  cancelAim();
+  hero.wantSkill = 0;
+  hero.manualTarget = null;
+  aiming = { hero, controlsEnabled: controls.enabled, pointer: null, target: null };
+  controls.enabled = false;
+  renderer.domElement.style.cursor = 'crosshair';
+  aimHint.hidden = false;
+  updateAim();
+}
+
+function updateAim() {
+  if (!aiming) return;
+  const h = aiming.hero, spec = aimSpec(h);
+  if (h.auto || h.dead || !units.includes(h) || game.paused || game.over || game.state !== 'fight' || h.skillTimer > 0) return cancelAim();
+  aimGroup.visible = true;
+  aimRange.position.copy(h.pos).setY(h.pos.y + 0.12);
+  aimRange.scale.setScalar(spec.range);
+  let target = null;
+  const pointer = aiming.pointer;
+  if (pointer) {
+    const bounds = renderer.domElement.getBoundingClientRect();
+    aimPointer.set((pointer.x - bounds.left) / bounds.width * 2 - 1, -(pointer.y - bounds.top) / bounds.height * 2 + 1);
+    aimRay.setFromCamera(aimPointer, camera);
+    if (spec.mode === 'enemy') {
+      let best = 45;
+      for (const enemy of skeletonsAlive()) {
+        if (enemy.spawning) continue;
+        const screen = enemy.pos.clone().add(new THREE.Vector3(0, enemy.size, 0)).project(camera);
+        if (screen.z < -1 || screen.z > 1) continue;
+        const distance = Math.hypot((screen.x + 1) * bounds.width / 2 + bounds.left - pointer.x,
+          (1 - screen.y) * bounds.height / 2 + bounds.top - pointer.y);
+        if (distance < best) { best = distance; target = enemy; }
+      }
+    } else {
+      // Procura a primeira interseção com a altura lógica do terreno, inclusive platôs.
+      const ray = aimRay.ray;
+      const hit = new THREE.Vector3();
+      let previous = ray.origin.y - world.groundHeight(ray.origin.x, ray.origin.z);
+      for (let distance = 0.5; distance <= 250; distance += 0.5) {
+        ray.at(distance, hit);
+        const above = hit.y - world.groundHeight(hit.x, hit.z);
+        if (above <= 0 && previous > 0) {
+          let low = distance - 0.5, high = distance;
+          for (let i = 0; i < 8; i++) {
+            const mid = (low + high) / 2;
+            ray.at(mid, hit);
+            if (hit.y > world.groundHeight(hit.x, hit.z)) low = mid; else high = mid;
+          }
+          ray.at(high, hit);
+          hit.y = world.groundHeight(hit.x, hit.z);
+          target = { pos: hit.clone(), dead: false, size: 1, groundTarget: true };
+          break;
+        }
+        previous = above;
+      }
+    }
+  }
+  aiming.target = target;
+  const valid = validAim(h, target);
+  aimArea.visible = aimLine.visible = !!target;
+  if (target) {
+    aimArea.position.copy(target.pos).setY(target.pos.y + 0.13);
+    aimArea.scale.setScalar(spec.radius || 0.4);
+    aimArea.material.color.setHex(valid ? 0x75ffad : 0xff6666);
+    const positions = aimLine.geometry.attributes.position;
+    positions.setXYZ(0, h.pos.x, h.pos.y + 0.15, h.pos.z);
+    positions.setXYZ(1, target.pos.x, target.pos.y + 0.15, target.pos.z);
+    positions.needsUpdate = true;
+    aimLine.geometry.computeBoundingSphere();
+    aimLine.material.color.copy(aimArea.material.color);
+  }
+  const message = `${h.cfg.ability} · ${spec.mode === 'enemy' ? 'Clique em um inimigo' : 'Clique no chão para mirar'} · Alcance ${spec.range.toLocaleString('pt-BR')} m${target && !valid ? ' · Fora do alcance ou alvo inválido' : ''} · Esc / botão direito cancela`;
+  if (aimHint.textContent !== message) aimHint.textContent = message;
+}
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (aiming) aiming.pointer = { x: e.clientX, y: e.clientY };
+});
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (!aiming || e.button !== 2) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  cancelAim();
+}, true);
+renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // clicar num herói abre o cartão dele (clique sem arrastar, para não brigar com o giro da câmera)
 const selectRing = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 6), new THREE.MeshBasicMaterial({ color: 0xffe066, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false }));
@@ -2684,7 +2820,18 @@ scene.add(selectRing);
 let downAt = null;
 renderer.domElement.addEventListener('pointerdown', (e) => (downAt = [e.clientX, e.clientY]));
 renderer.domElement.addEventListener('pointerup', (e) => {
+  if (e.button !== 0) return;
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+  if (aiming) {
+    aiming.pointer = { x: e.clientX, y: e.clientY };
+    updateAim();
+    if (!aiming) return;
+    const { hero, target } = aiming;
+    if (!validAim(hero, target)) { audio.play('click'); return; }
+    const result = hero.requestSkill(target);
+    if (result === 'ok') cancelAim();
+    return;
+  }
   let best = null, bestD = 50;   // herói mais perto do clique na tela, até 50 px
   for (const h of heroes()) {
     tmp.copy(h.pos).setY(h.pos.y + 1).project(camera);
@@ -2696,6 +2843,7 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  if (aiming) { cancelAim(); return; }
   closeHeroPanel();
   if (!$('campaign').classList.contains('hidden')) showMenu();   // Esc no mapa volta ao menu
 });

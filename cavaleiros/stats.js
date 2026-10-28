@@ -1,5 +1,6 @@
 // Estatísticas de cada herói na partida, o cartão que abre ao clicar nele e o resumo do fim de jogo.
 import { heroInfo, skillCooldown } from './class-info.js';
+import { aimSpec } from './skill-targeting.js';
 
 export const newStats = () => ({ dano: 0, recebido: 0, cura: 0, abates: 0, ataques: 0, habilidades: 0, criticos: 0, esquivas: 0, distancia: 0, tempo: 0 });
 
@@ -69,7 +70,7 @@ function renderHeroPanel() {
     <div class="hero-guide"><h4>${info.name} · ${info.role}</h4><p>${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}</p></div>
     <div class="ability"><b>${c.ability}</b>${info.skill}
       <span class="skill-meta">${h.dead ? 'Indisponível enquanto caído' : h.skillTimer > 0 ? `Disponível em ${Math.ceil(h.skillTimer)} s` : 'Pronta para usar'} · Recarga: ${skillCooldown(c.id, h.level, h.skillRate).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s</span>
-      <span class="skill-meta">${h.auto ? 'Automático: usa quando houver uma oportunidade.' : 'Manual: ative pela barra ou pelas teclas 1–4.'}</span></div>
+      <span class="skill-meta">${h.auto ? 'Automático: usa quando houver uma oportunidade.' : aimSpec(h) ? 'Manual: ative pela barra ou pelas teclas 1–4 e clique no alvo. Esc cancela.' : 'Manual: ative pela barra ou pelas teclas 1–4. Efeito centrado no herói.'}</span></div>
     <div class="hero-guide"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
     <h4>Atributos</h4>
     <dl>${attrs.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
