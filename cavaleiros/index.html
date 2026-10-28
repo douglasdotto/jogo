@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cavaleiros vs Esqueletos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Fredoka:wght@500;700&family=MedievalSharp&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@900&family=Lilita+One&family=Fredoka:wght@500;700&family=MedievalSharp&family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2228; font-family: 'Fredoka', system-ui, sans-serif; color: #f1ecdc; }
     canvas { display: block; }
@@ -220,6 +220,87 @@
       .card, .card .portrait img, .card::after { transition: none !important; transform: none !important; }
       #pick *, #pick::before, #pick::after, #banner.show { animation: none !important; }
     }
+    /* ==================== visual estilo Clash: painéis azul-marinho, fonte grossa contornada, brilho ==================== */
+    :root { --navy: #1f2f52; --navy-2: #2c4272; --navy-edge: #0f1a33; --sky: #4fb3ff; --sky-dark: #1d6fd6; --gold: #ffd44a; --gold-dark: #c98a12;
+      --clash-text: #fff; --outline: #0d1426; }
+    html, body { font-family: 'Lilita One', 'Fredoka', system-ui, sans-serif; }
+    /* texto grosso com contorno escuro, como nos jogos da Supercell */
+    .chip, button, #banner, #pickTitle, .class-tag, #pickList.grid .card .ribbon, .pick-info .ribbon, #overlayText, .pop, #heroPanel .ribbon {
+      font-family: 'Lilita One', sans-serif; font-weight: 400; letter-spacing: .3px; }
+    .chip { color: #fff; font-size: 16px; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; text-shadow: 0 2px 0 var(--outline);
+      background: linear-gradient(#3a5a92, #233a66); border: 3px solid var(--navy-edge); border-radius: 10px;
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, .25), inset 0 -3px 0 rgba(0, 0, 0, .25), 0 3px 0 var(--navy-edge); }
+    .chip::after { display: none; }
+    #wave::before, #kills::before, #party::before { color: var(--gold); -webkit-text-stroke: 2px var(--outline); } #left::before { color: #e8e8f0; -webkit-text-stroke: 2px var(--outline); }
+    button { color: #fff; font-size: 16px; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; text-shadow: 0 2px 0 var(--outline);
+      background: linear-gradient(#7cc8ff 0%, var(--sky) 45%, var(--sky-dark) 100%); border: 3px solid var(--outline); border-radius: 12px;
+      box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45), inset 0 -4px 0 rgba(0, 0, 0, .25), 0 4px 0 var(--outline); }
+    button:hover { filter: brightness(1.1); }
+    #banner { color: #fff; font-size: 46px; -webkit-text-stroke: 7px var(--outline); padding: 10px 70px 16px;
+      background: linear-gradient(#6cc0ff, #2a86e8 55%, #1a5fbf); clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%); filter: drop-shadow(0 5px 0 var(--outline)); }
+    .pop { -webkit-text-stroke-width: 5px; }
+    #overlayText { color: #fff; font-size: 26px; -webkit-text-stroke: 5px var(--outline); paint-order: stroke fill;
+      background: linear-gradient(var(--navy-2), var(--navy)); border: 4px solid var(--navy-edge); border-radius: 18px;
+      box-shadow: inset 0 3px 0 rgba(255, 255, 255, .15), 0 6px 0 var(--navy-edge), 0 14px 30px rgba(0, 0, 0, .5); }
+    #overlayText::before, #overlayText::after { display: none; }
+    .hp { border: 2px solid var(--outline); border-radius: 5px; background: #1b223a; box-shadow: 0 1px 0 var(--outline); }
+    .hp > i { border-radius: 3px; background: linear-gradient(#ff7a7a, #e0303a); } .hp.ally > i { background: linear-gradient(#8ef07a, #3fb83a); }
+    .hp.ally > span { font-family: 'Lilita One', sans-serif; font-size: 13px; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+    /* tela de escolha: painel azul-marinho, fita azul no título, cartões com arte cheia e moldura brilhante */
+    #pick { background: radial-gradient(ellipse at center, rgba(16, 26, 52, .55), rgba(8, 12, 26, .88)); }
+    #pick::before, #pick::after { display: none; }
+    #pickTitle { color: #fff; font-size: 38px; -webkit-text-stroke: 7px var(--outline); padding: 8px 70px 14px;
+      background: linear-gradient(#6cc0ff, #2a86e8 55%, #1a5fbf); clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%); filter: drop-shadow(0 5px 0 var(--outline)); }
+    #pickTitle::before, #pickTitle::after { display: none; }
+    #pickSub { font-family: 'Lilita One', sans-serif; color: #cfe6ff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+    #pickHint { font-family: 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; animation: none;
+      background: linear-gradient(#3a5a92, #233a66); border: 3px solid var(--navy-edge); border-radius: 12px; box-shadow: 0 3px 0 var(--navy-edge); }
+    .pick-rows { padding: 14px 16px; gap: 10px; border: 4px solid var(--navy-edge); border-radius: 18px;
+      background: linear-gradient(160deg, #34507f, #22365e 60%, #1b2b4d); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .15), 0 6px 0 var(--navy-edge), 0 16px 30px rgba(0, 0, 0, .5); }
+    .class-tag { width: 88px; padding: 10px 4px 12px; font-size: 15px; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; border: 3px solid var(--outline);
+      border-radius: 12px; clip-path: none; background: var(--flag); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .35), inset 0 -4px 0 rgba(0, 0, 0, .25), 0 3px 0 var(--outline); }
+    .class-tag::before { display: block; margin-bottom: 2px; font-size: 24px; line-height: 1; color: var(--gold); -webkit-text-stroke: 3px var(--outline); }
+    .pick-row:nth-child(1) .class-tag { --flag: linear-gradient(#6cb6ff, #2f6fd0); } .pick-row:nth-child(1) .class-tag::before { content: '\265C\FE0E'; }
+    .pick-row:nth-child(2) .class-tag { --flag: linear-gradient(#ff9a5a, #d0502f); } .pick-row:nth-child(2) .class-tag::before { content: '\2692\FE0E'; }
+    .pick-row:nth-child(3) .class-tag { --flag: linear-gradient(#c58cff, #7a3fd0); } .pick-row:nth-child(3) .class-tag::before { content: '\2726'; }
+    .pick-row:nth-child(4) .class-tag { --flag: linear-gradient(#7ee07a, #2f9a3a); } .pick-row:nth-child(4) .class-tag::before { content: '\263E\FE0E'; }
+    /* cartão: arte ocupando o topo, moldura em gradiente da cor da variante, faixa escura embaixo */
+    #pickList.grid .card { width: 112px; padding: 4px 4px 0; gap: 0; border: 3px solid var(--outline); border-radius: 12px; overflow: hidden;
+      background: linear-gradient(170deg, color-mix(in srgb, var(--c) 70%, #fff), var(--cd) 60%, color-mix(in srgb, var(--cd) 70%, #000));
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, .5), 0 4px 0 var(--outline); }
+    #pickList.grid .card::before { display: none; }
+    #pickList.grid .card .portrait { width: 100%; height: 92px; padding: 0; border-radius: 8px; clip-path: none; background: none; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .35); }
+    #pickList.grid .card .portrait img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; clip-path: none;
+      background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c) 40%, #fff), color-mix(in srgb, var(--cd) 85%, #000)); }
+    #pickList.grid .card .ribbon { position: relative; margin: -14px 0 0; padding: 0; background: none; border: 0; clip-path: none; box-shadow: none;
+      font-size: 15px; color: #fff; -webkit-text-stroke: 4px var(--outline); paint-order: stroke fill; text-shadow: 0 2px 0 var(--outline); }
+    #pickList.grid .card .ability { width: calc(100% + 8px); margin: 3px -4px 0; padding: 4px 2px 5px; box-sizing: border-box; text-align: center;
+      font: 400 11px 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 2.5px var(--outline); paint-order: stroke fill;
+      background: linear-gradient(rgba(0, 0, 0, .15), rgba(0, 0, 0, .45)); border-top: 2px solid rgba(0, 0, 0, .35); }
+    #pickList.grid .card:hover, #pickList.grid .card.sel { box-shadow: 0 0 0 3px var(--gold), 0 0 20px 4px rgba(255, 212, 74, .75), inset 0 2px 0 rgba(255, 255, 255, .5), 0 4px 0 var(--outline); }
+    #pickList.grid .card.owned { background: linear-gradient(#7a7f8c, #4c5160); }
+    .card .seal { font-family: 'Lilita One', sans-serif; background: linear-gradient(#ff6a7a, #c22a46); border: 3px solid var(--outline); }
+    .pick-info { border: 4px solid var(--navy-edge); border-radius: 18px; color: #fff; background: linear-gradient(160deg, #34507f, #1f3156);
+      box-shadow: inset 0 3px 0 rgba(255, 255, 255, .15), 0 6px 0 var(--navy-edge), 0 16px 30px rgba(0, 0, 0, .5); }
+    .pick-info .crest { width: 120px; height: 120px; padding: 4px; border-radius: 14px; clip-path: none; background: linear-gradient(170deg, var(--c), var(--cd)); border: 3px solid var(--outline); }
+    .pick-info .crest img { border-radius: 10px; clip-path: none; object-fit: cover; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c) 40%, #fff), var(--cd)); }
+    .pick-info .ribbon { margin-top: -16px; padding: 4px 18px 7px; font-size: 20px; color: #fff; -webkit-text-stroke: 4px var(--outline); paint-order: stroke fill;
+      background: linear-gradient(#6cc0ff, #1d6fd6); border: 3px solid var(--outline); border-radius: 10px; clip-path: none; }
+    .pick-info small { font-family: 'Lilita One', sans-serif; color: #cfe6ff; font-size: 14px; }
+    .pick-info .ability { color: #e8f2ff; background: rgba(0, 0, 0, .25); border: 2px solid rgba(255, 255, 255, .15); border-radius: 10px; }
+    .pick-info .ability b { font-family: 'Lilita One', sans-serif; font-weight: 400; color: var(--gold); -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+    .pick-info .stats { color: #e8f2ff; font-family: 'Lilita One', sans-serif; font-weight: 400; }
+    .burst { color: var(--gold); }
+    #heroPanel { color: #fff; border: 4px solid var(--navy-edge); border-radius: 16px; background: linear-gradient(160deg, #34507f, #1f3156);
+      box-shadow: inset 0 3px 0 rgba(255, 255, 255, .15), 0 6px 0 var(--navy-edge), 0 12px 24px rgba(0, 0, 0, .45); }
+    #heroPanel h4 { font-family: 'Lilita One', sans-serif; font-weight: 400; color: var(--gold); border-bottom-color: rgba(255, 255, 255, .2); }
+    #heroPanel dt { color: #b8d4f5; } #heroPanel .lvl, #heroPanel .xp-txt { color: #e8f2ff; }
+    #heroPanel .ability { color: #e8f2ff; background: rgba(0, 0, 0, .25); }
+    #heroPanel .ribbon { background: linear-gradient(#6cc0ff, #1d6fd6); border: 3px solid var(--outline); -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+    #overlayStats table { color: #fff; font-family: 'Lilita One', sans-serif; background: linear-gradient(#34507f, #1f3156); border: 4px solid var(--navy-edge); border-radius: 14px; }
+    #overlayStats th { background: #1a5fbf; color: #fff; }
+    #overlayStats td { border-top-color: rgba(255, 255, 255, .12); }
+    #overlayStats td.top { color: var(--gold); }
   </style>
   <script type="importmap">
     { "imports": {
