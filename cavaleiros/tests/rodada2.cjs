@@ -47,12 +47,15 @@ const THREE={ Vector3, Mesh:class {constructor(){Object.assign(this,root())}}, G
   MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2, RingGeometry:class{}, DoubleSide:2 };
 const context=vm.createContext({THREE,document:{createElement:el,getElementById:(id)=>{if(!elements.has(id))elements.set(id,el());return elements.get(id)}},
   addEventListener:noop,requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,
-  SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
+  URLSearchParams,location:{search:''},
+  localStorage:{data:{},getItem(k){return this.data[k]??null},setItem(k,v){this.data[k]=String(v)}},
+  SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
+  SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop,
-  renderer:{render:noop,domElement:{addEventListener:noop}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()}},
+  renderer:{render:noop,domElement:{addEventListener:noop}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
   follow:new Vector3(),controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
-    tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null},
+    tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
   poof:noop,ring:noop,beam:noop,popText:noop, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop});
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
@@ -63,7 +66,7 @@ vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context);
 vm.runInContext(part(source,'class Hero','// empurra unidades'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,damageCleave,startGame,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
 const t=context.t;
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
@@ -94,7 +97,7 @@ test('variantes repetem classe, pulam ocupadas e usam postos distintos',()=>{
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
-  assert.equal(t.evolutions.length,3);assert.equal(a.level,3);assert.ok(Math.abs(a.dmg-28*1.1**2)<.001);
+  assert.equal(t.evolutions.length,3);assert.equal(a.level,3);assert.ok(Math.abs(a.dmg-24*1.1**2)<.001);
   t.showEvolution();assert.equal(t.game.paused,true);assert.equal(new Set(t.pick.upgrades.map(o=>o.id)).size,3);
   t.confirmPick(0);assert.equal(t.evolutions.length,2);assert.equal(t.game.paused,true);
   t.confirmPick(0);t.confirmPick(0);assert.equal(t.evolutions.length,0);assert.equal(t.game.paused,false);
@@ -111,7 +114,7 @@ test('brado, invocações, raízes e cura têm os efeitos previstos',()=>{
   const enemy=new t.Skeleton('Warrior',1);enemy.spawning=false;enemy.pos.set(0,0,2);
   for(const h of t.heroes())h.pos.set(0,0,0);
   const cast=h=>{assert.equal(h.useSkill(enemy),true,h.cfg.id);h.pendingHit.effect();h.pendingHit=null};
-  cast(king);assert.equal(druid.royalT,5);assert.equal(druid.royalBonus,.25);
+  cast(king);assert.equal(druid.royalT,5);assert.equal(druid.royalBonus,.2);
   cast(necro);assert.equal(t.units.filter(u=>u.summoner===necro).length,2);assert.equal(t.heroes().length,3);
   cast(necro);assert.equal(t.units.filter(u=>u.summoner===necro).length,2);
   const summon=t.units.find(u=>u.summoner===necro);summon.update(9);assert.ok(!t.units.includes(summon));
@@ -123,13 +126,13 @@ test('machado glacial causa dano e lentidão na área',()=>{
   const a=new t.Skeleton('Warrior',1),b=new t.Skeleton('Warrior',1);
   a.spawning=b.spawning=false;a.pos.set(0,0,3);b.pos.set(1,0,3);
   assert.equal(h.useSkill(a),true);h.pendingHit.effect();h.pendingHit=null;
-  context.updateBolts(.25);assert.equal(a.hp,48);assert.equal(b.hp,48);assert.equal(a.slowT,3);assert.equal(b.slowT,3);
+  context.updateBolts(.25);assert.equal(a.hp,a.maxHp-29);assert.equal(b.hp,b.maxHp-29);assert.equal(a.slowT,3);assert.equal(b.slowT,3);
 });
 test('cleave frontal limita raio, dano secundário e recuo',()=>{
   clear();const h=new t.Hero(cfg('crusher'));h.pos.set(0,0,0);h.root.rotation.y=0;
   const enemy=(x,z)=>{const u=new t.Skeleton('Minion',1);u.spawning=false;u.pos.set(x,0,z);u.hp=1000;return u};
   const a=enemy(0,1.8),b=enemy(1,1.5),back=enemy(0,-1.8),far=enemy(0,2.3);
-  t.damageCleave(h,a);assert.equal(a.hp,966);assert.equal(b.hp,979.6);assert.equal(back.hp,1000);assert.equal(far.hp,1000);
+  t.damageCleave(h,a);assert.equal(a.hp,969);assert.equal(b.hp,981.4);assert.equal(back.hp,1000);assert.equal(far.hp,1000);
   assert.ok(b.vel.length()<a.vel.length());
 });
 test('fim de jogo mantém animação e impede dano e golpes pendentes',()=>{
@@ -137,9 +140,32 @@ test('fim de jogo mantém animação e impede dano e golpes pendentes',()=>{
   const enemy=new t.Skeleton('Minion',1),hp=enemy.hp;enemy.takeDamage(100,h.pos);assert.equal(enemy.hp,hp);
   let hit=false;enemy.pendingHit={t:0,effect:()=>{hit=true}};t.frame();assert.ok(h.mixer.time>before);assert.equal(hit,false);
 });
-test('reinício limpa invocados, fila, efeitos e reabre seleção',()=>{
+test('reinício limpa invocados, fila, efeitos e volta à tela de dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
-  assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
+  assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
+  assert.equal(t.pick.cards.length,4);
+  let next;context.setTimeout=(fn,ms)=>{if(ms===550)next=fn};
+  t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'Difícil');
+  next();assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);
+  context.setTimeout=noop;t.setDifficulty(1);
+});
+test('dificuldade escala esqueletos e ondas; Pesadelo segura o caído uma fase',()=>{
+  clear();t.setDifficulty(0);const easy=new t.Skeleton('Warrior',1).maxHp;
+  t.setDifficulty(3);const hard=new t.Skeleton('Warrior',1);assert.ok(hard.maxHp>easy*1.5&&hard.dmg>11);
+  Object.assign(t.game,{phase:4});t.startPhase();assert.equal(t.game.toSpawn,Math.round(10*t.getDifficulty().count));assert.ok(t.game.toSpawn>10);
+  for(const u of [...t.units])u.remove();
+  const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('pyro'));Object.assign(t.game,{phase:3});b.die();
+  Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);assert.equal(b.dead,true);
+  Object.assign(t.game,{phase:4,state:'fight',toSpawn:0});t.updateGame(.1);assert.equal(b.dead,false);assert.equal(b.hp,b.maxHp*.25);
+  t.setDifficulty(1);
+});
+test('recorde guarda a melhor fase por dificuldade e marca vitória',()=>{
+  clear();context.localStorage.data={};Object.assign(t.game,{start:1,phase:5,kills:40});t.endGame('Derrota',false);
+  assert.ok(elements.get('overlayText').textContent.includes('Novo recorde'));
+  Object.assign(t.game,{over:false,phase:3,kills:90});t.endGame('Derrota',false);assert.equal(t.loadRecords().normal.phase,5);
+  Object.assign(t.game,{over:false,phase:12,kills:200});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.won,true);
+  Object.assign(t.game,{over:false,start:6,phase:12,kills:999});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.kills,200);
+  t.showDifficulty();assert.ok(t.pick.cards[1].innerHTML.includes('Vitória!'));assert.ok(t.pick.cards[0].innerHTML.includes('Sem recorde'));
 });
 test('entrada tardia recebe metade da média de XP e respeita limite de quatro',()=>{
   clear();const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('berserker'));a.xp=300;b.xp=100;
