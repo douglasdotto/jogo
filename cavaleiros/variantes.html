@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aparência das Variantes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe3ff; font-family: 'Fredoka', sans-serif; }
+    canvas { display: block; }
+    #labels { position: absolute; inset: 0; pointer-events: none; }
+    .tag { position: absolute; transform: translate(-50%, 0); padding: 2px 12px; font-size: 14px; font-weight: 700; color: #fff; background: #6b4a3a; border-radius: 999px; border: 2px solid #fff; }
+    #bar { position: absolute; bottom: 14px; width: 100%; display: flex; gap: 10px; justify-content: center; }
+    button { font-family: inherit; background: #ff8a5b; color: #fff; border: 0; border-radius: 999px; padding: 7px 16px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #c4572e; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="labels"></div>
+  <div id="bar">
+    <button data-anim="Idle">Parado</button>
+    <button data-anim="Running_A">Correr</button>
+    <button data-anim="Cheer">Comemorar</button>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+    import { applyLook } from './characters.js';
+    import { LOOKS, LOOK_PREVIEW, WEAPONS } from './looks.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.prepend(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xbfe3ff);
+    const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 9, 17);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0.8, -1);
+    scene.add(new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.9));
+    const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
+    sun.position.set(4, 10, 6);
+    sun.castShadow = true;
+    Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12 });
+    scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), new THREE.MeshLambertMaterial({ color: 0x9ccc4a }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const loader = new GLTFLoader();
+    const assets = {};
+    await Promise.all(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded'].map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+    assets.Skeleton_Quiver = await loader.loadAsync('assets/Skeleton_Quiver.gltf');
+
+    // 4 colunas (classes) x 3 linhas (variantes)
+    const units = LOOK_PREVIEW.map((v, i) => {
+      const col = Math.floor(i / 3), row = i % 3;
+      const model = SkeletonUtils.clone(assets[v.model].scene);
+      model.traverse((o) => { if (WEAPONS[v.model].includes(o.name) && !v.use.includes(o.name)) o.visible = false; });
+      applyLook(model, assets, LOOKS[v.id]);
+      model.position.set((col - 1.5) * 4.2, 0, (row - 1) * 4 - 1);
+      scene.add(model);
+      const mixer = new THREE.AnimationMixer(model);
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.textContent = v.name;
+      document.getElementById('labels').appendChild(tag);
+      return { v, model, mixer, tag, current: null, anims: assets[v.model].animations };
+    });
+
+    function play(u, name) {
+      if (name === 'Idle' && u.v.model === 'Barbarian') name = '2H_Melee_Idle';
+      const a = u.mixer.clipAction(THREE.AnimationClip.findByName(u.anims, name));
+      a.reset().play();
+      if (u.current && u.current !== a) a.crossFadeFrom(u.current, 0.25, false);
+      u.current = a;
+    }
+    units.forEach((u) => play(u, 'Idle'));
+    document.querySelectorAll('#bar button').forEach((b) => (b.onclick = () => units.forEach((u) => play(u, b.dataset.anim))));
+
+    const clock = new THREE.Clock();
+    const p = new THREE.Vector3();
+    renderer.setAnimationLoop(() => {
+      const dt = clock.getDelta(), t = clock.elapsedTime;
+      for (const u of units) {
+        u.mixer.update(dt);
+        u.model.traverse((o) => {
+          if (o.userData.spin) { o.rotation.y += dt * 2; o.position.y = 0.1 + Math.sin(t * 3) * 0.05; }
+          if (o.userData.orbit) o.rotation.y += dt * 1.5;
+          if (o.userData.flicker) o.scale.y = 1 + Math.sin(t * 14) * 0.15;
+        });
+        p.copy(u.model.position).setY(-0.1).project(camera);
+        u.tag.style.left = `${(p.x * 0.5 + 0.5) * innerWidth}px`;
+        u.tag.style.top = `${(-p.y * 0.5 + 0.5) * innerHeight}px`;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>

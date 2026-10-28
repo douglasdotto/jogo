@@ -69,16 +69,29 @@ const clean = (name) => name.replace(/\./g, '');
 
 export function buildCharacter(assets, r) {
   const root = SkeletonUtils.clone(assets[r.base].scene);
+  applyLook(root, assets, r);
+  return { scene: root, animations: assets[r.base].animations };
+}
+
+// aplica uma receita (sem "base") num modelo já clonado: usado pelos bonecos e pelas aparências das variantes
+export function applyLook(root, assets, r) {
   let skeleton = null, rig = null;
   root.traverse((o) => { if (o.isSkinnedMesh && !skeleton) { skeleton = o.skeleton; rig = o.parent; } });
 
   for (const name of r.hide || []) root.getObjectByName(name)?.removeFromParent();
 
-  for (const { from, part } of r.add || []) {
+  for (const { from, part, bone, pos, rot, scale } of r.add || []) {
     const src = assets[from].scene.getObjectByName(part);
     const copy = src.clone(true);
     let skinned = false;
     copy.traverse((o) => { if (o.isSkinnedMesh) { o.bind(skeleton, o.bindMatrix); skinned = true; } });
+    if (bone) {   // peça avulsa (ex.: aljava) num osso escolhido, com posição própria
+      copy.position.fromArray(pos || [0, 0, 0]);
+      copy.rotation.fromArray(rot || [0, 0, 0]);
+      copy.scale.setScalar(scale || 1);
+      root.getObjectByName(clean(bone)).add(copy);
+      continue;
+    }
     // peça de pele vai junto do corpo; peça rígida vai no osso de mesmo nome (cabeça, peito, mão)
     (skinned ? rig : root.getObjectByName(clean(src.parent.name))).add(copy);
   }
@@ -91,10 +104,10 @@ export function buildCharacter(assets, r) {
     });
   }
 
-  for (const extra of r.extras || []) root.getObjectByName(clean(extra.bone))?.add(ACCESSORIES[extra.type]());
+  for (const extra of r.extras || []) root.getObjectByName(clean(extra.bone))?.add(ACCESSORIES[extra.type](extra));
 
   root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-  return { scene: root, animations: assets[r.base].animations };
+  return root;
 }
 
 // ---------- cores: recolore o atlas de cores do modelo ----------
@@ -226,12 +239,106 @@ const ACCESSORIES = {
     g.rotation.x = -0.15;
     return g;
   },
-  orb() {
+  orb({ color = 0x7dffa0, glow = 0x2fbf5a } = {}) {
     const g = new THREE.Group();
-    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), new THREE.MeshLambertMaterial({ color: 0x7dffa0, emissive: 0x2fbf5a, emissiveIntensity: 1 }));
+    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), new THREE.MeshLambertMaterial({ color, emissive: glow, emissiveIntensity: 1 }));
     orb.position.set(0, 0.1, 0.15);
     orb.userData.spin = true;
     g.add(orb);
+    return g;
+  },
+  // pena/crista em cima do elmo
+  plume({ color = 0xffffff, tall = false, y = 0.95 } = {}) {
+    const g = new THREE.Group();
+    const mat = lambert(color);
+    const n = tall ? 5 : 3;
+    for (let i = 0; i < n; i++) {
+      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), mat);
+      f.scale.set(0.6, 1.6, 1.3);
+      f.position.set(0, y + Math.sin((i / (n - 1 || 1)) * Math.PI) * 0.15, -0.15 + i * (tall ? 0.12 : 0.1));
+      f.rotation.x = -0.4 + i * 0.25;
+      g.add(f);
+    }
+    return g;
+  },
+  // ombreiras redondas (no osso do peito)
+  pauldrons({ color = 0xb0b8c4, spikes = false } = {}) {
+    const g = new THREE.Group();
+    for (const s of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), lambert(color));
+      p.position.set(s * 0.42, 0.38, 0);
+      p.rotation.z = -s * 0.5;
+      g.add(p);
+      if (spikes) {
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 5), lambert(0xe8e0c8));
+        sp.position.set(s * 0.5, 0.55, 0);
+        sp.rotation.z = -s * 0.6;
+        g.add(sp);
+      }
+    }
+    return g;
+  },
+  // cachecol no pescoço (osso da cabeça, embaixo)
+  scarf({ color = 0xd94f4f } = {}) {
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.08, 6, 14), lambert(color));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.05;
+    g.add(ring);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.05), lambert(color));
+    tail.position.set(0.12, -0.12, -0.26);
+    tail.rotation.set(0.3, 0, 0.25);
+    g.add(tail);
+    return g;
+  },
+  // coroa de cristais de gelo
+  iceCrown({ radius = 0.36, y = 0.95, n = 6 } = {}) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: 0xc8f4ff, emissive: 0x3aa8d8, emissiveIntensity: 0.5, flatShading: true });
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), mat);
+      c.scale.set(0.7, 2 + (i % 2), 0.7);
+      c.position.set(Math.cos(a) * radius, y, Math.sin(a) * radius);
+      c.rotation.z = Math.cos(a) * 0.3;
+      c.rotation.x = -Math.sin(a) * 0.3;
+      g.add(c);
+    }
+    return g;
+  },
+  // estrelinhas girando em volta da cabeça
+  stars({ color = 0xffe066 } = {}) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.6, flatShading: true });
+    for (let i = 0; i < 3; i++) {
+      const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.07), mat);
+      const a = (i / 3) * Math.PI * 2;
+      s.position.set(Math.cos(a) * 0.6, 1.25, Math.sin(a) * 0.6);
+      g.add(s);
+    }
+    g.userData.orbit = true;
+    return g;
+  },
+  // pena atrás da orelha
+  feather({ color = 0xff8a3d } = {}) {
+    const g = new THREE.Group();
+    const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), lambert(color));
+    f.scale.set(0.5, 2.6, 0.9);
+    f.position.set(0.42, 0.75, -0.1);
+    f.rotation.z = -0.6;
+    g.add(f);
+    return g;
+  },
+  // chaminhas saindo do chapéu
+  flames({ y = 1.55 } = {}) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffb03a, emissive: 0xff5a1a, emissiveIntensity: 0.8, flatShading: true });
+    for (const [x, h] of [[-0.12, 0.25], [0, 0.35], [0.12, 0.22]]) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.07, h, 5), mat);
+      f.position.set(x, y + h / 2, -0.05);
+      g.add(f);
+    }
+    g.userData.flicker = true;
     return g;
   },
 };

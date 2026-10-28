@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { createWorld } from './world.js';
+import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -352,6 +353,7 @@ class Unit {
     this.busy = dur * 0.9;
     this.attackTimer = this.cooldown;
     this.pendingHit = { target, t: dur * 0.4 };
+    if (this.stats) this.stats.ataques++;
     if (!this.ranged) this.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(2.2));   // passo à frente
   }
 
@@ -363,10 +365,14 @@ class Unit {
         this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
         this.pendingHit = null;
         popText(this.pos, 'Esquiva!', 'heal');
+        this.stats.esquivas++;
         return;
       }
       if (this.guardT > 0) n *= 0.6;
     }
+    const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
+    if (this.stats) this.stats.recebido += real;
+    if (owner?.stats) { owner.stats.dano += real; if (critical) owner.stats.criticos++; }
     this.hp -= n;
     if (owner) this.lastHit = owner;
     this.flash = 0.14;
@@ -389,6 +395,7 @@ class Unit {
     this.bar.style.display = 'none';
     if (this.team === 'skeleton') {
       game.kills++;
+      if (this.lastHit?.stats) this.lastHit.stats.abates++;
       for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
     }
     if (this.aura) this.aura.visible = false;
@@ -411,6 +418,7 @@ class Unit {
     if (!this.moving) this.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
     this.moving = false;
     if (!this.dead) this.pos.addScaledVector(this.vel, dt);
+    if (this.stats && !this.dead) this.stats.distancia += this.vel.length() * dt;
     // "amassa" ao levar golpe e aparece com um pop (escala elástica)
     let sx = 1, sy = 1;
     if (this.squashT > 0) {
@@ -655,6 +663,7 @@ class Hero extends Unit {
     this.halo.position.y = 2.5;
     this.halo.visible = false;
     this.root.add(this.aura, this.halo);
+    this.stats = newStats();
     this.levelLabel = document.createElement('span');
     this.levelLabel.textContent = 'Nv1';
     this.bar.appendChild(this.levelLabel);
@@ -704,6 +713,7 @@ class Hero extends Unit {
         for (const h of friends) if (!h.dead && h.pos.distanceTo(this.pos) <= 5 + level) {
           const heal = Math.min(h.maxHp - h.hp, 32 + level * 10);
           h.hp += heal;
+          this.stats.cura += heal;
           popText(h.pos, '+' + Math.round(heal), 'heal');
         }
         ring(this.pos, 5 + level, 0x6eea90, 1);
@@ -760,6 +770,7 @@ class Hero extends Unit {
     this.busy = this.once(anim, 1.4);
     this.pendingHit = { target, effect, t: this.busy * 0.4 };
     this.skillTimer = (id === 'paladin' ? 8 : id === 'guardian' ? 9 : 6) - (level - 1) * 0.7;
+    this.stats.habilidades++;
     return true;
   }
 
@@ -789,6 +800,7 @@ class Hero extends Unit {
     this.dodgeTimer -= dt;
     this.guardT -= dt;
     this.age += dt;
+    if (!this.dead && game.state === 'fight') this.stats.tempo += dt;   // para o dano por segundo
     const rage = !this.dead && this.cfg.id === 'berserker' && this.hp < this.maxHp * 0.5;
     this.cooldown = this.cfg.cooldown / (1 + (this.level - 1) * 0.15) / (rage ? 1.6 + (this.level - 1) * 0.15 : 1);
     this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0);
@@ -924,6 +936,8 @@ function startGame() {
   }
   while (fx.length) { const m = fx.pop(); scene.remove(m); m.material.dispose(); }
   bars.querySelectorAll('.pop').forEach((el) => el.remove());
+  closeHeroPanel();
+  $('overlayStats').innerHTML = '';
   while (units.length) units[0].remove();
   Object.assign(game, { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(1), over: false });
   const start = world.pointAt(game.guideS);
@@ -1011,7 +1025,9 @@ function updateGame(dt) {
 
 function endGame(text) {
   game.over = true;
+  closeHeroPanel();
   $('overlayText').textContent = text;
+  $('overlayStats').innerHTML = summaryHTML(heroes());
   $('overlayBtn').hidden = false;
   $('overlay').classList.remove('hidden');
 }
@@ -1053,11 +1069,35 @@ function frame() {
   sun.position.set(follow.x + 14, 30, follow.z + 12);
   sun.target.position.copy(follow);
   world.update(real);
+  const sel = panelHero();   // anel embaixo do herói com o cartão aberto
+  selectRing.visible = !!sel && !sel.dead && units.includes(sel);
+  if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
+  tickHeroPanel(real);
   controls.update();
   renderer.render(scene, camera);
   updateBars();
   requestAnimationFrame(frame);
 }
+
+// clicar num herói abre o cartão dele (clique sem arrastar, para não brigar com o giro da câmera)
+const selectRing = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 6), new THREE.MeshBasicMaterial({ color: 0xffe066, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false }));
+selectRing.rotation.x = -Math.PI / 2;
+selectRing.visible = false;
+scene.add(selectRing);
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', (e) => (downAt = [e.clientX, e.clientY]));
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+  let best = null, bestD = 50;   // herói mais perto do clique na tela, até 50 px
+  for (const h of heroes()) {
+    tmp.copy(h.pos).setY(h.pos.y + 1).project(camera);
+    const d = Math.hypot((tmp.x * 0.5 + 0.5) * innerWidth - e.clientX, (-tmp.y * 0.5 + 0.5) * innerHeight - e.clientY);
+    if (d < bestD) { bestD = d; best = h; }
+  }
+  if (best) openHeroPanel(best, XP_LEVELS);
+  else if (panelHero()) closeHeroPanel();
+});
+addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHeroPanel(); });
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;

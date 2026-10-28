@@ -9,11 +9,23 @@
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2228; font-family: 'Fredoka', system-ui, sans-serif; color: #f1ecdc; }
     canvas { display: block; }
-    #hud { position: absolute; top: 12px; left: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .chip { background: #fff6e0; color: #6b3f17; padding: 6px 14px; border-radius: 999px; font-size: 16px; font-weight: 500; border: 3px solid #e8c88f; box-shadow: 0 3px 0 rgba(107, 63, 23, .35); }
-    button { font-family: inherit; background: #ff8a5b; color: #fff; border: 0; border-radius: 999px; padding: 7px 16px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #c4572e; transition: transform .1s; }
-    button:hover { background: #ff9d73; transform: translateY(-1px); }
-    button:active { transform: translateY(3px); box-shadow: 0 1px 0 #c4572e; }
+    /* ---------- interface fofa e medieval: pergaminho, madeira e ouro ---------- */
+    :root { --wood: #8a5a2e; --wood-dark: #4a2c1a; --gold: #f2c94c; --parch: #fff3d6; --parch-dark: #f0d9a8; }
+    #hud { position: absolute; top: 12px; left: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .chip { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px 6px 12px; font-size: 16px; font-weight: 700; color: var(--wood-dark);
+      background: linear-gradient(var(--parch), var(--parch-dark)); border: 3px solid var(--wood); border-radius: 12px;
+      box-shadow: inset 0 0 0 2px #fffaf0, 0 4px 0 var(--wood-dark), 0 6px 10px rgba(0, 0, 0, .25); }
+    .chip::after { content: ''; position: absolute; inset: 3px; pointer-events: none; border-radius: 8px;
+      background: radial-gradient(circle at 4px 4px, var(--gold) 0 2.5px, transparent 3px), radial-gradient(circle at calc(100% - 4px) 4px, var(--gold) 0 2.5px, transparent 3px),
+        radial-gradient(circle at 4px calc(100% - 4px), var(--gold) 0 2.5px, transparent 3px), radial-gradient(circle at calc(100% - 4px) calc(100% - 4px), var(--gold) 0 2.5px, transparent 3px); }
+    #wave::before, #left::before, #kills::before, #party::before { font-size: 17px; color: #b3261e; }
+    #wave::before { content: '\2691\FE0E'; } #left::before { content: '\2620\FE0E'; color: #5a4a6a; }
+    #kills::before { content: '\2694\FE0E'; color: #6b3f17; } #party::before { content: '\265B\FE0E'; color: #d19a1c; }
+    button { position: relative; font-family: inherit; color: var(--parch); padding: 7px 18px 8px; font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: .3px;
+      background: linear-gradient(#b07a43, var(--wood) 55%, #73461f); border: 3px solid var(--gold); border-radius: 14px;
+      text-shadow: 0 2px 0 var(--wood-dark); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .25), 0 4px 0 var(--wood-dark), 0 6px 10px rgba(0, 0, 0, .3); transition: transform .1s, filter .15s; }
+    button:hover { filter: brightness(1.12); transform: translateY(-1px); }
+    button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2), 0 1px 0 var(--wood-dark); }
     /* números de dano e corações */
     .pop { position: absolute; transform: translate(-50%, -50%); font: 700 24px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 5px #d1342b; paint-order: stroke fill; animation: popUp .9s ease-out forwards; }
     .pop.hurt { color: #ffe1e1; -webkit-text-stroke-color: #8a1c1c; font-size: 20px; }
@@ -59,7 +71,8 @@
     .card.chosen { animation: chosen .5s forwards; }
     .card.gone { opacity: 0; transform: scale(.8) translateY(30px); }
     .burst { position: absolute; left: 50%; top: 40%; font-size: 26px; color: #ff5d8f; pointer-events: none; animation: burst .8s ease-out forwards; }
-    #pickHint { padding: 6px 18px; font-size: 15px; font-weight: 500; color: #9a5a7a; background: #fff; border-radius: 999px; animation: breathe 1.6s ease-in-out infinite; }
+    #pickHint { padding: 6px 18px; font-size: 15px; font-weight: 700; color: var(--wood-dark); background: linear-gradient(var(--parch), var(--parch-dark));
+      border: 3px solid var(--wood); border-radius: 12px; box-shadow: 0 3px 0 var(--wood-dark); animation: breathe 1.6s ease-in-out infinite; }
     @keyframes rise { from { opacity: 0; transform: translateY(90px) scale(.6); } }
     @keyframes drop { from { opacity: 0; transform: translateY(-70px) scale(1.4); } }
     @keyframes wobble { 0%, 100% { rotate: -1deg; } 50% { rotate: 1deg; } }
@@ -69,14 +82,57 @@
     @keyframes chosen { 40% { transform: translateY(-30px) scale(1.18) rotate(3deg); } 100% { transform: translateY(-20px) scale(1.1); } }
     @keyframes burst { from { transform: translate(-50%, -50%) scale(.3); opacity: 1; } to { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1.2); opacity: 0; } }
     .hp.boss { width: 90px; height: 8px; margin-left: -45px; }
-    #banner { position: absolute; top: 16%; width: 100%; text-align: center; font: 700 56px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 9px #6b3f17; paint-order: stroke fill;
-      text-shadow: 0 6px 0 rgba(0, 0, 0, .25); pointer-events: none; opacity: 0; transition: opacity .4s; }
+    /* faixa de fita vermelha com pontas recortadas */
+    #banner { position: absolute; top: 15%; left: 50%; translate: -50% 0; width: max-content; max-width: 90vw; padding: 10px 70px 16px; text-align: center;
+      font: 700 48px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 8px #6b1410; paint-order: stroke fill;
+      background: linear-gradient(#e0473b, #b3261e 60%, #8a1c16); clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+      filter: drop-shadow(0 6px 0 rgba(0, 0, 0, .25)); pointer-events: none; opacity: 0; transition: opacity .4s; }
     #banner.show { animation: bannerPop .5s cubic-bezier(.2, 1.8, .4, 1); }
     @keyframes bannerPop { from { transform: scale(.3) rotate(-6deg); } }
-    #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 16px; align-items: center; justify-content: center; background: rgba(10, 10, 12, .65); font-size: 22px; }
+    /* carregando / derrota / vitória: pergaminho enrolado com bastões de madeira */
+    #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 18px; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(20, 14, 30, .45), rgba(20, 14, 30, .8)); font-size: 22px; }
+    #overlayText { position: relative; max-width: 460px; padding: 26px 40px; text-align: center; font: 700 24px 'Fredoka', sans-serif; line-height: 1.35; color: var(--wood-dark);
+      background: linear-gradient(90deg, #ead09a, var(--parch) 12%, var(--parch) 88%, #ead09a); border-radius: 6px; box-shadow: 0 10px 24px rgba(0, 0, 0, .4); }
+    #overlayText::before, #overlayText::after { content: ''; position: absolute; left: -14px; right: -14px; height: 16px; border-radius: 8px;
+      background: linear-gradient(#b07a43, var(--wood) 50%, #5a3416); border: 2px solid var(--gold); }
+    #overlayText::before { top: -10px; } #overlayText::after { bottom: -10px; }
+    #overlay button { font-size: 20px; padding: 10px 26px 12px; }
+    /* resumo da partida (tabela no fim do jogo) */
+    #overlayStats:empty { display: none; }
+    #overlayStats table { border-collapse: separate; border-spacing: 0; font: 600 15px 'Fredoka', sans-serif; color: var(--wood-dark);
+      background: linear-gradient(var(--parch), var(--parch-dark)); border: 3px solid var(--wood); border-radius: 14px; overflow: hidden; box-shadow: 0 4px 0 var(--wood-dark); }
+    #overlayStats th { padding: 7px 12px; color: var(--parch); background: var(--wood); text-shadow: 0 1px 0 var(--wood-dark); }
+    #overlayStats td { padding: 5px 12px; text-align: center; border-top: 1px dashed #d8b980; }
+    #overlayStats td:first-child { display: flex; align-items: center; gap: 8px; text-align: left; white-space: nowrap; }
+    #overlayStats img { width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 2px solid var(--wood); }
+    #overlayStats td.top { color: #b3261e; font-weight: 700; }
+    #overlayStats .mvp { padding: 1px 7px; font-size: 12px; color: #6b4a00; background: var(--gold); border-radius: 99px; }
+    /* cartão do herói (abre ao clicar nele) */
+    #heroPanel { position: absolute; top: 64px; right: 14px; width: 270px; max-height: calc(100vh - 90px); overflow-y: auto; padding: 16px 16px 12px; box-sizing: border-box;
+      font-size: 14px; color: var(--wood-dark); background: linear-gradient(var(--parch), var(--parch-dark)); border: 4px solid var(--wood); border-radius: 18px;
+      box-shadow: inset 0 0 0 3px #fffaf0, inset 0 0 0 5px var(--cd, var(--gold)), 0 6px 0 var(--wood-dark), 0 12px 24px rgba(0, 0, 0, .35); animation: panelIn .3s cubic-bezier(.2, 1.6, .4, 1); }
+    #heroPanel.hidden { display: none; }
+    #heroPanel .close { position: absolute; top: 8px; right: 8px; padding: 2px 9px 4px; font-size: 14px; }
+    #heroPanel .hp-top { display: flex; gap: 12px; align-items: center; }
+    #heroPanel .portrait { flex: none; width: 78px; height: 78px; border-radius: 50%; overflow: hidden; border: 4px solid #fff; box-shadow: 0 0 0 3px var(--cd);
+      background: radial-gradient(circle at 50% 40%, #fff, var(--c) 75%); }
+    #heroPanel .portrait img { width: 100%; height: 100%; }
+    #heroPanel .ribbon { display: inline-block; padding: 2px 14px 4px; font: 700 18px 'Fredoka', sans-serif; color: #fff; background: var(--cd); border-radius: 999px; }
+    #heroPanel .lvl { margin: 4px 0 3px; font-weight: 700; }
+    #heroPanel .xp { height: 8px; background: #e8d4a8; border: 2px solid var(--wood); border-radius: 99px; overflow: hidden; }
+    #heroPanel .xp i { display: block; height: 100%; background: linear-gradient(90deg, #ffe066, #f2a93b); }
+    #heroPanel .xp-txt { margin-top: 2px; font-size: 12px; color: #8a6a4a; }
+    #heroPanel .ability { margin-top: 10px; padding: 7px 10px; font-size: 13px; background: #fffaf0; border: 2px dashed var(--c); border-radius: 10px; }
+    #heroPanel .ability b { display: block; color: var(--cd); }
+    #heroPanel h4 { margin: 12px 0 4px; font: 700 15px 'MedievalSharp', serif; color: #8a3a1e; border-bottom: 2px solid #e2c48a; }
+    #heroPanel dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 0; }
+    #heroPanel dt { color: #7a5a3a; } #heroPanel dd { margin: 0; font-weight: 700; text-align: right; }
+    @keyframes panelIn { from { opacity: 0; transform: translateX(40px) scale(.9); } }
     #overlay.hidden { display: none; }
     #bars { position: absolute; inset: 0; pointer-events: none; }
-    .hp { position: absolute; width: 40px; height: 6px; margin-left: -22px; background: rgba(60, 30, 20, .55); border: 2px solid #fff; border-radius: 99px; overflow: hidden; }
+    .hp { position: absolute; width: 40px; height: 6px; margin-left: -22px; background: rgba(60, 30, 20, .6); border: 2px solid var(--parch); border-radius: 99px; overflow: hidden;
+      box-shadow: 0 0 0 1.5px var(--wood-dark); }
     .hp > i { display: block; height: 100%; background: #ff5d6c; border-radius: 99px; }
     .hp.ally > i { background: #5fd35f; }
     .hp.ally { overflow: visible; }
@@ -129,7 +185,8 @@
     <div id="pickList"></div>
     <span id="pickHint">← → classe · ↑ ↓ variante · Enter confirmar · 1–4 escolher</span>
   </div>
-  <div id="overlay"><span id="overlayText">Carregando modelos...</span><button id="overlayBtn" hidden>Jogar de novo</button></div>
+  <aside id="heroPanel" class="hidden"></aside>
+  <div id="overlay"><span id="overlayText">Carregando modelos...</span><div id="overlayStats"></div><button id="overlayBtn" hidden>Jogar de novo</button></div>
   <script type="module" src="main.js"></script>
 </body>
 </html>
