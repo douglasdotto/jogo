@@ -9,6 +9,7 @@ const LABELS = [
 ];
 const fmt = (k, v) => (k === 'distancia' ? `${Math.round(v)} m` : Math.round(v).toLocaleString('pt-BR'));
 const dps = (s) => (s.tempo > 1 ? s.dano / s.tempo : 0);
+const portraitOf = (h) => h.cfg.portraits?.[h.level - 1] || h.cfg.portrait;   // retrato do nível atual
 
 // ---------- cartão do herói ----------
 const panel = () => document.getElementById('heroPanel');
@@ -55,7 +56,7 @@ function renderHeroPanel() {
   el.innerHTML = `
     <button class="close" aria-label="Fechar">✕</button>
     <div class="hp-top">
-      <div class="portrait"><img src="${c.portrait}" alt=""></div>
+      <div class="portrait"><img src="${portraitOf(h)}" alt=""></div>
       <div>
         <div class="ribbon">${c.names ? c.names[h.level - 1] : c.name}</div>
         <div class="lvl">Nível ${h.level}${h.dead ? ' · caído' : ''}</div>
@@ -78,7 +79,7 @@ export function summaryHTML(heroes) {
   const cols = [['dano', 'Dano'], ['abates', 'Abates'], ['recebido', 'Recebido'], ['cura', 'Cura']];
   const mvp = heroes.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a));
   const rows = heroes.map((h) => `<tr>
-      <td><img src="${h.cfg.portrait}" alt="">${h.cfg.names ? h.cfg.names[h.level - 1] : h.cfg.name}${h === mvp ? ' <span class="mvp">♛ MVP</span>' : ''}</td>
+      <td><img src="${portraitOf(h)}" alt="">${h.cfg.names ? h.cfg.names[h.level - 1] : h.cfg.name}${h === mvp ? ' <span class="mvp">♛ MVP</span>' : ''}</td>
       ${cols.map(([k]) => `<td class="${h.stats[k] === best(k) && best(k) > 0 ? 'top' : ''}">${fmt(k, h.stats[k])}</td>`).join('')}
     </tr>`).join('');
   return `<table><tr><th>Herói</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr>${rows}</table>`;
