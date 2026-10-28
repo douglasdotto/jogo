@@ -496,7 +496,7 @@ function dropSkull(at, dmg, owner) {
   for (const x of [-0.11, 0.11]) skull.add(piece(GEO.ball, MAT.dark, [x, 0.03, 0.26], 0.08));
   skull.position.copy(at);
   G.scene.add(skull);
-  track({ t: 0.35, life: 0.35, meshes: [skull], step(f) { skull.position.y = at.y + 0.4 + 6.6 * Math.max(0, f.t / f.life); skull.rotation.x += 0.3; },
+  track({ owner, t: 0.35, life: 0.35, meshes: [skull], step(f) { skull.position.y = at.y + 0.4 + 6.6 * Math.max(0, f.t / f.life); skull.rotation.x += 0.3; },
     end: () => blast(at, 1.5, dmg, 0xb050ff, { owner }) });
 }
 

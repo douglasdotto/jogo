@@ -94,7 +94,7 @@ vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts};',context);
 vm.runInContext('t.world=world;',context);
 const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
@@ -389,6 +389,24 @@ test('habilidades principais dos quatro novos heróis têm efeitos funcionais',(
   assert.equal(chronist.useSkill(enemy,false,true),true);chronist.pendingHit.effect();assert.ok(enemy.rootT>0);
   clear();
 });
+test('virotes perfurantes reutilizam vetores e acertam vários inimigos no quadro',()=>{
+  clear();t.bolts.length=0;
+  const shooter=new t.Hero(cfg('crossbow'));shooter.pos.set(0,0,0);shooter.dmg=120;
+  const first=new t.Skeleton('Minion',1),second=new t.Skeleton('Minion',1);
+  first.spawning=second.spawning=false;first.pos.set(0,0,-1);second.pos.set(0,0,-2);first.hp=second.hp=10000;
+  t.frameTargetContext.skeletons.length=0;t.frameTargetContext.skeletons.push(first,second);
+  t.fireBolt(shooter,first,'crossbow');t.fireBolt(shooter,first,'crossbow');
+  const OriginalVector3=context.THREE.Vector3;let allocations=0;
+  const originalFilter=t.units.filter;let skeletonScans=0;
+  context.THREE.Vector3=class CountedVector3 extends OriginalVector3 { constructor(...args){super(...args);allocations++;} };
+  t.units.filter=function(predicate,...args){if(String(predicate).includes("'skeleton'"))skeletonScans++;return originalFilter.call(this,predicate,...args);};
+  const before=[first.hp,second.hp];
+  try { t.updateBolts(.15); } finally { context.THREE.Vector3=OriginalVector3;t.units.filter=originalFilter; }
+  assert.ok(first.hp<before[0]&&second.hp<before[1],'o mesmo virote deve atravessar os dois alvos');
+  assert.equal(allocations,0,'a atualização de virotes existentes não deve alocar vetores');
+  assert.equal(skeletonScans,0,'o quadro com snapshot pronto não deve reconstruir a lista de inimigos');
+  t.bolts.length=0;clear();t.frameTargetContext.skeletons.length=0;
+});
 test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
   clear();const b=new t.Hero(cfg('berserker')),a=new t.Hero(cfg('assassin'));b.pos.set(0,0,0);a.pos.set(3,0,0);
   const e=new t.Skeleton('Warrior',1);e.spawning=false;e.pos.set(0,0,2);e.hp=1000;
@@ -500,11 +518,13 @@ test('Druida não gasta habilidade manual sem aliado ferido ou inimigo ao alcanc
 });
 test('dica pós-derrota usa o objetivo e o estado real da missão',()=>{
   const tip=mission=>context.buildBattleReport({won:false,mission}).find(item=>item.id==='next-try').text;
-  assert.match(tip({goal:{type:'escort'}}),/aldeão ficou exposto/);
+  assert.match(tip({goal:{type:'escort'},villagerDown:true}),/aldeão caiu/);
+  assert.match(tip({goal:{type:'escort'},villagerDown:false}),/grupo caiu antes de concluir a escolta/);
   assert.match(tip({goal:{type:'nofall'}}),/ninguém caia/);
   assert.match(tip({goal:{type:'timer',time:240},time:241}),/limite de tempo acabou/);
   assert.match(tip({goal:{type:'totems',count:3},totemsDown:1}),/Faltaram 2 totens/);
-  assert.match(tip({goal:{type:'boss'},bossDown:false}),/chefe surgir/);
+  assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:false,phase:5}),/antes da estreia do chefe.*fase 6/);
+  assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:true}),/chefe ainda está ativo/);
   assert.match(tip({goal:{type:'survive',time:90},surviveRemaining:12.1}),/Faltavam 13 s/);
 });
 test('dica de vitória orienta a próxima arena e a busca por estrelas',()=>{
@@ -517,11 +537,21 @@ test('dica de vitória orienta a próxima arena e a busca por estrelas',()=>{
 });
 test('resultado da campanha encaminha o objetivo para a dica pós-batalha',()=>{
   clear();const previousSummary=context.summaryHTML;let report;
-  context.summaryHTML=(_,value)=>{report=value;return '';};
-  t.game.test=true;t.game.roster=[];t.game.mission=t.MISSIONS.find(m=>m.id==='ponte');
-  t.endGame('O aldeão caiu! Proteja-o até o fim.',false);
-  assert.match(report.find(item=>item.id==='next-try').text,/aldeão ficou exposto/);
-  context.summaryHTML=previousSummary;clear();
+  try {
+    context.summaryHTML=(_,value)=>{report=value;return '';};
+    t.game.test=true;t.game.roster=[];t.game.mission=t.MISSIONS.find(m=>m.id==='ponte');t.game.villager={dead:true};
+    t.endGame('O aldeão caiu! Proteja-o até o fim.',false);
+    assert.match(report.find(item=>item.id==='next-try').text,/aldeão caiu/);
+
+    clear();t.game.test=true;t.game.roster=[];t.game.phase=5;t.game.bossSeen=false;t.game.mission=t.MISSIONS.find(m=>m.goal.type==='boss');
+    t.endGame('Os esqueletos venceram.',false);
+    assert.match(report.find(item=>item.id==='next-try').text,/fase 6/);
+    assert.equal(report.find(item=>item.id==='next-try').text.includes('chefe surgir'),false);
+
+    clear();t.game.test=true;t.game.roster=[];t.game.phase=6;t.game.bossSeen=true;t.game.mission=t.MISSIONS.find(m=>m.goal.type==='boss');
+    t.endGame('Os esqueletos venceram.',false);
+    assert.match(report.find(item=>item.id==='next-try').text,/chefe ainda está ativo/);
+  } finally { context.summaryHTML=previousSummary;clear(); }
 });
 test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
   clear();const previousSummary=context.summaryHTML,previousLocation=context.location,previousStorage={...context.localStorage.data};let report;

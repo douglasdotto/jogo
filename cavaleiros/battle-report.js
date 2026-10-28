@@ -42,7 +42,8 @@ function objectiveTip(mission) {
   const goal = mission?.goal;
   if (!goal) return null;
   if (goal.type === 'escort') {
-    return 'O aldeão ficou exposto. Intercepte inimigos perto dele e leve cura ou provocação para mantê-lo vivo.';
+    if (mission.villagerDown) return 'O aldeão caiu. Intercepte inimigos perto dele e leve cura ou provocação para mantê-lo vivo.';
+    return 'O grupo caiu antes de concluir a escolta. Reforce a linha de frente e leve cura ou provocação para proteger a equipe e o aldeão.';
   }
   if (goal.type === 'nofall') {
     return 'A missão exige que ninguém caia. Guarde cura, escudo ou controle para salvar o aliado que ficar com pouca vida.';
@@ -55,7 +56,12 @@ function objectiveTip(mission) {
     return `Faltaram ${remaining} ${remaining === 1 ? 'totem' : 'totens'}. Destrua cada um cedo: enquanto ficam ativos, invocam reforços.`;
   }
   if (goal.type === 'boss' && !mission.bossDown) {
-    return 'Quando o chefe surgir, concentre o dano nele e saia das áreas marcadas antes do impacto.';
+    if (!mission.bossSeen) {
+      const phase = Math.max(1, number(mission.phase));
+      const bossPhase = Math.max(6, Math.ceil(phase / 6) * 6);
+      return `O grupo caiu antes da estreia do chefe. Sobreviva às ondas até a fase ${bossPhase} e priorize os inimigos de suporte.`;
+    }
+    return 'O chefe ainda está ativo. Concentre o dano nele e saia das áreas marcadas antes do impacto.';
   }
   if (goal.type === 'survive' && number(mission.surviveRemaining) > 0) {
     return `Faltavam ${Math.ceil(number(mission.surviveRemaining))} s para sobreviver. Não persiga longe da formação e guarde controle para grupos perigosos.`;

@@ -345,6 +345,10 @@
 .camp-complete { width: 100%; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(150, 208, 159, .18); border-left: 3px solid #87c891; border-radius: 10px;
   color: #cfe2d2; background: rgba(38, 89, 57, .2); font: 500 12px/1.4 'Fredoka', sans-serif; }
 .camp-complete b { color: #a8dbae; font: 600 12px 'Fredoka', sans-serif; }
+.camp-replay-target { padding: 5px 7px; border: 1px solid rgba(168, 219, 174, .16); border-radius: 7px; color: #e1f2df; background: rgba(126, 185, 131, .1); font-weight: 600; }
+.camp-replay-button { align-self: flex-start; padding: 6px 9px; border: 1px solid rgba(168, 219, 174, .3); border-radius: 7px; color: #e1f2df; font: 600 10px 'Fredoka', sans-serif; background: rgba(126, 185, 131, .16); cursor: pointer; transition: background .15s, border-color .15s; }
+.camp-replay-button:hover { border-color: rgba(168, 219, 174, .58); background: rgba(126, 185, 131, .26); }
+.camp-replay-button:focus-visible { outline: 2px solid #b7edaa; outline-offset: 2px; }
 .camp-tip, .camp-unlock { padding: 10px 12px; gap: 4px; border: 1px solid rgba(146, 205, 238, .12); border-left: 3px solid #66bce3; border-radius: 10px; color: #c8d8e6; background: rgba(8, 25, 43, .32); font: 500 12px/1.4 'Fredoka', sans-serif; }
 .camp-tip b { color: #8bd2f1; font: 600 12px 'Fredoka', sans-serif; }
 .camp-unlock { border-left-color: #e1b55f; color: #f5e8c8; background: rgba(90, 67, 29, .18); }

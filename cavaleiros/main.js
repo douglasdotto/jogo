@@ -1791,19 +1791,25 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   bolts.push(bolt);
 }
 
+const piercingStartScratch = new THREE.Vector3();
+const piercingOffsetScratch = new THREE.Vector3();
+const piercingHeightOffset = new THREE.Vector3(0, 1.3, 0);
+
 function updateBolts(dt) {
   if (dt <= 0) return;
+  let targetSnapshot = null;
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i];
     b.life -= dt;
     if (b.skill || b.look) FX.trail(b, dt);
     const piercing = b.kind === 'crossbow' || b.kind === 'ninja';
     if (piercing) {
-      const step = 18 * dt, start = b.mesh.position.clone();
+      const step = 18 * dt, start = piercingStartScratch.copy(b.mesh.position);
       b.mesh.position.addScaledVector(b.dir, step);
-      for (const s of skeletonsAlive()) {
-        if (s.spawning || b.hit.has(s)) continue;
-        const offset = new THREE.Vector3().copy(s.pos).add(new THREE.Vector3(0, 1.3, 0)).sub(start);
+      if (targetSnapshot === null) targetSnapshot = frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive();
+      for (const s of targetSnapshot) {
+        if (s.dead || s.spawning || b.hit.has(s)) continue;
+        const offset = piercingOffsetScratch.copy(s.pos).add(piercingHeightOffset).sub(start);
         const along = THREE.MathUtils.clamp(offset.dot(b.dir), 0, step);
         if (offset.addScaledVector(b.dir, -along).length() > 0.45 * s.size) continue;
         heroHit(b.owner, s, b.dmg * (b.kind === 'ninja' ? 0.8 : 1) * b.power);
@@ -1836,7 +1842,10 @@ function updateBolts(dt) {
           scene.add(mesh);
           flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.15, t: (1.5 + b.level * 0.5) * b.power, tick: 0 });
         }
-        if (b.kind === 'cryo' || b.kind === 'iceviking') for (const s of skeletonsAlive()) if (s.pos.distanceTo(b.target.pos) <= radius) s.slowT = scaleBranchEffect(b.owner, 'control', 3 + (b.level - 1) * 0.5) * b.power;
+        if (b.kind === 'cryo' || b.kind === 'iceviking') {
+          if (targetSnapshot === null) targetSnapshot = frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive();
+          for (const s of targetSnapshot) if (!s.dead && s.pos.distanceTo(b.target.pos) <= radius) s.slowT = scaleBranchEffect(b.owner, 'control', 3 + (b.level - 1) * 0.5) * b.power;
+        }
         ring(b.target.pos, Math.max(0.5, radius), colors[b.kind] || 0xc999ff);
         if (b.skill || b.look) FX.impact(b.skill ? b.kind : 'basic', b.target.pos, Math.max(0.6, radius), b.look);
         b.life = 0;
@@ -4035,6 +4044,9 @@ function endGame(text, won = false) {
       goal: game.mission.goal,
       time: game.missionT,
       bossDown: game.bossDown,
+      bossSeen: game.bossSeen,
+      phase: game.phase,
+      villagerDown: !!game.villager?.dead,
       totemsDown: game.totemsDown,
       surviveRemaining: game.surviveT,
       stars: won && !game.test ? missionStars : null,

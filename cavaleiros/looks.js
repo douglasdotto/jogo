@@ -88,12 +88,12 @@ export const LOOKS = {
     ],
   },
   // ---------- Ladino ----------
-  assassin: {   // capa longa escura e cachecol vermelho
-    shape: silhouette('Rogue', { torso: 0.9, arms: 0.93, legs: 0.98, height: 1.07, depth: 0.9 }),
+  assassin: {   // duelista sem capuz: rosto à mostra, cachecol vermelho e capa escura
+    shape: silhouette('Rogue', { torso: 0.98, arms: 0.96, legs: 1, height: 1.02, depth: 0.97 }),
     hide: ['Rogue_Cape'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }],
     paint: { ...outfit('Rogue', '#3a2e4a', '#2a2238', 0.75), Mage_Cape: { tint: '#2a2238', amount: 0.85 } },
-    extras: [{ type: 'scarf', bone: 'head', color: 0xd13b4f }, { type: 'mask', bone: 'head', color: 0x241c30 }],
+    extras: [{ type: 'scarf', bone: 'head', color: 0xd13b4f }],
   },
   crossbow: {   // chapéu pontudo de caçador com pena (Robin Hood) e aljava
     shape: silhouette('Rogue', { torso: 1.03, arms: 1.02, legs: 1, height: 1.04, depth: 1.03 }),

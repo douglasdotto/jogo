@@ -153,12 +153,14 @@ const starRow = (n, size = '') => `<span class="stars ${size}">${[1, 2, 3].map((
 
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
 export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null) {
-  let sel = MISSIONS.findIndex((_, i) => unlocked(i) && starsOf(MISSIONS[i].id) === 0);
   const total = totalStars();
   const cleared = MISSIONS.every((m) => starsOf(m.id) > 0);
+  let sel = MISSIONS.findIndex((_, i) => unlocked(i) && starsOf(MISSIONS[i].id) === 0);
   if (sel < 0) sel = cleared ? MISSIONS.length - 1 : 0;
   const remainingStars = MISSIONS.length * 3 - total;
+  const replayTargetIndex = cleared ? MISSIONS.findIndex((m) => starsOf(m.id) < 3) : -1;
   const remainingText = `${remainingStars} estrela${remainingStars === 1 ? '' : 's'}`;
+  const remainingLabel = `${remainingText} ${remainingStars === 1 ? 'restante' : 'restantes'}`;
   const reward = allOpen() ? null : UNLOCKS.find((item) => item.stars > total);
   const starsLeft = reward ? reward.stars - total : 0;
   root.innerHTML = `
@@ -202,7 +204,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
     map.appendChild(b);
     return b;
   });
-  function select(i, moveFocus = false) {
+  function select(i, moveFocus = false, focusPlay = false) {
     sel = i;
     nodes.forEach((n, k) => {
       n.classList.toggle('sel', k === i);
@@ -218,6 +220,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
     const starTargets = m.goal.type === 'nofall'
       ? ['1★ Concluir sem quedas', '2★ Terminar com 75%+ de vida', '3★ Terminar com 90%+ de vida']
       : ['1★ Concluir a missão', '2★ Sem quedas', '3★ Sem quedas e 50%+ de vida'];
+    const showReplayButton = remainingStars && replayTargetIndex >= 0 && i !== replayTargetIndex;
     info.innerHTML = `
       <div class="camp-info-head">
         <div class="camp-info-title">
@@ -227,7 +230,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
         ${starRow(starsOf(m.id), 'big')}
       </div>
       <p>${m.desc}</p>
-      ${cleared ? `<div class="camp-complete"><b>${remainingStars ? 'Campanha concluída' : 'Campanha perfeita'}</b><span>${remainingStars ? `Todas as arenas foram vencidas. Rejogue as missões para buscar ${remainingText} restantes.` : 'Todas as 24 estrelas foram conquistadas e todas as variantes estão liberadas.'}</span></div>` : ''}
+      ${cleared ? `<div class="camp-complete"><b>${remainingStars ? 'Campanha concluída' : 'Campanha perfeita'}</b><span>${remainingStars ? 'Todas as arenas foram vencidas. Ainda há estrelas para buscar.' : 'Todas as 24 estrelas foram conquistadas e todas as variantes estão liberadas.'}</span>${remainingStars && replayTargetIndex >= 0 ? `<span class="camp-replay-target">${MISSIONS[replayTargetIndex].name} ainda pode render estrelas. ${remainingLabel} para buscar.</span>${showReplayButton ? '<button class="camp-replay-button" type="button">Ver missão recomendada</button>' : ''}` : ''}</div>` : ''}
       <div class="camp-goal"><b>Objetivo</b>${goalText(m.goal)}</div>
       ${records.length ? `<div class="camp-records" aria-label="Melhores tempos desta missão"><b>Seus melhores tempos</b><div class="camp-record-list">${records.map((record) => `<span>${record.difficultyName}<strong>${record.time}</strong></span>`).join('')}</div></div>` : ''}
       ${threats.length ? `<div class="camp-threats" aria-label="Ameaças previstas"><b>Inimigos especiais</b><div class="camp-threat-grid">${threats.map((threat) => `<div class="camp-threat${threat.optional ? ' optional' : ''}${['King', 'Lich', 'Golem'].includes(threat.id) ? ' boss' : ''}" title="${threat.detail}"><i aria-hidden="true">${threat.icon}</i><span><strong>${threat.name}</strong><small>${threat.optional ? 'Possível · dificuldade alta' : threat.possible ? `Pode surgir · fase ${threat.phase}` : `Fase ${threat.phase}`} · ${threat.detail}</small></span></div>`).join('')}</div></div>` : ''}
@@ -237,7 +240,10 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
       <div class="camp-goals"><b>Estrelas acumulativas</b>${starTargets.map((target) => `<span>${target}</span>`).join('')}</div>
       <button class="camp-play" ${open ? '' : 'disabled'}>${open ? 'Batalhar' : 'Bloqueada'}</button>`;
     info.querySelector('.camp-play').onclick = play;
+    const replayButton = info.querySelector('.camp-replay-button');
+    if (replayButton && showReplayButton) replayButton.onclick = () => select(replayTargetIndex, false, true);
     if (moveFocus) nodes[i].focus();
+    else if (focusPlay) info.querySelector('.camp-play')?.focus();
   }
   function play() { if (unlocked(sel)) onPlay(MISSIONS[sel]); }
   function key(e) {
