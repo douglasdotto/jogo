@@ -6,6 +6,7 @@ import { createWorld } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './characters.js';
 import { LOOKS } from './looks.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
+import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -71,6 +72,7 @@ const SKELETONS = {
   Warrior: { hp: 80, dmg: 11, range: 1.4, speed: 1.3, cooldown: 1.6, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A' },
   Rogue:   { hp: 30, dmg: 8,  range: 1.3, speed: 2.3, cooldown: 1.1, weapon: 'Skeleton_Blade', move: 'Running_C' },
 };
+Object.assign(SKELETONS, MONSTER_TYPES);   // escudeiro, bombardeiro, sacerdote, fantasma, golem e chefes (monsters.js)
 
 // Dificuldades: multiplicam vida/dano dos esqueletos, tamanho e ritmo das ondas e força do chefe;
 // heal = cura ao vencer a fase, revive = vida de quem volta, reviveDelay = fases que o caído espera,
@@ -586,6 +588,7 @@ class Unit {
     if (this.dead || game.over) return;
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && owner.cfg.id !== 'viking' && owner.cfg.id !== 'iceviking' && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
+    if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
       if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
@@ -631,6 +634,7 @@ class Unit {
       game.kills++;
       if (this.lastHit?.stats) this.lastHit.stats.abates++;
       for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
+      monsterDied(this);
     }
     if (this.aura) this.aura.visible = false;
     if (this.halo) this.halo.visible = false;
@@ -653,9 +657,9 @@ class Unit {
     this.moving = false;
     if (!this.dead && !game.over) {
       const next = this.pos.clone().addScaledVector(this.vel, dt);
-      if (world.canStep(this.pos, next)) this.pos.copy(next);
+      if (this.phasing || world.canStep(this.pos, next)) this.pos.copy(next);   // fantasmas atravessam obstáculos
       else this.vel.set(0, 0, 0);
-      this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
+      this.pos.y = world.groundHeight(this.pos.x, this.pos.z) + (this.hover || 0);
       if (world.isShallow(this.pos.x, this.pos.z) && this.vel.lengthSq() > 0.1) {
         this.rippleT = (this.rippleT || 0) - dt;
         if (this.rippleT <= 0) { waterSplash(this.pos); this.rippleT = 0.45; }
@@ -861,7 +865,7 @@ function updateBolts(dt) {
 const enemyBolts = [];
 const enemyOrbMat = new THREE.MeshBasicMaterial({ color: 0xc591ee });
 function fireEnemyBolt(from, target) {
-  const mesh = from.enemyKind === 'Crossbow' ? assets.Skeleton_Arrow.scene.clone() : new THREE.Mesh(boltGeo, enemyOrbMat);
+  const mesh = from.enemyKind === 'Crossbow' ? assets.Skeleton_Arrow.scene.clone() : new THREE.Mesh(boltGeo, from.boltMat || enemyOrbMat);
   mesh.position.copy(from.pos).add(new THREE.Vector3(0, 1.3, 0));
   scene.add(mesh);
   enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
@@ -879,6 +883,7 @@ function updateEnemyBolts(dt) {
     }
     if (b.life <= 0 || b.target.dead) { scene.remove(b.mesh); enemyBolts.splice(i, 1); }
   }
+  updateMonsterFx(dt);   // avisos no chão e golpes especiais dos monstros
 }
 function waterSplash(at, spawn = false) {
   ring(at.clone().setY(at.y + 0.1), spawn ? 1 : 0.45, 0xc5f2f4, spawn ? 0.7 : 0.4);
@@ -1158,6 +1163,8 @@ class Hero extends Unit {
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     this.updateCommon(dt);
     if (this.dead || this.busy > 0 || game.over) return;
+    const escape = game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
+    if (escape) { this.moveTo(escape, dt); this.locomote('Running_A', 'Walking_A', this.cfg.idle); return; }
     const target = game.state === 'fight' ? nearest(this.pos, skeletonsAlive().filter((u) => !u.spawning)) : null;
     if (game.state === 'fight' && this.skillTimer <= 0 && this.useSkill(target)) return;
     // atiradores não saem do lugar: o grupo vai até eles
@@ -1219,8 +1226,11 @@ class Skeleton extends Unit {
     const hpScale = (1 + (phase - 1) * 0.12) * D.hp * (boss ? 9 * D.boss : 1);
     const dmgScale = (1 + (phase - 1) * 0.06) * D.dmg * (boss ? 2.5 * D.boss : 1);
     super(assets[`Skeleton_${base.model || type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
-    this.boss = boss;
+    this.boss = boss || !!base.heavy;   // o golem é pesado como um chefe, mas sem a vida de chefe
     this.ranged = !!base.ranged;
+    this.mobile = !!base.mobile;       // atiradores que andam (sacerdote, lich)
+    this.phasing = !!base.phasing;     // atravessa obstáculos e o grupo
+    this.kind = base;
     this.enemyKind = type;
     this.attackAnim = base.attack || '1H_Melee_Attack_Chop';
     this.stunT = 0;
@@ -1236,12 +1246,18 @@ class Skeleton extends Unit {
     this.stars.visible = false;
     this.root.add(this.stars);
     this.move = base.move || 'Walking_D_Skeletons';
+    this.walk = base.walk || 'Walking_D_Skeletons';
+    this.idle = base.idle || 'Idle_Combat';
     this.speed *= 0.85 + Math.random() * 0.3;   // cada esqueleto num ritmo um pouco diferente
-    if (boss) { this.size = 1.7; this.root.scale.setScalar(this.size); this.range += 0.6; this.bar.classList.add('boss'); }
-    this.attach(base.weapon, 'handslotr');   // o GLTFLoader tira o ponto de "handslot.r"
+    this.size = base.size || (boss ? 1.7 : 1);
+    this.root.scale.setScalar(this.size);
+    if (boss) this.range += 0.6;
+    if (this.boss) this.bar.classList.add('boss');
+    if (base.weapon) this.attach(base.weapon, 'handslotr');   // o GLTFLoader tira o ponto de "handslot.r"
     if (base.shield) this.attach(base.shield, 'handslotl');
     this.spawning = true;
-    this.busy = this.once('Spawn_Ground_Skeletons');
+    this.busy = this.once(base.spawn || 'Spawn_Ground_Skeletons');
+    base.dress?.(this);   // peças, cores e brilho dos tipos novos
   }
 
   attach(asset, bone) {
@@ -1259,34 +1275,39 @@ class Skeleton extends Unit {
     this.slowT = Math.max(0, this.slowT - dt);
     this.tauntT -= dt;
     if (this.stunT > 0) { this.pendingHit = null; this.vel.set(0, 0, 0); }
-    if (this.ranged) this.vel.set(0, 0, 0);
+    if (this.ranged && !this.mobile) this.vel.set(0, 0, 0);
     this.updateCommon(dt);
     this.stars.visible = !this.dead && this.stunT > 0;
     this.stars.rotation.y += dt * 5;
-    for (const m of this.mats) if (m.emissive && !this.flashOn) m.emissive.setHex(this.slowT > 0 ? 0x246d99 : 0);
+    for (const m of this.mats) if (m.emissive && !this.flashOn) m.emissive.setHex(this.slowT > 0 ? 0x246d99 : m.userData?.glow || 0);
 
     if (this.dead) {
       this.deadTime += dt;
       if (this.deadTime > 1) { poof(this.pos, this.size); this.remove(); }   // some numa nuvenzinha
       return;
     }
-    if (game.over || this.stunT > 0) return;
-    if (this.busy > 0) return;
+    if (game.over) return;
+    this.kind?.tick?.(this, dt);   // recargas, flutuar e investida dos tipos novos
+    if (this.stunT > 0 || this.busy > 0) return;
     this.spawning = false;
     const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt : nearest(this.pos, allies());
+    if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)
+      if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
+      return;
+    }
     if (target) {
       const d = target.pos.distanceTo(this.pos);
       if (this.ranged) this.vel.set(0, 0, 0);
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
       else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
     }
-    if (this.busy <= 0) this.locomote(this.move, 'Walking_D_Skeletons', 'Idle_Combat');
+    if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
   }
 }
 
 // empurra unidades sobrepostas e desvia dos obstáculos
 function separate() {
-  const alive = units.filter((u) => !u.dead);
+  const alive = units.filter((u) => !u.dead && !u.phasing);   // fantasmas passam pelo grupo
   const before = alive.map((u) => u.pos.clone());
   for (let i = 0; i < alive.length; i++) {
     for (let j = i + 1; j < alive.length; j++) {
@@ -1312,7 +1333,7 @@ function separate() {
   }
   alive.forEach((u, i) => {
     if (!world.canStep(before[i], u.pos) || (u.team === 'skeleton' && u.ranged && world.groundHeight(u.pos.x, u.pos.z) < 2.95)) u.pos.copy(before[i]);
-    u.pos.y = world.groundHeight(u.pos.x, u.pos.z);
+    u.pos.y = world.groundHeight(u.pos.x, u.pos.z) + (u.hover || 0);
   });
 }
 
@@ -1338,6 +1359,7 @@ function startGame() {
   closeHeroPanel();
   $('overlayStats').innerHTML = '';
   while (units.length) units[0].remove();
+  clearMonsterFx();   // avisos, covas e barra do chefe
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   const first = THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES);
   Object.assign(game, { phase: first, start: first, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(first), over: false });
@@ -1362,17 +1384,19 @@ function spawnSkeleton() {
   const zone = world.zoneOf(p);
   const onTop = zone?.type === 'plateau' && game.toSpawn <= 2;
   let type = 'Minion', boss = false;
-  if (game.bossPending && game.toSpawn === 1) { type = 'Warrior'; boss = true; }
+  const lead = game.toSpawn === 1 ? waveLeader(p, game.bossPending) : null;   // Rei (6), Lich (12) ou golem
+  if (lead) { type = lead; boss = game.bossPending; }
   else {
     const r = Math.random();
     const rogue = Math.min(0.3, 0.04 * p), warrior = Math.min(0.4, 0.06 * p);
     type = r < rogue ? 'Rogue' : r < rogue + warrior ? 'Warrior' : 'Minion';
+    type = pickMonster(p, type);   // tipos novos entram aos poucos
     if (p >= 2 && Math.random() < difficulty.shooters) type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
-  if (onTop) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
+  if (onTop && !lead) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
-  const behind = p >= difficulty.behindFrom && !boss && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
+  const behind = p >= difficulty.behindFrom && !lead && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
   for (let tries = 0; tries < 12; tries++) {
     const at = behind ? s0 - 9 - Math.random() * 3 : s0 + 11 + Math.random() * 6;
     s.pos.copy(world.along(at, (Math.random() * 2 - 1) * (ROAD - 1)));
@@ -1387,6 +1411,10 @@ function spawnSkeleton() {
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
 }
+
+// monsters.js usa estas peças do jogo (ele não importa o main.js)
+linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, world, ring, beam, poof, popText, showBanner,
+  get game() { return game; }, get difficulty() { return difficulty; } });
 
 function updateGame(dt) {
   if (game.over || game.paused) return;

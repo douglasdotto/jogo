@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
+const monsters = fs.readFileSync(path.join(dir, 'monsters.js'), 'utf8');
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
   set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -39,11 +40,11 @@ const material = () => ({ color: color(), emissive: color(), dispose: noop });
 const root = () => ({ position: new Vector3(), rotation: { x: 0, y: 0, z: 0 }, scale: new Vector3(1, 1, 1), quaternion: { setFromUnitVectors: noop },
   traverse: noop, add: noop, removeFromParent: noop, getObjectByName: () => ({ add: noop }), material: material(), children: [], rotateZ: noop, clone: root });
 const action = () => ({ reset() { return this; }, setLoop() { return this; }, play() { return this; }, crossFadeFrom: noop, getClip: () => ({ duration: 1, name: 'Idle' }) });
-const THREE = { Vector3, Mesh: class { constructor() { Object.assign(this, root()); } }, Group: class { constructor() { Object.assign(this, root()); } },
+const THREE = new Proxy({ Vector3, Mesh: class { constructor() { Object.assign(this, root()); } }, Group: class { constructor() { Object.assign(this, root()); } },
   MeshBasicMaterial: class { constructor() { Object.assign(this, material()); } }, MeshLambertMaterial: class { constructor() { Object.assign(this, material()); } },
   AnimationMixer: class { update() {} clipAction() { return action(); } stopAllAction() {} },
   AnimationClip: { findByName: (_, name) => ({ name, duration: 1 }) }, Clock: class { getDelta() { return 0.016; } },
-  MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(v, b)) }, LoopOnce: 1, LoopRepeat: 2, RingGeometry: class {}, DoubleSide: 2 };
+  MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(v, b)) }, LoopOnce: 1, LoopRepeat: 2, RingGeometry: class {}, DoubleSide: 2 }, { get: (o, k) => k in o ? o[k] : class { constructor() { Object.assign(this, root()); } } });   // geometrias novas viram objetos simples
 const asset = () => ({ scene: root(), animations: [] });
 const assets = {};
 for (const n of ['Minion', 'Warrior', 'Rogue', 'Mage', 'Blade', 'Axe', 'Shield_Small_A', 'Crossbow', 'Staff', 'Arrow']) assets['Skeleton_' + n] = asset();
@@ -59,6 +60,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, getElem
   poof: noop, ring: noop, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], blasts: [], flames: [] });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
+vm.runInContext(monsters.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
 vm.runInContext(part(source, 'const units =', '// projéteis e áreas'), context);
@@ -108,7 +110,7 @@ for (const diff of [original, ...t.DIFFICULTIES].filter((d) => which === 'todas'
   for (let i = 0; i < runs; i++) res.push(play(diff));
   for (const r of res) for (const [id, dmg, dps] of r.damage) (damage[id] ||= []).push([dmg, dps]);
   const avg = (f) => (res.reduce((s, r) => s + f(r), 0) / res.length).toFixed(1);
-  console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · fase média ${avg((r) => r.phase)} · quedas ${avg((r) => r.deaths)} · abates ${avg((r) => r.kills)}`);
+  console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · fase média ${avg((r) => r.phase)} · quedas ${avg((r) => r.deaths)} · abates ${avg((r) => r.kills)} · derrotas nas fases ${res.filter((r) => !r.won).map((r) => r.phase).sort((x, y) => x - y).join(',') || '-'}`);
 }
 console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate');
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
