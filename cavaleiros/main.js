@@ -2352,36 +2352,96 @@ class Skeleton extends Unit {
   }
 }
 
-// empurra unidades sobrepostas e desvia dos obstáculos
+// move units apart in a few small solver passes so blocked moves do not put
+// them back at their original, overlapping positions.
+function collisionMove(unit, dx, dz) {
+  const pos = unit.pos, fromX = pos.x, fromZ = pos.z;
+  let fraction = 1;
+  for (let attempt = 0; attempt < 5; attempt++, fraction *= 0.5) {
+    const toX = fromX + dx * fraction, toZ = fromZ + dz * fraction;
+    const from = { x: fromX, z: fromZ }, to = { x: toX, z: toZ };
+    const wasOnPlateau = unit.team === 'skeleton' && unit.ranged && world.groundHeight(fromX, fromZ) >= 2.95;
+    if (!world.canStep(from, to) || (wasOnPlateau && world.groundHeight(toX, toZ) < 2.95)) continue;
+    pos.x = toX;
+    pos.z = toZ;
+    return Math.hypot(dx, dz) * fraction;
+  }
+  return 0;
+}
+
+function separatePair(a, b, ia, ib) {
+  if (Math.abs(a.pos.y - b.pos.y) >= 0.85) return;
+  const min = 0.53 * (a.size + b.size);
+  let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+  let distance = Math.hypot(dx, dz);
+  if (distance >= min) return;
+  if (distance < 0.001) {
+    // Give perfectly coincident units a stable direction instead of skipping them.
+    const angle = (ia * 0.754877666 + ib * 0.569840291) * Math.PI * 2;
+    dx = Math.cos(angle); dz = Math.sin(angle); distance = 0;
+  } else { dx /= distance; dz /= distance; }
+
+  const overlap = min - distance, half = overlap * 0.5;
+  let movedA = collisionMove(a, -dx * half, -dz * half);
+  let movedB = collisionMove(b, dx * half, dz * half);
+  let remaining = overlap - movedA - movedB;
+  if (remaining > 0.002) {
+    const extraA = collisionMove(a, -dx * remaining, -dz * remaining);
+    remaining -= extraA;
+    if (remaining > 0.002) collisionMove(b, dx * remaining, dz * remaining);
+  }
+
+  // When a wall or height boundary blocks the direct push, let the pair slide
+  // around the contact instead of remaining stacked on the same point.
+  let slideX = b.pos.x - a.pos.x, slideZ = b.pos.z - a.pos.z;
+  const slideDistance = Math.hypot(slideX, slideZ);
+  if (slideDistance < min) {
+    if (slideDistance > 0.001) { slideX /= slideDistance; slideZ /= slideDistance; }
+    else { slideX = dx; slideZ = dz; }
+    const beforeSideA = { x: a.pos.x, z: a.pos.z }, beforeSideB = { x: b.pos.x, z: b.pos.z };
+    const sideDistance = Math.sqrt(Math.max(0, min * min - slideDistance * slideDistance)) * 0.5;
+    const sideDx = -slideZ, sideDz = slideX;
+    collisionMove(a, -sideDx * sideDistance, -sideDz * sideDistance);
+    collisionMove(b, sideDx * sideDistance, sideDz * sideDistance);
+    if (Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) <= slideDistance + 0.002) {
+      a.pos.x = beforeSideA.x; a.pos.z = beforeSideA.z;
+      b.pos.x = beforeSideB.x; b.pos.z = beforeSideB.z;
+    }
+  }
+
+  // Remove inward velocity at contact so units stop pushing through one another.
+  const closing = (a.vel.x - b.vel.x) * dx + (a.vel.z - b.vel.z) * dz;
+  if (closing > 0) {
+    a.vel.x -= dx * closing * 0.5; a.vel.z -= dz * closing * 0.5;
+    b.vel.x += dx * closing * 0.5; b.vel.z += dz * closing * 0.5;
+  }
+}
+
 function separate() {
   const alive = units.filter((u) => !u.dead && !u.phasing);   // fantasmas passam pelo grupo
-  const before = alive.map((u) => u.pos.clone());
-  for (let i = 0; i < alive.length; i++) {
-    for (let j = i + 1; j < alive.length; j++) {
-      const a = alive[i].pos, b = alive[j].pos;
-      const min = 0.45 * (alive[i].size + alive[j].size);
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const d = Math.hypot(dx, dz);
-      if (Math.abs(a.y - b.y) < 0.85 && d > 0 && d < min) {
-        const push = (min - d) / 2 / d;
-        a.x -= dx * push; a.z -= dz * push;
-        b.x += dx * push; b.z += dz * push;
+  // Alternate unit and world collisions: a push off a rock must not create a
+  // fresh overlap with a nearby unit, and vice versa.
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 0; i < alive.length; i++) {
+      for (let j = i + 1; j < alive.length; j++) separatePair(alive[i], alive[j], i + 1, j + 1);
+    }
+    for (let i = 0; i < alive.length; i++) {
+      const u = alive[i];
+      for (let oi = 0; oi < world.obstacles.length; oi++) {
+        const o = world.obstacles[oi], min = o.r + 0.53 * u.size;
+        let dx = u.pos.x - o.x, dz = u.pos.z - o.z;
+        if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
+        let distance = Math.hypot(dx, dz);
+        if (distance >= min) continue;
+        if (distance < 0.001) {
+          const angle = ((i + 1) * 0.754877666 + (oi + 1) * 0.569840291) * Math.PI * 2;
+          dx = Math.cos(angle); dz = Math.sin(angle); distance = 0;
+        } else { dx /= distance; dz /= distance; }
+        collisionMove(u, dx * (min - distance), dz * (min - distance));
       }
     }
+    for (const u of alive) u.pos.y = world.groundHeight(u.pos.x, u.pos.z) + (u.hover || 0);
   }
-  for (const u of alive) {
-    for (const o of world.obstacles) {
-      const min = o.r + 0.4 * u.size;
-      const dx = u.pos.x - o.x, dz = u.pos.z - o.z;
-      if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
-      const d = Math.hypot(dx, dz) || 0.01;
-      if (d < min) { u.pos.x = o.x + (dx / d) * min; u.pos.z = o.z + (dz / d) * min; }
-    }
-  }
-  alive.forEach((u, i) => {
-    if (!world.canStep(before[i], u.pos) || (u.team === 'skeleton' && u.ranged && world.groundHeight(u.pos.x, u.pos.z) < 2.95)) u.pos.copy(before[i]);
-    u.pos.y = world.groundHeight(u.pos.x, u.pos.z) + (u.hover || 0);
-  });
 }
 
 // ---------- fases ----------
