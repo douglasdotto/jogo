@@ -256,7 +256,8 @@ export function createWorld(scene, ROAD, PHASES) {
   const gn = ground.attributes.normal;
   const colors = new Float32Array(gp.count * 3);
   // paleta da referência: grama verde-limão, terra alaranjada, encostas de pedra arenosa
-  const grassA = new THREE.Color(0x9ccc4a), grassB = new THREE.Color(0x88bd3e), sandA = new THREE.Color(0xeac48a), sandB = new THREE.Color(0xdfb478),
+  // estilo Clash: grama verde forte e saturada, terra quente
+  const grassA = new THREE.Color(0x76cc32), grassB = new THREE.Color(0x5db426), sandA = new THREE.Color(0xf0b860), sandB = new THREE.Color(0xe0a24c),
     cliffA = new THREE.Color(0xdba468), cliffB = new THREE.Color(0xc98d55), bed = new THREE.Color(0xc9a46a),
     dry = new THREE.Color(0xa39a5c), necro = new THREE.Color(0x5e536e);
   const c = new THREE.Color(), grass = new THREE.Color(), sand = new THREE.Color(), cliff = new THREE.Color();
@@ -1168,8 +1169,8 @@ export function createWorld(scene, ROAD, PHASES) {
   inst([torchGeo, [0x5e3b1d, 0x6b4423]], torches);
   inst([new THREE.ConeGeometry(0.13, 0.4, 5).translate(0, 2.1, 0), [0xffffff]], torches, lantern, false);
 
-  const trunks = [0x8a6a4a, 0x7a5c3e, 0x9b8a7a];
-  const limes = [0xa5d64c, 0x95c843, 0xb5de5a, 0x86bb3c, 0x9fd04a];
+  const trunks = [0x7a4a26, 0x6a3f20, 0x8a5a30];
+  const limes = [0x4fb82a, 0x3fa424, 0x62c834, 0x37941e, 0x58bf2c];   // copas verde-forte, estilo Clash
   // árvore redonda da referência: tronco fino e alto, copa de vários blocos facetados
   const roundTrunk = mergeGeometries([
     new THREE.CylinderGeometry(0.14, 0.24, 2.6, 6).translate(0, 1.3, 0),
@@ -1217,7 +1218,7 @@ export function createWorld(scene, ROAD, PHASES) {
   instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 280, (o) => { const p = spot(0, ROAD + 12, 1.5); if (!p) return false; placeAt(o, p, range(0.15, 0.4)); o.scale.y *= 0.5; return true; }, false);
 
   const tuftGeo = mergeGeometries([0, 1, 2].map((i) => new THREE.ConeGeometry(0.06, 0.5, 3).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0.25, 0).toNonIndexed()));
-  instanced([tuftGeo, [0xa8d655, 0x98c94b, 0xb7e063, 0x8cbf42]], 7000, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
+  instanced([tuftGeo, [0x82d63e, 0x6cc432, 0x94e04a, 0x5cb22a]], 7000, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
 
   const flowerGeo = new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.25, 0);
   instanced([flowerGeo, [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7]], 1600, (o) => { const p = spot(1, ROAD + 22, 1.8, false); if (!p || gloomAt(p.z) > rand() * 0.6) return false; placeAt(o, p, range(0.8, 1.3)); return true; }, false);

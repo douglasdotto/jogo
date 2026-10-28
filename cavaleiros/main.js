@@ -109,7 +109,7 @@ const follow = new THREE.Vector3();   // ponto que a câmera persegue
 const hemi = new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8);   // sombras mais suaves
 scene.add(hemi);
 // céu, névoa e luz de dia e nas terras do necromante (misturados pela "trevas" de onde o grupo está)
-const SKY = [new THREE.Color(0xa9d6f0), new THREE.Color(0x3f3552)];
+const SKY = [new THREE.Color(0x7cc6ff), new THREE.Color(0x3f3552)];   // azul vivo de dia (estilo Clash)
 const HEMI = [new THREE.Color(0xfff4dc), new THREE.Color(0xb8a8d8)], HEMI_GROUND = [new THREE.Color(0xa89868), new THREE.Color(0x3e3448)];
 const SUN = [new THREE.Color(0xffe2b8), new THREE.Color(0xc6a8ff)];
 const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
@@ -1491,9 +1491,9 @@ function frame() {
   scene.fog.far = 110 - gloom * 45;
   hemi.color.lerpColors(HEMI[0], HEMI[1], gloom);
   hemi.groundColor.lerpColors(HEMI_GROUND[0], HEMI_GROUND[1], gloom);
-  hemi.intensity = 1.8 - gloom * 0.5;
+  hemi.intensity = 1.35 - gloom * 0.3;   // menos luz ambiente e sol mais forte: sombras marcadas
   sun.color.lerpColors(SUN[0], SUN[1], gloom);
-  sun.intensity = 2.4 - gloom * 1;
+  sun.intensity = 3.1 - gloom * 1.4;
   const sel = panelHero();   // anel embaixo do herói com o cartão aberto
   selectRing.visible = !!sel && !sel.dead && units.includes(sel);
   if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
