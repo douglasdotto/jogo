@@ -2639,7 +2639,16 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-await loadAssets();
-renderPortraits();
-startGame();
-frame();
+try {
+  await loadAssets();
+  renderPortraits();
+  startGame();
+  frame();
+} catch (error) {
+  console.error('Falha ao iniciar o jogo:', error);
+  $('overlayText').textContent = 'Não foi possível carregar o jogo. Verifique sua conexão e tente novamente.';
+  $('overlay').classList.remove('hidden');
+  $('overlayBtn').textContent = 'Tentar novamente';
+  $('overlayBtn').hidden = false;
+  $('overlayBtn').onclick = () => location.reload();
+}
