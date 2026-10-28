@@ -22,10 +22,11 @@ export const CHARACTERS = [
   {
     id: 'necromante', name: 'Necromante', desc: 'Mago esqueleto que brinca com magia verde.', color: ['#c9a3ff', '#6b3fa0'],
     base: 'Mage',
-    hide: ['Mage_Head', 'Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand'],
+    hide: ['Mage_Head', 'Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
     add: [
       { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Skull' }, { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Jaw' },
       { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Eyes' }, { from: 'Skeleton_Mage', part: 'Skeleton_Mage_Hat' },
+      { from: 'Skeleton_Staff', part: 'Skeleton_Staff', bone: 'handslotr', rot: [0, Math.PI, 0] },   // cajado de osso
     ],
     paint: {
       Mage_Body: { tint: '#4a3366', amount: 0.8 }, Mage_ArmLeft: { tint: '#4a3366', amount: 0.8 }, Mage_ArmRight: { tint: '#4a3366', amount: 0.8 },
@@ -33,7 +34,7 @@ export const CHARACTERS = [
       Mage_Cape: { tint: '#6fe08a', amount: 0.75 }, '2H_Staff': { tint: '#e8e0c8', amount: 0.7 },
       Skeleton_Mage_Hat: { tint: '#7a4fc4', amount: 0.8 },
     },
-    extras: [{ type: 'orb', bone: 'handslotl' }],
+    extras: [{ type: 'orb', bone: 'handslotl' }, { type: 'skull', bone: 'handslotr', y: 1.38 }],   // caveira na ponta do cajado
   },
   {
     id: 'rei', name: 'Rei Dourado', desc: 'Armadura de ouro, coroa e espadão.', color: ['#ffe07a', '#d19a1c'],
@@ -62,7 +63,7 @@ export const CHARACTERS = [
 ];
 
 // arquivos que as receitas usam
-export const CHARACTER_ASSETS = ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Skeleton_Mage'];
+export const CHARACTER_ASSETS = ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Skeleton_Mage'];   // .glb; o cajado de osso (Skeleton_Staff.gltf) vem à parte
 
 // o GLTFLoader tira os pontos dos nomes ("handslot.r" vira "handslotr")
 const clean = (name) => name.replace(/\./g, '');
@@ -81,7 +82,8 @@ export function applyLook(root, assets, r) {
   for (const name of r.hide || []) root.getObjectByName(name)?.removeFromParent();
 
   for (const { from, part, bone, pos, rot, scale } of r.add || []) {
-    const src = assets[from].scene.getObjectByName(part);
+    const src = assets[from]?.scene.getObjectByName(part);
+    if (!src) continue;   // modelo não carregado nesta página (ex.: vitrine)
     const copy = src.clone(true);
     let skinned = false;
     copy.traverse((o) => { if (o.isSkinnedMesh) { o.bind(skeleton, o.bindMatrix); skinned = true; } });
@@ -333,15 +335,115 @@ const ACCESSORIES = {
     return g;
   },
   // chaminhas saindo do chapéu
-  flames({ y = 1.55 } = {}) {
+  flames({ y = 1.55, z = -0.05 } = {}) {
     const g = new THREE.Group();
     const mat = new THREE.MeshLambertMaterial({ color: 0xffb03a, emissive: 0xff5a1a, emissiveIntensity: 0.8, flatShading: true });
     for (const [x, h] of [[-0.12, 0.25], [0, 0.35], [0.12, 0.22]]) {
       const f = new THREE.Mesh(new THREE.ConeGeometry(0.07, h, 5), mat);
-      f.position.set(x, y + h / 2, -0.05);
+      f.position.set(x, y + h / 2, z);
       g.add(f);
     }
     g.userData.flicker = true;
+    return g;
+  },
+  // mão pegando fogo (no osso da mão): chamas em volta do punho
+  handFire({ y = 0.05 } = {}) {
+    const g = new THREE.Group();
+    const outer = new THREE.MeshLambertMaterial({ color: 0xff8a2a, emissive: 0xff4a10, emissiveIntensity: 0.9, flatShading: true });
+    const inner = new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xffb020, emissiveIntensity: 1, flatShading: true });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2, h = 0.34 + (i % 2) * 0.18;
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.09, h, 5), outer);
+      f.position.set(Math.cos(a) * 0.11, y + h / 2, Math.sin(a) * 0.11);
+      f.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+      g.add(f);
+    }
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 5), inner);
+    core.position.y = y + 0.25;
+    g.add(core);
+    g.userData.flicker = true;
+    return g;
+  },
+  // caveira com olhos verdes brilhando (na ponta do cajado do necromante)
+  skull({ y = 1.35 } = {}) {
+    const g = new THREE.Group();
+    const bone = lambert(0xeee6d4);
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.17, 1), bone);
+    head.scale.set(1, 1.05, 1.1);
+    g.add(head);
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.16), bone);
+    jaw.position.set(0, -0.15, 0.03);
+    g.add(jaw);
+    const eye = new THREE.MeshLambertMaterial({ color: 0x7dffa0, emissive: 0x2fff6a, emissiveIntensity: 1.2 });
+    for (const s of [-1, 1]) {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 4), eye);
+      e.position.set(s * 0.065, 0.01, 0.15);
+      g.add(e);
+    }
+    g.position.y = y;
+    g.rotation.y = Math.PI;   // o osso da mão está virado: a caveira olha para a frente
+    return g;
+  },
+  // emblema redondo no peito (sol/brasão)
+  emblem({ color = 0xf2c94c, y = 0.15, z = 0.36 } = {}) {
+    const g = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.04, 10).rotateX(Math.PI / 2), lambert(color, { emissive: color, emissiveIntensity: 0.25 }));
+    g.add(disc);
+    for (let i = 0; i < 8; i++) {
+      const ray = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.1, 4), lambert(color));
+      const a = (i / 8) * Math.PI * 2;
+      ray.position.set(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0);
+      ray.rotation.z = a - Math.PI / 2;
+      g.add(ray);
+    }
+    g.position.set(0, y, z);
+    return g;
+  },
+  // colar de dentes em volta do pescoço
+  necklace({ color = 0xf2ead8 } = {}) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 9; i++) {
+      const a = Math.PI * 0.15 + (i / 8) * Math.PI * 0.7;
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 4), lambert(color));
+      tooth.position.set(Math.cos(a) * 0.3, -0.02, Math.sin(a) * 0.3);
+      tooth.rotation.x = Math.PI;
+      g.add(tooth);
+    }
+    return g;
+  },
+  // círculo de runas girando aos pés (no osso raiz)
+  runeRing({ color = 0xb07aff } = {}) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.85, 32).rotateX(-Math.PI / 2), mat);
+    g.add(ring);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const rune = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.2).rotateX(-Math.PI / 2), mat);
+      rune.position.set(Math.cos(a) * 0.62, 0, Math.sin(a) * 0.62);
+      rune.rotation.y = -a;
+      g.add(rune);
+    }
+    g.position.y = 0.04;
+    g.userData.orbit = true;
+    return g;
+  },
+  // máscara cobrindo a parte de baixo do rosto
+  mask({ color = 0x2a2238 } = {}) {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.4, 0.2, 12, 1, true, -Math.PI * 0.42, Math.PI * 0.84), new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, flatShading: true }));
+    m.position.set(0, 0.28, 0.02);
+    g.add(m);
+    return g;
+  },
+  // cristal de gelo flutuando na mão
+  iceShard() {
+    const g = new THREE.Group();
+    const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.14), new THREE.MeshLambertMaterial({ color: 0xc8f4ff, emissive: 0x3aa8d8, emissiveIntensity: 0.6, flatShading: true }));
+    c.scale.set(0.8, 1.8, 0.8);
+    c.position.set(0, 0.2, 0.12);
+    c.userData.spin = true;
+    g.add(c);
     return g;
   },
 };

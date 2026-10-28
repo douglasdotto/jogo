@@ -17,13 +17,13 @@ export const LOOKS = {
     hide: ['Knight_Cape'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }],
     paint: { ...outfit('Knight', '#f4ecd8', '#e8dcc0', 0.55), Mage_Cape: { tint: '#fff8e8', amount: 0.85 }, Knight_Helmet: { tint: '#fff6e0', amount: 0.45 } },
-    extras: [{ type: 'plume', bone: 'head', color: 0xffffff, tall: true, y: 1.25 }, { type: 'pauldrons', bone: 'chest', color: 0xf2c94c }],
+    extras: [{ type: 'plume', bone: 'head', color: 0xffffff, tall: true, y: 1.25 }, { type: 'pauldrons', bone: 'chest', color: 0xf2c94c }, { type: 'emblem', bone: 'chest' }],
   },
   guardian: {   // capa de pele e ombreiras grandes
     hide: ['Knight_Cape'],
     add: [{ from: 'Barbarian', part: 'Barbarian_Cape' }],
     paint: { ...outfit('Knight', '#6f8fb8', '#4a6488'), Barbarian_Cape: { tint: '#3e5a8a', amount: 0.7 }, Knight_Helmet: { tint: '#8fa8c8', amount: 0.5 } },
-    extras: [{ type: 'pauldrons', bone: 'chest', color: 0xb8cce8, size: 1.35 }],
+    extras: [{ type: 'pauldrons', bone: 'chest', color: 0xb8cce8, size: 1.35 }, { type: 'plume', bone: 'head', color: 0x3a6ad8, y: 1.22 }],
   },
   champion: {   // sem elmo: rosto à mostra, gorro de pele e capa vermelha
     hide: ['Knight_Helmet'],
@@ -34,7 +34,7 @@ export const LOOKS = {
   berserker: {   // cabeça raspada com chifres e sem capa
     hide: ['Barbarian_Hat', 'Barbarian_Cape'],
     paint: { ...outfit('Barbarian', '#b83a3a', '#5a2a2a', 0.6) },
-    extras: [{ type: 'horns', bone: 'head' }, { type: 'scarf', bone: 'head', color: 0x8a1f1f }],
+    extras: [{ type: 'horns', bone: 'head' }, { type: 'necklace', bone: 'head' }],
   },
   crusher: {   // elmo de ferro e ombreiras com espinhos
     hide: ['Barbarian_Hat'],
@@ -51,24 +51,25 @@ export const LOOKS = {
   // ---------- Mago ----------
   pyro: {
     paint: { ...outfit('Mage', '#e8642e', '#8a3a1e'), Mage_Hat: { tint: '#d13b2b', amount: 0.85 }, Mage_Cape: { tint: '#ffb03a', amount: 0.8 } },
-    extras: [{ type: 'flames', bone: 'head', y: 1.2 }, { type: 'orb', bone: 'handslotl', color: 0xffa040, glow: 0xff5a1a }],
+    // chamas na ponta do chapéu (inclinado para trás) e as duas mãos pegando fogo
+    extras: [{ type: 'flames', bone: 'head', y: 1.42, z: -0.3 }, { type: 'handFire', bone: 'handslotl' }, { type: 'handFire', bone: 'handslotr' }],
   },
   arcane: {   // sem chapéu, capa longa e estrelas orbitando
     hide: ['Mage_Hat', 'Mage_Cape'],
     add: [{ from: 'Knight', part: 'Knight_Cape' }],
     paint: { ...outfit('Mage', '#6a4fc4', '#3a2a7a'), Knight_Cape: { tint: '#8a6ae0', amount: 0.85 } },
-    extras: [{ type: 'stars', bone: 'head', color: 0xffe066 }, { type: 'orb', bone: 'handslotl', color: 0xd8b8ff, glow: 0x8a4fe0 }],
+    extras: [{ type: 'stars', bone: 'head', color: 0xffe066 }, { type: 'runeRing', bone: 'root', color: 0xb07aff }],
   },
   cryo: {
     paint: { ...outfit('Mage', '#e8f6ff', '#8ec8e8', 0.65), Mage_Hat: { tint: '#a8e4ff', amount: 0.85 }, Mage_Cape: { tint: '#ffffff', amount: 0.8 } },
-    extras: [{ type: 'iceCrown', bone: 'head', radius: 0.95, y: 0.78, n: 8 }, { type: 'orb', bone: 'handslotl', color: 0xc8f4ff, glow: 0x3aa8d8 }],
+    extras: [{ type: 'iceCrown', bone: 'head', radius: 0.95, y: 0.78, n: 8 }, { type: 'iceShard', bone: 'handslotl' }],
   },
   // ---------- Ladino ----------
   assassin: {   // capa longa escura e cachecol vermelho
     hide: ['Rogue_Cape'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }],
     paint: { ...outfit('Rogue', '#3a2e4a', '#2a2238', 0.75), Mage_Cape: { tint: '#2a2238', amount: 0.85 } },
-    extras: [{ type: 'scarf', bone: 'head', color: 0xd13b4f }],
+    extras: [{ type: 'scarf', bone: 'head', color: 0xd13b4f }, { type: 'mask', bone: 'head', color: 0x241c30 }],
   },
   crossbow: {   // chapéu pontudo de caçador com pena (Robin Hood) e aljava
     add: [
@@ -80,7 +81,7 @@ export const LOOKS = {
   },
   ninja: {
     paint: { ...outfit('Rogue', '#2e3a6a', '#1e2648', 0.75), Rogue_Cape: { tint: '#3a4a8a', amount: 0.8 } },
-    extras: [{ type: 'scarf', bone: 'head', color: 0xffffff }],
+    extras: [{ type: 'scarf', bone: 'head', color: 0xffffff }, { type: 'mask', bone: 'head', color: 0x1e2648 }],
   },
 };
 

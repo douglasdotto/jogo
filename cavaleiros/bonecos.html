@@ -65,6 +65,7 @@
     const loader = new GLTFLoader();
     const assets = {};
     await Promise.all(CHARACTER_ASSETS.map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+    assets.Skeleton_Staff = await loader.loadAsync('assets/Skeleton_Staff.gltf');
 
     const units = CHARACTERS.map((r, i) => {
       const { scene: model, animations } = buildCharacter(assets, r);
