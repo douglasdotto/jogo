@@ -1218,11 +1218,13 @@ function dropFx(e) {
 function updateSkillFx(dt) {
   for (let i = skillFx.length - 1; i >= 0; i--) {
     const e = skillFx[i];
+    const previous = e.t;
     e.t += dt;
     if (e.t < 0) continue;
     e.mesh.visible = true;
     const k = Math.min(1, e.t / e.life);
-    e.tick?.(e, dt, k);
+    // Um efeito que começou neste quadro recebe apenas o tempo em que esteve ativo.
+    e.tick?.(e, Math.max(0, Math.min(e.t, e.life) - Math.max(0, previous)), k);
     if (k >= 1 || e.done) { dropFx(e); skillFx.splice(i, 1); }
   }
 }
@@ -1286,13 +1288,67 @@ function column(at, color, radius, height, life, o = {}) {
 }
 
 // faíscas da cor do herói girando para a mão no começo da habilidade
-function charge(h) {
-  const c = h.cfg.color[1], center = h.pos.clone().setY(h.pos.y + 1.2);
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * TAU, from = V(h.pos.x + Math.cos(a) * 1.6, h.pos.y + 0.4 + Math.random() * 1.4, h.pos.z + Math.sin(a) * 1.6);
-    particle(sparkGeo, i % 2 ? c : 0xffffff, from, center.clone().sub(from).divideScalar(0.35), 0.35, { size: 1.4 });
+function charge(h, duration) {
+  const color = h.cfg.color[0];
+  const life = Math.max(0.08, duration);
+  const pending = h.pendingHit;
+  const active = () => !h.dead && units.includes(h) && h.pendingHit === pending;
+  // O selo acompanha o herói e contrai até o instante real da habilidade.
+  const seal = new THREE.Group();
+  const ring = new THREE.Mesh(thinRingGeo, glow(color, 0.7));
+  const rune = new THREE.Mesh(hexGeo, glow(color, 0.5, false));
+  ring.rotation.x = rune.rotation.x = -Math.PI / 2;
+  seal.add(ring, rune);
+  addFx(seal, life, (e, dt, k) => {
+    if (!active()) { e.done = true; return; }
+    seal.position.copy(h.pos).setY(h.pos.y + 0.09);
+    const ease = k * k * (3 - 2 * k);
+    ring.scale.setScalar(1.65 - ease * 0.85);
+    rune.scale.setScalar(1.05 + Math.sin(k * Math.PI) * 0.15);
+    rune.rotation.z = -k * Math.PI;
+    ring.material.opacity = Math.sin(Math.PI * k) * 0.8;
+    rune.material.opacity = Math.sin(Math.PI * k) * 0.55;
+  });
+  // Trajetórias curvas, em vez de faíscas retas: convergem à frente do peito.
+  for (let i = 0; i < 10; i++) {
+    const spark = new THREE.Mesh(sparkGeo, glow(i % 3 ? color : 0xffffff));
+    const angle = i / 10 * TAU;
+    addFx(spark, life, (e, dt, k) => {
+      if (!active()) { e.done = true; return; }
+      const radius = 1.7 * (1 - k) ** 1.4;
+      const a = angle + k * Math.PI * 1.3;
+      const forward = 0.45 * k;
+      spark.position.set(h.pos.x + Math.cos(a) * radius + Math.sin(h.root.rotation.y) * forward,
+        h.pos.y + 0.25 + k * 1.1 + Math.sin(k * Math.PI) * 0.4,
+        h.pos.z + Math.sin(a) * radius + Math.cos(h.root.rotation.y) * forward);
+      spark.scale.setScalar(0.5 + Math.sin(Math.PI * k) * 1.1);
+      spark.material.opacity = Math.sin(Math.PI * k);
+    });
   }
-  wave(h.pos, c, 1.6, 0.4, 0.4);
+}
+
+// Pulso breve na liberação, sem encobrir os combatentes.
+function release(h) {
+  const color = h.cfg.color[0];
+  const origin = h.pos.clone().setY(h.pos.y + 1.15);
+  origin.addScaledVector(V(Math.sin(h.root.rotation.y), 0, Math.cos(h.root.rotation.y)), 0.45);
+  const flash = new THREE.Mesh(shellGeo, glow(0xffffff, 0.85));
+  flash.position.copy(origin);
+  addFx(flash, 0.2, (e, dt, k) => {
+    flash.scale.setScalar(0.7 + 3 * (1 - (1 - k) ** 3));
+    flash.material.opacity = e.base * (1 - k) ** 2;
+  });
+  wave(h.pos, color, 0.65, 1.9, 0.38, { opacity: 0.65 });
+  for (let i = 0; i < 2; i++) {
+    const arc = new THREE.Mesh(arcGeo, glow(color, 0.8));
+    arc.rotation.set(-Math.PI / 2 + (i ? 0.5 : -0.5), h.root.rotation.y, i * Math.PI);
+    addFx(arc, 0.32, (e, dt, k) => {
+      arc.position.copy(origin);
+      arc.scale.setScalar(0.45 + k * 1.25);
+      arc.rotation.z += dt * (i ? -7 : 7);
+      arc.material.opacity = e.base * (1 - k) ** 2;
+    });
+  }
 }
 
 // Paladino: coluna de luz dourada, faíscas subindo e cura verde em quem foi curado
@@ -1476,7 +1532,7 @@ function iceFan(h, target) {
 }
 
 // Arcano: raio em zigue-zague com brilho roxo e núcleo branco
-function zigzag(a, b) {
+function zigzag(a, b, delay = 0) {
   const A = a.clone().setY(a.y + 1.3), B = b.clone().setY(b.y + 1.1), pts = [A];
   for (let i = 1; i < 6; i++) pts.push(A.clone().lerp(B, i / 6).add(V(rnd(0.45), rnd(0.45), rnd(0.45))));
   pts.push(B);
@@ -1487,13 +1543,16 @@ function zigzag(a, b) {
       m.position.copy(pts[i]).addScaledVector(dir, 0.5);
       m.scale.set(width, len, width);
       m.quaternion.setFromUnitVectors(V(0, 1, 0), dir.normalize());
-      addFx(m, 0.35, (e, dt, k) => (m.material.opacity = e.base * (1 - k) * (0.55 + Math.random() * 0.45)));
+      addFx(m, 0.35, (e, dt, k) => {
+        const flicker = 0.7 + 0.3 * Math.sin(e.t * 85 + i * 1.7) ** 2;
+        m.material.opacity = e.base * (1 - k) * flicker;
+      }, delay);
     }
   }
   const orb = new THREE.Mesh(boltGeo, glow(0xe6d0ff, 0.95));
   orb.position.copy(B);
-  addFx(orb, 0.3, (e, dt, k) => { orb.scale.setScalar(1 + k * 3); orb.material.opacity = e.base * (1 - k); });
-  burst(B, [0xc999ff, 0xffffff], 10, 4);
+  addFx(orb, 0.3, (e, dt, k) => { orb.scale.setScalar(1 + k * 3); orb.material.opacity = e.base * (1 - k); }, delay);
+  burst(B, [0xc999ff, 0xffffff], 10, 4, { delay });
 }
 
 // Necromante: círculo de invocação verde girando e caveiras subindo
@@ -1691,7 +1750,7 @@ function cameraJolt(real) {
   return jolt.set(rnd(), rnd() * 0.6, rnd()).multiplyScalar(shakeK);
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, charge, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, roots, leaves, dress, trail, column };
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, roots, leaves, dress, trail, column };
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -1846,7 +1905,7 @@ class Hero extends Unit {
         let next = target;
         for (let i = 0; i < Math.round((3 + (level - 1)) * power); i++) {
           if (!next || next.dead) break;
-          FX.zigzag(at, next.pos);
+          FX.zigzag(at, next.pos, i * 0.055);
           hit.add(next);
           heroHit(this, next, this.dmg * 0.9);
           at = next.pos;
@@ -1896,11 +1955,11 @@ class Hero extends Unit {
     } else return false;
     const [anim, pace, at, sound] = SKILL_MOVES[id];
     const run = effect;
-    effect = () => { audio.play(sound); run(); };
+    effect = () => { audio.play(sound); FX.release(this); run(); };
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
     this.busy = this.once(anim, pace);
     this.pendingHit = { target, effect, t: this.busy * at };
-    FX.charge(this);
+    FX.charge(this, this.pendingHit.t);
     this.skillTimer = this.skillMax = (({ necro: 12, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7 }[id] ?? 6) - (level - 1) * 0.7) * this.skillRate;
     this.stats.habilidades++;
     return true;
