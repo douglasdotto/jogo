@@ -406,6 +406,7 @@ function selectCard(i) {
 function confirmPick(i) {
   if (!pick.open) return;
   if (pick.mode === 'evolution') return confirmEvolution(i);
+  if (pick.mode === 'relic') return confirmRelic(i);
   if (pick.mode === 'difficulty') return confirmDifficulty(i);
   if (pick.mode === 'mode') return confirmMode(i);
   const cfg = pick.options[i];
@@ -450,6 +451,80 @@ const UPGRADES = [
   { id: 'skill', name: 'Habilidade', desc: 'Recarga 25% menor e efeito 25% maior', icon: '✦' },
   { id: 'shield', name: 'Escudo', desc: '20% de redução de dano', icon: '⬟' },
 ];
+
+const RELICS = [
+  { id: 'keen-edge', name: 'Lâmina afiada', icon: '⚔', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
+  { id: 'swift-boots', name: 'Botas velozes', icon: '➤', desc: 'Heróis se movem 10% mais rápido pelo resto da jornada.' },
+  { id: 'oak-charm', name: 'Amuleto de carvalho', icon: '⬟', desc: 'Heróis recebem 12% menos dano pelo resto da jornada.' },
+  { id: 'vital-medallion', name: 'Medalhão vital', icon: '♥', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
+  { id: 'arcane-focus', name: 'Foco arcano', icon: '✦', desc: 'Habilidades ficam 15% mais fortes pelo resto da jornada.' },
+  { id: 'giant-bane', name: 'Ferrão de gigante', icon: '✹', desc: 'Heróis causam 20% mais dano contra chefes.' },
+  { id: 'healing-vial', name: 'Frasco curativo', icon: '⚗', desc: 'Heróis de pé recuperam 35% da vida máxima.' },
+  { id: 'wind-chime', name: 'Sino do vento', icon: '♫', desc: 'Heróis atacam 10% mais rápido pelo resto da jornada.' },
+];
+
+function applyRelicToHero(hero, id) {
+  if (id === 'keen-edge') hero.dmg *= 1.12;
+  else if (id === 'swift-boots') hero.speed *= 1.1;
+  else if (id === 'oak-charm') hero.damageTaken *= 0.88;
+  else if (id === 'vital-medallion') {
+    const extra = Math.round(hero.maxHp * 0.15);
+    hero.maxHp += extra;
+    hero.hp = Math.min(hero.maxHp, hero.hp + extra);
+  } else if (id === 'arcane-focus') hero.skillPower *= 1.15;
+  else if (id === 'giant-bane') hero.bossBonus = (hero.bossBonus || 0) + 0.2;
+  else if (id === 'wind-chime') hero.haste *= 1.1;
+}
+
+function showRelicPick() {
+  const pool = [...RELICS];
+  pick.mode = 'relic';
+  pick.options = [];
+  while (pick.options.length < 3 && pool.length) pick.options.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  $('banner').style.opacity = 0;
+  pick.open = true;
+  game.paused = true;
+  $('pickTitle').textContent = 'Relíquia encontrada!';
+  $('pickSub').textContent = `Fase ${game.phase} · escolha um bônus para o restante da jornada`;
+  $('pickHint').textContent = 'Uma escolha · bônus acumulam · 1–3 escolher';
+  const list = $('pickList');
+  list.innerHTML = '';
+  list.classList.remove('grid');
+  pick.cards = pick.options.map((relic, i) => {
+    const card = document.createElement('div');
+    card.className = 'card relic';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `${relic.name}: ${relic.desc}`);
+    card.style.setProperty('--c', '#f5c75b');
+    card.style.setProperty('--cd', '#a65d35');
+    card.style.setProperty('--d', `${i * 90}ms`);
+    card.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.desc}</p><small>Acumulável nesta jornada</small>`;
+    card.onclick = () => confirmPick(i);
+    bindCard(card, i);
+    list.appendChild(card);
+    return card;
+  });
+  selectCard(0);
+  $('pick').classList.remove('hidden');
+}
+
+function confirmRelic(i) {
+  const relic = pick.options[i];
+  if (!relic) return;
+  game.relics.push(relic.id);
+  if (relic.id === 'healing-vial') {
+    for (const hero of heroes()) if (!hero.dead) hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.35);
+  } else {
+    for (const hero of heroes()) applyRelicToHero(hero, relic.id);
+  }
+  if (heroes()[0]) popText(heroes()[0].pos, `${relic.name}!`, 'evolve');
+  pick.open = false;
+  $('pick').classList.add('hidden');
+  game.paused = false;
+  if (heroes().length < 4) return showPick('Novo aliado!', 'Escolha quem entra no grupo');
+  audio.startMusic();
+}
 
 function showEvolution() {
   if (!evolutions.length || pick.open || game.paused || game.over) return;
@@ -991,7 +1066,8 @@ function heroHit(owner, target, dmg, center = owner.pos) {
   const attack = ['crossbow', 'ninja'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
   if (attack) dmg = applySynergy(attack, owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.65, (0.25 + (owner.level - 1) * 0.05) * owner.skillPower);
-  target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1), center, owner.summoner || owner, critical);
+  const bossBonus = target.boss ? 1 + (owner.bossBonus || 0) : 1;
+  target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1) * bossBonus, center, owner.summoner || owner, critical);
 }
 
 
@@ -1833,6 +1909,7 @@ class Hero extends Unit {
     this.skillPower = 1;
     this.controlPower = 1;
     this.supportPower = 1;
+    this.bossBonus = 0;
     this.damageTaken = 1;
     this.royalT = 0;
     this.royalBonus = 0;
@@ -1846,6 +1923,7 @@ class Hero extends Unit {
     this.guardT = 0;
     this.dodgeTimer = 2;
     this.age = 0;
+    for (const relic of game.relics || []) applyRelicToHero(this, relic);
     this.aura = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: cfg.color[1], side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false }));
     this.aura.rotation.x = -Math.PI / 2;
     this.aura.position.y = 0.05;
@@ -2346,7 +2424,7 @@ function startGame(view = 'menu') {
 function placeParty(first) {
   const m = game.mission;
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
     test: new URLSearchParams(location.search).has('fase') });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
@@ -2640,7 +2718,7 @@ function updateGame(dt) {
       if (game.phase >= game.last) return endGame(game.mission ? `Missão cumprida: ${game.mission.name}! Abates: ${game.kills}` : `Vitória! O grupo chegou ao castelo. Abates: ${game.kills}`, true);
       game.phase++;
       game.state = 'advance';
-      if (heroes().length < HEROES.length) showPick('Novo aliado!', 'Escolha quem entra no grupo');
+      showRelicPick();
     }
   } else if (game.state === 'advance') {
     // o ponto da formação anda pela estrada e o grupo vai atrás
