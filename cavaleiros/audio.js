@@ -2,8 +2,8 @@
 // O navegador só libera o áudio depois de um clique, por isso tudo começa em unlock().
 
 let ctx = null, master = null, sfxBus = null, musicBus = null, noiseBuf = null;
-let muted = false;
-try { muted = localStorage.getItem('cavaleiros-mudo') === '1'; } catch {}
+let muted = true;
+try { muted = localStorage.getItem('cavaleiros-mudo') !== '0'; } catch {}
 
 export function unlock() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
