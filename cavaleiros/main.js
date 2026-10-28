@@ -5,6 +5,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { createWorld } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './characters.js';
 import { LOOKS } from './looks.js';
+import { CLASSES, heroInfo, skillCooldown } from './class-info.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
 import { MISSIONS, goalText, starsFor, saveStars, renderCampaign, totalStars, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
@@ -167,7 +168,7 @@ function showPick(title, sub) {
   for (const hero of HEROES) {
     const row = document.createElement('div');
     row.className = 'pick-row';
-    row.innerHTML = `<span class="class-tag">${hero.name}</span>`;
+    row.innerHTML = `<span class="class-tag" title="${CLASSES[HEROES.indexOf(hero)].summary}">${hero.name}</span>`;
     rows.appendChild(row);
   }
   const total = totalStars();
@@ -360,12 +361,19 @@ function bindCard(b, i) {
 
 // painel de detalhes do cartão em foco: descrição, habilidade e atributos
 function renderInfo(cfg) {
+  const info = heroInfo(cfg);
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
     `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="crest"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
-    <small>${HEROES[cfg.classId].name}</small><div class="ability"><b>✦ ${cfg.ability}</b>${cfg.desc}</div><div class="stats">${stats}</div>
+    <small>${info.name} · ${cfg.ranged ? 'À distância' : 'Corpo a corpo'}</small>
+    <div class="hero-guide"><h4>${info.role}</h4><p>${CLASSES[cfg.classId].summary}</p></div>
+    <div class="ability"><b>✦ ${cfg.ability}</b>${info.skill}<span class="skill-meta">Recarga no nível 1: ${skillCooldown(cfg.id)} s</span></div>
+    <div class="hero-guide"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
+    <div class="stats">${stats}</div>
+    <dl class="hero-numbers"><dt>Vida inicial</dt><dd>${cfg.hp}</dd><dt>Dano por golpe</dt><dd>${cfg.dmg}</dd><dt>Intervalo de ataque</dt><dd>${cfg.cooldown.toLocaleString('pt-BR')} s</dd><dt>Alcance básico</dt><dd>${cfg.range.toLocaleString('pt-BR')} m</dd></dl>
+    <p class="guide-note">Valores do nível 1. Evoluções e melhorias alteram os atributos.</p>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}`;
 }
 
@@ -574,7 +582,7 @@ function buildSkillBar(party) {
     b.setAttribute('role', 'button');
     b.style.setProperty('--c', h.cfg.color[0]);
     b.style.setProperty('--cd', h.cfg.color[1]);
-    b.title = `${h.cfg.name}: ${h.cfg.desc} (tecla ${i + 1})`;
+    b.title = `${h.cfg.name} — ${h.cfg.ability}: ${heroInfo(h.cfg).skill} (tecla ${i + 1})`;
     b.innerHTML = `<span class="key">${i + 1}</span><button class="auto" title="Automático: a habilidade sai sozinha. Manual: espera você.">AUTO</button>
       <div class="face"><img alt=""><div class="cd"></div><b class="secs"></b></div><div class="name">${h.cfg.ability}</div>`;
     const it = { h, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
@@ -1960,7 +1968,7 @@ class Hero extends Unit {
     this.busy = this.once(anim, pace);
     this.pendingHit = { target, effect, t: this.busy * at };
     FX.charge(this, this.pendingHit.t);
-    this.skillTimer = this.skillMax = (({ necro: 12, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7 }[id] ?? 6) - (level - 1) * 0.7) * this.skillRate;
+    this.skillTimer = this.skillMax = skillCooldown(id, level, this.skillRate);
     this.stats.habilidades++;
     return true;
   }

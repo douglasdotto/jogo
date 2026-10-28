@@ -81,3 +81,16 @@
 .unlock span { display: flex; flex-direction: column; font-size: 24px; -webkit-text-stroke: 4px #0d1426; paint-order: stroke fill; }
 .unlock b { font-weight: 400; font-size: 16px; color: #fff6c8; }
 @keyframes unlock-pop { from { scale: 0; rotate: -8deg; } }
+
+/* Guia de classes: texto legível e rolagem própria em telas menores. */
+.pick-info { max-height: calc(100dvh - 180px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.pick-info > * { flex-shrink: 0; }
+.hero-guide { width: 100%; text-align: left; font: 500 13px/1.45 'Fredoka', sans-serif; }
+.hero-guide h4 { margin: 0 0 4px; color: #ffd44a; font-size: 14px; }
+.hero-guide p { margin: 0; color: #e8f2ff; }
+.skill-meta { display: block; margin-top: 7px; color: #cfe6ff; font-size: 12px; line-height: 1.4; }
+.hero-numbers { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; margin: 0; font: 500 12px/1.4 'Fredoka', sans-serif; }
+.hero-numbers dt { color: #cfe6ff; }
+.hero-numbers dd { margin: 0; color: #fff; font-weight: 700; }
+.guide-note { margin: 0; color: #cfe6ff; font: 500 11px/1.4 'Fredoka', sans-serif; }
+#heroPanel .hero-guide h4 { margin-top: 12px; }
