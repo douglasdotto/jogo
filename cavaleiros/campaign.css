@@ -1,0 +1,53 @@
+/* mapa da campanha no estilo Clash: painel azul-marinho, trilha num campo verde, medalhões com estrelas */
+#campaign { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(ellipse at center, rgba(16, 26, 52, .55), rgba(8, 12, 26, .9)); font-family: 'Lilita One', sans-serif; color: #fff; }
+#campaign.hidden { display: none; }
+#campaign .txt { -webkit-text-stroke: 3px #0d1426; paint-order: stroke fill; }
+.camp-head { display: flex; align-items: center; gap: 18px; }
+.camp-title { padding: 8px 70px 14px; font-size: 40px; color: #fff; -webkit-text-stroke: 7px #0d1426; paint-order: stroke fill;
+  background: linear-gradient(#6cc0ff, #2a86e8 55%, #1a5fbf); clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%); filter: drop-shadow(0 5px 0 #0d1426); }
+.camp-total { padding: 6px 14px; font-size: 18px; -webkit-text-stroke: 3px #0d1426; paint-order: stroke fill;
+  background: linear-gradient(#3a5a92, #233a66); border: 3px solid #0f1a33; border-radius: 12px; box-shadow: 0 3px 0 #0f1a33; }
+.camp-body { display: flex; gap: 18px; align-items: stretch; }
+.camp-map { position: relative; width: min(56vw, 560px); height: min(72vh, 560px); border: 4px solid #0f1a33; border-radius: 20px; overflow: hidden;
+  background: radial-gradient(circle at 20% 15%, rgba(255, 255, 255, .15), transparent 40%),
+    radial-gradient(circle at 80% 30%, #5db426 0 10%, transparent 11%), radial-gradient(circle at 15% 55%, #4fa324 0 9%, transparent 10%),
+    radial-gradient(circle at 85% 80%, #4fa324 0 12%, transparent 13%),
+    linear-gradient(180deg, #4a3f6a 0%, #6a6a52 30%, #76cc32 62%, #6cc42e 100%);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, .2), 0 6px 0 #0f1a33, 0 16px 30px rgba(0, 0, 0, .5); }
+.camp-trail { position: absolute; inset: 0; width: 100%; height: 100%; }
+.camp-trail path { fill: none; stroke: #f0b860; stroke-width: 5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.camp-node { position: absolute; translate: -50% -50%; width: 64px; height: 64px; padding: 0; display: grid; place-items: center; border-radius: 50%;
+  background: linear-gradient(#ffe27a, #f2b82e 55%, #c98a12); border: 4px solid #0d1426; box-shadow: inset 0 4px 0 rgba(255, 255, 255, .5), 0 5px 0 #0d1426; cursor: pointer; }
+.camp-node .medal { font-size: 28px; line-height: 1; color: #fff; -webkit-text-stroke: 3px #0d1426; paint-order: stroke fill; }
+.camp-node .num { position: absolute; top: -10px; left: -10px; width: 26px; height: 26px; display: grid; place-items: center; font-size: 14px; border-radius: 50%;
+  background: linear-gradient(#6cc0ff, #1d6fd6); border: 3px solid #0d1426; -webkit-text-stroke: 2px #0d1426; paint-order: stroke fill; }
+.camp-node .stars { position: absolute; bottom: -16px; left: 50%; translate: -50% 0; }
+.camp-node.done { background: linear-gradient(#a6ff7a, #4fc23a 55%, #2f8a24); }
+.camp-node.locked { background: linear-gradient(#9aa2b4, #5c6476); cursor: not-allowed; }
+.camp-node.sel { scale: 1.18; box-shadow: 0 0 0 4px #ffd44a, 0 0 22px 6px rgba(255, 212, 74, .8), inset 0 4px 0 rgba(255, 255, 255, .5), 0 5px 0 #0d1426; animation: node-bob 1.2s ease-in-out infinite; }
+@keyframes node-bob { 50% { translate: -50% calc(-50% - 5px); } }
+.stars { display: inline-flex; gap: 1px; }
+.stars i { font-style: normal; font-size: 18px; color: #3a4258; -webkit-text-stroke: 2.5px #0d1426; paint-order: stroke fill; }
+.stars i.on { color: #ffd44a; }
+.stars.small i { font-size: 15px; }
+.stars.big i { font-size: 34px; }
+.camp-info { width: 250px; padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  background: linear-gradient(160deg, #34507f, #1f3156); border: 4px solid #0f1a33; border-radius: 18px; box-shadow: inset 0 3px 0 rgba(255, 255, 255, .15), 0 6px 0 #0f1a33; }
+.camp-info .medal.big { width: 90px; height: 90px; display: grid; place-items: center; font-size: 46px; border-radius: 50%; color: #fff; -webkit-text-stroke: 4px #0d1426; paint-order: stroke fill;
+  background: linear-gradient(#ffe27a, #f2b82e 55%, #c98a12); border: 4px solid #0d1426; box-shadow: inset 0 4px 0 rgba(255, 255, 255, .5), 0 5px 0 #0d1426; }
+.camp-name { font-size: 22px; -webkit-text-stroke: 4px #0d1426; paint-order: stroke fill; }
+.camp-info p { margin: 0; font-size: 15px; color: #dbeaff; -webkit-text-stroke: 2px #0d1426; paint-order: stroke fill; }
+.camp-info ul { margin: 0; padding: 0; list-style: none; font-size: 14px; color: #b8d4f5; }
+.camp-goals { width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 8px; box-sizing: border-box; font-size: 13px; background: rgba(0, 0, 0, .25); border-radius: 10px; }
+.camp-goals b { color: #ffd44a; font-weight: 400; -webkit-text-stroke: 2px #0d1426; paint-order: stroke fill; }
+.camp-goals span { color: #e8f2ff; }
+.camp-play { margin-top: auto; width: 100%; padding: 10px 0 12px; font-size: 24px; color: #fff; -webkit-text-stroke: 4px #0d1426; paint-order: stroke fill;
+  background: linear-gradient(#a6ff7a, #4fc23a 55%, #2f8a24); border: 4px solid #0d1426; border-radius: 14px; box-shadow: inset 0 4px 0 rgba(255, 255, 255, .45), 0 5px 0 #0d1426; cursor: pointer; }
+.camp-play:disabled { background: linear-gradient(#9aa2b4, #5c6476); cursor: not-allowed; }
+/* estrelas ganhas no fim da missão */
+#overlayStars:empty { display: none; }
+#overlayStars .stars.big i { font-size: 54px; }
+#overlayStars .stars.big i.on { animation: star-pop .5s cubic-bezier(.2, 1.8, .4, 1) backwards; }
+#overlayStars .stars.big i:nth-child(2) { animation-delay: .25s; } #overlayStars .stars.big i:nth-child(3) { animation-delay: .5s; }
+@keyframes star-pop { from { scale: 0; rotate: -40deg; } }

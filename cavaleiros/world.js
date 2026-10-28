@@ -1,6 +1,12 @@
 // Cenário low poly: estrada sinuosa, rio com ponte, vila, natureza e castelo no topo.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { recolor } from './characters.js';
+
+// muitas peças já vêm sem índice; o three avisa a cada "desindexação" repetida. Mesma saída (uma cópia), sem o aviso
+const toNonIndexed = THREE.BufferGeometry.prototype.toNonIndexed;
+THREE.BufferGeometry.prototype.toNonIndexed = function () { return this.index ? toNonIndexed.call(this) : this.clone(); };
 
 // pontos (x, z) por onde a estrada passa, de baixo (z positivo) para cima
 const ROUTE = [[0, 14], [2, 0], [8, -18], [4, -38], [-7, -56], [-10, -76], [-3, -96], [8, -114], [10, -134], [2, -152], [-8, -170], [-7, -190], [1, -208], [6, -228], [2, -246], [0, -264]];
@@ -349,7 +355,11 @@ export function createWorld(scene, ROAD, PHASES) {
   // afloramento rochoso: paredes com saliências e nervuras (ruído em ângulo e altura), base larga com
   // pedregulhos caídos, pontas de rocha na borda e uma trilha de terra entalhada na encosta.
   // O topo onde se anda fica na altura 3 e a trilha ocupa |x| <= 1.5, z de -9 a -3 (igual à lógica).
-  function rockMountain(group, gloom) {
+  function rockMountain(group, gloom, zone) {
+    // casco (paredes, topo e pontas) num grupo próprio: é trocado pelo modelo pronto quando ele carregar
+    const shell = new THREE.Group();
+    group.add(shell);
+    zone.shell = shell;
     const SEG = 34, ROWS = 8, seedA = rand() * 10, seedB = rand() * 10;
     const radiusAt = (a, t) => {   // t: 0 na base, 1 no topo
       // a lógica trata o topo como raio 4 e contorna a ~5 m: a base não pode passar muito disso
@@ -384,7 +394,7 @@ export function createWorld(scene, ROAD, PHASES) {
       const y = (a.y + b.y + d.y) / 3;
       return c.set(bands[Math.max(0, Math.floor((y + 0.25) / 0.55)) % bands.length]).multiplyScalar(range(0.9, 1.08)).lerp(dark, gloom * 0.5).getHex();
     };
-    mesh(faceted(tris, wallColor), rockMat, 0, 0, 0, group);
+    mesh(faceted(tris, wallColor), rockMat, 0, 0, 0, shell);
 
     // topo: musgo e pedra em mosaico irregular; a borda é o último anel das paredes
     const rim = grid[ROWS].map((v) => {
@@ -405,7 +415,7 @@ export function createWorld(scene, ROAD, PHASES) {
     mesh(faceted(capTris, (a, b, d) => {
       const x = (a.x + b.x + d.x) / 3, z = (a.z + b.z + d.z) / 3;
       return c.copy(stoneTop).lerp(mossA, THREE.MathUtils.smoothstep(mossAt(x, z), -0.6, 0.6)).multiplyScalar(range(0.95, 1.04)).lerp(dark, gloom * 0.55).getHex();
-    }), rockMat, 0, 0, 0, group);
+    }), rockMat, 0, 0, 0, shell);
 
     // pontas de rocha na borda (fora da trilha)
     const shardGeo = new THREE.ConeGeometry(0.55, 1, 5);
@@ -414,7 +424,7 @@ export function createWorld(scene, ROAD, PHASES) {
       const x = Math.sin(a) * r, z = Math.cos(a) * r;
       if (Math.abs(x) < 2.6 && z < 0) continue;
       const h = range(0.8, 2.2);
-      const s = mesh(shardGeo, pick(bands), x, 3 + h / 2 - 0.1, z, group);
+      const s = mesh(shardGeo, pick(bands), x, 3 + h / 2 - 0.1, z, shell);
       s.scale.set(range(0.7, 1.3), h, range(0.7, 1.2));
       s.rotation.set(range(-0.15, 0.15), rand() * 3, range(-0.15, 0.15));
     }
@@ -521,7 +531,8 @@ export function createWorld(scene, ROAD, PHASES) {
     group.position.copy(zone.center).setY(0);
     group.rotation.y = Math.atan2(zone.fwd.x, zone.fwd.z);
     scene.add(group);
-    if (zone.type === 'plateau') rockMountain(group, gloomAt(zone.center.z));
+    zone.group = group;
+    if (zone.type === 'plateau') rockMountain(group, gloomAt(zone.center.z), zone);
     else lake(zone, group, gloomAt(zone.center.z));
   }
 
@@ -1290,6 +1301,70 @@ export function createWorld(scene, ROAD, PHASES) {
     wisps.push(w);
   }
   const cloudDay = new THREE.Color(0xffffff), cloudGloom = new THREE.Color(0x6e667e);
+
+  // ---------- montanhas, colinas e pedras prontas (KayKit Medieval Hexagon, CC0) ----------
+  // carregam sozinhas depois do resto do mapa; a grama da textura vem amarelada e é girada para verde
+  const HEX = ['mountain_A', 'mountain_B', 'mountain_C', 'mountain_A_grass', 'mountain_B_grass', 'mountain_C_grass', 'mountain_A_grass_trees',
+    'mountain_B_grass_trees', 'mountain_C_grass_trees', 'hills_A_trees', 'hills_B_trees', 'hills_C_trees', 'rock_single_A', 'rock_single_C', 'rock_single_E'];
+  const hexLoader = new GLTFLoader();
+  Promise.all(HEX.map((n) => hexLoader.loadAsync(`assets/hex/${n}.gltf`).then((g) => [n, g.scene]))).then((list) => {
+    const hex = Object.fromEntries(list);
+    const size = {};
+    for (const [n, obj] of Object.entries(hex)) {
+      obj.traverse((o) => { if (o.isMesh && o.material.map) o.material.map = recolor(o.material.map, { hue: 38 }); });
+      size[n] = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+    }
+    // cópia com sombra; nas terras escuras perde a cor como o resto do mundo
+    const place = (name, parent, x, y, z, sx, sy, rotY, gz) => {
+      const m = hex[name].clone(true), g = gloomAt(gz);
+      m.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = o.receiveShadow = true;
+        if (g > 0.05) { o.material = o.material.clone(); o.material.color.lerp(gloomTint, g * 0.65); }
+      });
+      m.position.set(x, y, z);
+      m.scale.set(sx, sy, sx);
+      m.rotation.y = rotY;
+      parent.add(m);
+      return m;
+    };
+    // montanhas das zonas: ocupam o platô da lógica (raio ~4, topo na altura 3); a trilha e o acampamento ficam
+    const zoneModels = ['mountain_C_grass', 'mountain_B_grass', 'mountain_A_grass'];
+    let k = 0;
+    for (const zone of zones.values()) {
+      if (zone.type !== 'plateau') continue;
+      const name = zoneModels[k++ % zoneModels.length], sz = size[name];
+      place(name, zone.group, 0, 0, 0, 9 / Math.max(sz.x, sz.z), 3.15 / sz.y, Math.PI / 6, zone.center.z);
+      zone.shell.visible = false;
+    }
+    // longe do caminho: cordilheira de montanhas grandes e colinas com árvores enquadrando o mapa
+    const farOk = (p, min) => roadDist(p.x, p.z) > min && riverDist(p.x, p.z) > 8 && p.distanceTo(castle.position) > 30
+      && ![...zones.values()].some((z) => Math.hypot(z.center.x - p.x, z.center.z - p.z) < 16);
+    const bigs = ['mountain_A', 'mountain_B', 'mountain_C', 'mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass_trees'];
+    for (let n = 0, tries = 0; n < 26 && tries < 400; tries++) {
+      const p = along(range(-5, L + 5), (rand() < 0.5 ? -1 : 1) * range(ROAD + 26, ROAD + 52));
+      if (!farOk(p, ROAD + 24)) continue;
+      const s = range(6, 10);
+      place(pick(bigs), scene, p.x, heightAt(p.x, p.z) - 0.4, p.z, s, s * range(0.9, 1.3), rand() * 6.3, p.z);
+      n++;
+    }
+    const hills = ['hills_A_trees', 'hills_B_trees', 'hills_C_trees'];
+    for (let n = 0, tries = 0; n < 22 && tries < 400; tries++) {
+      const p = along(range(-5, L + 5), (rand() < 0.5 ? -1 : 1) * range(ROAD + 14, ROAD + 26));
+      if (!farOk(p, ROAD + 12)) continue;
+      const s = range(3.5, 5);
+      place(pick(hills), scene, p.x, heightAt(p.x, p.z) - 0.3, p.z, s, s * 0.7, rand() * 6.3, p.z);
+      n++;
+    }
+    // pedras grandes soltas perto do caminho (só visual, fora da área de luta)
+    const rocks = ['rock_single_A', 'rock_single_C', 'rock_single_E'];
+    for (let n = 0, tries = 0; n < 40 && tries < 300; tries++) {
+      const p = along(range(0, L), (rand() < 0.5 ? -1 : 1) * range(ROAD + 6, ROAD + 14));
+      if (!farOk(p, ROAD + 5.5)) continue;
+      place(pick(rocks), scene, p.x, heightAt(p.x, p.z) - 0.05, p.z, range(4, 7), range(4, 8), rand() * 6.3, p.z);
+      n++;
+    }
+  }).catch((e) => console.warn('modelos de montanha não carregaram', e));
 
   let time = 0;
   function update(dt, viewZ = 0) {

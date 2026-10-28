@@ -117,7 +117,7 @@ export function applyLook(root, assets, r) {
 // ---------- cores: recolore o atlas de cores do modelo ----------
 const recolored = new Map();
 
-function recolor(tex, op) {
+export function recolor(tex, op) {
   const key = `${tex.uuid}|${JSON.stringify(op)}`;
   if (recolored.has(key)) return recolored.get(key);
   const { width: w, height: h } = tex.image;
