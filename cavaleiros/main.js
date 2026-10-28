@@ -1081,6 +1081,79 @@ function nearest(from, list) {
   return best;
 }
 
+function tacticalDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.z - b.z);
+}
+
+function canHeroReachTarget(hero, target) {
+  const goal = game.mission?.goal;
+  const plateauBonus = world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0;
+  const fromPost = tacticalDistance(hero.post, target.pos);
+  if (fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5) return true;
+
+  // Na escolta, o grupo pode sair um pouco da formação para tirar um inimigo do aldeão.
+  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
+  if (villager && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
+
+  // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão.
+  return goal?.type === 'totems' && target.totem && fromPost <= LEASH + hero.range + 5;
+}
+
+function heroTargetScore(hero, target) {
+  const goal = game.mission?.goal;
+  const distance = tacticalDistance(hero.pos, target.pos);
+  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
+  let score = distance;
+
+  if (target.boss) score -= goal?.type === 'boss' ? 12 : 3.5;
+  if (target.totem) score -= goal?.type === 'totems' ? 12 : 1;
+  if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
+
+  if (target.enemyKind === 'Bomber') {
+    const nearby = allies().filter((ally) => !ally.dead).reduce((best, ally) => Math.min(best, tacticalDistance(ally.pos, target.pos)), Infinity);
+    score -= nearby < 7 ? 4 + (7 - nearby) * 0.45 : 1;
+  }
+
+  if (target.ranged) score -= hero.ranged ? 2.5 : 1.25;
+  const threatenedAlly = target.pendingHit?.target;
+  if (threatenedAlly?.team === 'hero') {
+    const missingHealth = 1 - Math.max(0, threatenedAlly.hp) / threatenedAlly.maxHp;
+    score -= 3 + missingHealth * 2 + (goal?.type === 'nofall' ? 4 : 0);
+  }
+  if (villager) {
+    const toVillager = tacticalDistance(villager.pos, target.pos);
+    if (target.pendingHit?.target === villager) score -= 11;
+    else if (toVillager < 12) score -= (12 - toVillager) * 0.8;
+  }
+
+  return score;
+}
+
+function chooseHeroTarget(hero, candidates, dt) {
+  hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
+  const eligible = candidates.filter((target) => !target.dead && !target.spawning && canHeroReachTarget(hero, target));
+  if (!eligible.length) {
+    hero.targetFocus = null;
+    hero.targetFocusT = 0;
+    return null;
+  }
+
+  let best = eligible[0], bestScore = heroTargetScore(hero, best);
+  for (let i = 1; i < eligible.length; i++) {
+    const score = heroTargetScore(hero, eligible[i]);
+    if (score < bestScore) { best = eligible[i]; bestScore = score; }
+  }
+
+  const focused = eligible.find((target) => target === hero.targetFocus);
+  // Mantém o foco por um instante, exceto quando surge uma ameaça claramente mais urgente.
+  if (focused && hero.targetFocusT > 0 && best !== focused && bestScore > heroTargetScore(hero, focused) - 3.5) best = focused;
+  if (hero.targetFocus !== best) {
+    hero.targetFocus = best;
+    hero.targetFocusT = 1.1;
+  }
+  return best;
+}
+
 // projéteis e áreas usam geometrias compartilhadas, sem luzes extras.
 const bolts = [], blasts = [], flames = [];
 const boltGeo = new THREE.SphereGeometry(0.2, 10, 10);
@@ -2034,6 +2107,8 @@ class Hero extends Unit {
     this.auto = loadAuto(cfg.id);
     this.wantSkill = 0;     // tempo em que o pedido do jogador ainda vale
     this.noTarget = 0;
+    this.targetFocus = null;
+    this.targetFocusT = 0;
     this.furyT = 0;
     this.guardT = 0;
     this.dodgeTimer = 2;
@@ -2298,7 +2373,7 @@ class Hero extends Unit {
     if (this.dead || this.busy > 0 || game.over) return;
     const escape = game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
     if (escape) { this.moveTo(escape, dt); this.locomote('Running_A', 'Walking_A', this.cfg.idle); return; }
-    const target = game.state === 'fight' ? nearest(this.pos, skeletonsAlive().filter((u) => !u.spawning)) : null;
+    const target = game.state === 'fight' ? chooseHeroTarget(this, skeletonsAlive(), dt) : null;
     // no manual a habilidade fica carregada esperando o jogador pedir
     if (game.state === 'fight' && this.skillTimer <= 0 && (this.auto || this.wantSkill > 0)) {
       const asked = this.wantSkill > 0;
@@ -2308,8 +2383,8 @@ class Hero extends Unit {
       if (this.useSkill(chosen || target, !!chosen)) return;
       if (asked) this.missSkill();
     }
-    // atiradores não saem do lugar: o grupo vai até eles
-    const engage = target && (target.ranged || target.pos.distanceTo(this.post) < LEASH + this.range + (world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0));
+    // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
+    const engage = target && canHeroReachTarget(this, target);
     if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
