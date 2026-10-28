@@ -51,3 +51,33 @@
 #overlayStars .stars.big i.on { animation: star-pop .5s cubic-bezier(.2, 1.8, .4, 1) backwards; }
 #overlayStars .stars.big i:nth-child(2) { animation-delay: .25s; } #overlayStars .stars.big i:nth-child(3) { animation-delay: .5s; }
 @keyframes star-pop { from { scale: 0; rotate: -40deg; } }
+.camp-back { padding: 6px 14px 8px; font-size: 18px; }
+.camp-goal { width: 100%; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; font-size: 16px; color: #fff; -webkit-text-stroke: 3px #0d1426; paint-order: stroke fill;
+  background: linear-gradient(#ff8a5a, #d0502f); border: 3px solid #0d1426; border-radius: 10px; box-shadow: inset 0 3px 0 rgba(255, 255, 255, .3), 0 3px 0 #0d1426; }
+.camp-goal b { font-weight: 400; font-size: 13px; color: #ffe27a; }
+/* menu inicial: dois cartões grandes */
+.card.diff.mode { width: 230px; }
+/* objetivo da missão no HUD */
+#goal.hidden { display: none; }
+#goal { background: linear-gradient(#ff9a5a, #d0502f); }
+#goal::before { content: '\2691\FE0E'; font-size: 17px; color: var(--gold); -webkit-text-stroke: 2px var(--outline); }
+#goal.warn { background: linear-gradient(#ff6a7a, #b3203a); animation: goal-pulse .8s ease-in-out infinite; }
+#goal.done { background: linear-gradient(#a6ff7a, #2f8a24); }
+@keyframes goal-pulse { 50% { scale: 1.08; } }
+/* variante bloqueada na grade: cinza, cadeado e quantas estrelas faltam */
+#pickList.grid .card.locked { cursor: not-allowed; background: linear-gradient(#7a7f8c, #4c5160); }
+.card.locked .portrait img { filter: grayscale(1) brightness(.55); }
+#pickList.grid .card.locked .ability { color: #ffd44a; }
+.card .lock { position: absolute; z-index: 3; top: 26px; left: 50%; translate: -50% 0; font-size: 30px; color: #fff; -webkit-text-stroke: 3px #0d1426; paint-order: stroke fill; }
+.pick-info .lock-info { width: 100%; padding: 6px 8px; box-sizing: border-box; font-size: 13px; text-align: center; color: #ffd44a; -webkit-text-stroke: 2px #0d1426; paint-order: stroke fill;
+  background: rgba(0, 0, 0, .35); border: 2px solid #ffd44a; border-radius: 10px; }
+/* fim da missão: recorde e aviso de variante liberada */
+#overlayStars { display: flex; flex-direction: column; align-items: center; gap: 10px; font-family: 'Lilita One', sans-serif; color: #fff; }
+#overlayStars .star-best { font-size: 18px; color: #ffd44a; -webkit-text-stroke: 3px #0d1426; paint-order: stroke fill; }
+.unlock { display: flex; align-items: center; gap: 12px; padding: 8px 20px 8px 8px; border: 4px solid #0d1426; border-radius: 16px;
+  background: linear-gradient(#ffe27a, #f2b82e 55%, #c98a12); box-shadow: inset 0 4px 0 rgba(255, 255, 255, .5), 0 5px 0 #0d1426, 0 0 30px 6px rgba(255, 212, 74, .6);
+  animation: unlock-pop .6s .8s cubic-bezier(.2, 1.8, .4, 1) backwards; }
+.unlock img { width: 64px; height: 64px; border-radius: 12px; border: 3px solid #0d1426; background: radial-gradient(circle at 50% 30%, var(--c), var(--cd)); }
+.unlock span { display: flex; flex-direction: column; font-size: 24px; -webkit-text-stroke: 4px #0d1426; paint-order: stroke fill; }
+.unlock b { font-weight: 400; font-size: 16px; color: #fff6c8; }
+@keyframes unlock-pop { from { scale: 0; rotate: -8deg; } }

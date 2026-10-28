@@ -7,6 +7,7 @@ import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './chara
 import { LOOKS } from './looks.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
+import { MISSIONS, goalText, starsFor, saveStars, renderCampaign, totalStars, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -130,8 +131,8 @@ const $ = (id) => document.getElementById(id);
 const bars = $('bars');
 let speed = 1;
 $('speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('speed').textContent = `Velocidade ${speed}x`; };
-$('restart').onclick = () => startGame();   // volta para a tela de dificuldade
-$('overlayBtn').onclick = () => startGame();
+$('restart').onclick = () => startGame();   // volta para o menu inicial
+$('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');   // na campanha volta para o mapa
 
 function showBanner(text, seconds = 2) {
   const b = $('banner');
@@ -167,18 +168,19 @@ function showPick(title, sub) {
     row.innerHTML = `<span class="class-tag">${hero.name}</span>`;
     rows.appendChild(row);
   }
+  const total = totalStars();
   pick.cards = pick.options.map((cfg, i) => {
-    const owned = isOwned(cfg);
+    const owned = isOwned(cfg), open = variantOpen(cfg.id, total);
     const b = document.createElement('div');
-    b.className = owned ? 'card owned' : 'card';
+    b.className = owned ? 'card owned' : open ? 'card' : 'card locked';
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', owned ? `${cfg.name} (já está no grupo)` : `Escolher ${cfg.name}`);
+    b.setAttribute('aria-label', owned ? `${cfg.name} (já está no grupo)` : open ? `Escolher ${cfg.name}` : `${cfg.name} (★ ${starsToUnlock(cfg.id)} para liberar)`);
     b.style.setProperty('--c', cfg.color[0]);
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 30}ms`);
     b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
-      <strong class="ability">${cfg.ability}</strong>${owned ? '<span class="seal">No grupo</span>' : ''}`;
-    if (!owned) b.onclick = () => confirmPick(i);
+      <strong class="ability">${owned || open ? cfg.ability : `★ ${starsToUnlock(cfg.id)} para liberar`}</strong>${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : '<span class="lock">\u{1F512}︎</span>'}`;
+    if (!owned && open) b.onclick = () => confirmPick(i);
     bindCard(b, i);
     rows.children[cfg.classId].appendChild(b);
     return b;
@@ -186,13 +188,14 @@ function showPick(title, sub) {
   pick.info = document.createElement('aside');
   pick.info.className = 'pick-info';
   list.append(rows, pick.info);
-  selectCard(pick.options.findIndex((cfg) => !isOwned(cfg)));
+  selectCard(pick.options.findIndex(isFree));
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
 }
 
 const isOwned = (cfg) => heroes().some((h) => h.cfg.id === cfg.id);
+const isFree = (cfg) => !isOwned(cfg) && variantOpen(cfg.id);   // pode entrar no grupo agora
 
 // recordes por dificuldade (melhor fase e abates), guardados no navegador quando der
 const RECORDS_KEY = 'cavaleiros-recordes';
@@ -202,7 +205,7 @@ function loadRecords() {
 
 // devolve true quando a partida que acabou virou o novo recorde do nível
 function saveRecord(won) {
-  if (game.start > 1) return false;   // o atalho ?fase=N não vale recorde
+  if (game.start > 1 || game.mission) return false;   // o atalho ?fase=N não vale recorde; a campanha usa estrelas
   const records = loadRecords(), old = records[difficulty.id];
   const now = { phase: game.phase, kills: game.kills, won };
   const better = !old || (won && !old.won) || (won === !!old.won && (now.phase > old.phase || (now.phase === old.phase && now.kills > old.kills)));
@@ -225,21 +228,86 @@ function saveAuto(id, on) {
   } catch {}
 }
 
-// tela inicial: título e as quatro dificuldades com o recorde de cada uma
-function showDifficulty() {
-  pick.mode = 'difficulty';
+// menu inicial: Campanha (missões com estrelas) ou Jornada completa (as 12 fases seguidas)
+const MODES = [
+  { name: 'Campanha', icon: '⚑', desc: '8 missões com objetivos e estrelas.', color: ['#ffe27a', '#c98a12'] },
+  { name: 'Jornada completa', icon: '♛', desc: 'As 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
+];
+function showMenu() {
+  pick.mode = 'mode';
   $('banner').style.opacity = 0;
-  pick.options = DIFFICULTIES;
-  const records = loadRecords();
+  $('campaign').classList.add('hidden');
+  pick.options = MODES;
   $('pickTitle').textContent = 'Cavaleiros vs Esqueletos';
-  $('pickSub').textContent = 'Escolha a dificuldade da aventura';
+  $('pickSub').textContent = 'Escolha o modo de jogo';
   $('pickHint').textContent = 'Clique para escolher · ← → movem · Enter confirma';
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
+  const records = Object.values(loadRecords());
+  const lines = [`★ ${totalStars()} / ${MISSIONS.length * 3} estrelas`,
+    records.some((r) => r.won) ? '♛ Jornada vencida!' : records.length ? `Recorde: fase ${Math.max(...records.map((r) => r.phase))}` : 'Sem recorde ainda'];
+  pick.cards = MODES.map((m, i) => {
+    const b = document.createElement('div');
+    b.className = 'card diff mode';
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-label', `${m.name}: ${m.desc}`);
+    b.style.setProperty('--c', m.color[0]);
+    b.style.setProperty('--cd', m.color[1]);
+    b.style.setProperty('--d', `${i * 90}ms`);
+    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${m.icon}</div><div class="ribbon">${m.name}</div><p>${m.desc}</p><div class="record">${lines[i]}</div>`;
+    b.onclick = () => confirmPick(i);
+    bindCard(b, i);
+    list.appendChild(b);
+    return b;
+  });
+  selectCard(0);
+  pick.open = true;
+  game.paused = true;
+  $('pick').classList.remove('hidden');
+}
+
+function confirmMode(i) {
+  pick.open = false;
+  pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : (game.mission = null, showDifficulty())), 450);
+}
+
+// mapa da campanha; escolher uma missão leva à dificuldade
+function showCampaign() {
+  game.mission = null;
+  pick.open = false;
+  game.paused = true;   // sem grupo ainda: a partida não pode correr por trás do mapa
+  $('pick').classList.add('hidden');
+  const root = $('campaign');
+  renderCampaign(root, (m) => {
+    game.mission = m;
+    root.classList.add('hidden');
+    showDifficulty();
+  });
+  const back = document.createElement('button');
+  back.className = 'camp-back';
+  back.textContent = '← Menu';
+  back.onclick = () => showMenu();
+  root.querySelector('.camp-head')?.prepend(back);
+  root.classList.remove('hidden');
+}
+
+// dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão
+function showDifficulty() {
+  pick.mode = 'difficulty';
+  $('banner').style.opacity = 0;
+  pick.options = DIFFICULTIES;
+  const records = loadRecords(), m = game.mission;
+  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada completa';
+  $('pickSub').textContent = m ? `Objetivo: ${goalText(m.goal)} · escolha a dificuldade` : 'Escolha a dificuldade da aventura';
+  $('pickHint').textContent = 'Clique para escolher · ← → movem · Enter confirma · Esc volta';
+  const list = $('pickList');
+  list.innerHTML = '';
+  list.classList.remove('grid');
   pick.cards = DIFFICULTIES.map((d, i) => {
-    const r = records[d.id];
-    const record = r ? `${r.won ? '♛ Vitória!' : `Recorde: fase ${r.phase}`} · ${r.kills} abates` : 'Sem recorde ainda';
+    const r = m ? null : records[d.id];
+    const record = m ? `Fases ${m.from}–${m.to}` : r ? `${r.won ? '♛ Vitória!' : `Recorde: fase ${r.phase}`} · ${r.kills} abates` : 'Sem recorde ainda';
     const b = document.createElement('div');
     b.className = 'card diff';
     b.setAttribute('role', 'button');
@@ -265,8 +333,17 @@ function confirmDifficulty(i) {
   setText('level', difficulty.name);
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos'), 550);
+  const m = game.mission;
+  // ?fase=N também vale na campanha, dentro do trecho da missão
+  const asked = +new URLSearchParams(location.search).get('fase');
+  placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
+  game.picksLeft = m ? m.heroes : 0;
+  pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
+    : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
 }
+
+const pickTitle = () => game.mission.heroes > 1 ? `Escolha o herói ${heroes().length + 1} de ${game.mission.heroes}` : 'Escolha seu herói';
+const pickSub = () => `${game.mission.name}: o grupo começa no nível ${game.mission.level}`;
 
 function bindCard(b, i) {
   b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
@@ -286,12 +363,13 @@ function renderInfo(cfg) {
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="crest"><img src="${cfg.portrait}" alt=""></div><div class="ribbon">${cfg.name}</div>
-    <small>${HEROES[cfg.classId].name}</small><div class="ability"><b>✦ ${cfg.ability}</b>${cfg.desc}</div><div class="stats">${stats}</div>`;
+    <small>${HEROES[cfg.classId].name}</small><div class="ability"><b>✦ ${cfg.ability}</b>${cfg.desc}</div><div class="stats">${stats}</div>
+    ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}`;
 }
 
 // setas na grade: ← → dentro da linha, ↑ ↓ entre linhas (coluna mais próxima), pulando quem já está no grupo
 function moveGrid(dx, dy) {
-  const free = (i) => !isOwned(pick.options[i]);
+  const free = (i) => isFree(pick.options[i]);
   const r0 = Math.floor(pick.sel / 4), c0 = pick.sel % 4;
   for (let n = 1; n < 4; n++) {
     if (dx) {
@@ -315,8 +393,9 @@ function confirmPick(i) {
   if (!pick.open) return;
   if (pick.mode === 'evolution') return confirmEvolution(i);
   if (pick.mode === 'difficulty') return confirmDifficulty(i);
+  if (pick.mode === 'mode') return confirmMode(i);
   const cfg = pick.options[i];
-  if (isOwned(cfg) || heroes().length >= 4) return;
+  if (!isFree(cfg) || heroes().length >= 4) return;
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   for (let k = 0; k < 10; k++) {   // corações saindo do cartão escolhido
@@ -330,12 +409,17 @@ function confirmPick(i) {
   }
   pick.timer = setTimeout(() => {
     $('pick').classList.add('hidden');
-    const party = heroes();
-    const xp = party.length ? party.reduce((sum, h) => sum + h.xp, 0) / party.length / 2 : 0;
+    const party = heroes(), first = game.picksLeft > 0;   // first: grupo inicial da missão
+    const xp = first ? XP_LEVELS[game.mission.level - 1] : party.length ? party.reduce((sum, h) => sum + h.xp, 0) / party.length / 2 : 0;
     const h = new Hero(cfg);
     arrangeParty();
     h.gainXp(xp);
     h.busy = h.once('Cheer') * 0.6;
+    if (first) {
+      autoUpgrade();   // a missão já começa no nível certo, sem telas de evolução
+      if (--game.picksLeft > 0) return showPick(pickTitle(), pickSub());
+      return startMission();
+    }
     if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
     game.paused = false;
     audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
@@ -387,17 +471,30 @@ function showEvolution() {
 
 function confirmEvolution(i) {
   const h = evolutions.shift().hero, option = pick.upgrades[i];
+  applyUpgrade(h, option);
+  popText(h.pos, option.name + '!', 'evolve');
+  pick.open = false;
+  $('pick').classList.add('hidden');
+  game.paused = false;
+  showEvolution();
+}
+
+// no começo da missão as evoluções já vêm com uma melhoria sorteada, sem abrir a tela
+function autoUpgrade() {
+  while (evolutions.length) {
+    const h = evolutions.shift().hero;
+    const pool = UPGRADES.filter((o) => (o.id !== 'range' || h.ranged) && (o.id !== 'skill' || h.cfg.id !== 'berserker'));
+    applyUpgrade(h, pool[Math.floor(Math.random() * pool.length)]);
+  }
+}
+
+function applyUpgrade(h, option) {
   if (option.id === 'hp') { h.maxHp = Math.round(h.maxHp * 1.25); h.hp = h.maxHp; }
   if (option.id === 'dmg') h.dmg *= 1.2;
   if (option.id === 'haste') h.haste *= 1.2;
   if (option.id === 'range') h.range *= 1.2;
   if (option.id === 'skill') { h.skillRate *= 0.75; h.skillPower *= 1.25; h.skillTimer *= 0.75; }
   if (option.id === 'shield') h.damageTaken *= 0.8;
-  popText(h.pos, option.name + '!', 'evolve');
-  pick.open = false;
-  $('pick').classList.add('hidden');
-  game.paused = false;
-  showEvolution();
 }
 
 function arrangeParty() {
@@ -413,6 +510,7 @@ function arrangeParty() {
 
 addEventListener('keydown', (e) => {
   if (!pick.open) return;
+  if (e.key === 'Escape' && pick.mode === 'difficulty') return game.mission ? showCampaign() : showMenu();
   const grid = pick.mode === 'hero';
   if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : selectCard(pick.sel - 1);
   else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : selectCard(pick.sel + 1);
@@ -2052,7 +2150,8 @@ function separate() {
 // state: 'fight' (onda) -> 'cleared' (comemoração + escolha de herói) -> 'advance' (sobe a estrada) -> 'fight'
 const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: 0, over: false, paused: false };
 
-function startGame() {
+// view: 'menu' (tela inicial) ou 'map' (mapa da campanha)
+function startGame(view = 'menu') {
   clearTimeout(pick.timer);
   clearTimeout(showBanner.t);
   $('banner').style.opacity = 0;
@@ -2071,16 +2170,37 @@ function startGame() {
   bars.querySelectorAll('.pop').forEach((el) => el.remove());
   closeHeroPanel();
   $('overlayStats').innerHTML = '';
+  $('overlayStars').innerHTML = '';
   while (units.length) units[0].remove();
+  game.mission = null;
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
-  const first = THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES);
-  Object.assign(game, { phase: first, start: first, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(first), over: false });
+  placeParty(THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES));
+  $('overlay').classList.add('hidden');
+  if (view === 'map') showCampaign();
+  else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
+}
+
+// põe o grupo (e a câmera) na fase inicial e zera a partida; game.mission continua
+function placeParty(first) {
+  const m = game.mission;
+  Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
+    test: new URLSearchParams(location.search).has('fase') });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
   camera.position.set(follow.x, 23, follow.z + 21);
-  $('overlay').classList.add('hidden');
-  showDifficulty();   // depois da dificuldade vem a escolha do herói
+  $('goal').classList.toggle('hidden', !m);
+  if (m) setText('goal', goalText(m.goal));
+  $('goal').classList.remove('warn', 'done');
+}
+
+// grupo inicial escolhido: começa a missão (o aldeão entra junto na escolta)
+function startMission() {
+  const m = game.mission;
+  if (m.goal.type === 'escort') game.villager = new Villager();
+  showBanner(`${m.name}: ${goalText(m.goal)}`, 3);
+  game.paused = false;
 }
 
 function startPhase() {
@@ -2088,7 +2208,202 @@ function startPhase() {
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
   game.bossPending = game.phase % 6 === 0;
   game.spawnTimer = 0.5;
+  const goal = game.mission?.goal;
+  if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
+    const n = Math.ceil((goal.count - game.totemsPlaced) / (game.last - game.phase + 1));
+    for (let k = 0; k < n; k++) placeTotem(k);
+  }
+  if (goal?.type === 'survive' && game.phase === goal.phase) return showBanner(`Aguente ${goal.time} s!`);
   showBanner(game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`);
+}
+
+// ---------- campanha: aldeão, totens e objetivos ----------
+// aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
+class Villager extends Unit {
+  constructor() {
+    super(assets.Barbarian, { hp: Math.round(240 / difficulty.dmg), dmg: 0, range: 0, speed: 3, cooldown: 1 }, 'villager');
+    const tint = new THREE.Color(0xd8b07a);
+    this.root.traverse((o) => { if (HEROES[1].weapons.includes(o.name) && o.name !== 'Mug') o.visible = false; });
+    for (const m of this.mats) m.color?.lerp(tint, 0.45);
+    this.bar.classList.add('ally');
+    const label = document.createElement('span');
+    label.textContent = 'Aldeão';
+    this.bar.appendChild(label);
+    this.post = new THREE.Vector3();
+    this.follow();
+    this.pos.copy(this.post);
+    this.popT = 0;
+    this.loop('Idle');
+  }
+
+  follow() {
+    const fwd = world.tangentAt(game.guideS);
+    this.post.copy(world.pointAt(game.guideS)).addScaledVector(fwd, -3.2);
+    return fwd;
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.updateCommon(dt);
+    if (this.dead || game.over || this.busy > 0) return;
+    const fwd = this.follow();
+    if (this.pos.distanceTo(this.post) > 0.3) this.moveTo(this.post, dt);
+    else this.face(tmp.copy(this.post).addScaledVector(fwd, 10), dt);
+    this.locomote('Running_A', 'Walking_A', 'Idle');
+  }
+
+  die() {
+    this.dead = true;
+    this.hp = 0;
+    this.pendingHit = null;
+    this.once('Death_A');
+    this.bar.style.display = 'none';
+  }
+}
+
+// totem de ossos: pilha de ossos com caveira e brilho roxo; tem vida, não anda e faz surgir esqueletos por perto
+let totemParts = null;
+function totemModel() {
+  totemParts ||= { bone: new THREE.MeshLambertMaterial({ color: 0xf1e8d2 }), glow: new THREE.MeshBasicMaterial({ color: 0xb36bff }),
+    stick: new THREE.CylinderGeometry(0.11, 0.11, 1.3, 6), knob: new THREE.SphereGeometry(0.15, 8, 6), skull: new THREE.SphereGeometry(0.42, 12, 10),
+    eye: new THREE.SphereGeometry(0.09, 6, 6), ring: new THREE.TorusGeometry(0.85, 0.07, 6, 24), base: new THREE.CylinderGeometry(0.7, 0.85, 0.35, 8) };
+  const P = totemParts, g = new THREE.Group();
+  const base = new THREE.Mesh(P.base, P.bone);
+  base.position.y = 0.17;
+  g.add(base);
+  for (let k = 0; k < 3; k++) {   // ossos cruzados em pé
+    const stick = new THREE.Mesh(P.stick, P.bone);
+    stick.position.set(Math.cos(k * 2.1) * 0.22, 0.95, Math.sin(k * 2.1) * 0.22);
+    stick.rotation.set(Math.sin(k * 2.1) * 0.35, 0, Math.cos(k * 2.1) * 0.35);
+    for (const end of [-0.65, 0.65]) { const knob = new THREE.Mesh(P.knob, P.bone); knob.position.y = end; stick.add(knob); }
+    g.add(stick);
+  }
+  const skull = new THREE.Mesh(P.skull, P.bone);
+  skull.position.y = 1.95;
+  skull.scale.set(1, 0.9, 1);
+  for (const side of [-0.15, 0.15]) { const eye = new THREE.Mesh(P.eye, P.glow); eye.position.set(side, 0.02, 0.36); skull.add(eye); }
+  g.add(skull);
+  const ring = new THREE.Mesh(P.ring, P.glow);
+  ring.name = 'glow';
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.4;
+  g.add(ring);
+  return { scene: g, animations: [] };
+}
+
+class Totem extends Unit {
+  constructor(at) {
+    super(totemModel(), { hp: Math.round(240 * difficulty.hp * (1 + (game.phase - 1) * 0.12)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
+    this.totem = true;
+    this.ranged = true;      // o grupo vai até ele (e o separate não o empurra)
+    this.busy = Infinity;    // sem animações de golpe
+    this.spawnT = 2;
+    this.glow = this.root.getObjectByName('glow');
+    this.pos.copy(at);
+    this.popT = 0;
+    this.deadTime = 0;
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.vel.set(0, 0, 0);
+    this.updateCommon(dt);
+    if (this.glow) this.glow.rotation.z += dt * 2;
+    if (this.dead && (this.deadTime += dt) > 0.4) this.remove();
+  }
+
+  die() {
+    this.dead = true;
+    this.hp = 0;
+    this.bar.style.display = 'none';
+    this.root.visible = false;
+    poof(this.pos, 1.6);
+    ring(this.pos, 2.4, 0xb36bff, 1);
+    game.totemsDown++;
+    for (const h of heroes()) if (!h.dead) h.gainXp(8);
+    showBanner(`Totem destruído! ${game.totemsDown}/${game.mission.goal.count}`);
+  }
+}
+
+// totem num lado da estrada, à frente do grupo e longe do desafio da fase
+function placeTotem(k) {
+  const s0 = world.anchorS(game.phase), zone = world.zoneOf(game.phase);
+  const side = zone ? (zone.type === 'lake' ? 1 : -1) : k % 2 ? 1 : -1;
+  const at = new THREE.Vector3();
+  for (let tries = 0; tries < 12; tries++) {
+    at.copy(world.along(s0 + 5 + k * 3 + Math.random() * 2, side * (2.5 + Math.random() * 1.5)));
+    if (!world.obstacles.some((o) => Math.hypot(o.x - at.x, o.z - at.z) < o.r + 1.2)) break;
+  }
+  at.y = world.groundHeight(at.x, at.z);
+  new Totem(at);
+  game.totemsPlaced++;
+}
+
+const clockText = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+// regras da missão a cada quadro; devolve true se a missão acabou em derrota
+function campaignTick(dt, skeletons) {
+  const goal = game.mission.goal;
+  for (const h of heroes()) { if (h.dead && !h.fell) game.falls++; h.fell = h.dead; }
+  game.missionT += dt;
+  const fail = (text) => (endGame(text, false), true);
+  if (goal.type === 'nofall' && game.falls) return fail('Um herói caiu! A regra era ninguém cair.');
+  if (goal.type === 'escort' && game.villager?.dead) return fail('O aldeão caiu! Proteja-o até o fim.');
+  if (goal.type === 'timer' && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
+  if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
+    const boss = units.find((u) => u.boss);
+    if (boss) game.bossSeen = true;
+    if (game.bossSeen && (!boss || boss.dead) && game.state === 'fight' && !game.bossDown) {
+      game.bossDown = true;
+      game.last = game.phase;
+      game.toSpawn = 0;
+      for (const s of skeletonsAlive()) s.die();
+      showBanner('Chefe derrotado!', 2.5);
+    }
+  }
+  if (goal.type === 'survive' && game.phase === goal.phase && game.state === 'fight') {   // ondas sem parar até o tempo acabar
+    game.surviveT = Math.max(0, game.surviveT - dt);
+    if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = 4;
+  }
+  if (goal.type === 'totems' && game.state === 'fight') {
+    for (const t of skeletons) if (t.totem && (t.spawnT -= dt) <= 0) {
+      t.spawnT = 6 * difficulty.interval;
+      if (skeletons.length >= 12) continue;
+      const s = new Skeleton(Math.random() < 0.3 ? 'Warrior' : 'Minion', game.phase);
+      const a = Math.random() * Math.PI * 2;
+      s.pos.set(t.pos.x + Math.cos(a) * 1.6, 0, t.pos.z + Math.sin(a) * 1.6);
+      s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+    }
+  }
+  // indicador no HUD
+  const v = game.villager, left = goal.time - game.missionT;
+  const text = {
+    win: `Vença até a fase ${game.mission.to}`,
+    escort: v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão',
+    boss: game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`,
+    survive: game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!',
+    totems: `Totens ${game.totemsDown}/${goal.count}`,
+    nofall: `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`,
+    timer: `Tempo ${clockText(Math.max(0, left))}`,
+  }[goal.type];
+  setText('goal', text);
+  $('goal').classList.toggle('warn', (goal.type === 'escort' && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
+  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
+  return false;
+}
+
+// fim da missão: estrelas animadas, gravação e aviso de variante nova
+function missionEnd(won) {
+  const party = heroes();
+  const hpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
+  const stars = starsFor({ won, falls: game.falls, hpRatio });
+  const before = totalStars();
+  const best = !game.test && saveStars(game.mission.id, stars);
+  const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
+  const row = `<span class="stars big">${[1, 2, 3].map((k) => `<i class="${k <= stars ? 'on' : ''}">★</i>`).join('')}</span>`;
+  $('overlayStars').innerHTML = row + (best && stars ? '<div class="star-best">Novo melhor resultado!</div>' : '') + (game.test ? '<div class="star-best">Atalho ?fase: estrelas não contam</div>' : '')
+    + fresh.map((cfg) => `<div class="unlock" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"><img src="${cfg.portrait}" alt=""><span><b>Nova variante liberada!</b>${cfg.name}</span></div>`).join('');
+  return stars;
 }
 
 function spawnSkeleton() {
@@ -2128,6 +2443,7 @@ function updateGame(dt) {
   const skeletons = skeletonsAlive();
 
   if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}. Abates: ${game.kills}`, false);
+  if (game.mission && campaignTick(dt, skeletons)) return;
 
   if (game.state === 'fight') {
     if (game.toSpawn > 0) {
@@ -2145,13 +2461,15 @@ function updateGame(dt) {
         popText(h.pos, '♥', 'heal');
         h.busy = h.once('Cheer');
       }
+      const v = game.villager;
+      if (v && !v.dead) v.hp = Math.min(v.maxHp, v.hp + v.maxHp * difficulty.heal);
       game.state = 'cleared';
       game.timer = 2.2;
     }
   } else if (game.state === 'cleared') {
     game.timer -= dt;
     if (game.timer <= 0) {
-      if (game.phase >= PHASES) return endGame(`Vitória! O grupo chegou ao castelo. Abates: ${game.kills}`, true);
+      if (game.phase >= game.last) return endGame(game.mission ? `Missão cumprida: ${game.mission.name}! Abates: ${game.kills}` : `Vitória! O grupo chegou ao castelo. Abates: ${game.kills}`, true);
       game.phase++;
       game.state = 'advance';
       if (heroes().length < HEROES.length) showPick('Novo aliado!', 'Escolha quem entra no grupo');
@@ -2164,8 +2482,8 @@ function updateGame(dt) {
     if (game.guideS >= goal && alive.every((h) => h.pos.distanceTo(h.post) < 0.6)) startPhase();
   }
 
-  setText('wave', `Fase ${game.phase}/${PHASES}`);
-  setText('left', `Esqueletos: ${skeletons.length + (game.state === 'fight' ? game.toSpawn : 0)}`);
+  setText('wave', `Fase ${game.phase}/${game.last}`);
+  setText('left', `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
   setText('kills', `Abates: ${game.kills}`);
   setText('party', `Heróis: ${heroes().length}/${HEROES.length}`);
 }
@@ -2176,7 +2494,9 @@ function endGame(text, won = false) {
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
   $('overlayText').textContent = text + (saveRecord(won) ? ` · Novo recorde no ${difficulty.name}!` : '');
+  if (game.mission) missionEnd(won);
   $('overlayStats').innerHTML = summaryHTML(heroes());
+  $('overlayBtn').textContent = game.mission ? 'Voltar ao mapa' : 'Jogar de novo';
   $('overlayBtn').hidden = false;
   $('overlay').classList.remove('hidden');
 }
@@ -2279,7 +2599,11 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   if (best) openHeroPanel(best, XP_LEVELS);
   else if (panelHero()) closeHeroPanel();
 });
-addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHeroPanel(); });
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeHeroPanel();
+  if (!$('campaign').classList.contains('hidden')) showMenu();   // Esc no mapa volta ao menu
+});
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;

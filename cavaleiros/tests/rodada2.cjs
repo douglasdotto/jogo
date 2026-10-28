@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
+const campaign = fs.readFileSync(path.join(dir, 'campaign.js'), 'utf8');
 class Vector3 {
   constructor(x=0,y=0,z=0) { Object.assign(this,{x,y,z}); }
   set(x,y,z) { Object.assign(this,{x,y,z}); return this; }
@@ -31,23 +32,25 @@ class Vector3 {
   setScalar(k) { return this.set(k,k,k); }
 }
 const noop=()=>{};
-const el=()=>({ style:{setProperty:noop}, classList:{add:noop,remove:noop,toggle:noop}, children:[], setAttribute:noop,
-  append(...c){ this.children.push(...c); },
+const el=()=>{ const cls=new Set(); return { style:{setProperty:noop}, classList:{add:(...c)=>c.forEach(x=>cls.add(x)),remove:(...c)=>c.forEach(x=>cls.delete(x)),
+  toggle:(c,on)=>((on??!cls.has(c))?cls.add(c):cls.delete(c)),contains:c=>cls.has(c)}, children:[], setAttribute:noop,
+  append(...c){ this.children.push(...c); }, prepend:noop,
   appendChild(c){ this.children.push(c); }, addEventListener:noop, querySelector:()=>el(), querySelectorAll:()=>[el(),el()],
-  remove:noop, firstChild:{style:{}}, innerHTML:'', textContent:'' });
+  remove:noop, firstChild:{style:{}}, innerHTML:'', textContent:'' }; };
 const elements=new Map();
 const color=()=>({set:noop,setHex:noop});
 const material=()=>({color:color(),emissive:color(),dispose:noop});
-const root=()=>({position:new Vector3(),rotation:{y:0},scale:new Vector3(1,1,1),quaternion:{setFromUnitVectors:noop},
-  traverse:noop,add:noop,removeFromParent:noop,getObjectByName:()=>({add:noop}),material:material(),children:[],rotateZ:noop});
+const root=()=>({position:new Vector3(),rotation:{y:0,set:noop},scale:new Vector3(1,1,1),quaternion:{setFromUnitVectors:noop},
+  traverse:noop,add:noop,removeFromParent:noop,getObjectByName:()=>({add:noop,rotation:{z:0}}),material:material(),children:[],rotateZ:noop});
 const action=()=>({reset(){return this},setLoop(){return this},play(){return this},crossFadeFrom:noop,getClip:()=>({duration:1,name:'Idle'})});
 const THREE={ Vector3, Mesh:class {constructor(){Object.assign(this,root())}}, Group:class {constructor(){Object.assign(this,root())}},
   MeshBasicMaterial:class {constructor(){Object.assign(this,material())}}, MeshLambertMaterial:class {constructor(){Object.assign(this,material())}},
   AnimationMixer:class {constructor(){this.time=0}update(dt){this.time+=dt}clipAction(){return action()}stopAllAction(){}},
   AnimationClip:{findByName:(_,name)=>({name,duration:1})}, Clock:class{getDelta(){return .016}},
-  MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2, RingGeometry:class{}, DoubleSide:2 };
+  MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2, RingGeometry:class{}, DoubleSide:2,
+  Color:class{}, CylinderGeometry:class{}, SphereGeometry:class{}, TorusGeometry:class{} };
 const context=vm.createContext({THREE,document:{createElement:el,getElementById:(id)=>{if(!elements.has(id))elements.set(id,el());return elements.get(id)}},
-  addEventListener:noop,requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,
+  addEventListener:noop,removeEventListener:noop,requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,
   URLSearchParams,location:{search:''},
   localStorage:{data:{},getItem(k){return this.data[k]??null},setItem(k,v){this.data[k]=String(v)}},
   SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
@@ -63,21 +66,24 @@ const context=vm.createContext({THREE,document:{createElement:el,getElementById:
   FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
 vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('export ',''),context);
+vm.runInContext(campaign.replaceAll('export ',''),context);
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context);
 vm.runInContext(part(source,'class Hero','// empurra unidades'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,saveAuto,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,endGame,frame};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,saveAuto,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,endGame,frame,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,setMission:m=>{game.mission=m}};',context);
 const t=context.t;
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
 for(const n of ['Minion','Warrior','Rogue']) context.assets['Skeleton_'+n]={scene:{},animations:[]};
+context.assets.Barbarian={scene:{},animations:[]};
+context.location={search:'?tudo=1'};   // os testes antigos usam todas as variantes
 for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A']) context.assets[n]={scene:{clone:root}};
 const results=[];
 function test(name,fn){fn();results.push(name);console.log('OK:',name)}
-function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10});}
+function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,missionT:0,villager:null,test:false});}
 test('16 variantes, receitas e animações existentes nos GLB',()=>{
   assert.equal(t.VARIANTS.length,16);
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
@@ -143,11 +149,12 @@ test('fim de jogo mantém animação e impede dano e golpes pendentes',()=>{
   const enemy=new t.Skeleton('Minion',1),hp=enemy.hp;enemy.takeDamage(100,h.pos);assert.equal(enemy.hp,hp);
   let hit=false;enemy.pendingHit={t:0,effect:()=>{hit=true}};t.frame();assert.ok(h.mixer.time>before);assert.equal(hit,false);
 });
-test('reinício limpa invocados, fila, efeitos e volta à tela de dificuldade',()=>{
+test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
-  assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
-  assert.equal(t.pick.cards.length,4);
-  let next;context.setTimeout=(fn,ms)=>{if(ms===550)next=fn};
+  assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'mode');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
+  assert.equal(t.pick.cards.length,2);
+  let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
+  t.confirmPick(1);next();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
   t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'Difícil');
   next();assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);
   context.setTimeout=noop;t.setDifficulty(1);
@@ -214,5 +221,73 @@ test('fúria acelera o berserker e o passo das sombras leva o assassino às cost
   b.busy=9;b.update(.016);assert.ok(Math.abs(b.cooldown-cfg('berserker').cooldown/1.5)<1e-9);
   assert.equal(a.useSkill(e),true);a.pendingHit.effect();assert.ok(a.pos.distanceTo(e.pos)<1.5);
   a.pendingHit.effect();assert.ok(e.hp<1000);
+});
+// ---------- campanha ----------
+const mission=id=>t.MISSIONS.find(m=>m.id===id);
+const idx=id=>t.pick.options.findIndex(v=>v.id===id);
+// escolhe a missão, a dificuldade Normal e os heróis do grupo inicial
+function begin(id,picks){
+  clear();t.setMission(mission(id));t.showDifficulty();
+  let next;context.setTimeout=(fn,ms)=>{if(ms===550)next=fn};
+  t.confirmPick(1);next();
+  for(const p of picks){t.confirmPick(idx(p));next();}
+  context.setTimeout=noop;
+}
+test('8 missões com objetivo; só 4 variantes no começo e uma nova a cada 2 estrelas',()=>{
+  assert.equal(t.MISSIONS.length,8);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+  context.location={search:''};context.localStorage.data={};
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).map(v=>v.id).sort().join(),'assassin,berserker,paladin,pyro');
+  assert.equal(t.UNLOCKS.length,12);assert.equal(new Set([...t.UNLOCKS.map(u=>u.id),...t.STARTERS]).size,16);
+  assert.equal(t.UNLOCKS.at(-1).stars,23);
+  clear();t.showPick('','');assert.ok(t.pick.cards[idx('guardian')].innerHTML.includes('★ 1 para liberar'));
+  t.confirmPick(idx('guardian'));assert.equal(t.pick.open,true);
+  t.selectCard(idx('paladin'));t.moveGrid(1,0);assert.equal(t.pick.sel,idx('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,idx('berserker'));
+  context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.variantOpen('guardian')&&t.variantOpen('viking')&&!t.variantOpen('cryo'));
+  context.location={search:'?tudo=1'};assert.ok(t.variantOpen('druid'));assert.ok(t.unlocked(7));
+});
+test('campanha: escolhe N heróis em sequência, já no nível da missão e sem telas de evolução',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('fazendas',['paladin','pyro']);
+  assert.equal(t.heroes().length,2);assert.ok(t.heroes().every(h=>h.level===2));assert.equal(t.evolutions.length,0);
+  assert.equal(t.game.phase,4);assert.equal(t.game.last,6);assert.equal(t.game.paused,false);assert.equal(t.pick.open,false);
+  begin('ponte',['berserker','assassin']);assert.ok(t.game.villager instanceof t.Villager);assert.equal(t.game.phase,3);
+});
+test('objetivos: aldeão, ninguém cai e tempo derrubam a missão',()=>{
+  context.location={search:''};
+  begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('aldeão'));assert.equal(t.starsOf('ponte'),0);
+  begin('lago-sombrio',['paladin','pyro','berserker','assassin']);t.heroes()[1].die();t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('caiu'));
+  begin('cemiterio',['paladin','pyro','berserker','assassin']);t.game.missionT=239.95;t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('tempo'));
+});
+test('objetivos: sobreviver com ondas contínuas, totens e chefe',()=>{
+  context.location={search:''};
+  begin('lago',['paladin','pyro','berserker']);Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);
+  assert.equal(t.game.toSpawn,3);assert.equal(t.game.state,'fight');   // 4 novos, um já surgiu
+  for(const u of [...t.units])if(u.team==='skeleton')u.remove();
+  Object.assign(t.game,{surviveT:.05,toSpawn:0});t.updateGame(.1);t.updateGame(.1);assert.equal(t.game.state,'cleared');
+  begin('ruinas',['paladin','pyro','berserker']);t.startPhase();
+  const totem=t.skeletonsAlive().find(u=>u.totem);assert.ok(totem);assert.equal(t.game.totemsPlaced,1);
+  t.game.toSpawn=0;totem.spawnT=0;t.updateGame(.1);assert.ok(t.skeletonsAlive().some(u=>!u.totem));assert.equal(t.game.state,'fight');
+  for(const u of t.skeletonsAlive())if(!u.totem)u.remove();
+  totem.takeDamage(99999,null,t.heroes()[0]);assert.equal(t.game.totemsDown,1);t.updateGame(.1);assert.equal(t.game.state,'cleared');
+  begin('fazendas',['paladin','pyro']);Object.assign(t.game,{phase:6,state:'fight',toSpawn:0});
+  const boss=new t.Skeleton('Warrior',6,true);boss.spawning=false;new t.Skeleton('Minion',6);t.updateGame(.1);assert.equal(t.game.bossSeen,true);
+  boss.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);assert.equal(t.skeletonsAlive().length,0);
+  t.updateGame(.1);t.game.timer=0;t.updateGame(.1);assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.startsWith('Missão cumprida'));
+});
+test('estrelas no fim: gravam o melhor, liberam variantes e não contam com ?fase',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('vila',['paladin']);Object.assign(t.game,{phase:3,state:'cleared',timer:0});t.updateGame(.1);
+  assert.equal(t.starsOf('vila'),3);const stars=elements.get('overlayStars').innerHTML;
+  assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(stars.includes('Nova variante liberada!')&&stars.includes('Guardião')&&stars.includes('Viking'));
+  assert.ok(t.variantOpen('viking'));assert.equal(elements.get('overlayBtn').textContent,'Voltar ao mapa');
+  t.game.paused=false;t.startGame('map');assert.equal(t.game.paused,true);t.updateGame(.1);assert.equal(t.game.over,false);   // o mapa segura a partida
+  begin('ponte',['paladin','pyro']);t.heroes()[0].die();t.heroes()[1].hp=1;Object.assign(t.game,{phase:5,state:'cleared',timer:0});t.updateGame(.1);t.updateGame(.1);
+  assert.equal(t.starsOf('ponte'),1);   // venceu, mas um caiu e terminou com pouca vida
+  context.location={search:'?fase=4'};begin('ponte',['paladin','pyro']);Object.assign(t.game,{phase:5,state:'cleared',timer:0});t.updateGame(.1);
+  assert.equal(t.starsOf('ponte'),1);assert.ok(elements.get('overlayStars').innerHTML.includes('não contam'));
+  context.location={search:'?tudo=1'};
 });
 console.log(results.length+' verificações passaram.');
