@@ -23,6 +23,105 @@ export function createWorld(scene, ROAD, PHASES) {
   const anchorS = (p) => firstS + ((p - 1) * (lastS - firstS)) / (PHASES - 1);
   const roadPts = curve.getSpacedPoints(600);
 
+
+  // ---------- desafios por fase ----------
+  const zones = new Map();
+  for (const phase of [3, 5, 7, 9, 10]) {
+    const type = phase === 5 || phase === 9 ? 'lake' : 'plateau';
+    const fwd = tangentAt(anchorS(phase)), side = sideOf(fwd);
+    const center = along(anchorS(phase) - 1, type === 'lake' ? -7 : 6.5);
+    const zone = { type, center, fwd, side, radius: type === 'lake' ? 5.8 : 4,
+      ground: [-2, 0, 2].map((off) => along(anchorS(phase) + 7, off)) };
+    if (type === 'plateau') {
+      zone.ramp = { bottom: center.clone().addScaledVector(fwd, -9), top: center.clone().addScaledVector(fwd, -3).setY(3) };
+      zone.top = [-1.2, 1.2].map((off) => center.clone().addScaledVector(side, off).setY(3));
+    } else zone.water = [-1, 0, 1].map((a) => center.clone().addScaledVector(side, 4.8 * Math.cos(a)).addScaledVector(fwd, 4.8 * Math.sin(a)));
+    zones.set(phase, zone);
+  }
+  const zoneOf = (phase) => zones.get(phase) || null;
+  const local = (zone, p) => {
+    const dx = p.x - zone.center.x, dz = p.z - zone.center.z;
+    return { x: dx * zone.side.x + dz * zone.side.z, z: dx * zone.fwd.x + dz * zone.fwd.z };
+  };
+  const inRamp = (p) => Math.abs(p.x) <= 1.5 && p.z >= -9 && p.z <= -3;
+  function groundHeight(x, z) {
+    for (const zone of zones.values()) if (zone.type === 'plateau') {
+      const p = local(zone, { x, z });
+      if (inRamp(p)) return (p.z + 9) / 2;
+      if (Math.hypot(p.x, p.z) < zone.radius) return 3;
+    }
+    return 0;
+  }
+  const lakesZones = [...zones.values()].filter((zone) => zone.type === 'lake');
+  const isShallow = (x, z) => lakesZones.some((zone) => zone.type === 'lake' && Math.hypot(x - zone.center.x, z - zone.center.z) < zone.radius && Math.hypot(x - zone.center.x, z - zone.center.z) >= 3.2);
+  const deepAt = (p) => lakesZones.some((zone) => zone.type === 'lake' && Math.hypot(p.x - zone.center.x, p.z - zone.center.z) < 3.2);
+  function canStep(from, to) {
+    if (deepAt(to)) return false;
+    const h = groundHeight(to.x, to.z), prev = groundHeight(from.x, from.z);
+    return Math.abs(h - prev) <= Math.max(0.18, Math.hypot(to.x - from.x, to.z - from.z) * 0.65);
+  }
+  function aroundZone(from, to, zone, radius) {
+    const edge = zone.type === 'lake' ? 3.2 : zone.radius;
+    radius = Math.min(radius, Math.max(edge, to.clone().setY(0).distanceTo(zone.center) - 0.05));
+    const delta = new THREE.Vector3().subVectors(to, from).setY(0), len = delta.lengthSq();
+    const off = new THREE.Vector3().subVectors(zone.center, from).setY(0);
+    const t = len ? THREE.MathUtils.clamp(off.dot(delta) / len, 0, 1) : 0;
+    if (from.clone().addScaledVector(delta, t).setY(0).distanceTo(zone.center) >= radius) return to;
+    const a = local(zone, from), b = local(zone, to), angle = Math.atan2(a.z, a.x);
+    const turn = Math.atan2(Math.sin(Math.atan2(b.z, b.x) - angle), Math.cos(Math.atan2(b.z, b.x) - angle));
+    const next = angle + THREE.MathUtils.clamp(turn, -0.55, 0.55);
+    return zone.center.clone().addScaledVector(zone.side, Math.cos(next) * (radius + 0.65)).addScaledVector(zone.fwd, Math.sin(next) * (radius + 0.65));
+  }
+  function nextWaypoint(from, to) {
+    for (const zone of zones.values()) {
+      if (zone.type === 'plateau') {
+        const a = local(zone, from), b = local(zone, to);
+        const ah = Math.hypot(a.x, a.z) < 4 || inRamp(a) ? groundHeight(from.x, from.z) : 0;
+        const bh = Math.hypot(b.x, b.z) < 4 || inRamp(b) ? groundHeight(to.x, to.z) : 0;
+        if (ah < 0.1 && bh < 0.1 && !inRamp(a)) {
+          // Contorna também as laterais da rampa, sem cortar a encosta.
+          let lo = 0, hi = 1;
+          for (const [v, d, min, max] of [[a.x,b.x-a.x,-1.5,1.5],[a.z,b.z-a.z,-9,-3]]) {
+            if (Math.abs(d) < 0.0001) { if (v < min || v > max) hi = -1; }
+            else { const t0=(min-v)/d,t1=(max-v)/d; lo=Math.max(lo,Math.min(t0,t1)); hi=Math.min(hi,Math.max(t0,t1)); }
+          }
+          if (lo <= hi) {
+            const sign = (a.z > -9.3 ? a.x : b.x) < 0 ? -1 : 1;
+            if (b.z > -3 && Math.abs(a.x) > 1.8) {
+              const side = zone.center.clone().addScaledVector(zone.side, sign * 5.3).addScaledVector(zone.fwd, -2);
+              return aroundZone(from, side, zone, 4.5);
+            }
+            const entry = zone.ramp.bottom.clone().addScaledVector(zone.side, sign * 2.3).addScaledVector(zone.fwd,-1);
+            return aroundZone(from, entry, zone, 4.5);
+          }
+          const around = aroundZone(from, to, zone, 4.5);
+          if (around !== to) return around;
+          continue;
+        }
+        if (Math.abs(ah - bh) < 0.1 && !inRamp(a)) continue;
+        const up = bh > ah || (inRamp(a) && bh >= 3);
+        if (up && (Math.hypot(b.x, b.z) < 4 || inRamp(b))) {
+          if (ah < 0.1 && !inRamp(a)) {
+            if (from.distanceTo(zone.ramp.bottom) < 0.45) return zone.ramp.top;
+            if (a.z > -9.2 && (Math.abs(a.x) > 1.6 || a.z > -8.5)) {
+              const entry = zone.ramp.bottom.clone().addScaledVector(zone.side, a.x < 0 ? -2.3 : 2.3).addScaledVector(zone.fwd, -1);
+              return aroundZone(from, entry, zone, 4.5);
+            }
+            return zone.ramp.bottom;
+          }
+          if (ah < 2.95) return inRamp(b) ? to : zone.ramp.top;
+        } else if ((ah > 0 || inRamp(a)) && bh < 3) {
+          if (!inRamp(a) && from.distanceTo(zone.ramp.top) > 0.45) return zone.ramp.top;
+          return inRamp(b) ? to : zone.ramp.bottom.clone().addScaledVector(zone.fwd, -0.7);
+        }
+      } else {
+        const around = aroundZone(from, to, zone, 3.9);
+        if (around !== to) return around;
+      }
+    }
+    return to;
+  }
+
   // ---------- rio, cruzando a estrada entre as fases 3 e 4 ----------
   const crossS = (anchorS(3) + anchorS(4)) / 2;
   const cp = pointAt(crossS), ct = tangentAt(crossS), cn = sideOf(ct);
@@ -52,6 +151,7 @@ export function createWorld(scene, ROAD, PHASES) {
     const wobble = (patch(z * 0.6, x * 0.6) - 0.5) * 14;
     const hill = THREE.MathUtils.smoothstep(d + wobble, ROAD + 9, ROAD + 30);
     let h = hill * (1.5 + 9 * noise(x, z) ** 1.5);
+    if ([...zones.values()].some((zone) => Math.hypot(x - zone.center.x, z - zone.center.z) < 12)) h = 0;
     const dr = riverDist(x, z);
     if (dr < 4) h = THREE.MathUtils.lerp(-0.8, h, (dr / 4) ** 2);
     return h;
@@ -75,6 +175,11 @@ export function createWorld(scene, ROAD, PHASES) {
 
   const obstacles = [];   // { x, z, r } para colisão das unidades
   const blocked = [];     // áreas onde não nasce árvore nem grama alta
+  for (const zone of zones.values()) {
+    blocked.push({ x: zone.center.x, z: zone.center.z, r: zone.radius + 2 });
+    for (const p of zone.ground) blocked.push({ x: p.x, z: p.z, r: 1.5 });
+    if (zone.ramp) blocked.push({ x: zone.ramp.bottom.x, z: zone.ramp.bottom.z, r: 3 });
+  }
   const isFree = (x, z, r = 0) => !blocked.some((b) => Math.hypot(b.x - x, b.z - z) < b.r + r);
 
   // ---------- chão ----------
@@ -154,6 +259,71 @@ export function createWorld(scene, ROAD, PHASES) {
   for (const p of riverPts) {
     const off = new THREE.Vector3(p.x - cp.x, 0, p.z - cp.z);
     if (Math.abs(off.dot(cn)) > BW + 0.8) obstacles.push({ x: p.x, z: p.z, r: 2.6 });
+  }
+
+
+  // ---------- mesas de arenito e lagos ----------
+  const shrubGeo = new THREE.IcosahedronGeometry(0.65, 0), trunkGeo = new THREE.CylinderGeometry(0.12, 0.2, 1.4, 5);
+  const crownGeo = new THREE.IcosahedronGeometry(1, 0), pebbleGeo = new THREE.DodecahedronGeometry(0.6, 0);
+  const reedGeo = new THREE.CylinderGeometry(0.035, 0.045, 0.9, 4), headGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.28, 5);
+  const padGeo = new THREE.CircleGeometry(0.4, 9, 0.25, Math.PI * 2 - 0.5), plankGeo = new THREE.BoxGeometry(2, 0.16, 0.45);
+  const lakes = [];
+  for (const zone of zones.values()) {
+    const group = new THREE.Group();
+    group.position.copy(zone.center);
+    group.rotation.y = Math.atan2(zone.fwd.x, zone.fwd.z);
+    scene.add(group);
+    if (zone.type === 'plateau') {
+      // camadas facetadas; a abertura acompanha a rampa na borda do topo
+      for (let layer = 0; layer < 4; layer++) {
+        const positions = [], indices = [], r0 = 4.25 - layer * 0.06, r1 = layer === 3 ? 4 : r0 - 0.04;
+        for (let i = 0; i <= 32; i++) {
+          const a = i / 32 * Math.PI * 2;
+          for (const [r, y] of [[r0, layer * 0.74], [r1, (layer + 1) * 0.74]]) {
+            const edge = r + (y < 2.9 ? Math.sin(a * 5) * 0.08 + Math.sin(a * 9) * 0.04 : 0);
+            const x = Math.sin(a) * edge, z = Math.cos(a) * edge;
+            const rampY = Math.abs(x) <= 1.65 && z < -3 ? (z + 9) / 2 : 3;
+            positions.push(x, Math.min(y, rampY), z);
+          }
+          if (i < 32) { const k = i * 2; indices.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geo.setIndex(indices); geo.computeVertexNormals();
+        mesh(geo, [0xc58a51, 0xe2b179, 0xce985d, 0xe9ba80][layer], 0, 0, 0, group);
+      }
+      const top = new THREE.CircleGeometry(4, 32); top.rotateX(-Math.PI / 2);
+      const tp = top.attributes.position;
+      for (let i = 0; i < tp.count; i++) if (Math.abs(tp.getX(i)) <= 1.65 && tp.getZ(i) < -3) tp.setZ(i, -3);
+      top.computeVertexNormals(); mesh(top, 0x9ccc4a, 0, 3, 0, group);
+      const ramp = new THREE.BufferGeometry();
+      ramp.setAttribute('position', new THREE.Float32BufferAttribute([-1.5,0,-9, 1.5,0,-9, -1.5,3,-3, 1.5,3,-3, -1.5,0,-3, 1.5,0,-3],3));
+      ramp.setIndex([0,2,1,1,2,3,0,4,2,1,3,5,4,5,3,4,3,2]); ramp.computeVertexNormals();
+      mesh(ramp, 0xdfa164, 0, 0.015, 0, group);
+      for (const [x,z] of [[-2,1.8],[2,1.8]]) {
+        mesh(trunkGeo, 0x8a6a4a, x, 3.7, z, group);
+        mesh(crownGeo, 0xa5d64c, x, 4.7, z, group);
+        mesh(shrubGeo, 0x86bb3c, x * 0.7, 3.4, z + 0.6, group);
+      }
+    } else {
+      mesh(new THREE.CylinderGeometry(6.1,6.3,0.12,24), 0xe4bd80, 0, 0, 0, group);
+      const lake = mesh(new THREE.CircleGeometry(zone.radius,32), mat(0x74cddd,{transparent:true,opacity:0.8,side:THREE.DoubleSide}), 0,0.14,0,group);
+      lake.rotation.x = -Math.PI / 2; lake.castShadow = false; lakes.push(lake);
+      const deep = mesh(new THREE.CircleGeometry(3.2,24), mat(0x368faa,{side:THREE.DoubleSide}),0,0.15,0,group);
+      deep.rotation.x = -Math.PI / 2; deep.castShadow = false;
+      obstacles.push({x:zone.center.x,z:zone.center.z,r:3.2});
+      for (let i=0;i<7;i++) {
+        const a=i*0.83, x=Math.cos(a)*4.5,z=Math.sin(a)*4.5;
+        const rock=mesh(pebbleGeo,0xc4ae8a,x,0.04,z,group); rock.scale.set(1,0.35,0.8);
+        if (i%2===0) { const pad=mesh(padGeo,0x71ae46,x*0.8,0.18,z*0.8,group); pad.rotation.x=-Math.PI/2; pad.rotation.z=a; }
+      }
+      for (let i=0;i<18;i++) {
+        const a=1.4+i*0.16,x=Math.cos(a)*5.6,z=Math.sin(a)*5.6;
+        mesh(reedGeo,0x789844,x,0.5,z,group).rotation.z=range(-0.2,0.2);
+        mesh(headGeo,0x8a623b,x,0.95,z,group);
+      }
+      for (let z=3.8;z<7;z+=0.48) mesh(plankGeo,0x9a6a36,0,0.18,z,group);
+      for (const x of [-0.85,0.85]) for (const z of [4,6.7]) mesh(trunkGeo,0x6b4423,x,-0.15,z,group);
+    }
   }
 
   // ---------- casas e vila ----------
@@ -256,6 +426,7 @@ export function createWorld(scene, ROAD, PHASES) {
       const side = rand() < 0.5 ? -1 : 1;
       const at = along(s, side * range(2.3, ROAD - 0.9));
       const kind = rand();
+      if (!isFree(at.x, at.z, 1.5)) continue;
       if (kind < 0.4) {
         const r = range(0.7, 1.1);
         mesh(new THREE.DodecahedronGeometry(r, 0), 0x7a7468, at.x, r * 0.5, at.z).rotation.set(rand() * 3, rand() * 3, 0);
@@ -413,8 +584,9 @@ export function createWorld(scene, ROAD, PHASES) {
     }
     lantern.emissiveIntensity = 0.9 + Math.sin(time * 9) * 0.1 + Math.sin(time * 23) * 0.05;
     water.material.color.setHSL(0.57, 0.55, 0.56 + Math.sin(time * 1.5) * 0.02);
+    for (const lake of lakes) lake.material.opacity = 0.8 + Math.sin(time * 1.8) * 0.04;
     for (const cl of clouds) { cl.position.x += dt * 0.8; if (cl.position.x > 90) cl.position.x = -90; }
   }
 
-  return { L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update };
+  return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update };
 }
