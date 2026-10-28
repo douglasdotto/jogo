@@ -334,6 +334,7 @@
       background: linear-gradient(#7cc8ff, #1d6fd6); border: 3px solid var(--outline); border-radius: 12px; }
     .upgrade span { -webkit-text-stroke-width: 2px; }
   </style>
+  <link rel="stylesheet" href="campaign.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -349,6 +350,7 @@
     <span class="chip" id="left">Esqueletos: 0</span>
     <span class="chip" id="kills">Abates: 0</span>
     <span class="chip" id="party">Heróis: 0/4</span>
+    <span class="chip hidden" id="goal"></span>
     <button id="speed">Velocidade 1x</button>
     <button id="restart">Reiniciar</button>
   </div>
@@ -359,8 +361,9 @@
     <div id="pickList"></div>
     <span id="pickHint"></span>
   </div>
+  <div id="campaign" class="hidden"></div>
   <aside id="heroPanel" class="hidden"></aside>
-  <div id="overlay"><span id="overlayText">Carregando modelos...</span><div id="overlayStats"></div><button id="overlayBtn" hidden>Jogar de novo</button></div>
+  <div id="overlay"><span id="overlayText">Carregando modelos...</span><div id="overlayStars"></div><div id="overlayStats"></div><button id="overlayBtn" hidden>Jogar de novo</button></div>
   <script type="module" src="main.js"></script>
 </body>
 </html>

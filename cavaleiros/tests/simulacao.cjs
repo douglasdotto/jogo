@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
+const campaign = fs.readFileSync(path.join(dir, 'campaign.js'), 'utf8');
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
   set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -48,7 +49,7 @@ const asset = () => ({ scene: root(), animations: [] });
 const assets = {};
 for (const n of ['Minion', 'Warrior', 'Rogue', 'Mage', 'Blade', 'Axe', 'Shield_Small_A', 'Crossbow', 'Staff', 'Arrow']) assets['Skeleton_' + n] = asset();
 const stats = () => ({ dano: 0, recebido: 0, cura: 0, abates: 0, ataques: 0, habilidades: 0, criticos: 0, esquivas: 0, distancia: 0, tempo: 0 });
-const context = vm.createContext({ THREE, document: { createElement: el, getElementById: el }, URLSearchParams, location: { search: '' },
+const context = vm.createContext({ THREE, document: { createElement: el, getElementById: el }, URLSearchParams, location: { search: '?tudo=1' },   // todas as variantes liberadas
   addEventListener: noop, requestAnimationFrame: noop, setTimeout: (fn) => fn(), clearTimeout: noop, innerWidth: 1440, innerHeight: 1000,
   SkeletonUtils: { clone: root }, scene: { add: noop, remove: noop }, assets, ringGeo: {}, haloGeo: {}, goldMat: {}, starGeo: {}, puffGeo: {},
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
@@ -59,6 +60,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, getElem
   poof: noop, ring: noop, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], blasts: [], flames: [] });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
+vm.runInContext(campaign.replaceAll('export ', ''), context);
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
 vm.runInContext(part(source, 'const units =', '// projéteis e áreas'), context);
@@ -72,6 +74,7 @@ for (const v of vm.runInContext('VARIANTS', context)) v.built = asset(), v.portr
 function play(diff) {
   t.setDifficulty(diff);
   t.startGame();
+  t.confirmPick(1);   // menu: Jornada completa
   t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
   t.setDifficulty(diff);
   let time = 0, deaths = 0;
