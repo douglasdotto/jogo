@@ -59,7 +59,7 @@ function disposeFx(f) {
 }
 
 // aviso que enche até o golpe; some sem golpear se o dono morrer ou ficar zonzo
-function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, harmless = false, follow = null } = {}) {
+function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, harmless = false, follow = null, announce = '' } = {}) {
   const group = new THREE.Group();
   const fillMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide });
   const edgeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: line ? 0.22 : 0.9, depthWrite: false, side: THREE.DoubleSide });
@@ -72,7 +72,7 @@ function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, har
   group.position.y += 0.07;
   if (line) group.rotation.y = Math.atan2(line.dir.x, line.dir.z);
   G.scene.add(group);
-  return track({ owner, at: at.clone(), radius, line, harmless: harmless || !!follow, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), end,
+  return track({ owner, at: at.clone(), radius, line, announce: owner?.boss && !harmless ? announce : '', harmless: harmless || !!follow, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), end,
     step(f) {
       const k = 1 - Math.max(0, f.t) / f.life;
       if (follow && !follow.dead) { f.at.copy(follow.pos); group.position.copy(follow.pos); group.position.y += 0.07; }
@@ -104,8 +104,8 @@ export function dangerAt(u) {
 }
 
 // explosão/pancada: dano em heróis e invocados (e meio dano em esqueletos comuns, se pedir)
-function blast(at, radius, dmg, color, { skeletons = false, skip = null } = {}) {
-  for (const u of liveAllies()) if (flat(u.pos, at) <= radius + 0.3 * u.size) u.takeDamage(dmg, at);
+function blast(at, radius, dmg, color, { skeletons = false, skip = null, owner = null } = {}) {
+  for (const u of liveAllies()) if (flat(u.pos, at) <= radius + 0.3 * u.size) u.takeDamage(dmg, at, owner);
   if (skeletons) for (const s of G.skeletonsAlive()) if (s !== skip && !s.boss && !s.spawning && flat(s.pos, at) <= radius) s.takeDamage(dmg * 0.5, at);
   G.ring(at, radius, color, 0.7);
   G.poof(at, Math.min(1.6, radius * 0.6));
@@ -152,12 +152,12 @@ function slam(s, target, radius, time, mult, { offset = 0.8, down = true } = {})
   s.busy = time + 0.45;
   s.pendingHit = null;
   warn(s, center, radius, time, () => {
-    blast(center, radius, s.dmg * mult, 0xff6a3d);
+    blast(center, radius, s.dmg * mult, 0xff6a3d, { owner: s });
     for (const u of liveAllies()) if (flat(u.pos, center) <= radius + 0.3) {
       if (down) knockDown(u, center, 4);
       else u.vel.add(mV.subVectors(u.pos, center).setY(0).normalize().multiplyScalar(5));   // só empurra
     }
-  });
+  }, { announce: 'Pancada no chão — saia do círculo' });
 }
 
 // ---------- tipos novos (atributos base; fase e dificuldade escalam no Skeleton) ----------
@@ -207,7 +207,7 @@ export const MONSTER_TYPES = {
       s.cast = warn(s, s.pos, 2.2, 0.95, () => {
         if (s.dead) return;
         s.exploded = true;
-        blast(s.pos, 2.2, s.dmg, 0xff8a2a, { skeletons: true, skip: s });
+        blast(s.pos, 2.2, s.dmg, 0xff8a2a, { skeletons: true, skip: s, owner: s });
         if (!s.dead) s.die();
       }, { color: 0xff7a1a });
       return true;
@@ -217,7 +217,7 @@ export const MONSTER_TYPES = {
       if (s.exploded || !liveAllies().some((u) => flat(u.pos, s.pos) < 3.2)) return;
       s.exploded = true;
       const at = s.pos.clone();
-      warn(null, at, 2.2, 0.45, () => blast(at, 2.2, s.dmg * 0.6, 0xff8a2a, { skeletons: true }), { color: 0xff7a1a });
+      warn(null, at, 2.2, 0.45, () => blast(at, 2.2, s.dmg * 0.6, 0xff8a2a, { skeletons: true, owner: s }), { color: 0xff7a1a });
     } },
 
   // fica atrás: cura os esqueletos próximos e reergue os caídos
@@ -353,7 +353,7 @@ export const MONSTER_TYPES = {
       else { s.pos.copy(next); s.pos.y = G.world.groundHeight(s.pos.x, s.pos.z); s.dash.left -= step; }
       for (const u of liveAllies()) if (!s.dash.hit.has(u) && flat(u.pos, s.pos) < 1.6) {
         s.dash.hit.add(u);
-        u.takeDamage(s.dmg * 0.8, s.pos);
+        u.takeDamage(s.dmg * 0.8, s.pos, s);
         const side = new THREE.Vector3(s.dash.dir.z, 0, -s.dash.dir.x);
         if (side.dot(mV.subVectors(u.pos, s.pos)) < 0) side.multiplyScalar(-1);
         u.vel.add(side.multiplyScalar(6));
@@ -379,7 +379,7 @@ export const MONSTER_TYPES = {
         s.busy = 1.1 + len / 14 + 0.2;
         s.cd.charge = 12;
         s.pendingHit = null;
-        warn(s, s.pos, 0.95, 1.1, () => { s.dash = { dir, left: len, hit: new Set() }; s.loop('Running_C'); }, { line: { dir, len }, color: 0xff3b30 });
+        warn(s, s.pos, 0.95, 1.1, () => { s.dash = { dir, left: len, hit: new Set() }; s.loop('Running_C'); }, { line: { dir, len }, color: 0xff3b30, announce: 'Investida — saia da linha' });
         return true;
       }
       return false;
@@ -463,7 +463,7 @@ export const MONSTER_TYPES = {
         for (let i = 0; i < (fury ? 4 : 2); i++) {
           const f = foes[i % foes.length], at = f.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6));
           at.y = G.world.groundHeight(at.x, at.z);
-          warn(s, at, 1.5, 1.5 + i * 0.15, () => dropSkull(at, s.dmg * 0.8), { color: 0xb050ff });
+          warn(s, at, 1.5, 1.5 + i * 0.15, () => dropSkull(at, s.dmg * 0.8, s), { color: 0xb050ff, announce: 'Chuva de crânios — saia do círculo' });
         }
         return true;
       }
@@ -476,12 +476,12 @@ export const MONSTER_TYPES = {
           const hit = new Set();
           for (let i = 0; i < (fury ? 4 : 3) && next; i++) {
             G.beam(at, next.pos, 0xc77dff);
-            next.takeDamage(s.dmg * 0.75, at);
+            next.takeDamage(s.dmg * 0.75, at, s);
             hit.add(next);
             at = next.pos;
             next = nearestOf(at, liveAllies().filter((u) => !hit.has(u) && flat(u.pos, at) < 5));
           }
-        }, { color: 0xb36bff, follow: target });
+        }, { color: 0xb36bff, follow: target, announce: 'Raio marcado — prepare-se para sair' });
         return true;
       }
       if (d > s.range) s.moveTo(target.pos, dt);
@@ -490,14 +490,14 @@ export const MONSTER_TYPES = {
     } },
 };
 
-function dropSkull(at, dmg) {
+function dropSkull(at, dmg, owner) {
   const skull = new THREE.Group();
   skull.add(piece(GEO.ball, MAT.bone, [0, 0, 0], 0.32), piece(GEO.box, MAT.bone, [0, -0.24, 0.05], [0.3, 0.14, 0.26]));
   for (const x of [-0.11, 0.11]) skull.add(piece(GEO.ball, MAT.dark, [x, 0.03, 0.26], 0.08));
   skull.position.copy(at);
   G.scene.add(skull);
   track({ t: 0.35, life: 0.35, meshes: [skull], step(f) { skull.position.y = at.y + 0.4 + 6.6 * Math.max(0, f.t / f.life); skull.rotation.x += 0.3; },
-    end: () => blast(at, 1.5, dmg, 0xb050ff) });
+    end: () => blast(at, 1.5, dmg, 0xb050ff, { owner }) });
 }
 
 // ---------- ganchos chamados pelo main.js ----------
@@ -565,12 +565,21 @@ function updateBossBar() {
   const b = G.units?.find((u) => u.team === 'skeleton' && !u.dead && u.kind?.title);
   if (!b) { if (!el.hidden) el.hidden = true; mBar = null; return; }
   if (mBar?.unit !== b) {
-    el.innerHTML = `<span class="boss-name">${b.kind.name} <small>${b.kind.title}</small></span><div class="boss-track"><i class="boss-fill"></i><i class="boss-shield"></i></div>`;
-    mBar = { unit: b, fill: el.querySelector('.boss-fill'), shield: el.querySelector('.boss-shield'), hp: -1, sh: -1 };
+    el.innerHTML = `<span class="boss-name">${b.kind.name} <small>${b.kind.title}</small></span><div class="boss-track"><i class="boss-fill"></i><i class="boss-shield"></i></div><div class="boss-telegraph" role="status" aria-live="polite" hidden><span class="boss-warning-text"></span><span class="warning-countdown"></span><i class="warning-progress"></i></div>`;
+    mBar = { unit: b, fill: el.querySelector('.boss-fill'), shield: el.querySelector('.boss-shield'), hp: -1, sh: -1,
+      telegraph: el.querySelector('.boss-telegraph'), warningText: el.querySelector('.boss-warning-text'), countdown: el.querySelector('.warning-countdown'), progress: el.querySelector('.warning-progress'), second: -1 };
     el.hidden = false;
   }
   const hp = Math.round((Math.max(0, b.hp) / b.maxHp) * 1000) / 10, sh = Math.round(((b.shieldHp || 0) / b.maxHp) * 1000) / 10;
   if (hp !== mBar.hp) { mBar.fill.style.width = hp + '%'; mBar.hp = hp; }
   if (sh !== mBar.sh) { mBar.shield.style.width = sh + '%'; mBar.sh = sh; }
   el.classList.toggle('enraged', !!b.enraged);
+  const warning = mFx.filter((f) => f.alive && f.warning && f.owner === b && f.announce && f.t > 0).sort((a, c) => a.t - c.t)[0];
+  mBar.telegraph.hidden = !warning;
+  if (warning) {
+    if (mBar.warningText.textContent !== warning.announce) mBar.warningText.textContent = warning.announce;
+    const second = Math.ceil(warning.t);
+    if (mBar.second !== second) { mBar.countdown.textContent = `${second} s`; mBar.second = second; }
+    mBar.progress.style.width = `${Math.max(0, Math.min(100, (1 - warning.t / warning.life) * 100))}%`;
+  } else mBar.second = -1;
 }

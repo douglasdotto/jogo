@@ -139,6 +139,9 @@
     #overlayStats img { width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 2px solid var(--wood); }
     #overlayStats td.top { color: #b3261e; font-weight: 700; }
     #overlayStats .mvp { padding: 1px 7px; font-size: 12px; color: #6b4a00; background: var(--gold); border-radius: 99px; }
+    #overlayStats .battle-report { width: min(640px, calc(100vw - 36px)); display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+    #overlayStats .report-item { display: grid; gap: 3px; padding: 9px 12px; border: 2px solid var(--wood); border-radius: 10px; color: var(--wood-dark); background: linear-gradient(var(--parch), var(--parch-dark)); font: 500 13px/1.35 'Fredoka', sans-serif; }
+    #overlayStats .report-item b { color: #9b4a1d; font: 700 14px 'Lilita One', sans-serif; }
     /* cartão do herói (abre ao clicar nele) */
     #heroPanel { position: absolute; top: 64px; right: 14px; width: 270px; max-height: calc(100vh - 90px); overflow-y: auto; padding: 16px 16px 12px; box-sizing: border-box;
       font-size: 14px; color: var(--wood-dark); background: linear-gradient(var(--parch), var(--parch-dark)); border: 4px solid var(--wood); border-radius: 18px;
@@ -313,6 +316,8 @@
     #overlayStats th { background: #1a5fbf; color: #fff; }
     #overlayStats td { border-top-color: rgba(255, 255, 255, .12); }
     #overlayStats td.top { color: var(--gold); }
+    #overlayStats .report-item { color: #e8f2ff; background: linear-gradient(#34507f, #1f3156); border-color: var(--navy-edge); }
+    #overlayStats .report-item b { color: var(--gold); }
     /* cartões grandes (dificuldade e evolução) no mesmo estilo: azul-marinho com moldura na cor do cartão */
     #pickList:not(.grid) .card { color: #fff; border: 4px solid var(--outline); border-radius: 16px;
       background: linear-gradient(170deg, color-mix(in srgb, var(--c, #6cb6ff) 55%, #1f3156), #1f3156 65%);
@@ -385,6 +390,13 @@
     #bossBar .boss-fill { background: linear-gradient(#ff8a7a, #e0303a 60%, #a3172a); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .35); }
     #bossBar .boss-shield { background: linear-gradient(rgba(220, 180, 255, .95), rgba(140, 70, 220, .95)); }
     #bossBar.enraged .boss-fill { background: linear-gradient(#ffb36b, #ff4a1c 60%, #b0122a); }
+    #bossBar .boss-telegraph { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 32px; margin: 7px auto 0; padding: 4px 12px;
+      overflow: hidden; color: #fff; background: linear-gradient(100deg, #6c1024, #b52135 45%, #6c1024); border: 2px solid #ffe0a0; border-radius: 10px; box-shadow: 0 0 18px #ff343b99, 0 3px 0 var(--outline); font: 400 15px 'Lilita One', sans-serif; text-shadow: 0 2px 2px #4d0b18; animation: boss-warning-pulse .55s ease-in-out infinite alternate; }
+    #bossBar .boss-telegraph[hidden] { display: none; }
+    #bossBar .warning-countdown { min-width: 30px; color: #ffe27a; font-variant-numeric: tabular-nums; }
+    #bossBar .warning-progress { position: absolute; bottom: 0; left: 0; width: 0; height: 3px; background: #fff; box-shadow: 0 0 8px #fff; transition: width .08s linear; }
+    @keyframes boss-warning-pulse { to { filter: brightness(1.35); box-shadow: 0 0 26px #ff343bcc, 0 3px 0 var(--outline); } }
+    @media (prefers-reduced-motion: reduce) { #bossBar .boss-telegraph { animation: none; } }
   </style>
   <link rel="stylesheet" href="campaign.css">
   <script type="importmap">

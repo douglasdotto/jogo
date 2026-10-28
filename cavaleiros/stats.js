@@ -1,6 +1,7 @@
 // Estatísticas de cada herói na partida, o cartão que abre ao clicar nele e o resumo do fim de jogo.
 import { heroInfo, skillCooldown } from './class-info.js';
 import { aimSpec } from './skill-targeting.js';
+import { SYNERGIES } from './synergies.js';
 
 export const newStats = () => ({ dano: 0, recebido: 0, cura: 0, abates: 0, ataques: 0, habilidades: 0, criticos: 0, esquivas: 0, distancia: 0, tempo: 0 });
 
@@ -43,6 +44,7 @@ export function tickHeroPanel(real) {
 function renderHeroPanel() {
   const h = current, c = h.cfg, s = h.stats;
   const info = heroInfo(c);
+  const synergies = SYNERGIES.filter((synergy) => synergy.variants.includes(c.id));
   const next = xpLevels[h.level];
   const xpPct = next ? Math.min(100, ((h.xp - xpLevels[h.level - 1]) / (next - xpLevels[h.level - 1])) * 100) : 100;
   const attrs = [
@@ -72,6 +74,7 @@ function renderHeroPanel() {
       <span class="skill-meta">${h.dead ? 'Indisponível enquanto caído' : h.skillTimer > 0 ? `Disponível em ${Math.ceil(h.skillTimer)} s` : 'Pronta para usar'} · Recarga: ${skillCooldown(c.id, h.level, h.skillRate).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s</span>
       <span class="skill-meta">${h.auto ? 'Automático: usa quando houver uma oportunidade.' : aimSpec(h) ? 'Manual: ative pela barra ou pelas teclas 1–4 e clique no alvo. Esc cancela.' : 'Manual: ative pela barra ou pelas teclas 1–4. Efeito centrado no herói.'}</span></div>
     <div class="hero-guide"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
+    ${synergies.length ? `<div class="hero-guide"><h4>Sinergias de grupo</h4>${synergies.map((synergy) => `<p><b>${synergy.name}</b> · ${synergy.effect}</p>`).join('')}</div>` : ''}
     <h4>Atributos</h4>
     <dl>${attrs.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     <h4>Nesta partida</h4>
@@ -80,14 +83,19 @@ function renderHeroPanel() {
 }
 
 // ---------- resumo do fim da partida ----------
-export function summaryHTML(heroes) {
-  if (!heroes.length) return '';
-  const best = (k) => Math.max(...heroes.map((h) => h.stats[k]));
+const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+export function summaryHTML(heroes, highlights = []) {
+  if (!heroes.length && !highlights.length) return '';
+  const best = (k) => heroes.length ? Math.max(...heroes.map((h) => h.stats[k])) : 0;
   const cols = [['dano', 'Dano'], ['abates', 'Abates'], ['recebido', 'Recebido'], ['cura', 'Cura']];
-  const mvp = heroes.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a));
+  const mvp = heroes.length ? heroes.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a)) : null;
   const rows = heroes.map((h) => `<tr>
       <td><img src="${portraitOf(h)}" alt="">${h.cfg.names ? h.cfg.names[h.level - 1] : h.cfg.name}${h === mvp ? ' <span class="mvp">♛ MVP</span>' : ''}</td>
       ${cols.map(([k]) => `<td class="${h.stats[k] === best(k) && best(k) > 0 ? 'top' : ''}">${fmt(k, h.stats[k])}</td>`).join('')}
     </tr>`).join('');
-  return `<table><tr><th>Herói</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr>${rows}</table>`;
+  const cards = highlights.length ? `<section class="battle-report" aria-label="Destaques da partida">${highlights.map((item) =>
+    `<article class="report-item"><b>${escapeHTML(item.title)}</b><span>${escapeHTML(item.text)}</span></article>`).join('')}</section>` : '';
+  const table = heroes.length ? `<table><tr><th>Herói</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr>${rows}</table>` : '';
+  return cards + table;
 }

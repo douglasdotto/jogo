@@ -7,6 +7,9 @@ import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './chara
 import { LOOKS } from './looks.js';
 import { CLASSES, heroInfo, skillCooldown } from './class-info.js';
 import { aimSpec, validAim } from './skill-targeting.js';
+import { synergyDamageMultiplier, synergyDamageTakenMultiplier, SYNERGIES } from './synergies.js';
+import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './upgrade-branches.js';
+import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
 import { MISSIONS, goalText, starsFor, saveStars, renderCampaign, totalStars, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
@@ -455,9 +458,7 @@ function showEvolution() {
   $('banner').style.opacity = 0;
   pick.open = true;
   game.paused = true;
-  const pool = UPGRADES.filter((o) => o.id !== 'range' || h.ranged);
-  pick.upgrades = [];
-  while (pick.upgrades.length < 3) pick.upgrades.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  pick.upgrades = EVOLUTION_BRANCHES;
   $('pickTitle').textContent = 'Evolução!';
   $('pickSub').textContent = `${cfg.names[entry.level - 1]} · Nv${entry.level} · Escolha uma melhoria`;
   $('pickHint').textContent = '← → melhoria · Enter confirmar · 1–3 escolher';
@@ -500,6 +501,14 @@ function autoUpgrade() {
 }
 
 function applyUpgrade(h, option) {
+  const branch = applyEvolutionBranch(h, option.id);
+  if (branch) {
+    if (branch.damage) h.dmg *= 1 + branch.damage;
+    if (branch.haste) h.haste *= 1 + branch.haste;
+    if (branch.control) h.controlPower *= 1 + branch.control;
+    if (branch.support) h.supportPower *= 1 + branch.support;
+    return;
+  }
   if (option.id === 'hp') { h.maxHp = Math.round(h.maxHp * 1.25); h.hp = h.maxHp; }
   if (option.id === 'dmg') h.dmg *= 1.2;
   if (option.id === 'haste') h.haste *= 1.2;
@@ -705,6 +714,7 @@ class Unit {
     this.busy = 0;          // tempo travado em ataque/golpe/surgimento
     this.pendingHit = null;
     this.dead = false;
+    this.synergyNoticeT = 0;
     this.bar = document.createElement('div');
     this.bar.className = `hp ${team === 'hero' ? 'ally' : ''}`;
     this.bar.innerHTML = '<i></i>';
@@ -808,6 +818,11 @@ class Unit {
       }
       n *= this.damageTaken;
       if (this.guardT > 0) n *= 0.6;
+      const protection = synergyDamageTakenMultiplier(this, heroes());
+      if (protection < 1) {
+        n *= protection;
+        if (this.synergyNoticeT <= 0) { popText(this.pos, SYNERGIES[2].name, 'heal'); this.synergyNoticeT = 1.2; }
+      }
       if ((this.cfg.classId === 0 || this.cfg.id === 'viking' || this.cfg.id === 'iceviking') && Math.random() < 0.3) {
         n *= 0.5;
         popText(this.pos, 'Bloqueio!', 'block');
@@ -817,6 +832,13 @@ class Unit {
     const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
     if (this.stats) this.stats.recebido += real;
     if (owner?.stats) { owner.stats.dano += real; if (critical) owner.stats.criticos++; }
+    if (this.team === 'hero' && owner?.team === 'skeleton' && real > 0) {
+      const name = owner.kind?.name || owner.enemyKind || 'Esqueleto';
+      game.damageSources ||= {};
+      game.damageSources[name] ||= { name, damage: 0, hits: 0 };
+      game.damageSources[name].damage += real;
+      game.damageSources[name].hits++;
+    }
     this.hp -= n;
     if (owner) this.lastHit = owner;
     this.flash = 0.14;
@@ -838,7 +860,10 @@ class Unit {
     this.once(this.team === 'hero' ? 'Death_A' : 'Death_C_Skeletons');
     this.deadTime = 0;
     this.bar.style.display = 'none';
-    if (this.team === 'hero') this.diedIn = game.phase;   // no Pesadelo, decide quando volta
+    if (this.team === 'hero') {
+      this.diedIn = game.phase;   // no Pesadelo, decide quando volta
+      game.fallLog.push({ name: this.cfg.names?.[this.level - 1] || this.cfg.name, phase: game.phase, time: game.runTime });
+    }
     if (this.team === 'skeleton') {
       audio.play('bones');
       game.kills++;
@@ -859,6 +884,7 @@ class Unit {
   }
 
   updateCommon(dt) {
+    this.synergyNoticeT = Math.max(0, this.synergyNoticeT - dt);
     this.mixer.update(dt);
     this.attackTimer -= dt;
     this.busy -= dt;
@@ -917,6 +943,27 @@ const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dea
 const heroes = () => units.filter((u) => u.team === 'hero');
 const allies = () => units.filter((u) => u.team !== 'skeleton');
 
+function applySynergy(attack, owner, target, damage) {
+  const members = heroes();
+  if (attack === 'fire' && owner.cfg.id === 'pyro'
+    && members.some((h) => ['cryo', 'druid'].includes(h.cfg.id))) {
+    const multiplier = synergyDamageMultiplier('fire', target);
+    if (multiplier > 1) {
+      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, 'Sinergia +20%!', 'evolve'); target.synergyNoticeT = 1.2; }
+      return damage * multiplier;
+    }
+  }
+  if (attack === 'piercing' && ['crossbow', 'ninja'].includes(owner.cfg.id)
+    && members.some((h) => h.cfg.id === 'druid')) {
+    const multiplier = synergyDamageMultiplier('piercing', target);
+    if (multiplier > 1) {
+      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, 'Sinergia +20%!', 'evolve'); target.synergyNoticeT = 1.2; }
+      return damage * multiplier;
+    }
+  }
+  return damage;
+}
+
 function inMeleeArc(owner, target, radius = 2.2) {
   const forward = new THREE.Vector3(Math.sin(owner.root.rotation.y), 0, Math.cos(owner.root.rotation.y));
   const offset = new THREE.Vector3().subVectors(target.pos, owner.pos).setY(0);
@@ -941,6 +988,8 @@ function damageArea(center, radius, dmg, owner = null) {
 }
 
 function heroHit(owner, target, dmg, center = owner.pos) {
+  const attack = ['crossbow', 'ninja'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
+  if (attack) dmg = applySynergy(attack, owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.65, (0.25 + (owner.level - 1) * 0.05) * owner.skillPower);
   target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1), center, owner.summoner || owner, critical);
 }
@@ -1057,7 +1106,7 @@ function updateBolts(dt) {
           scene.add(mesh);
           flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.15, t: (1.5 + b.level * 0.5) * b.power, tick: 0 });
         }
-        if (b.kind === 'cryo' || b.kind === 'iceviking') for (const s of skeletonsAlive()) if (s.pos.distanceTo(b.target.pos) <= radius) s.slowT = (3 + (b.level - 1) * 0.5) * b.power;
+        if (b.kind === 'cryo' || b.kind === 'iceviking') for (const s of skeletonsAlive()) if (s.pos.distanceTo(b.target.pos) <= radius) s.slowT = scaleBranchEffect(b.owner, 'control', 3 + (b.level - 1) * 0.5) * b.power;
         ring(b.target.pos, Math.max(0.5, radius), colors[b.kind] || 0xc999ff);
         if (b.skill || b.look) FX.impact(b.skill ? b.kind : 'basic', b.target.pos, Math.max(0.6, radius), b.look);
         b.life = 0;
@@ -1782,6 +1831,8 @@ class Hero extends Unit {
     this.haste = 1;
     this.skillRate = 1;
     this.skillPower = 1;
+    this.controlPower = 1;
+    this.supportPower = 1;
     this.damageTaken = 1;
     this.royalT = 0;
     this.royalBonus = 0;
@@ -1805,6 +1856,8 @@ class Hero extends Unit {
     this.halo.visible = false;
     this.root.add(this.aura, this.halo);
     this.stats = newStats();
+    game.roster ||= [];
+    game.roster.push(this);
     this.trinkets = [];   // acessórios animados (orbe, estrelinhas, chamas)
     this.root.traverse((o) => { if (o.userData.spin || o.userData.orbit || o.userData.flicker) this.trinkets.push(o); });
     this.levelLabel = document.createElement('span');
@@ -1860,7 +1913,7 @@ class Hero extends Unit {
       effect = () => {
         const healed = [];
         for (const h of friends) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
-          const heal = Math.min(h.maxHp - h.hp, (32 + level * 10) * power);
+          const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', 32 + level * 10) * power);
           h.hp += heal;
           this.stats.cura += heal;
           healed.push(h);
@@ -1871,7 +1924,7 @@ class Hero extends Unit {
     } else if (id === 'guardian') {
       if (!nearby.length) return false;
       effect = () => {
-        this.guardT = (4 + (level - 1)) * power;
+        this.guardT = scaleBranchEffect(this, 'control', 4 + (level - 1)) * power;
         for (const s of nearby) if (!s.dead) { s.taunt = this; s.tauntT = this.guardT; s.pendingHit = null; popText(s.pos, '!', 'crit'); }
         FX.dome(this, radius);
       };
@@ -1884,7 +1937,7 @@ class Hero extends Unit {
           if (id === 'crusher' && !inMeleeArc(this, s, 2.2 * power)) continue;
           heroHit(this, s, this.dmg * 1.1);
           if (id === 'champion') s.vel.add(new THREE.Vector3().subVectors(s.pos, this.pos).setY(0).normalize().multiplyScalar(6 + level));
-          else { s.stunT = (1.5 + (level - 1) * 0.25) * power; s.pendingHit = null; s.vel.set(0, 0, 0); }
+          else { s.stunT = scaleBranchEffect(this, 'control', 1.5 + (level - 1) * 0.25) * power; s.pendingHit = null; s.vel.set(0, 0, 0); }
         }
         if (id === 'champion') FX.whirl(this, radius);
         else FX.quake(this, 2.2 * power);
@@ -1963,12 +2016,12 @@ class Hero extends Unit {
       if (!nearby.length) return false;
       effect = () => {
         for (const enemy of skeletonsAlive()) if (!enemy.spawning && enemy.pos.distanceTo(this.pos) <= radius) {
-          enemy.rootT = 1.5 * power;
+          enemy.rootT = scaleBranchEffect(this, 'control', 1.5) * power;
           enemy.vel.set(0, 0, 0);
           FX.roots(enemy);
         }
         for (const h of heroes()) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
-          const heal = Math.min(h.maxHp - h.hp, 20 * power);
+          const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', 20) * power);
           h.hp += heal;
           this.stats.cura += heal;
           if (heal > 0) popText(h.pos, '+' + Math.round(heal), 'heal');
@@ -2107,7 +2160,7 @@ class Minion extends Unit {
     this.summoner = summoner;
     this.cfg = { id: 'minion' };
     this.level = summoner.level;
-    this.life = 8 * summoner.skillPower;
+    this.life = scaleBranchEffect(summoner, 'support', 8) * summoner.skillPower;
     this.pos.copy(summoner.pos).add(new THREE.Vector3(side * 0.9, 0, 0));
     this.size = 0.7;
     this.popT = 0;
@@ -2293,7 +2346,7 @@ function startGame(view = 'menu') {
 function placeParty(first) {
   const m = game.mission;
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
     test: new URLSearchParams(location.search).has('fase') });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
@@ -2610,7 +2663,14 @@ function endGame(text, won = false) {
   audio.play(won ? 'victory' : 'defeat');
   $('overlayText').textContent = text + (saveRecord(won) ? ` · Novo recorde no ${difficulty.name}!` : '');
   if (game.mission) missionEnd(won);
-  $('overlayStats').innerHTML = summaryHTML(heroes());
+  const party = game.roster;
+  const report = buildBattleReport({
+    won,
+    heroes: party.map((h) => ({ name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
+    falls: game.fallLog,
+    damageSources: Object.values(game.damageSources),
+  });
+  $('overlayStats').innerHTML = summaryHTML(party, report);
   $('overlayBtn').textContent = game.mission ? 'Voltar ao mapa' : 'Jogar de novo';
   $('overlayBtn').hidden = false;
   $('overlay').classList.remove('hidden');
@@ -2634,6 +2694,7 @@ const clock = new THREE.Clock();
 function frame() {
   const real = Math.min(clock.getDelta(), 0.05);
   const dt = game.paused ? 0 : real * speed;
+  if (dt > 0 && !game.over) game.runTime += dt;
   for (const u of [...units]) u.update(dt);
   if (dt > 0 && !game.over) separate();
   updateBolts(dt);
