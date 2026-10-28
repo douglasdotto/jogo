@@ -1341,6 +1341,26 @@ const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a
 const starGlowMat = glow(0x6f8cff, 0.55);
 for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
 const TRAIL = { arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff] };
+// Símbolo e paleta próprios aparecem enquanto cada habilidade é preparada.
+const SKILL_ART = {
+  paladin:   { color: 0xffe27a, accent: 0x8af5a8, glyph: crystalGeo, scale: 1.2 },
+  guardian:  { color: 0x3f9bff, accent: 0xc8efff, glyph: domeGeo, scale: 0.48 },
+  champion:  { color: 0xffe59b, accent: 0xffffff, glyph: arcGeo, scale: 0.65 },
+  berserker: { color: 0xff3b3b, accent: 0xffa040, glyph: boltGeo, scale: 2.2 },
+  crusher:   { color: 0xffb060, accent: 0xffe59b, glyph: crystalGeo, scale: 1.2 },
+  viking:    { color: 0xd6e9ef, accent: 0xffd84a, glyph: crystalGeo, scale: 1.2 },
+  pyro:      { color: 0xff6a1a, accent: 0xffe070, glyph: flameGeo, scale: 1.5 },
+  arcane:    { color: 0x8a3cff, accent: 0xe0c8ff, glyph: boltGeo, scale: 2.2 },
+  cryo:      { color: 0x5fd0ff, accent: 0xffffff, glyph: iceGeo, scale: 2 },
+  assassin:  { color: 0x9974b5, accent: 0xe0c8ff, glyph: slashGeo, scale: 0.6 },
+  crossbow:  { color: 0xc9eaa4, accent: 0xfff0a0, glyph: shardGeo, scale: 1.8 },
+  ninja:     { color: 0x768ac6, accent: 0xffffff, glyph: shurikenGeo, scale: 1.45 },
+  king:      { color: 0xffc61a, accent: 0xffffff, glyph: crownGeo, scale: 1.5 },
+  iceviking: { color: 0x58aaca, accent: 0xffffff, glyph: iceGeo, scale: 2 },
+  necro:     { color: 0x22e050, accent: 0xd8ffe0, glyph: skullGeo, scale: 2.2 },
+  druid:     { color: 0x5fbf2a, accent: 0xc8f07a, glyph: leafGeo, scale: 3.5 },
+};
+const TARGETED_SKILLS = new Set(['assassin', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja']);
 let shakeK = 0;
 const jolt = new THREE.Vector3();
 
@@ -1433,28 +1453,113 @@ function column(at, color, radius, height, life, o = {}) {
   }, o.delay);
 }
 
+// Um selo flutuante mostra qual energia está sendo reunida para cada herói.
+function skillSigil(h, life, art, active) {
+  const seal = new THREE.Group();
+  const ground = new THREE.Mesh(groundGeo, glow(art.color, 0.12, false));
+  const outer = new THREE.Mesh(thinRingGeo, glow(art.color, 0.9));
+  const inner = new THREE.Mesh(hexGeo, glow(art.accent, 0.8, false));
+  const crest = new THREE.Mesh(art.glyph, glow(art.accent, 0.95));
+  ground.rotation.x = outer.rotation.x = inner.rotation.x = -Math.PI / 2;
+  ground.position.y = 0.03;
+  outer.position.y = 0.06;
+  inner.position.y = 0.08;
+  crest.position.y = 1.75;
+  crest.rotation.x = h.cfg.id === 'cryo' || h.cfg.id === 'iceviking' ? 0.25 : 0;
+  seal.add(ground, outer, inner, crest);
+  const motes = [];
+  for (let i = 0; i < 3; i++) {
+    const mote = new THREE.Mesh(sparkGeo, glow(i === 1 ? art.accent : art.color));
+    seal.add(mote);
+    motes.push(mote);
+  }
+  addFx(seal, life, (e, dt, k) => {
+    if (!active()) { e.done = true; return; }
+    seal.position.copy(h.pos);
+    const pulse = 0.9 + Math.sin(e.t * 12) * 0.1;
+    ground.scale.setScalar((0.6 + k * 1.45) * pulse);
+    ground.material.opacity = 0.12 * Math.sin(Math.PI * k);
+    outer.scale.setScalar(0.7 + k * 1.15);
+    outer.rotation.z += dt * 1.8;
+    outer.material.opacity = 0.82 * Math.sin(Math.PI * k);
+    inner.scale.setScalar(0.8 + Math.sin(k * Math.PI) * 0.32);
+    inner.rotation.z -= dt * 2.6;
+    inner.material.opacity = 0.8 * Math.sin(Math.PI * k);
+    crest.position.set(Math.sin(h.root.rotation.y) * 0.35, 1.7 + Math.sin(e.t * 7) * 0.12, Math.cos(h.root.rotation.y) * 0.35);
+    crest.rotation.y += dt * (h.cfg.id === 'ninja' ? 8 : 2.5);
+    crest.rotation.z = Math.sin(e.t * 5) * 0.15;
+    crest.scale.setScalar(art.scale * (0.55 + 0.65 * Math.sin(Math.PI * k)) * pulse);
+    crest.material.opacity = 0.95 * Math.sin(Math.PI * k);
+    for (let i = 0; i < motes.length; i++) {
+      const a = e.t * (2.5 + i * 0.35) + (i / motes.length) * TAU;
+      const r = 0.7 + Math.sin(k * Math.PI) * 0.35;
+      motes[i].position.set(Math.cos(a) * r, 1.35 + Math.sin(a * 1.4) * 0.28, Math.sin(a) * r);
+      motes[i].scale.setScalar(0.65 + Math.sin(e.t * 10 + i) * 0.25);
+      motes[i].material.opacity = Math.sin(Math.PI * k);
+    }
+  });
+}
+
+// A mira se fecha sobre o alvo enquanto o conjurador prepara o golpe.
+function targetLock(target, life, art, active) {
+  const lock = new THREE.Group();
+  const ring = new THREE.Mesh(thinRingGeo, glow(art.color, 0.9));
+  ring.rotation.x = -Math.PI / 2;
+  lock.add(ring);
+  for (let i = 0; i < 4; i++) {
+    const corner = new THREE.Mesh(shardGeo, glow(art.accent, 0.9));
+    corner.rotation.y = i * Math.PI / 2;
+    corner.position.set(Math.cos(i * Math.PI / 2) * 0.7, 0.08, Math.sin(i * Math.PI / 2) * 0.7);
+    lock.add(corner);
+  }
+  addFx(lock, life, (e, dt, k) => {
+    if (!active() || target.dead || !units.includes(target)) { e.done = true; return; }
+    lock.position.copy(target.pos).setY(target.pos.y + 0.07);
+    const pulse = 0.78 + Math.sin(e.t * 17) * 0.12;
+    ring.scale.setScalar((0.55 + 0.4 * k) * pulse);
+    lock.rotation.y += dt * 2.5;
+    ring.material.opacity = 0.35 + 0.55 * Math.sin(Math.PI * k);
+    lock.scale.setScalar(0.75 + Math.sin(k * Math.PI) * 0.25);
+  });
+}
+
+// Um fio de energia anuncia disparos direcionados e deixa claro quem será atingido.
+function castLink(h, target, life, art, active) {
+  const link = new THREE.Group();
+  const outer = new THREE.Mesh(beamGeo, glow(art.color, 0.78));
+  const core = new THREE.Mesh(beamGeo, glow(art.accent, 0.95));
+  link.add(outer, core);
+  addFx(link, life, (e, dt, k) => {
+    if (!active() || target.dead || !units.includes(target)) { e.done = true; return; }
+    const start = h.pos.clone().setY(h.pos.y + 1.35)
+      .addScaledVector(V(Math.sin(h.root.rotation.y), 0, Math.cos(h.root.rotation.y)), 0.42);
+    const end = target.pos.clone().setY(target.pos.y + 1.05);
+    const dir = end.sub(start), distance = dir.length();
+    if (distance < 0.05) { e.done = true; return; }
+    const reveal = 0.15 + 0.85 * k;
+    dir.normalize();
+    link.position.copy(start).addScaledVector(dir, distance * reveal * 0.5);
+    link.quaternion.setFromUnitVectors(V(0, 1, 0), dir);
+    outer.scale.set(2.2, distance * reveal, 2.2);
+    core.scale.set(0.65, distance * reveal, 0.65);
+    const pulse = 0.75 + Math.sin(e.t * 22) * 0.2;
+    outer.material.opacity = 0.65 * pulse * (1 - k * 0.45);
+    core.material.opacity = 0.85 * pulse * (1 - k * 0.45);
+  });
+}
+
 // faíscas da cor do herói girando para a mão no começo da habilidade
 function charge(h, duration) {
-  const color = h.cfg.color[0];
+  const art = SKILL_ART[h.cfg.id] || { color: h.cfg.color[0], accent: 0xffffff, glyph: shellGeo, scale: 0.5 };
+  const color = art.color;
   const life = Math.max(0.08, duration);
   const pending = h.pendingHit;
   const active = () => !h.dead && units.includes(h) && h.pendingHit === pending;
-  // O selo acompanha o herói e contrai até o instante real da habilidade.
-  const seal = new THREE.Group();
-  const ring = new THREE.Mesh(thinRingGeo, glow(color, 0.7));
-  const rune = new THREE.Mesh(hexGeo, glow(color, 0.5, false));
-  ring.rotation.x = rune.rotation.x = -Math.PI / 2;
-  seal.add(ring, rune);
-  addFx(seal, life, (e, dt, k) => {
-    if (!active()) { e.done = true; return; }
-    seal.position.copy(h.pos).setY(h.pos.y + 0.09);
-    const ease = k * k * (3 - 2 * k);
-    ring.scale.setScalar(1.65 - ease * 0.85);
-    rune.scale.setScalar(1.05 + Math.sin(k * Math.PI) * 0.15);
-    rune.rotation.z = -k * Math.PI;
-    ring.material.opacity = Math.sin(Math.PI * k) * 0.8;
-    rune.material.opacity = Math.sin(Math.PI * k) * 0.55;
-  });
+  skillSigil(h, life, art, active);
+  if (pending.target && TARGETED_SKILLS.has(h.cfg.id)) {
+    targetLock(pending.target, life, art, active);
+    castLink(h, pending.target, life, art, active);
+  }
   // Trajetórias curvas, em vez de faíscas retas: convergem à frente do peito.
   for (let i = 0; i < 10; i++) {
     const spark = new THREE.Mesh(sparkGeo, glow(i % 3 ? color : 0xffffff));
@@ -1475,7 +1580,8 @@ function charge(h, duration) {
 
 // Pulso breve na liberação, sem encobrir os combatentes.
 function release(h) {
-  const color = h.cfg.color[0];
+  const art = SKILL_ART[h.cfg.id] || { color: h.cfg.color[0], accent: 0xffffff, glyph: shellGeo, scale: 0.5 };
+  const color = art.color;
   const origin = h.pos.clone().setY(h.pos.y + 1.15);
   origin.addScaledVector(V(Math.sin(h.root.rotation.y), 0, Math.cos(h.root.rotation.y)), 0.45);
   const flash = new THREE.Mesh(shellGeo, glow(0xffffff, 0.85));
@@ -1484,6 +1590,15 @@ function release(h) {
     flash.scale.setScalar(0.7 + 3 * (1 - (1 - k) ** 3));
     flash.material.opacity = e.base * (1 - k) ** 2;
   });
+  const crest = new THREE.Mesh(art.glyph, glow(art.accent, 0.9));
+  crest.position.copy(origin);
+  addFx(crest, 0.38, (e, dt, k) => {
+    crest.scale.setScalar(art.scale * (0.3 + k * 1.2));
+    crest.rotation.y += dt * (h.cfg.id === 'ninja' ? 13 : 4);
+    crest.rotation.z += dt * (h.cfg.id === 'assassin' ? 7 : 1.5);
+    crest.material.opacity = 0.9 * (1 - k) ** 1.5;
+  });
+  burst(origin, [art.color, art.accent, 0xffffff], 8, 5, { life: 0.42, size: 1.25 });
   wave(h.pos, color, 0.65, 1.9, 0.38, { opacity: 0.65 });
   for (let i = 0; i < 2; i++) {
     const arc = new THREE.Mesh(arcGeo, glow(color, 0.8));
