@@ -13,7 +13,7 @@ import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './u
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
-import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
+import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -394,7 +394,7 @@ function saveAuto(id, on, slot = null) {
 
 // menu inicial: Campanha (missões com estrelas) ou Jornada completa (as 12 fases seguidas)
 const MODES = [
-  { name: 'Campanha', icon: '⚑', desc: '8 missões com objetivos e estrelas.', color: ['#ffe27a', '#c98a12'] },
+  { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
   { name: 'Jornada completa', icon: '♛', desc: 'As 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
 ];
 function showMenu() {
@@ -1252,8 +1252,9 @@ class Unit {
       dir.x += px * s * push; dir.z += pz * s * push;
     }
     dir.normalize();
-    const slow = Math.min(1, d / 0.8);                        // freia chegando no ponto
-    this.vel.lerp(dir.multiplyScalar(this.speed * slow * (this.slowT > 0 ? 0.5 : 1) * (world.isShallow(this.pos.x, this.pos.z) ? 0.6 : 1)), Math.min(1, dt * 7));
+    const terrainSpeed = (this.slowT > 0 ? 0.5 : 1) * (world.isShallow(this.pos.x, this.pos.z) ? 0.6 : 1);
+    const approachSpeed = Math.min(this.speed, d * 1.75) * terrainSpeed; // limita a frenagem para não ultrapassar o alvo
+    this.vel.lerp(dir.multiplyScalar(approachSpeed), Math.min(1, dt * 7));
     this.moving = true;
     this.face(tmp.copy(this.pos).add(this.vel), dt);
   }
@@ -1426,7 +1427,7 @@ function makeTargetContext(reuse = null) {
     party.length = 0;
     for (const unit of units) if (unit.team === 'hero') party.push(unit);
   }
-  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
+  const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager : null;
   const friends = reuse ? reuse.friends : villager ? [...party, villager] : party;
   if (reuse) {
     friends.length = 0;
@@ -1529,6 +1530,8 @@ function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
+
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
@@ -1559,7 +1562,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   if (goal?.type === 'nofall' && fromPost <= interceptLimit && (threatenedHero || nearCriticalHero)) return true;
 
   // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão.
-  return goal?.type === 'totems' && target.totem && fromPost <= LEASH + hero.range + 5;
+  return hasDestructionGoal(goal) && target.totem && fromPost <= LEASH + hero.range + 5;
 }
 
 function heroTargetScore(hero, target, from = hero.pos, context = targetContext()) {
@@ -1569,7 +1572,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   let distanceToVulnerable = Infinity;
 
   if (target.boss) score -= goal?.type === 'boss' ? 12 : 3.5;
-  if (target.totem) score -= goal?.type === 'totems' ? 12 : 1;
+  if (target.totem) score -= hasDestructionGoal(goal) ? 12 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
 
   if (target.enemyKind === 'Bomber') {
@@ -1706,7 +1709,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const urgentBomber = best.enemyKind === 'Bomber'
     && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
   const urgentObjectiveTarget = (goal?.type === 'boss' && best.boss)
-    || (goal?.type === 'totems' && best.totem)
+    || (hasDestructionGoal(goal) && best.totem)
     || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
   let criticalAllyNearFocus = false;
   if (focused && goal?.type === 'nofall') for (const ally of party) {
@@ -3678,7 +3681,7 @@ function placeParty(first) {
   const m = game.mission;
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, bossSeen: false, bossDown: false, villager: null,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
@@ -3695,6 +3698,7 @@ function startMission() {
     const m = game.mission;
     if (!m) return;
     if (m.goal.type === 'escort') game.villager = new Villager();
+    if (m.goal.type === 'rescue') game.villager = new Villager(true);
     showBanner(`${m.name} · ${world.biome}`, 3);
     game.paused = false;
   };
@@ -3712,6 +3716,9 @@ function startPhase() {
     const n = Math.ceil((goal.count - game.totemsPlaced) / (game.last - game.phase + 1));
     for (let k = 0; k < n; k++) placeTotem(k);
   }
+  if (goal?.type === 'tower' && game.totemsPlaced < goal.count) {
+    for (let k = 0; k < goal.count - game.totemsPlaced; k++) placeTotem(k, true);
+  }
   if (goal?.type === 'survive' && game.phase === goal.phase) return showBanner(`Aguente ${goal.time} s!`);
   showBanner(game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`);
 }
@@ -3719,18 +3726,27 @@ function startPhase() {
 // ---------- campanha: aldeão, totens e objetivos ----------
 // aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
 class Villager extends Unit {
-  constructor() {
+  constructor(captive = false) {
     super(assets.Barbarian, { hp: Math.round(240 / difficulty.dmg), dmg: 0, range: 0, speed: 3, cooldown: 1 }, 'villager');
     const tint = new THREE.Color(0xd8b07a);
     this.root.traverse((o) => { if (HEROES[1].weapons.includes(o.name) && o.name !== 'Mug') o.visible = false; });
     for (const m of this.mats) m.color?.lerp(tint, 0.45);
     this.bar.classList.add('ally');
     const label = document.createElement('span');
-    label.textContent = 'Aldeão';
+    label.textContent = captive ? 'Prisioneiro' : 'Aldeão';
     this.bar.appendChild(label);
+    this.nameTag = label;
+    this.captive = captive;
+    this.rescued = !captive;
     this.post = new THREE.Vector3();
-    this.follow();
-    this.pos.copy(this.post);
+    if (captive) {
+      this.pos.copy(world.along(game.guideS + 4.5, -1.5));
+      this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
+      this.post.copy(this.pos);
+    } else {
+      this.follow();
+      this.pos.copy(this.post);
+    }
     this.popT = 0;
     this.loop('Idle');
   }
@@ -3745,6 +3761,7 @@ class Villager extends Unit {
     if (dt <= 0) return;
     this.updateCommon(dt);
     if (this.dead || game.over || this.busy > 0) return;
+    if (this.captive && !this.rescued) { this.vel.set(0, 0, 0); this.loop('Idle'); return; }
     const fwd = this.follow();
     if (this.pos.distanceTo(this.post) > 0.3) this.moveTo(this.post, dt);
     else this.face(tmp.copy(this.post).addScaledVector(fwd, 10), dt);
@@ -3791,9 +3808,12 @@ function totemModel() {
 }
 
 class Totem extends Unit {
-  constructor(at) {
-    super(totemModel(), { hp: Math.round(240 * difficulty.hp * (1 + (game.phase - 1) * 0.12)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
+  constructor(at, tower = false) {
+    const towerHealth = tower ? 420 : 240;
+    super(totemModel(), { hp: Math.round(towerHealth * difficulty.hp * (1 + (game.phase - 1) * 0.12)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
     this.totem = true;
+    this.tower = tower;
+    if (tower) this.size = 1.65;
     this.ranged = true;      // o grupo vai até ele (e o separate não o empurra)
     this.busy = Infinity;    // sem animações de golpe
     this.spawnT = 2;
@@ -3801,6 +3821,11 @@ class Totem extends Unit {
     this.pos.copy(at);
     this.popT = 0;
     this.deadTime = 0;
+    if (tower) {
+      const label = document.createElement('span');
+      label.textContent = 'Torre de ossos';
+      this.bar.appendChild(label);
+    }
   }
 
   update(dt) {
@@ -3819,13 +3844,15 @@ class Totem extends Unit {
     poof(this.pos, 1.6);
     ring(this.pos, 2.4, 0xb36bff, 1);
     game.totemsDown++;
+    if (this.tower) game.towersDown++;
     for (const h of heroes()) if (!h.dead) h.gainXp(8);
-    showBanner(`Totem destruído! ${game.totemsDown}/${game.mission.goal.count}`);
+    const destroyed = this.tower ? game.towersDown : game.totemsDown;
+    showBanner(`${this.tower ? 'Torre derrubada' : 'Totem destruído'}! ${destroyed}/${game.mission.goal.count}`);
   }
 }
 
 // totem num lado da estrada, à frente do grupo e longe do desafio da fase
-function placeTotem(k) {
+function placeTotem(k, tower = false) {
   const s0 = world.anchorS(game.phase), zone = world.zoneOf(game.phase);
   const side = zone ? (zone.type === 'lake' ? 1 : -1) : k % 2 ? 1 : -1;
   const at = new THREE.Vector3();
@@ -3834,7 +3861,7 @@ function placeTotem(k) {
     if (!world.obstacles.some((o) => Math.hypot(o.x - at.x, o.z - at.z) < o.r + 1.2)) break;
   }
   at.y = world.groundHeight(at.x, at.z);
-  new Totem(at);
+  new Totem(at, tower);
   game.totemsPlaced++;
 }
 
@@ -3846,12 +3873,14 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
   const phaseCount = Math.max(1, mission.to - mission.from + 1);
   const phaseProgress = THREE.MathUtils.clamp((game.phase - mission.from + Number(game.state === 'cleared')) / phaseCount, 0, 1);
   if (goal.type === 'escort') return villager ? THREE.MathUtils.clamp(villager.hp / villager.maxHp, 0, 1) : 0;
+  if (goal.type === 'rescue') return game.rescueComplete ? 1 : 0;
   if (goal.type === 'boss') return game.bossDown ? 1 : phaseProgress;
   if (goal.type === 'survive') {
     if (game.phase < goal.phase) return 0;
     if (game.phase > goal.phase || game.surviveT <= 0) return 1;
     return THREE.MathUtils.clamp(1 - game.surviveT / goal.time, 0, 1);
   }
+  if (goal.type === 'tower') return THREE.MathUtils.clamp(game.towersDown / goal.count, 0, 1);
   if (goal.type === 'totems') return THREE.MathUtils.clamp(game.totemsDown / goal.count, 0, 1);
   if (goal.type === 'timer') return THREE.MathUtils.clamp(game.missionT / goal.time, 0, 1);
   return phaseProgress;
@@ -3866,6 +3895,19 @@ function campaignTick(dt, skeletons) {
   const fail = (text) => (endGame(text, false), true);
   if (goal.type === 'nofall' && game.falls) return fail('Um herói caiu! A regra era ninguém cair.');
   if (goal.type === 'escort' && game.villager?.dead) return fail('O aldeão caiu! Proteja-o até o fim.');
+  if (goal.type === 'rescue' && game.villager?.dead) return fail(game.rescueComplete
+    ? 'A pessoa resgatada caiu antes de chegar em segurança.'
+    : 'A pessoa presa caiu antes do resgate.');
+  if (goal.type === 'rescue' && game.villager && !game.villager.rescued
+    && heroes().some((hero) => !hero.dead && tacticalDistance(hero.pos, game.villager.pos) <= 2.8)) {
+    game.villager.rescued = true;
+    game.rescueComplete = true;
+    game.villager.nameTag.textContent = 'Resgatado';
+    popText(game.villager.pos, 'Resgatado!', 'heal');
+    showBanner('Pessoa resgatada!', 2.5);
+  }
+  if (finalPhaseCleared && goal.type === 'rescue' && !game.villager?.rescued) return fail('A pessoa presa não foi encontrada a tempo.');
+  if (finalPhaseCleared && goal.type === 'tower' && game.towersDown < goal.count) return fail('A torre de ossos ainda está de pé!');
   if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
   if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
     const boss = units.find((u) => u.phaseBoss);
@@ -3882,7 +3924,7 @@ function campaignTick(dt, skeletons) {
     game.surviveT = Math.max(0, game.surviveT - dt);
     if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = 4;
   }
-  if (goal.type === 'totems' && game.state === 'fight') {
+  if (hasDestructionGoal(goal) && game.state === 'fight') {
     for (const t of skeletons) if (t.totem && (t.spawnT -= dt) <= 0) {
       t.spawnT = 6 * difficulty.interval;
       if (skeletons.length >= 12) continue;
@@ -3898,16 +3940,18 @@ function campaignTick(dt, skeletons) {
   switch (goal.type) {
     case 'win': text = `Vença até a fase ${game.mission.to}`; break;
     case 'escort': text = v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão'; break;
+    case 'rescue': text = v?.rescued ? 'Pessoa resgatada!' : 'Encontre e resgate a pessoa'; break;
     case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`; break;
     case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!'; break;
     case 'totems': text = `Totens ${game.totemsDown}/${goal.count}`; break;
+    case 'tower': text = game.towersDown >= goal.count ? 'Torre derrubada!' : 'Derrube a torre de ossos'; break;
     case 'nofall': text = `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`; break;
     case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
     default: text = goalText(goal);
   }
   setGoalUI(text, missionProgress(goal, v, skeletons));
-  $('goal').classList.toggle('warn', (goal.type === 'escort' && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
-  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
+  $('goal').classList.toggle('warn', ((goal.type === 'escort' || goal.type === 'rescue' && !v?.rescued) && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
+  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'tower' && game.towersDown >= goal.count) || (goal.type === 'rescue' && game.rescueComplete) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
   return false;
 }
 
@@ -3946,7 +3990,7 @@ function spawnSkeleton() {
     if (p >= 2 && ['Minion', 'Warrior', 'Rogue'].includes(type) && Math.random() < difficulty.shooters)
       type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
-  if (onTop && !lead) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
+  if (onTop && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
   const behind = p >= difficulty.behindFrom && !lead && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
@@ -4052,6 +4096,9 @@ function endGame(text, won = false) {
       stars: won && !game.test ? missionStars : null,
       nextMission,
       remainingStars: won && !game.test && game.mission ? MISSIONS.length * 3 - totalStars() : null,
+      maxStars: MISSIONS.length * 3,
+      rescueComplete: game.rescueComplete,
+      towersDown: game.towersDown,
     } : null,
   });
   $('overlayStats').innerHTML = summaryHTML(party, report);
@@ -4096,7 +4143,8 @@ const clock = new THREE.Clock();
 const frameUnits = [], frameHeroes = [], frameFoes = [], frameNearFoes = [];
 const frameFoeCenter = new THREE.Vector3();
 function frame() {
-  const real = Math.min(clock.getDelta(), 0.05);
+  requestAnimationFrame(frame);   // agenda antes: um erro no quadro não congela o jogo
+  const real =Math.min(clock.getDelta(), 0.05);
   const dt = game.paused ? 0 : real * speed;
   if (dt > 0 && !game.over) game.runTime += dt;
   const updateCount = units.length;
@@ -4186,7 +4234,6 @@ function frame() {
   updateSkillBar();
   updateAim();
   audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
-  requestAnimationFrame(frame);
 }
 
 // Mira manual: alcance azul, alvo válido verde e alvo inválido vermelho.

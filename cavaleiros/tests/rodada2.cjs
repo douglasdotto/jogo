@@ -106,7 +106,8 @@ context.assets.Barbarian={scene:{},animations:[]};
 context.location={search:'?tudo=1'};   // os testes antigos usam todas as variantes
 for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skeleton_Staff','Skeleton_Crossbow']) context.assets[n]={scene:{clone:root}};
 const results=[];
-function test(name,fn){fn();results.push(name);console.log('OK:',name)}
+const failures=[];
+function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.message.split('\n')[0])}}
 function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,test:false});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.pos.set(0,0,-4);t.updateBars();
@@ -188,14 +189,6 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
   assert.ok(t.pick.info.innerHTML.includes('Derrote o chefe')&&t.pick.info.innerHTML.includes('class="covered priority">Dano a chefe<b>1</b>'));
   clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);
-});
-test('prévia da equipe não trata heróis bloqueados como se fossem escolhidos',()=>{
-  const previousLocation=context.location,previousStorage=context.localStorage.data;
-  clear();context.location={search:''};context.localStorage.data={};new t.Hero(cfg('pyro'));
-  t.showPick('','');const locked=t.pick.options.findIndex(hero=>hero.id==='cleric');t.selectCard(locked);
-  assert.ok(t.pick.info.innerHTML.includes('Equipe atual')&&t.pick.info.innerHTML.includes('Ganhe ★ 2 na campanha'));
-  assert.ok(!t.pick.info.innerHTML.includes('class="candidate"'));
-  context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
@@ -588,19 +581,13 @@ function begin(id,picks){
   for(const p of picks){t.confirmPick(idx(p));next();}
   context.setTimeout=noop;
 }
-test('8 missões com objetivo; quatro variantes começam liberadas e as novas entram no fluxo de estrelas',()=>{
-  assert.equal(t.MISSIONS.length,8);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+test('10 missões com objetivo e todo o elenco liberado desde o início',()=>{
+  assert.equal(t.MISSIONS.length,10);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).map(v=>v.id).sort().join(),'assassin,berserker,paladin,pyro');
-  assert.equal(t.UNLOCKS.length,16);assert.equal(new Set([...t.UNLOCKS.map(u=>u.id),...t.STARTERS]).size,20);
-  assert.equal(t.UNLOCKS.at(-1).stars,23);
-  assert.ok(t.UNLOCKS.every(u=>u.stars<=24));
-  assert.deepEqual(['cleric','bard','angel','chronist'].map(id=>t.starsToUnlock(id)),[2,8,14,20]);
-  clear();t.showPick('','');assert.ok(t.pick.cards[idx('guardian')].innerHTML.includes('★ 1 para liberar'));
-  t.confirmPick(idx('guardian'));assert.equal(t.pick.open,true);
-  t.selectCard(idx('paladin'));t.moveGrid(1,0);assert.equal(t.pick.sel,idx('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,idx('berserker'));
-  context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.variantOpen('guardian')&&t.variantOpen('viking')&&!t.variantOpen('cryo'));
-  context.location={search:'?tudo=1'};assert.ok(t.variantOpen('druid'));assert.ok(t.unlocked(7));
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,20);assert.equal(t.UNLOCKS.length,0);
+  clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('para liberar'));
+  context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
+  context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));
 });
 test('estrelas da campanha são cumulativas e missão sem quedas usa vida como desafio extra',()=>{
   const stars=context.starsFor;
@@ -693,12 +680,12 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha concluída/);
-  assert.match(view.info.innerHTML,/16 estrelas restantes/);
+  assert.match(view.info.innerHTML,/20 estrelas restantes/);
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,3])))};
   view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.match(view.info.innerHTML,/todas as variantes estão liberadas/);
+  assert.match(view.info.innerHTML,/Todas as 30 estrelas foram conquistadas/);
   context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('atalho ?tudo=1 não grava estrelas de campanha',()=>{
@@ -763,11 +750,11 @@ test('objetivos: sobreviver com ondas contínuas, totens e chefe',()=>{
   boss.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);assert.equal(t.skeletonsAlive().length,0);
   t.updateGame(.1);t.game.timer=0;t.updateGame(.1);assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.startsWith('Missão cumprida'));
 });
-test('estrelas no fim: gravam o melhor, liberam variantes e não contam com ?fase',()=>{
+test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   context.location={search:''};context.localStorage.data={};
   begin('vila',['paladin']);Object.assign(t.game,{phase:3,state:'cleared',timer:0,missionT:83});t.updateGame(.1);
   assert.equal(t.starsOf('vila'),3);const stars=elements.get('overlayStars').innerHTML;
-  assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(stars.includes('Nova variante liberada!')&&stars.includes('Guardião')&&stars.includes('Viking'));
+  assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(!stars.includes('Nova variante liberada!'));
   assert.ok(stars.includes('Concluir a missão')&&stars.includes('Terminar sem quedas (0 quedas)')&&stars.includes('atual 100%'));
   assert.ok(stars.includes('Novo recorde · Normal · 1:23'));
   assert.deepEqual(Array.from(t.missionRecords('vila'),r=>r.difficultyId),['normal']);
@@ -868,3 +855,4 @@ test('chefes e golem fecham as ondas certas; tipos novos entram aos poucos',()=>
   t.clearMonsterFx();const seen=new Set();for(let i=0;i<300;i++)seen.add(t.pickMonster(12,'Minion'));for(const k of ['Shieldbearer','Bomber','Ghost'])assert.ok(seen.has(k),k);
 });
 console.log(results.length+' verificações passaram.');
+if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

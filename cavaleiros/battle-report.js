@@ -48,6 +48,18 @@ function objectiveTip(mission) {
   if (goal.type === 'nofall') {
     return 'A missão exige que ninguém caia. Guarde cura, escudo ou controle para salvar o aliado que ficar com pouca vida.';
   }
+  if (goal.type === 'rescue' && mission.villagerDown) {
+    return mission.rescueComplete
+      ? 'A pessoa foi resgatada, mas caiu antes de chegar em segurança. Proteja-a depois de libertá-la.'
+      : 'O prisioneiro caiu antes do resgate. Aproxime-se dele e mantenha os esqueletos afastados.';
+  }
+  if (goal.type === 'rescue' && !mission.rescueComplete) {
+    return 'O prisioneiro continua preso. Aproxime-se dele para libertá-lo e mantenha os esqueletos afastados.';
+  }
+  if (goal.type === 'tower' && number(mission.towersDown) < number(goal.count)) {
+    const remaining = Math.max(0, number(goal.count) - number(mission.towersDown));
+    return `Faltou derrubar ${remaining === 1 ? 'a torre' : `${remaining} torres`} de ossos. Aproxime os heróis e concentre os ataques nela.`;
+  }
   if (goal.type === 'timer' && number(mission.time) > number(goal.time)) {
     return 'O limite de tempo acabou. Use dano em área nas ondas, priorize sacerdotes e arqueiros e evite perseguições longas.';
   }
@@ -73,15 +85,20 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
   if (won) {
     if (mission?.stars != null) {
       const stars = number(mission.stars);
+      const objective = mission.goal?.type === 'rescue' && mission.rescueComplete
+        ? 'Prisioneiro resgatado! '
+        : mission.goal?.type === 'tower' && number(mission.towersDown) >= number(mission.goal.count)
+          ? `${number(mission.goal.count) === 1 ? 'Torre derrubada!' : 'Torres derrubadas!'} `
+          : '';
       if (mission.nextMission) {
         return stars < 3
-          ? `Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada; confira os critérios acima para conquistar as que faltam.`
-          : `Três estrelas! ${label(mission.nextMission, 'A próxima arena')} está liberada no mapa da campanha.`;
+          ? `${objective}Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada; confira os critérios acima para conquistar as que faltam.`
+          : `${objective}Três estrelas! ${label(mission.nextMission, 'A próxima arena')} está liberada no mapa da campanha.`;
       }
       const remaining = number(mission.remainingStars);
       return remaining > 0
-        ? `Todas as arenas foram vencidas. Rejogue as missões para conquistar as ${remaining} estrelas restantes.`
-        : 'Campanha perfeita! Todas as arenas e as 24 estrelas foram conquistadas.';
+        ? `${objective}Todas as arenas foram vencidas. Rejogue as missões para conquistar as ${remaining} estrelas restantes.`
+        : `${objective}Campanha perfeita! Todas as arenas e as ${number(mission.maxStars) || 24} estrelas foram conquistadas.`;
     }
     return 'Na próxima jornada, experimente outra composição para descobrir novas combinações entre as classes.';
   }
