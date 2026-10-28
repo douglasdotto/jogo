@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bonecos Novos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #bfe3ff; font-family: 'Fredoka', sans-serif; }
+    canvas { display: block; }
+    #labels { position: absolute; inset: 0; pointer-events: none; }
+    .tag { position: absolute; transform: translate(-50%, 0); text-align: center; }
+    .tag b { display: inline-block; padding: 4px 16px; font-size: 20px; color: #fff; border-radius: 999px; border: 3px solid #fff; box-shadow: 0 3px 0 rgba(0, 0, 0, .15); }
+    .tag span { display: block; margin-top: 6px; width: 180px; font-size: 13px; color: #5a4a5a; }
+    #bar { position: absolute; bottom: 18px; width: 100%; display: flex; gap: 10px; justify-content: center; }
+    button { font-family: inherit; background: #ff8a5b; color: #fff; border: 0; border-radius: 999px; padding: 8px 18px; font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #c4572e; }
+    button:active { transform: translateY(3px); box-shadow: 0 1px 0 #c4572e; }
+    #title { position: absolute; top: 14px; width: 100%; text-align: center; font-size: 36px; font-weight: 700; color: #fff; -webkit-text-stroke: 7px #4a2c1a; paint-order: stroke fill; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="title">Bonecos novos</div>
+  <div id="labels"></div>
+  <div id="bar">
+    <button data-anim="Idle">Parado</button>
+    <button data-anim="Walking_A">Andar</button>
+    <button data-anim="Running_A">Correr</button>
+    <button data-anim="attack">Atacar</button>
+    <button data-anim="Spellcast_Shoot">Magia</button>
+    <button data-anim="Cheer">Comemorar</button>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CHARACTERS, CHARACTER_ASSETS, buildCharacter } from './characters.js';
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.prepend(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xbfe3ff);
+    const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 3.2, 12);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.1, 0);
+    scene.add(new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.9));
+    const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
+    sun.position.set(4, 8, 6);
+    sun.castShadow = true;
+    scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(12, 40), new THREE.MeshLambertMaterial({ color: 0x9ccc4a }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const loader = new GLTFLoader();
+    const assets = {};
+    await Promise.all(CHARACTER_ASSETS.map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+
+    const units = CHARACTERS.map((r, i) => {
+      const { scene: model, animations } = buildCharacter(assets, r);
+      model.position.set((i - 1.5) * 2.6, 0.25, 0);
+      scene.add(model);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.1, 0.25, 24), new THREE.MeshLambertMaterial({ color: new THREE.Color(r.color[0]) }));
+      base.position.set(model.position.x, 0.12, 0);
+      base.receiveShadow = true;
+      scene.add(base);
+      const mixer = new THREE.AnimationMixer(model);
+      const tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.innerHTML = `<b style="background:${r.color[1]}">${r.name}</b><span>${r.desc}</span>`;
+      document.getElementById('labels').appendChild(tag);
+      return { r, model, mixer, animations, tag, current: null };
+    });
+
+    const attackOf = { Rogue: 'Dualwield_Melee_Attack_Slice', Mage: '2H_Melee_Attack_Stab', Knight: '2H_Melee_Attack_Slice', Barbarian: '2H_Melee_Attack_Chop' };
+    function play(u, name) {
+      if (name === 'attack') name = attackOf[u.r.base];
+      const a = u.mixer.clipAction(THREE.AnimationClip.findByName(u.animations, name));
+      a.reset().play();
+      if (u.current && u.current !== a) a.crossFadeFrom(u.current, 0.25, false);
+      u.current = a;
+    }
+    units.forEach((u) => play(u, u.r.base === 'Barbarian' ? '2H_Melee_Idle' : 'Idle'));
+    document.querySelectorAll('#bar button').forEach((b) => (b.onclick = () => units.forEach((u) => play(u, b.dataset.anim))));
+
+    const clock = new THREE.Clock();
+    const v = new THREE.Vector3();
+    renderer.setAnimationLoop(() => {
+      const dt = clock.getDelta(), t = clock.elapsedTime;
+      for (const u of units) {
+        u.mixer.update(dt);
+        u.model.rotation.y = Math.sin(t * 0.5 + u.model.position.x) * 0.5;
+        u.model.traverse((o) => { if (o.userData.spin) { o.rotation.y += dt * 2; o.position.y = 0.1 + Math.sin(t * 3) * 0.05; } });
+        v.set(u.model.position.x, -0.2, 0).project(camera);
+        u.tag.style.left = `${(v.x * 0.5 + 0.5) * innerWidth}px`;
+        u.tag.style.top = `${(-v.y * 0.5 + 0.5) * innerHeight}px`;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    });
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

@@ -39,7 +39,7 @@
       font-family: inherit; color: #6b4a3a; background: #fffaf2; border: 5px solid var(--c); border-radius: 30px;
       box-shadow: 0 8px 0 var(--cd), 0 14px 24px rgba(120, 80, 120, .25); transition: transform .2s cubic-bezier(.2, 1.8, .4, 1), box-shadow .2s, opacity .25s, filter .25s;
       animation: rise .55s backwards cubic-bezier(.2, 1.7, .4, 1), wobble 3.2s ease-in-out infinite; animation-delay: var(--d), calc(var(--d) * 4); }
-    .card:hover, .card.sel { transform: translateY(-14px) scale(1.07) rotate(-1.5deg); animation: none; box-shadow: 0 12px 0 var(--cd), 0 0 0 7px #fff, 0 0 36px 10px var(--c); }
+    .card:hover, .card.sel { transform: translateY(-14px) scale(1.07) rotate(-1.5deg); animation-play-state: running, paused; box-shadow: 0 12px 0 var(--cd), 0 0 0 7px #fff, 0 0 36px 10px var(--c); }
     .card.sel .portrait img { animation: bob .8s ease-in-out infinite; }
     .card .num { position: absolute; top: -16px; left: -14px; width: 40px; height: 44px; display: grid; place-items: center; font-size: 20px; font-weight: 700; color: #fff;
       background: var(--cd); clip-path: polygon(50% 100%, 0 70%, 0 0, 100% 0, 100% 70%); }

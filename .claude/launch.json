@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["cavaleiros/server.js"],
       "port": 8080
+    },
+    {
+      "name": "variantes",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "process.env.PORT = 8081; require('C:/ProjetosBAT/jogo-variantes/cavaleiros/server.js')"],
+      "port": 8081
     }
   ]
 }
