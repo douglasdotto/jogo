@@ -93,6 +93,8 @@ export function applyLook(root, assets, r) {
       continue;
     }
     // peça de pele vai junto do corpo; peça rígida vai no osso de mesmo nome (cabeça, peito, mão)
+    if (!skinned && scale) copy.scale.multiplyScalar(scale);
+    if (!skinned && pos) copy.position.add(new THREE.Vector3(...pos));
     (skinned ? rig : root.getObjectByName(clean(src.parent.name))).add(copy);
   }
 
@@ -262,8 +264,9 @@ const ACCESSORIES = {
     return g;
   },
   // ombreiras redondas (no osso do peito)
-  pauldrons({ color = 0xb0b8c4, spikes = false } = {}) {
+  pauldrons({ color = 0xb0b8c4, spikes = false, size = 1 } = {}) {
     const g = new THREE.Group();
+    g.scale.setScalar(size);
     for (const s of [-1, 1]) {
       const p = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), lambert(color));
       p.position.set(s * 0.42, 0.38, 0);
