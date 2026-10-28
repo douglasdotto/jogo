@@ -34,13 +34,13 @@ const VARIANTS = [
   { id: 'berserker', names: ['Berserker', 'Fera Rubra', 'Fúria Titã'], desc: 'Pouca vida, golpes mais rápidos.', ability: 'Fúria', color: ['#ffb2b2', '#ce5f63'],
     use: ['1H_Axe', '1H_Axe_Offhand'], stats: { Vida: 4, Força: 4, Rapidez: 4, Alcance: 1 }, hp: 220, dmg: 30, cooldown: 0.95, cleave: 0, attacks: ['Dualwield_Melee_Attack_Slice'], classId: 1 },
   { id: 'crusher', names: ['Esmagador', 'Quebra-rochas', 'Abala-terra'], desc: 'Pancada que deixa todos zonzos.', ability: 'Terremoto', color: ['#ffbf8a', '#d88950'],
-    use: ['2H_Axe'], stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, classId: 1 },
+    use: ['2H_Axe'], stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, dmg: 31, classId: 1 },
   { id: 'viking', names: ['Viking', 'Jarl Valente', 'Rei do Norte'], desc: 'Arremessa um machado à distância.', ability: 'Machado voador', color: ['#b8dfe5', '#5b9dab'],
     use: ['1H_Axe', 'Barbarian_Round_Shield'], stats: { Vida: 5, Força: 4, Rapidez: 3, Alcance: 3 }, cleave: 0, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop'], classId: 1 },
   { id: 'pyro', names: ['Piromante', 'Chama Viva', 'Fênix Solar'], desc: 'Bolas de fogo deixam chamas no chão.', ability: 'Chão em chamas', color: ['#ffc6a4', '#dc8757'],
-    use: ['2H_Staff'], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, classId: 2 },
+    use: ['2H_Staff'], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, dmg: 24, splash: 1.1, classId: 2 },
   { id: 'arcane', names: ['Arcano', 'Sábio Astral', 'Mestre Estelar'], desc: 'Um raio salta entre os inimigos.', ability: 'Raio em cadeia', color: ['#d4b3ff', '#9a6be0'],
-    use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, dmg: 26, splash: 0, cooldown: 1.05, classId: 2 },
+    use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, dmg: 24, splash: 0, cooldown: 1.05, classId: 2 },
   { id: 'cryo', names: ['Criomante', 'Sábio Glacial', 'Coração Polar'], desc: 'Gelo deixa os esqueletos lentinhos.', ability: 'Onda de gelo', color: ['#b9efff', '#58aaca'],
     use: ['1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 170, dmg: 24, splash: 0.8, cooldown: 1.2, classId: 2 },
   { id: 'assassin', names: ['Assassino', 'Sombra Ágil', 'Sombra Real'], desc: 'Golpes críticos e esquivas ligeiras.', ability: 'Passo das sombras', color: ['#d1b7df', '#9974b5'],
@@ -52,7 +52,7 @@ const VARIANTS = [
   { id: 'king', names: ['Rei Dourado', 'Rei Radiante', 'Imperador Solar'], desc: 'Seu brado fortalece todo o grupo.', ability: 'Brado real', color: CHARACTERS[2].color,
     recipe: CHARACTERS[2], classId: 0, dmg: 28, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 } },
   { id: 'iceviking', names: ['Viking do Gelo', 'Jarl Glacial', 'Rei das Geleiras'], desc: 'Seu machado congela uma área.', ability: 'Machado glacial', color: CHARACTERS[3].color,
-    recipe: CHARACTERS[3], classId: 1, dmg: 32, stats: { Vida: 5, Força: 4, Rapidez: 2, Alcance: 3 } },
+    recipe: CHARACTERS[3], classId: 1, dmg: 29, stats: { Vida: 5, Força: 4, Rapidez: 2, Alcance: 3 } },
   { id: 'necro', names: ['Necromante', 'Senhor dos Ossos', 'Soberano Espectral'], desc: 'Invoca dois esqueletinhos amigos.', ability: 'Amigos do além', color: CHARACTERS[1].color,
     recipe: CHARACTERS[1], classId: 2, dmg: 24, splash: 0, stats: { Vida: 2, Força: 3, Rapidez: 2, Alcance: 5 } },
   { id: 'druid', names: ['Druida', 'Guardião do Bosque', 'Espírito da Floresta'], desc: 'Raízes prendem e a natureza cura.', ability: 'Abraço da floresta', color: CHARACTERS[0].color,
@@ -71,6 +71,21 @@ const SKELETONS = {
   Warrior: { hp: 80, dmg: 11, range: 1.4, speed: 1.3, cooldown: 1.6, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A' },
   Rogue:   { hp: 30, dmg: 8,  range: 1.3, speed: 2.3, cooldown: 1.1, weapon: 'Skeleton_Blade', move: 'Running_C' },
 };
+
+// Dificuldades: multiplicam vida/dano dos esqueletos, tamanho e ritmo das ondas e força do chefe;
+// heal = cura ao vencer a fase, revive = vida de quem volta, reviveDelay = fases que o caído espera,
+// behind/behindFrom = chance e fase mínima de virem por trás, shooters = chance de um atirador na estrada.
+const DIFFICULTIES = [
+  { id: 'facil', name: 'Fácil', icon: '❀', desc: 'Um passeio pelo reino.', color: ['#cdf0b4', '#6aa84f'],
+    hp: 0.85, dmg: 0.8, count: 0.9, interval: 1.15, boss: 0.8, heal: 0.5, revive: 0.5, reviveDelay: 0, behind: 0.15, behindFrom: 5, shooters: 0 },
+  { id: 'normal', name: 'Normal', icon: '⚔︎', desc: 'Os esqueletos vêm com tudo.', color: ['#bfe0ff', '#5a8fd0'],
+    hp: 1.08, dmg: 1.05, count: 1.1, interval: 0.95, boss: 1, heal: 0.3, revive: 0.35, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.06 },
+  { id: 'dificil', name: 'Difícil', icon: '♜', desc: 'Escolha bem cada herói.', color: ['#ffd29e', '#d17a2a'],
+    hp: 1.25, dmg: 1.2, count: 1.25, interval: 0.9, boss: 1.15, heal: 0.25, revive: 0.3, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.1 },
+  { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
+    hp: 1.5, dmg: 1.4, count: 1.45, interval: 0.75, boss: 1.35, heal: 0.15, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
+];
+let difficulty = DIFFICULTIES[1];
 
 // ---------- cena ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -111,7 +126,7 @@ const $ = (id) => document.getElementById(id);
 const bars = $('bars');
 let speed = 1;
 $('speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('speed').textContent = `Velocidade ${speed}x`; };
-$('restart').onclick = () => startGame();
+$('restart').onclick = () => startGame();   // volta para a tela de dificuldade
 $('overlayBtn').onclick = () => startGame();
 
 function showBanner(text, seconds = 2) {
@@ -175,6 +190,67 @@ function showPick(title, sub) {
 
 const isOwned = (cfg) => heroes().some((h) => h.cfg.id === cfg.id);
 
+// recordes por dificuldade (melhor fase e abates), guardados no navegador quando der
+const RECORDS_KEY = 'cavaleiros-recordes';
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || {}; } catch { return {}; }
+}
+
+// devolve true quando a partida que acabou virou o novo recorde do nível
+function saveRecord(won) {
+  if (game.start > 1) return false;   // o atalho ?fase=N não vale recorde
+  const records = loadRecords(), old = records[difficulty.id];
+  const now = { phase: game.phase, kills: game.kills, won };
+  const better = !old || (won && !old.won) || (won === !!old.won && (now.phase > old.phase || (now.phase === old.phase && now.kills > old.kills)));
+  if (!better) return false;
+  records[difficulty.id] = now;
+  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); } catch { return false; }
+  return true;
+}
+
+// tela inicial: título e as quatro dificuldades com o recorde de cada uma
+function showDifficulty() {
+  pick.mode = 'difficulty';
+  $('banner').style.opacity = 0;
+  pick.options = DIFFICULTIES;
+  const records = loadRecords();
+  $('pickTitle').textContent = 'Cavaleiros vs Esqueletos';
+  $('pickSub').textContent = 'Escolha a dificuldade da aventura';
+  $('pickHint').textContent = 'Clique para escolher · ← → movem · Enter confirma';
+  const list = $('pickList');
+  list.innerHTML = '';
+  list.classList.remove('grid');
+  pick.cards = DIFFICULTIES.map((d, i) => {
+    const r = records[d.id];
+    const record = r ? `${r.won ? '♛ Vitória!' : `Recorde: fase ${r.phase}`} · ${r.kills} abates` : 'Sem recorde ainda';
+    const b = document.createElement('div');
+    b.className = 'card diff';
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-label', `${d.name}: ${d.desc} ${record}`);
+    b.style.setProperty('--c', d.color[0]);
+    b.style.setProperty('--cd', d.color[1]);
+    b.style.setProperty('--d', `${i * 90}ms`);
+    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${d.icon}</div><div class="ribbon">${d.name}</div>
+      <p>${d.desc}</p><div class="record${r?.won ? ' won' : ''}">${record}</div>`;
+    b.onclick = () => confirmPick(i);
+    bindCard(b, i);
+    list.appendChild(b);
+    return b;
+  });
+  selectCard(DIFFICULTIES.indexOf(difficulty));
+  pick.open = true;
+  game.paused = true;
+  $('pick').classList.remove('hidden');
+}
+
+function confirmDifficulty(i) {
+  difficulty = DIFFICULTIES[i];
+  setText('level', difficulty.name);
+  pick.open = false;
+  pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
+  pick.timer = setTimeout(() => showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos'), 550);
+}
+
 function bindCard(b, i) {
   b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
   b.onpointermove = (e) => {
@@ -221,6 +297,7 @@ function selectCard(i) {
 function confirmPick(i) {
   if (!pick.open) return;
   if (pick.mode === 'evolution') return confirmEvolution(i);
+  if (pick.mode === 'difficulty') return confirmDifficulty(i);
   const cfg = pick.options[i];
   if (isOwned(cfg) || heroes().length >= 4) return;
   pick.open = false;
@@ -549,6 +626,7 @@ class Unit {
     this.once(this.team === 'hero' ? 'Death_A' : 'Death_C_Skeletons');
     this.deadTime = 0;
     this.bar.style.display = 'none';
+    if (this.team === 'hero') this.diedIn = game.phase;   // no Pesadelo, decide quando volta
     if (this.team === 'skeleton') {
       game.kills++;
       if (this.lastHit?.stats) this.lastHit.stats.abates++;
@@ -732,7 +810,7 @@ function updateBolts(dt) {
       const d = goal.distanceTo(b.mesh.position);
       b.mesh.position.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
       if (d <= 14 * dt + 0.25) {
-        const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0 : b.kind === 'viking' ? 0 : (1.5 + (b.level - 1) * 0.3) * b.power;
+        const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0 : b.kind === 'viking' ? 0 : (b.kind === 'pyro' ? 1.1 + (b.level - 1) * 0.2 : 1.3 + (b.level - 1) * 0.25) * b.power;
         if (radius) damageArea(b.target.pos, radius, b.dmg, b.owner);
         else if (!b.target.dead) heroHit(b.owner, b.target, b.dmg * (b.kind === 'viking' ? 1.8 * b.power : 1));
         if (b.kind === 'pyro') {
@@ -748,7 +826,7 @@ function updateBolts(dt) {
             mesh.add(flame);
           }
           scene.add(mesh);
-          flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.25, t: (2 + b.level) * b.power, tick: 0 });
+          flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.15, t: (1.5 + b.level * 0.5) * b.power, tick: 0 });
         }
         if (b.kind === 'cryo' || b.kind === 'iceviking') for (const s of skeletonsAlive()) if (s.pos.distanceTo(b.target.pos) <= radius) s.slowT = (3 + (b.level - 1) * 0.5) * b.power;
         ring(b.target.pos, Math.max(0.5, radius), colors[b.kind] || 0xc999ff);
@@ -962,7 +1040,7 @@ class Hero extends Unit {
       effect = () => {
         for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(this.pos) <= radius) {
           if (id === 'crusher' && !inMeleeArc(this, s, 2.2 * power)) continue;
-          heroHit(this, s, this.dmg * 1.3);
+          heroHit(this, s, this.dmg * 1.1);
           if (id === 'champion') s.vel.add(new THREE.Vector3().subVectors(s.pos, this.pos).setY(0).normalize().multiplyScalar(6 + level));
           else { s.stunT = (1.5 + (level - 1) * 0.25) * power; s.pendingHit = null; s.vel.set(0, 0, 0); }
         }
@@ -984,7 +1062,7 @@ class Hero extends Unit {
           if (!next || next.dead) break;
           beam(at, next.pos, colors.arcane);
           hit.add(next);
-          heroHit(this, next, this.dmg * 1.15);
+          heroHit(this, next, this.dmg * 0.9);
           at = next.pos;
           next = nearest(at, skeletonsAlive().filter((s) => !s.spawning && !hit.has(s) && s.pos.distanceTo(at) < 4 + level));
         }
@@ -1002,7 +1080,7 @@ class Hero extends Unit {
       effect = () => {
         for (const h of heroes()) if (!h.dead) {
           h.royalT = 5 * power;
-          h.royalBonus = 0.25;
+          h.royalBonus = 0.2;
           ring(h.pos, 1, 0xffdf70, 0.8);
         }
       };
@@ -1052,7 +1130,7 @@ class Hero extends Unit {
     this.halo.visible = this.level === 3;
     this.guardT = 0;
     this.royalT = 0;
-    this.hp = this.maxHp * 0.4;
+    this.hp = this.maxHp * difficulty.revive;
     this.bar.style.display = '';
     this.current = null;
     this.mixer.stopAllAction();
@@ -1082,7 +1160,8 @@ class Hero extends Unit {
     if (this.dead || this.busy > 0 || game.over) return;
     const target = game.state === 'fight' ? nearest(this.pos, skeletonsAlive().filter((u) => !u.spawning)) : null;
     if (game.state === 'fight' && this.skillTimer <= 0 && this.useSkill(target)) return;
-    const engage = target && target.pos.distanceTo(this.post) < LEASH + this.range + (world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0);
+    // atiradores não saem do lugar: o grupo vai até eles
+    const engage = target && (target.ranged || target.pos.distanceTo(this.post) < LEASH + this.range + (world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0));
     if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
@@ -1136,8 +1215,9 @@ class Minion extends Unit {
 class Skeleton extends Unit {
   constructor(type, phase, boss = false) {
     const base = SKELETONS[type];
-    const hpScale = (1 + (phase - 1) * 0.12) * (boss ? 9 : 1);
-    const dmgScale = (1 + (phase - 1) * 0.06) * (boss ? 2.5 : 1);
+    const D = difficulty;
+    const hpScale = (1 + (phase - 1) * 0.12) * D.hp * (boss ? 9 * D.boss : 1);
+    const dmgScale = (1 + (phase - 1) * 0.06) * D.dmg * (boss ? 2.5 * D.boss : 1);
     super(assets[`Skeleton_${base.model || type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss;
     this.ranged = !!base.ranged;
@@ -1260,18 +1340,18 @@ function startGame() {
   while (units.length) units[0].remove();
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   const first = THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES);
-  Object.assign(game, { phase: first, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(first), over: false });
+  Object.assign(game, { phase: first, start: first, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(first), over: false });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
   camera.position.set(follow.x, 23, follow.z + 21);
   $('overlay').classList.add('hidden');
-  showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos');
+  showDifficulty();   // depois da dificuldade vem a escolha do herói
 }
 
 function startPhase() {
   game.state = 'fight';
-  game.toSpawn = 2 + game.phase * 2;
+  game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
   game.bossPending = game.phase % 6 === 0;
   game.spawnTimer = 0.5;
   showBanner(game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`);
@@ -1287,11 +1367,12 @@ function spawnSkeleton() {
     const r = Math.random();
     const rogue = Math.min(0.3, 0.04 * p), warrior = Math.min(0.4, 0.06 * p);
     type = r < rogue ? 'Rogue' : r < rogue + warrior ? 'Warrior' : 'Minion';
+    if (p >= 2 && Math.random() < difficulty.shooters) type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
   if (onTop) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
-  const behind = p >= 4 && !boss && Math.random() < 0.25;   // nas fases mais altas, alguns vêm por trás
+  const behind = p >= difficulty.behindFrom && !boss && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
   for (let tries = 0; tries < 12; tries++) {
     const at = behind ? s0 - 9 - Math.random() * 3 : s0 + 11 + Math.random() * 6;
     s.pos.copy(world.along(at, (Math.random() * 2 - 1) * (ROAD - 1)));
@@ -1312,17 +1393,19 @@ function updateGame(dt) {
   const alive = heroes().filter((h) => !h.dead);
   const skeletons = skeletonsAlive();
 
-  if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}. Abates: ${game.kills}`);
+  if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}. Abates: ${game.kills}`, false);
 
   if (game.state === 'fight') {
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
-      if (game.spawnTimer <= 0) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05); }
+      if (game.spawnTimer <= 0) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
     } else if (!skeletons.length) {
       showBanner(`Fase ${game.phase} vencida!`, 2.5);
       for (const h of heroes()) {
-        if (h.dead) h.revive();
-        else h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.35);
+        if (h.dead) {
+          if (difficulty.reviveDelay && game.phase - h.diedIn < difficulty.reviveDelay) continue;   // ainda espera a fase seguinte
+          h.revive();
+        } else h.hp = Math.min(h.maxHp, h.hp + h.maxHp * difficulty.heal);
         h.gainXp(12);
         h.guardT = 0;
         popText(h.pos, '♥', 'heal');
@@ -1334,7 +1417,7 @@ function updateGame(dt) {
   } else if (game.state === 'cleared') {
     game.timer -= dt;
     if (game.timer <= 0) {
-      if (game.phase >= PHASES) return endGame(`Vitória! O grupo chegou ao castelo. Abates: ${game.kills}`);
+      if (game.phase >= PHASES) return endGame(`Vitória! O grupo chegou ao castelo. Abates: ${game.kills}`, true);
       game.phase++;
       game.state = 'advance';
       if (heroes().length < HEROES.length) showPick('Novo aliado!', 'Escolha quem entra no grupo');
@@ -1353,10 +1436,10 @@ function updateGame(dt) {
   setText('party', `Heróis: ${heroes().length}/${HEROES.length}`);
 }
 
-function endGame(text) {
+function endGame(text, won = false) {
   game.over = true;
   closeHeroPanel();
-  $('overlayText').textContent = text;
+  $('overlayText').textContent = text + (saveRecord(won) ? ` · Novo recorde no ${difficulty.name}!` : '');
   $('overlayStats').innerHTML = summaryHTML(heroes());
   $('overlayBtn').hidden = false;
   $('overlay').classList.remove('hidden');

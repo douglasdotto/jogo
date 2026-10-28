@@ -21,6 +21,7 @@
     #wave::before, #left::before, #kills::before, #party::before { font-size: 17px; color: #b3261e; }
     #wave::before { content: '\2691\FE0E'; } #left::before { content: '\2620\FE0E'; color: #5a4a6a; }
     #kills::before { content: '\2694\FE0E'; color: #6b3f17; } #party::before { content: '\265B\FE0E'; color: #d19a1c; }
+    #level::before { content: '\2605\FE0E'; font-size: 17px; color: #d19a1c; }
     button { position: relative; font-family: inherit; color: var(--parch); padding: 7px 18px 8px; font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: .3px;
       background: linear-gradient(#b07a43, var(--wood) 55%, #73461f); border: 3px solid var(--gold); border-radius: 14px;
       text-shadow: 0 2px 0 var(--wood-dark); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .25), 0 4px 0 var(--wood-dark), 0 6px 10px rgba(0, 0, 0, .3); transition: transform .1s, filter .15s; }
@@ -206,6 +207,17 @@
       border: 2px dashed var(--c); border-radius: 10px; }
     .pick-info .ability b { display: block; margin-bottom: 2px; font-size: 15px; color: var(--cd); }
     button:focus-visible { outline: 3px solid #6b3f17; outline-offset: 4px; }
+    /* tela inicial: um cartão por dificuldade, com medalhão, frase e recorde */
+    .card.diff { width: 178px; cursor: pointer; }
+    .card.diff .medal { width: 104px; height: 104px; display: grid; place-items: center; font-size: 54px; line-height: 1; color: #fffdf4; border-radius: 50%;
+      background: radial-gradient(circle at 38% 30%, var(--c), var(--cd) 72%); border: 4px solid #fff7df; box-shadow: 0 0 0 3px var(--cd), 0 5px 0 #442b21;
+      text-shadow: 0 3px 0 rgba(0, 0, 0, .25); transition: transform .4s ease; }
+    .card.diff:hover .medal, .card.diff.sel .medal { transform: translateY(-4px) scale(1.08) rotate(-4deg); }
+    .card.diff .ribbon { margin-top: -6px; font-size: 24px; }
+    .card.diff p { min-height: 0; font-weight: 600; }
+    .card.diff .record { width: 100%; padding: 5px 6px; box-sizing: border-box; font-size: 13px; font-weight: 700; text-align: center; color: var(--wood-dark);
+      background: #fffaf0; border: 2px dashed var(--cd); border-radius: 10px; }
+    .card.diff .record.won { color: #6b4a00; background: linear-gradient(#fff1a8, var(--gold)); border-style: solid; border-color: #b58138; }
     @media (max-width: 1050px), (max-height: 760px) {
       #pick { gap: 14px; overflow-y: auto; justify-content: flex-start; padding: 14px 12px; box-sizing: border-box; }
       #pickTitle { font-size: 32px; text-align: center; }
@@ -312,6 +324,7 @@
 <body>
   <div id="bars"></div>
   <div id="hud">
+    <span class="chip" id="level">Normal</span>
     <span class="chip" id="wave">Fase 1</span>
     <span class="chip" id="left">Esqueletos: 0</span>
     <span class="chip" id="kills">Abates: 0</span>
