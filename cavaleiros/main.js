@@ -91,7 +91,12 @@ controls.minDistance = 8;
 controls.maxDistance = 50;
 const follow = new THREE.Vector3();   // ponto que a câmera persegue
 
-scene.add(new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8));   // sombras mais suaves
+const hemi = new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8);   // sombras mais suaves
+scene.add(hemi);
+// céu, névoa e luz de dia e nas terras do necromante (misturados pela "trevas" de onde o grupo está)
+const SKY = [new THREE.Color(0xa9d6f0), new THREE.Color(0x3f3552)];
+const HEMI = [new THREE.Color(0xfff4dc), new THREE.Color(0xb8a8d8)], HEMI_GROUND = [new THREE.Color(0xa89868), new THREE.Color(0x3e3448)];
+const SUN = [new THREE.Color(0xffe2b8), new THREE.Color(0xc6a8ff)];
 const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -1239,7 +1244,9 @@ function startGame() {
   closeHeroPanel();
   $('overlayStats').innerHTML = '';
   while (units.length) units[0].remove();
-  Object.assign(game, { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(1), over: false });
+  // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
+  const first = THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES);
+  Object.assign(game, { phase: first, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: world.anchorS(first), over: false });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
@@ -1379,7 +1386,17 @@ function frame() {
   camera.position.add(tmp);
   sun.position.set(follow.x + 14, 30, follow.z + 12);
   sun.target.position.copy(follow);
-  world.update(real);
+  world.update(real, follow.z);
+  const gloom = world.gloomAt(follow.z);
+  scene.background.lerpColors(SKY[0], SKY[1], gloom);
+  scene.fog.color.copy(scene.background);
+  scene.fog.near = 45 - gloom * 22;
+  scene.fog.far = 110 - gloom * 45;
+  hemi.color.lerpColors(HEMI[0], HEMI[1], gloom);
+  hemi.groundColor.lerpColors(HEMI_GROUND[0], HEMI_GROUND[1], gloom);
+  hemi.intensity = 1.8 - gloom * 0.5;
+  sun.color.lerpColors(SUN[0], SUN[1], gloom);
+  sun.intensity = 2.4 - gloom * 1;
   const sel = panelHero();   // anel embaixo do herói com o cartão aberto
   selectRing.visible = !!sel && !sel.dead && units.includes(sel);
   if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
