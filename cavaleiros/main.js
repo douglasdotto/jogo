@@ -272,12 +272,17 @@ function setGoalUI(text, progress) {
 // tela de escolha estilo arcade: grade com uma linha por classe, todas as variantes à mostra
 const pick = { options: [], cards: [], classFilters: [], classRows: [], activeClass: -1, suggestedId: null, sel: 0, open: false, timer: null };
 const PICK_CLASS_GLYPHS = ['♜', '⚒', '✦', '☾', '⚕'];
+const PICK_HERO_HINT = '← → ↑ ↓ · Enter';
+// papéis da equipe como ícones (o nome fica na dica e no aria-label)
+const ROLE_GLYPHS = { Defesa: '⛨', Cura: '✚', Área: '✺', Controle: '❄', 'À distância': '➶', 'Dano a chefe': '☠' };
+// atributos da ficha como ícones; o número exato vai para a dica
+const STAT_GLYPHS = { Vida: '♥', Força: '⚔', Rapidez: '➤', Alcance: '◎' };
 
 function showPick(title, sub) {
   pick.mode = 'hero';
   $('banner').style.opacity = 0;   // a faixa não pode ficar embaixo do título da escolha
   pick.options = HEROES.flatMap((_, classId) => variantsOf(classId));   // cada classe ocupa sua própria linha
-  $('pickHint').textContent = 'Escolha a classe · ← → herói · ↑ ↓ classe · Enter escolher';
+  $('pickHint').textContent = PICK_HERO_HINT;
   const previousSuggestion = game.mission && game.picksLeft > 0 && !game.test
     ? game.campaignSquadSuggestion?.[heroes().length]
     : null;
@@ -303,7 +308,7 @@ function showPick(title, sub) {
     filter.setAttribute('aria-label', `${hero.name}: ${count} heróis`);
     filter.setAttribute('aria-pressed', 'false');
     filter.style.setProperty('--class-color', hero.color?.[0] || '#8bb9e7');
-    filter.innerHTML = `<i aria-hidden="true">${PICK_CLASS_GLYPHS[classId] || '✦'}</i><span>${hero.name}</span><small>${count}</small>`;
+    filter.innerHTML = `<i aria-hidden="true">${PICK_CLASS_GLYPHS[classId] || '✦'}</i><span>${hero.name}</span>`;
     filter.onclick = () => focusClass(classId);
     filter.onfocus = () => focusClass(classId);
     filters.appendChild(filter);
@@ -334,10 +339,9 @@ function showPick(title, sub) {
     b.style.setProperty('--c', cfg.color[0]);
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 30}ms`);
-    const signatureSkill = skillSetFor(cfg)[0]?.name || cfg.ability;
     const mastery = progress.mastery(cfg.id).level;
     if (mastery > 1) b.classList.add(`mastery-${mastery}`);
-    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill"><i aria-hidden="true">✦</i> ${signatureSkill}</small></div>${mastery > 1 ? `<span class="mastery-badge" aria-hidden="true">✦${mastery}</span>` : ''}${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small></div>${mastery > 1 ? `<span class="mastery-badge" aria-hidden="true">✦${mastery}</span>` : ''}${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock" aria-hidden="true">🔒 ★ ${starsToUnlock(cfg.id)}</span>`}`;
     b.onclick = () => selectCard(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i, false);   // herói só muda com clique: o mouse passando não troca a ficha
@@ -629,7 +633,8 @@ function bindCard(b, i, hoverSelects = true) {
   b.addEventListener('animationend', (e) => { if (e.animationName === 'rise') b.classList.add('arrived'); });
 }
 
-// painel de detalhes do cartão em foco: descrição, habilidade e atributos
+// ficha do herói em foco: retrato, nome, papel, maestria, habilidades (detalhes na dica) e atributos em ícones
+const attr = (text) => String(text).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 function renderInfo(cfg) {
   const info = heroInfo(cfg);
   const skills = skillSetFor(cfg);
@@ -642,43 +647,43 @@ function renderInfo(cfg) {
   const objective = game.mission?.goal;
   const priorityRoles = missionRoleNeeds(objective);
   const uncoveredPriorities = priorityRoles.filter((name) => !team.roles.find((role) => role.name === name)?.count);
-  // a dica só aparece quando ainda há vaga: com a equipe fechada não há o que fazer com ela
+  // papéis que faltam só aparecem enquanto há vaga; na missão valem os prioritários do objetivo
   const slotsLeft = projectedTeam.length < teamLimit;
-  const wanted = objective ? uncoveredPriorities : team.missing;
-  const nextHint = slotsLeft && wanted.length
-    ? objective ? `Para esta missão, priorize: ${wanted.join(' · ')}.` : `Nas próximas vagas, priorize: ${wanted.join(' · ')}.`
-    : '';
-  const teamHint = alreadySelected ? 'Este herói já está na equipe.' : currentTeam.length >= teamLimit ? 'A equipe está completa.' : nextHint;
-  const coveredRoles = team.roles.filter((role) => role.count);
-  const teamRoles = coveredRoles.length
-    ? `<small>A equipe faz:</small>${coveredRoles.map((role) => `<span class="covered${priorityRoles.includes(role.name) ? ' priority' : ''}">${role.name}</span>`).join('')}`
-    : '';
-  const teamMembers = projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}"><img src="${member.portrait}" alt=""><em>${member.name}</em>${canAddCandidate && member.id === cfg.id ? '<small>novo</small>' : ''}</span>`).join('')
-    + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty"><i aria-hidden="true">+</i><em>Vaga livre</em></span>').join('');
-  const stats = Object.entries(cfg.stats).map(([label, n]) =>
-    `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
+  const wanted = slotsLeft ? (objective ? uncoveredPriorities : team.missing) : [];
+  const roleIcon = (name, cls, tip) => `<span class="${cls}" data-role="${name}" tabindex="0" data-tip="${attr(tip)}" aria-label="${attr(tip)}">${ROLE_GLYPHS[name] || '✦'}</span>`;
+  const coveredIcons = team.roles.filter((role) => role.count)
+    .map((role) => roleIcon(role.name, `covered${priorityRoles.includes(role.name) ? ' priority' : ''}`, role.name)).join('');
+  const wantedIcons = wanted.map((name) => roleIcon(name, `wanted${objective ? ' priority' : ''}`, objective ? `Missão pede: ${name}` : `Falta: ${name}`)).join('');
+  const teamMembers = projectedTeam.map((member) => {
+    const candidate = canAddCandidate && member.id === cfg.id;
+    return `<span class="${candidate ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}" data-tip="${attr(member.name)}" aria-label="${attr(member.name + (candidate ? ' (novo)' : ''))}"><img src="${member.portrait}" alt=""></span>`;
+  }).join('')
+    + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty" aria-label="Vaga livre"><i aria-hidden="true">+</i></span>').join('');
+  const numbers = { Vida: `${cfg.hp} de vida`, Força: `${cfg.dmg} de dano por golpe`, Rapidez: `golpe a cada ${cfg.cooldown.toLocaleString('pt-BR')} s`, Alcance: `${cfg.range.toLocaleString('pt-BR')} m` };
+  const stats = Object.entries(cfg.stats).map(([label, n]) => {
+    const tip = `${label} ${n}/5 · ${numbers[label] || ''}`;
+    return `<span class="hero-stat" tabindex="0" data-tip="${attr(tip)}" aria-label="${attr(tip)}"><i aria-hidden="true">${STAT_GLYPHS[label] || '✦'}</i><span class="pips${label === 'Vida' ? ' hearts' : ''}" aria-hidden="true">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span></span>`;
+  }).join('');
   const mastery = progress.mastery(cfg.id);
   const masteryPerks = MASTERY_PERKS.slice(1, mastery.level).map((perk) => perk.text).join(' · ') || 'Jogue com este herói para ganhar maestria.';
-  const masteryLine = `<div class="hero-mastery mastery-${mastery.level}" tabindex="0" data-tip="${masteryPerks}"><b>✦ Maestria ${mastery.level}</b><span class="mastery-track" aria-hidden="true"><i style="width:${mastery.next ? Math.round((mastery.xp - mastery.from) / (mastery.next - mastery.from) * 100) : 100}%"></i></span><small>${mastery.next ? `${mastery.xp}/${mastery.next} XP` : 'máxima'}</small></div>`;
+  const masteryXp = mastery.next ? `${mastery.xp}/${mastery.next} XP` : 'máxima';
+  const masteryLine = `<div class="hero-mastery mastery-${mastery.level}" tabindex="0" data-tip="${attr(`Maestria ${mastery.level} · ${masteryXp} · ${masteryPerks}`)}" aria-label="${attr(`Maestria ${mastery.level}, ${masteryXp}`)}"><b aria-hidden="true">✦${mastery.level}</b><span class="mastery-track" aria-hidden="true"><i style="width:${mastery.next ? Math.round((mastery.xp - mastery.from) / (mastery.next - mastery.from) * 100) : 100}%"></i></span></div>`;
+  const kindName = (skill) => skill.ultimate ? 'Ultimate' : skill.slot === 1 ? 'Técnica' : 'Básica';
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="hero-profile"><div class="crest"><img src="${cfg.portrait}" alt=""></div>
-      <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? 'À distância' : 'Corpo a corpo'}</small><div class="ribbon">${cfg.name}</div>
-        <span class="hero-role-pill">${info.role}</span></div></div>${masteryLine}
-    <div class="hero-overview"><p>${CLASSES[cfg.classId].summary}</p></div>
-    <section class="ability skill-list" aria-label="Habilidades do herói"><header><b>Habilidades</b><span>passe o mouse para detalhes</span></header>${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><span class="skill-kind">${skill.ultimate ? 'ULTIMATE' : skill.slot === 1 ? 'TÉCNICA' : 'BÁSICA'}</span><strong>${skill.name}</strong><span class="skill-copy">${skill.description}</span><span class="skill-meta">Recarga · ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
-    ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}
-    <details class="hero-more"><summary>Ver atributos e dicas</summary><div class="hero-more-content">
-      <div class="stats">${stats}</div>
-      <dl class="hero-numbers"><dt>Vida</dt><dd>${cfg.hp}</dd><dt>Dano por golpe</dt><dd>${cfg.dmg}</dd><dt>Intervalo</dt><dd>${cfg.cooldown.toLocaleString('pt-BR')} s</dd><dt>Alcance</dt><dd>${cfg.range.toLocaleString('pt-BR')} m</dd></dl>
-      <div class="hero-guide hero-tips"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
-      <p class="guide-note">Valores do nível 1. Evoluções e melhorias alteram os atributos.</p>
-    </div></details>`;
-  // equipe fixa ao lado dos cartões: mini-retratos, cobertura de papéis e o que falta
-  pick.team.innerHTML = `<section class="party-composition">
-      <header><b>${canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe'}</b><span class="pick-team-count">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit} heróis</span>${objective ? `<span class="party-objective"><b>Objetivo</b> ${goalText(objective)}</span>` : ''}</header>
+      <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? '➶' : '⚔'}</small><div class="ribbon">${cfg.name}</div>
+        <span class="hero-role-pill" tabindex="0" data-tip="${attr(`${CLASSES[cfg.classId].summary} ${info.tip}`)}">${info.role}</span>${masteryLine}</div></div>
+    <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attr(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
+    <div class="stats hero-stats" aria-label="Atributos">${stats}</div>
+    ${variantOpen(cfg.id) ? '' : `<div class="lock-info" aria-label="Ganhe ${starsToUnlock(cfg.id)} estrelas na campanha para liberar">\u{1F512}︎ ★ ${starsToUnlock(cfg.id)}</div>`}`;
+  // equipe fixa ao lado dos cartões: mini-retratos, contagem, papéis cobertos e os que faltam
+  pick.team.innerHTML = `<section class="party-composition" aria-label="${attr(canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe')}">
+      <span class="pick-team-count" aria-label="${Math.min(projectedTeam.length, teamLimit)} de ${teamLimit} heróis">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>
       <div class="party-members">${teamMembers}</div>
-      <div class="pick-team-status"><div class="party-roles">${teamRoles}</div>${teamHint ? `<p>${teamHint}</p>` : ''}</div>
+      <div class="party-roles" aria-label="Papéis cobertos">${coveredIcons}</div>
+      ${wantedIcons ? `<div class="party-roles party-wanted" aria-label="${objective ? 'Prioridades da missão' : 'Papéis que faltam'}">${wantedIcons}</div>` : ''}
+      ${objective ? `<span class="party-objective" tabindex="0" data-tip="Objetivo da missão"><i aria-hidden="true">⚑</i> ${goalText(objective)}</span>` : ''}
     </section>`;
   const selectButton = document.createElement('button');
   selectButton.type = 'button';
@@ -723,9 +728,7 @@ function selectCard(i) {
   });
   if (pick.mode === 'hero') {
     setPickClass(pick.options[pick.sel].classId);
-    $('pickHint').textContent = pick.options[pick.sel].id === pick.suggestedId
-      ? 'Sugestão da equipe · clique no herói para ver · Escolher ou Enter confirma'
-      : 'Clique no herói para ver · Escolher confirma · setas navegam · Enter confirma';
+    $('pickHint').textContent = PICK_HERO_HINT;
     renderInfo(pick.options[pick.sel]);
   }
 }
@@ -788,24 +791,24 @@ const RELIC_RARITY = {
 };
 const partyHas = (test) => heroes().some((h) => !h.dead && test(h));
 const RELICS = [
-  { id: 'keen-edge', name: 'Lâmina afiada', icon: '⚔', rarity: 'comum', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
-  { id: 'swift-boots', name: 'Botas velozes', icon: '➤', rarity: 'comum', desc: 'Heróis se movem 10% mais rápido pelo resto da jornada.' },
-  { id: 'oak-charm', name: 'Amuleto de carvalho', icon: '⬟', rarity: 'comum', desc: 'Heróis recebem 12% menos dano pelo resto da jornada.' },
-  { id: 'vital-medallion', name: 'Medalhão vital', icon: '♥', rarity: 'comum', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
-  { id: 'arcane-focus', name: 'Foco arcano', icon: '✦', rarity: 'comum', desc: 'Habilidades ficam 15% mais fortes pelo resto da jornada.' },
-  { id: 'giant-bane', name: 'Ferrão de gigante', icon: '✹', rarity: 'rara', desc: 'Heróis causam 20% mais dano contra chefes.', needs: () => bigFoeAhead() },
-  { id: 'healing-vial', name: 'Frasco curativo', icon: '⚗', rarity: 'comum', desc: 'Heróis de pé recuperam 35% da vida máxima.' },
-  { id: 'wind-chime', name: 'Sino do vento', icon: '♫', rarity: 'comum', desc: 'Heróis atacam 10% mais rápido pelo resto da jornada.' },
-  { id: 'ember-heart', name: 'Coração de brasa', icon: '✺', rarity: 'comum', unique: true, desc: 'Ao abater um inimigo, 25% de chance de ele explodir e ferir quem estiver por perto.' },
-  { id: 'dawn-ward', name: 'Égide da aurora', icon: '◈', rarity: 'comum', unique: true, desc: 'No início de cada fase, cada herói ganha um escudo de 20% da vida máxima.' },
-  { id: 'thorn-mail', name: 'Cota de espinhos', icon: '✶', rarity: 'comum', unique: true, desc: 'Inimigos corpo a corpo levam de volta 35% do dano que causam aos heróis.' },
-  { id: 'bulwark-banner', name: 'Estandarte do bastião', icon: '⛨', rarity: 'comum', unique: true, desc: 'Cada bloqueio recupera 5% da vida de quem bloqueou.', needs: () => partyHas(canBlock) },
-  { id: 'first-spark', name: 'Centelha inicial', icon: '⚡', rarity: 'rara', unique: true, desc: 'A primeira habilidade de cada herói em cada fase não entra em recarga.' },
-  { id: 'phoenix-feather', name: 'Pena da fênix', icon: '❦', rarity: 'rara', unique: true, desc: 'Usar a ultimate cura 20% da vida de quem usou e dos aliados próximos.' },
-  { id: 'ricochet-sling', name: 'Funda ricocheteante', icon: '↯', rarity: 'rara', unique: true, desc: 'Tiros comuns à distância ricocheteiam em mais um inimigo próximo (60% do dano).', needs: () => partyHas((h) => h.ranged && h.cfg.id !== 'crossbow') },
-  { id: 'shadow-mark', name: 'Marca das sombras', icon: '☾', rarity: 'rara', unique: true, desc: 'Cada abate de um Ladino tira 2 s das recargas das habilidades dele.', needs: () => partyHas((h) => h.cfg.classId === 3) },
-  { id: 'archmage-prism', name: 'Prisma do arquimago', icon: '✧', rarity: 'epica', unique: true, desc: 'Magos acertam +1 alvo: o tiro comum se divide e os raios em cadeia saltam mais uma vez.', needs: () => partyHas((h) => h.cfg.classId === 2) },
-  { id: 'last-oath', name: 'Juramento final', icon: '✠', rarity: 'epica', unique: true, desc: 'Uma vez por fase, o herói que cairia fica com 1 de vida e invulnerável por 2 s.' },
+  { id: 'keen-edge', short: '+12% de dano', name: 'Lâmina afiada', icon: '⚔', rarity: 'comum', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
+  { id: 'swift-boots', short: '+10% de velocidade', name: 'Botas velozes', icon: '➤', rarity: 'comum', desc: 'Heróis se movem 10% mais rápido pelo resto da jornada.' },
+  { id: 'oak-charm', short: '−12% de dano recebido', name: 'Amuleto de carvalho', icon: '⬟', rarity: 'comum', desc: 'Heróis recebem 12% menos dano pelo resto da jornada.' },
+  { id: 'vital-medallion', short: '+15% de vida máxima', name: 'Medalhão vital', icon: '♥', rarity: 'comum', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
+  { id: 'arcane-focus', short: 'Habilidades 15% mais fortes', name: 'Foco arcano', icon: '✦', rarity: 'comum', desc: 'Habilidades ficam 15% mais fortes pelo resto da jornada.' },
+  { id: 'giant-bane', short: '+20% de dano em chefes', name: 'Ferrão de gigante', icon: '✹', rarity: 'rara', desc: 'Heróis causam 20% mais dano contra chefes.', needs: () => bigFoeAhead() },
+  { id: 'healing-vial', short: 'Cura 35% da vida', name: 'Frasco curativo', icon: '⚗', rarity: 'comum', desc: 'Heróis de pé recuperam 35% da vida máxima.' },
+  { id: 'wind-chime', short: 'Ataques 10% mais rápidos', name: 'Sino do vento', icon: '♫', rarity: 'comum', desc: 'Heróis atacam 10% mais rápido pelo resto da jornada.' },
+  { id: 'ember-heart', short: 'Abates podem explodir', name: 'Coração de brasa', icon: '✺', rarity: 'comum', unique: true, desc: 'Ao abater um inimigo, 25% de chance de ele explodir e ferir quem estiver por perto.' },
+  { id: 'dawn-ward', short: 'Escudo a cada fase', name: 'Égide da aurora', icon: '◈', rarity: 'comum', unique: true, desc: 'No início de cada fase, cada herói ganha um escudo de 20% da vida máxima.' },
+  { id: 'thorn-mail', short: 'Espinhos devolvem dano', name: 'Cota de espinhos', icon: '✶', rarity: 'comum', unique: true, desc: 'Inimigos corpo a corpo levam de volta 35% do dano que causam aos heróis.' },
+  { id: 'bulwark-banner', short: 'Bloquear cura 5%', name: 'Estandarte do bastião', icon: '⛨', rarity: 'comum', unique: true, desc: 'Cada bloqueio recupera 5% da vida de quem bloqueou.', needs: () => partyHas(canBlock) },
+  { id: 'first-spark', short: '1ª habilidade da fase grátis', name: 'Centelha inicial', icon: '⚡', rarity: 'rara', unique: true, desc: 'A primeira habilidade de cada herói em cada fase não entra em recarga.' },
+  { id: 'phoenix-feather', short: 'Ultimate cura o grupo', name: 'Pena da fênix', icon: '❦', rarity: 'rara', unique: true, desc: 'Usar a ultimate cura 20% da vida de quem usou e dos aliados próximos.' },
+  { id: 'ricochet-sling', short: 'Tiros ricocheteiam', name: 'Funda ricocheteante', icon: '↯', rarity: 'rara', unique: true, desc: 'Tiros comuns à distância ricocheteiam em mais um inimigo próximo (60% do dano).', needs: () => partyHas((h) => h.ranged && h.cfg.id !== 'crossbow') },
+  { id: 'shadow-mark', short: 'Abates de Ladino aceleram recargas', name: 'Marca das sombras', icon: '☾', rarity: 'rara', unique: true, desc: 'Cada abate de um Ladino tira 2 s das recargas das habilidades dele.', needs: () => partyHas((h) => h.cfg.classId === 3) },
+  { id: 'archmage-prism', short: 'Magos acertam +1 alvo', name: 'Prisma do arquimago', icon: '✧', rarity: 'epica', unique: true, desc: 'Magos acertam +1 alvo: o tiro comum se divide e os raios em cadeia saltam mais uma vez.', needs: () => partyHas((h) => h.cfg.classId === 2) },
+  { id: 'last-oath', short: 'Escapa da morte por fase', name: 'Juramento final', icon: '✠', rarity: 'epica', unique: true, desc: 'Uma vez por fase, o herói que cairia fica com 1 de vida e invulnerável por 2 s.' },
 ];
 const hasRelic = (id) => !!game.relics?.includes(id);
 // quem bloqueia golpes (cavaleiros e vikings), usado no dano recebido e na oferta do estandarte
@@ -938,8 +941,8 @@ function showRelicPick() {
   pick.open = true;
   game.paused = true;
   $('pickTitle').textContent = 'Relíquia encontrada!';
-  $('pickSub').textContent = `Fase ${game.phase} · escolha um bônus para o restante da jornada`;
-  $('pickHint').textContent = `Uma escolha · comuns acumulam · únicas valem uma vez · 1–${pick.options.length} escolher`;
+  $('pickSub').textContent = `Fase ${game.phase}`;
+  $('pickHint').textContent = `1–${pick.options.length} · Enter`;
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
@@ -949,11 +952,13 @@ function showRelicPick() {
     card.className = `card relic rarity-${relic.rarity}`;
     card.setAttribute('role', 'button');
     card.setAttribute('tabindex', '0');
-    card.setAttribute('aria-label', `${relic.name}, relíquia ${rarity.name.toLowerCase()}: ${relic.desc}`);
+    card.setAttribute('aria-label', `${relic.name}, relíquia ${rarity.name.toLowerCase()}${relic.unique ? ', única' : ''}: ${relic.desc}`);
+    card.setAttribute('data-tip', 'relic');
+    card.setAttribute('data-relic', relic.id);
     card.style.setProperty('--c', rarity.c);
     card.style.setProperty('--cd', rarity.cd);
     card.style.setProperty('--d', `${i * 90}ms`);
-    card.innerHTML = `<div class="num">${i + 1}</div><span class="relic-rarity">${rarity.name}</span><div class="relic-icon">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.desc}</p><small>${relic.unique ? 'Única nesta jornada' : 'Acumulável nesta jornada'}</small>`;
+    card.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon" aria-hidden="true">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.short}</p>${relic.unique ? '<small aria-hidden="true">◆ Única</small>' : ''}`;
     card.onclick = () => confirmPick(i);
     bindCard(card, i);
     list.appendChild(card);
@@ -963,7 +968,9 @@ function showRelicPick() {
     const reroll = document.createElement('button');
     reroll.type = 'button';
     reroll.className = 'relic-reroll';
-    reroll.textContent = `↻ Trocar relíquias (${game.rerolls})`;
+    reroll.textContent = `↻ ${game.rerolls}`;
+    reroll.setAttribute('aria-label', `Trocar relíquias (${game.rerolls} restantes)`);
+    reroll.setAttribute('data-tip', 'Trocar relíquias');
     reroll.onclick = () => { game.rerolls--; showRelicPick(); };
     list.appendChild(reroll);
   }
@@ -1028,19 +1035,22 @@ function showEvolution() {
   game.paused = true;
   pick.upgrades = availableEvolutionBranches(h);
   $('pickTitle').textContent = 'Evolução!';
-  $('pickSub').textContent = `${cfg.names[entry.level - 1]} · Nv${entry.level} · Escolha uma melhoria`;
-  $('pickHint').textContent = '← → melhoria · Enter confirmar · 1–3 escolher';
+  $('pickSub').textContent = `${cfg.names[entry.level - 1]} · Nv${entry.level}`;
+  $('pickHint').textContent = `1–${pick.upgrades.length} · Enter`;
   $('pickList').innerHTML = '';
   $('pickList').classList.remove('grid');
   pick.cards = pick.upgrades.map((option, i) => {
     const b = document.createElement('div');
-    b.className = 'card evolution';
+    b.className = 'card relic evolution';
+    b.setAttribute('role', 'button');
+    b.setAttribute('tabindex', '0');
+    b.setAttribute('aria-label', `${option.name}: ${option.desc}`);
+    b.setAttribute('data-tip', option.desc);
     b.style.setProperty('--c', cfg.color[0]);
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 90}ms`);
-    b.innerHTML = `<div class="num">${i + 1}</div><div class="portrait"><img src="${cfg.portraits[entry.level - 1]}" alt="${cfg.names[entry.level - 1]}"></div>
-      <div class="ribbon">${cfg.names[entry.level - 1]}</div><button class="upgrade"><b>${option.icon} ${option.name}</b><span>${option.desc}</span></button>`;
-    b.querySelector('button').onclick = () => confirmPick(i);
+    b.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon" aria-hidden="true">${option.icon}</div><div class="ribbon">${option.name}</div><p>${option.short || option.desc}</p>`;
+    b.onclick = () => confirmPick(i);
     bindCard(b, i);
     $('pickList').appendChild(b);
     return b;
@@ -1130,7 +1140,7 @@ addEventListener('keydown', (e) => {
     } else if (e.key.startsWith('Arrow')) e.preventDefault();
     return;
   }
-  if (grid && e.target.closest?.('.hero-select-btn, .hero-more summary') && (e.key === 'Enter' || e.key === ' ')) return;
+  if (grid && e.target.closest?.('.hero-select-btn') && (e.key === 'Enter' || e.key === ' ')) return;
   if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : selectCard(pick.sel - 1);
   else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : selectCard(pick.sel + 1);
   else if (e.key === 'ArrowUp' && grid) moveGrid(0, -1);
@@ -1378,14 +1388,13 @@ function skillTooltip(el) {
   const key = el.getAttribute('data-key');
   if (key) facts.push(['Tecla', key]);
   const next = level < maxLevel
-    ? `<p class="tt-next"><b>Nível ${level + 1}</b> recarga ${num(cooldownForSkill(cfg, slot, level + 1, rate))} s${slot === 0 ? ' · efeito mais forte' : ''}</p>`
-    : '<p class="tt-next"><b>Nível máximo</b> alcançado</p>';
+    ? `<p class="tt-next"><b>Nv ${level + 1}</b> recarga ${num(cooldownForSkill(cfg, slot, level + 1, rate))} s${slot === 0 ? ' · mais forte' : ''}</p>`
+    : '<p class="tt-next"><b>Nível máximo</b></p>';
   const routes = Object.keys(hero?.evolutionBranches || {}).map((id) => EVOLUTION_BRANCHES.find((b) => b.id === id)).filter(Boolean);
   return `<div class="tt-skill tt-${kindId}">
-    <header><span class="tt-icon" aria-hidden="true">${glyph}</span><div><b>${skill.name}</b><span class="tt-kind">${kindName}</span></div></header>
+    <header><span class="tt-icon" aria-hidden="true">${glyph}</span><div><b>${skill.name}</b><span class="tt-kind">${kindName} · Nv ${level}</span></div></header>
     <p class="tt-desc">${skill.description}</p>
-    <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
-    <p class="tt-now"><b>Nível ${level}</b>${hero ? ` · ${cfg.name}` : ' · valores iniciais'}</p>${next}
+    <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>${next}
     ${routes.length ? `<p class="tt-routes">${routes.map((r) => `${r.icon} ${r.name}: ${r.desc}`).join('<br>')}</p>` : ''}
   </div>`;
 }

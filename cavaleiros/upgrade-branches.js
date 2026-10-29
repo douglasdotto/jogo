@@ -4,6 +4,7 @@ export const EVOLUTION_BRANCHES = [
   {
     id: 'damage',
     name: 'Ofensiva',
+    short: '+12% dano, +8% rapidez',
     icon: '⚔',
     desc: 'Golpes mais fortes e ataques um pouco mais rápidos.',
     bonus: { damage: 0.12, haste: 0.08 },
@@ -11,6 +12,7 @@ export const EVOLUTION_BRANCHES = [
   {
     id: 'control',
     name: 'Controle',
+    short: 'Controles duram +20%',
     icon: '❄',
     desc: 'Lentidões, raízes, provocações e atordoamentos duram mais.',
     bonus: { control: 0.2 },
@@ -18,6 +20,7 @@ export const EVOLUTION_BRANCHES = [
   {
     id: 'support',
     name: 'Apoio',
+    short: 'Curas e invocações +20%',
     icon: '✚',
     desc: 'Curas ficam mais fortes e aliados invocados lutam por mais tempo.',
     bonus: { support: 0.2 },

@@ -518,7 +518,7 @@
   perspective: none;
 }
 
-/* abas de classe: ícone + nome inteiro + quantidade, nunca truncadas */
+/* abas de classe: ícone + nome inteiro, nunca truncadas */
 #pick:has(#pickList.grid) .pick-filters {
   grid-area: tabs;
   min-width: 0;
@@ -561,17 +561,6 @@
   text-align: center;
 }
 #pick:has(#pickList.grid) .pick-filter span { flex: 0 1 auto; white-space: nowrap; }
-#pick:has(#pickList.grid) .pick-filter small {
-  flex: 0 0 auto;
-  min-width: 22px;
-  padding: 3px 5px;
-  box-sizing: border-box;
-  border-radius: 99px;
-  color: #c3d2e5;
-  background: rgba(5, 13, 25, .45);
-  text-align: center;
-  font: 600 13px/1 'Fredoka', sans-serif;
-}
 #pick:has(#pickList.grid) .pick-filter:hover { color: #fff; background: rgba(54, 75, 106, .9); }
 #pick:has(#pickList.grid) .pick-filter.active {
   color: #fff;
@@ -579,12 +568,13 @@
   background: color-mix(in srgb, var(--class-color) 24%, #1b2b45);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.1);
 }
-#pick:has(#pickList.grid) .pick-filter.active small { color: #ffe9a8; }
 #pick:has(#pickList.grid) .pick-filter:focus-visible,
 #pick:has(#pickList.grid) .card:focus-visible,
 #pick:has(#pickList.grid) .hero-select-btn:focus-visible,
 #pick:has(#pickList.grid) .skill-detail:focus-visible,
-#pick:has(#pickList.grid) .hero-more summary:focus-visible {
+#pick:has(#pickList.grid) .party-roles span:focus-visible,
+#pick:has(#pickList.grid) .hero-stat:focus-visible,
+#pick:has(#pickList.grid) .hero-mastery:focus-visible {
   outline: 3px solid #ffe08a;
   outline-offset: 3px;
 }
@@ -690,11 +680,6 @@
   color: color-mix(in srgb, var(--c) 65%, white);
   font: 600 15px/1.2 'Fredoka', sans-serif;
 }
-#pick:has(#pickList.grid) .pick-card-copy .pick-card-skill {
-  color: #c6d4e6;
-  font: 500 14px/1.25 'Fredoka', sans-serif;
-}
-#pick:has(#pickList.grid) .pick-card-copy .pick-card-skill i { color: #f2d27a; font-style: normal; }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card:hover,
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card.sel {
   transform: translateY(-2px);
@@ -743,98 +728,72 @@
 #pick:has(#pickList.grid) .pick-team-bar .party-composition {
   width: auto;
   padding: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
   border: 0;
   background: none;
 }
-#pick:has(#pickList.grid) .pick-team-bar .party-composition header {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: flex-start;
-  gap: 4px 12px;
-  color: #f0d684;
-  font: 600 16px/1.2 'Fredoka', sans-serif;
-}
-#pick:has(#pickList.grid) .pick-team-count { color: #9fe0f4; font: 600 15px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-team-count { color: #9fe0f4; font: 600 20px/1 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-team-bar .party-objective {
-  display: inline;
-  padding: 2px 8px;
-  border-left: 3px solid #f0d684;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: #dfe8f4;
   font: 500 14px/1.3 'Fredoka', sans-serif;
 }
-#pick:has(#pickList.grid) .pick-team-bar .party-objective b { color: #f0d684; }
-#pick:has(#pickList.grid) .pick-team-bar .party-members { margin: 0; display: flex; flex-wrap: nowrap; gap: 8px; align-items: flex-start; }
-#pick:has(#pickList.grid) .pick-team-bar .party-members span {
-  position: relative;
-  width: 76px;
-  padding: 0;
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  border-radius: 0;
-  color: #e9f0f9;
-  background: none;
-  font: 500 13px/1.15 'Fredoka', sans-serif;
-  text-align: center;
-}
+#pick:has(#pickList.grid) .pick-team-bar .party-objective i { color: #f0d684; font-style: normal; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members { margin: 0; display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members span { position: relative; display: block; padding: 0; background: none; }
 #pick:has(#pickList.grid) .pick-team-bar .party-members img,
 #pick:has(#pickList.grid) .pick-team-bar .party-members .empty i {
-  width: 58px;
-  height: 58px;
+  width: 48px;
+  height: 48px;
+  display: block;
   box-sizing: border-box;
   border: 2px solid color-mix(in srgb, var(--c, #8aa3c4) 70%, white);
   border-radius: 12px;
   object-fit: contain;
   background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--c, #8aa3c4) 46%, #fff), var(--cd, #2a3c58));
 }
-#pick:has(#pickList.grid) .pick-team-bar .party-members em { max-width: 100%; overflow: hidden; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
-#pick:has(#pickList.grid) .pick-team-bar .party-members span.candidate { color: #ffeaa2; outline: 0; background: none; }
 #pick:has(#pickList.grid) .pick-team-bar .party-members span.candidate img { border: 2px dashed #ffd96a; box-shadow: 0 0 0 3px rgba(255, 217, 106, .22); }
-#pick:has(#pickList.grid) .pick-team-bar .party-members small {
-  position: absolute;
-  top: -6px;
-  margin: 0;
-  padding: 1px 6px;
-  border-radius: 99px;
-  color: #2a1d05;
-  background: #ffd96a;
-  font: 600 13px/1.2 'Fredoka', sans-serif;
-  opacity: 1;
-}
-#pick:has(#pickList.grid) .pick-team-bar .party-members .empty { opacity: .8; color: #a9bbd1; }
 #pick:has(#pickList.grid) .pick-team-bar .party-members .empty i {
   display: grid;
   place-items: center;
-  border: 2px dashed rgba(169, 187, 209, .45);
+  border: 2px dashed rgba(169, 187, 209, .4);
   background: rgba(7, 18, 34, .35);
   color: #a9bbd1;
-  font: 500 26px/1 'Fredoka', sans-serif;
+  font: 500 22px/1 'Fredoka', sans-serif;
   font-style: normal;
 }
-#pick:has(#pickList.grid) .pick-team-bar .pick-team-status { min-width: 0; padding: 0; display: grid; gap: 8px; align-content: start; border: 0; }
 #pick:has(#pickList.grid) .pick-team-bar .party-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-#pick:has(#pickList.grid) .pick-team-bar .party-roles small { color: #9fb2c8; font: 500 13px 'Fredoka', sans-serif; margin-right: 2px; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles:empty { display: none; }
 #pick:has(#pickList.grid) .pick-team-bar .party-roles span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
-  border-radius: 99px;
-  color: #b8c8dc;
-  background: rgba(0, 0, 0, .25);
-  font: 500 14px/1.2 'Fredoka', sans-serif;
-  opacity: .85;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 50%;
+  color: #fff0a6;
+  background: rgba(255, 212, 74, .14);
+  font: 400 17px/1 'Fredoka', sans-serif;
+  cursor: help;
 }
-#pick:has(#pickList.grid) .pick-team-bar .party-roles span b { color: inherit; font-weight: 700; }
-#pick:has(#pickList.grid) .pick-team-bar .party-roles span.covered { color: #fff0a6; background: rgba(255, 212, 74, .16); opacity: 1; }
-#pick:has(#pickList.grid) .pick-team-bar .party-roles span.priority { outline: 1px dashed rgba(255, 212, 74, .7); opacity: 1; }
-#pick:has(#pickList.grid) .pick-team-bar .party-roles span.priority.covered { outline-style: solid; }
-#pick:has(#pickList.grid) .pick-team-bar .pick-team-status p { margin: 0; color: #dbe6f3; font: 500 15px/1.3 'Fredoka', sans-serif; opacity: 1; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span.priority { box-shadow: inset 0 0 0 2px rgba(255, 212, 74, .75); }
+/* papéis que faltam: contorno tracejado pulsando de leve, para chamar a próxima escolha */
+#pick:has(#pickList.grid) .pick-team-bar .party-wanted { padding-left: 12px; border-left: 1px solid rgba(174, 202, 237, .18); }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span.wanted {
+  color: #ffb6a0;
+  background: rgba(255, 120, 90, .1);
+  box-shadow: none;
+  border: 2px dashed rgba(255, 150, 120, .75);
+  animation: role-wanted 1.8s ease-in-out infinite;
+}
+@keyframes role-wanted { 50% { border-color: rgba(255, 150, 120, .3); } }
+@media (prefers-reduced-motion: reduce) { #pick:has(#pickList.grid) .pick-team-bar .party-roles span.wanted { animation: none; } }
 
 /* ficha do herói em foco */
 #pick:has(#pickList.grid) .pick-info {
@@ -884,7 +843,7 @@
   object-fit: contain;
   background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--c) 46%, #fff), var(--cd));
 }
-#pick:has(#pickList.grid) .hero-profile-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#pick:has(#pickList.grid) .hero-profile-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
 #pick:has(#pickList.grid) .hero-profile-copy small { margin: 0; color: #b8c8dc; font: 500 14px/1.2 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-info .ribbon {
   max-width: 100%;
@@ -910,114 +869,62 @@
   background: color-mix(in srgb, var(--c) 18%, rgba(8, 19, 35, .5));
   font: 600 14px/1.2 'Fredoka', sans-serif;
 }
-#pick:has(#pickList.grid) .hero-overview { min-width: 0; }
-#pick:has(#pickList.grid) .hero-overview p { margin: 0; color: #d3dfed; font: 400 15px/1.4 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-info .skill-list {
   width: 100%;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   box-sizing: border-box;
   border: 0;
   background: none;
 }
-#pick:has(#pickList.grid) .pick-info .skill-list > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-#pick:has(#pickList.grid) .pick-info .skill-list > header b { color: #f0d684; font: 600 17px/1.2 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .pick-info .skill-list > header span { color: #a9bbd1; font: 500 13px/1.2 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-info .skill-detail {
   --kind: #8cc4ff;
   min-width: 0;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  grid-template-rows: auto auto auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 2px 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(177, 202, 233, .14);
-  border-left: 3px solid var(--kind);
-  border-radius: 10px;
-  background: rgba(7, 18, 34, .3);
+  gap: 12px;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(7, 18, 34, .28);
   text-align: left;
   cursor: help;
+  transition: background .15s;
 }
 #pick:has(#pickList.grid) .pick-info .technique-detail { --kind: #7fdc9a; }
-#pick:has(#pickList.grid) .pick-info .ultimate-detail { --kind: #f4d88b; background: linear-gradient(100deg, rgba(131, 94, 38, .2), rgba(7, 18, 34, .3)); }
-#pick:has(#pickList.grid) .pick-info .skill-detail:hover { border-color: color-mix(in srgb, var(--kind) 55%, transparent); border-left-color: var(--kind); }
+#pick:has(#pickList.grid) .pick-info .ultimate-detail { --kind: #f4d88b; }
+#pick:has(#pickList.grid) .pick-info .skill-detail:hover { background: color-mix(in srgb, var(--kind) 14%, rgba(7, 18, 34, .3)); }
 #pick:has(#pickList.grid) .pick-info .skill-icon {
-  grid-column: 1;
-  grid-row: 1 / 3;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 11px;
+  border-radius: 10px;
   color: #fff8dc;
   background: radial-gradient(circle at 40% 30%, color-mix(in srgb, var(--kind) 55%, #22344f), #14233a);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind) 60%, transparent);
-  font: 400 24px/1 'Fredoka', sans-serif;
+  font: 400 22px/1 'Fredoka', sans-serif;
 }
-#pick:has(#pickList.grid) .pick-info .skill-kind {
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: start;
-  padding: 0;
-  border: 0;
-  color: var(--kind);
-  background: none;
-  font: 700 13px/1.1 'Fredoka', sans-serif;
-  letter-spacing: .4px;
-}
-#pick:has(#pickList.grid) .pick-info .skill-detail strong { grid-column: 2; grid-row: 2; color: #fff; font: 600 17px/1.2 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .pick-info .skill-detail .skill-meta { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; color: #b8c8dc; font: 500 13px/1.1 'Fredoka', sans-serif; white-space: nowrap; }
-#pick:has(#pickList.grid) .pick-info .skill-detail .skill-copy { grid-column: 1 / 4; grid-row: 3; margin-top: 6px; color: #d0dcea; font: 400 14px/1.4 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .hero-more {
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid rgba(177, 202, 233, .14);
-  border-radius: 10px;
-  background: rgba(7, 18, 34, .2);
-}
-#pick:has(#pickList.grid) .hero-more > summary {
-  min-height: 40px;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  color: #e3ecf7;
-  cursor: pointer;
-  list-style: none;
-  font: 600 15px/1.2 'Fredoka', sans-serif;
-}
-#pick:has(#pickList.grid) .hero-more > summary::-webkit-details-marker { display: none; }
-#pick:has(#pickList.grid) .hero-more > summary::after { content: '+'; margin-left: auto; color: #f0d47e; font: 600 18px/1 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .hero-more[open] > summary { border-bottom: 1px solid rgba(177, 202, 233, .1); }
-#pick:has(#pickList.grid) .hero-more[open] > summary::after { content: '−'; }
-#pick:has(#pickList.grid) .hero-more-content { min-width: 0; padding: 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-#pick:has(#pickList.grid) .hero-more-content .hero-tips,
-#pick:has(#pickList.grid) .hero-more-content .guide-note { grid-column: 1 / -1; }
-#pick:has(#pickList.grid) .pick-info .stats,
-#pick:has(#pickList.grid) .pick-info .hero-numbers {
+#pick:has(#pickList.grid) .pick-info .skill-detail strong { min-width: 0; overflow: hidden; color: #fff; font: 600 17px/1.2 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+#pick:has(#pickList.grid) .pick-info .skill-detail .skill-meta { margin: 0; color: #b8c8dc; font: 500 14px/1 'Fredoka', sans-serif; white-space: nowrap; }
+#pick:has(#pickList.grid) .pick-info .hero-stats {
   width: 100%;
-  min-width: 0;
   margin: 0;
-  padding: 10px;
-  box-sizing: border-box;
-  border: 1px solid rgba(177, 202, 233, .1);
-  border-radius: 8px;
-  color: #e3ecf7;
-  background: rgba(7, 18, 34, .25);
-  font: 500 14px/1.3 'Fredoka', sans-serif;
+  padding: 2px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  border: 0;
+  background: none;
 }
-#pick:has(#pickList.grid) .pick-info .stats { grid-template-columns: auto 1fr; gap: 6px 8px; }
-#pick:has(#pickList.grid) .pick-info .stats .pips { gap: 3px; }
-#pick:has(#pickList.grid) .pick-info .stats .pips i { width: 10px; height: 10px; }
-#pick:has(#pickList.grid) .pick-info .stats .pips.hearts i { width: auto; height: auto; font-size: 14px; line-height: 12px; }
-#pick:has(#pickList.grid) .pick-info .hero-numbers { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; align-content: center; }
-#pick:has(#pickList.grid) .hero-numbers dt { color: #b8c8dc; }
-#pick:has(#pickList.grid) .hero-numbers dd { margin: 0; color: #f0f5fc; font-weight: 600; text-align: right; }
-#pick:has(#pickList.grid) .hero-tips h4 { margin: 0 0 4px; color: #f0d684; font: 600 15px/1.2 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .hero-tips p { margin: 0; color: #d3dfed; font: 400 14px/1.4 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .guide-note { margin: 0; color: #a9bbd1; font: 400 13px/1.3 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-info .hero-stat { min-width: 0; display: flex; align-items: center; gap: 8px; cursor: help; }
+#pick:has(#pickList.grid) .pick-info .hero-stat > i { width: 20px; color: #f0d684; font: 400 16px/1 'Fredoka', sans-serif; font-style: normal; text-align: center; }
+#pick:has(#pickList.grid) .pick-info .hero-stat .pips { gap: 3px; }
+#pick:has(#pickList.grid) .pick-info .hero-stat .pips i { width: 10px; height: 10px; }
+#pick:has(#pickList.grid) .pick-info .hero-stat .pips.hearts i { width: auto; height: auto; font-size: 14px; line-height: 12px; }
 #pick:has(#pickList.grid) .hero-select-btn {
   position: sticky;
   bottom: 0;
@@ -1080,13 +987,10 @@
   #pick:has(#pickList.grid) .pick-card-copy { text-align: left; }
   #pick:has(#pickList.grid) .pick-team-bar { padding: 9px 12px; }
   #pick:has(#pickList.grid) .pick-team-bar .party-members img,
-  #pick:has(#pickList.grid) .pick-team-bar .party-members .empty i { width: 46px; height: 46px; }
-  #pick:has(#pickList.grid) .pick-team-bar .party-members span { width: 68px; }
+  #pick:has(#pickList.grid) .pick-team-bar .party-members .empty i { width: 42px; height: 42px; }
   #pick:has(#pickList.grid) .pick-info { gap: 9px; padding-top: 12px; }
   #pick:has(#pickList.grid) .pick-info .crest { width: 88px; height: 88px; flex-basis: 88px; }
   #pick:has(#pickList.grid) .pick-info .ribbon { font-size: 26px; }
-  #pick:has(#pickList.grid) .pick-info .skill-detail { padding: 8px 10px; }
-  #pick:has(#pickList.grid) .pick-info .skill-detail .skill-copy { margin-top: 4px; }
 }
 /* janelas estreitas: tudo empilhado com rolagem vertical, sem vazar para os lados */
 @media (max-width: 1000px) {
@@ -1292,10 +1196,15 @@
 #pickList .card.mastery-3, #pickList .card.mastery-4 { outline: 2px solid rgba(214, 224, 236, .75); outline-offset: -5px; }
 #pickList .card.mastery-5 { outline: 2px solid #ffd44a; outline-offset: -5px; }
 #pickList .card.mastery-5 .mastery-badge { color: #3b2600; background: linear-gradient(#fff1a8, #ffd44a); }
-.pick-info .hero-mastery { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 5px 9px; box-sizing: border-box;
-  border-radius: 9px; background: rgba(8, 18, 32, .35); font: 600 12px 'Fredoka', sans-serif; }
-.pick-info .hero-mastery b { color: #ffe37b; font: 400 13px 'Lilita One', sans-serif; } .pick-info .hero-mastery small { margin: 0; color: #c6d4e6; }
-.pick-info .hero-mastery.mastery-5 { outline: 1px solid #ffd44a; }
+.pick-info .hero-mastery { width: min(100%, 180px); display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; box-sizing: border-box; cursor: help; }
+.pick-info .hero-mastery b { color: #ffe37b; font: 400 13px 'Lilita One', sans-serif; }
+.pick-info .hero-mastery .mastery-track { height: 4px; }
+.pick-info .hero-mastery.mastery-5 .mastery-track { box-shadow: 0 0 6px rgba(255, 212, 74, .7); }
+/* relíquias e evolução: ícone + nome + uma linha curta; o detalhe fica na dica */
+#pickList .card.relic { min-height: 220px; gap: 12px; }
+#pickList .card.relic p { min-height: 0; }
+#pickList .card.relic small { opacity: .8; }
+#pickList .card.evolution .relic-icon { color: #fff; background: radial-gradient(circle at 50% 35%, var(--c), var(--cd)); }
 /* troca de relíquias (Dados do mascate) */
 #pickList .relic-reroll { align-self: center; }
 @media (prefers-reduced-motion: reduce) { .ach-toast { animation: ach-out .01s linear 4.5s forwards; } }
