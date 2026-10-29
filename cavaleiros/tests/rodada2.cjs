@@ -970,7 +970,7 @@ test('grade espacial separa unidades grandes nas células vizinhas e mantém col
 });
 test('monstros novos usam animações que existem nos GLB',()=>{
   const glb=n=>{const b=fs.readFileSync(path.join(dir,'assets',n+'.glb'));return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString()).animations.map(a=>a.name)};
-  const used=['Blocking','Block_Hit','Block','Use_Item','Spellcast_Raise','Spellcast_Summon','Spellcast_Shoot','Spellcasting','Death_C_Skeletons_Resurrect','Jump_Idle','Spawn_Air','1H_Melee_Attack_Stab','1H_Melee_Attack_Jump_Chop','2H_Melee_Attack_Chop','Taunt','Running_C'];
+  const used=['Blocking','Block_Hit','Block','Use_Item','Spellcast_Raise','Spellcast_Summon','Spellcast_Shoot','Spellcasting','Spellcast_Long','Throw','2H_Melee_Attack_Spin','1H_Melee_Attack_Stab','Death_C_Skeletons_Resurrect','Jump_Idle','Spawn_Air','1H_Melee_Attack_Stab','1H_Melee_Attack_Jump_Chop','2H_Melee_Attack_Chop','Taunt','Running_C'];
   for(const [type,m] of Object.entries(t.MONSTER_TYPES)){const clips=glb('Skeleton_'+m.model);for(const c of used)assert.ok(clips.includes(c),type+': '+c)}
   for(const c of ['Lie_Down','Lie_StandUp'])assert.ok(glb('Knight').includes(c));
 });
@@ -1012,6 +1012,7 @@ test('estreias de inimigos acompanham a fase inicial sem empilhar inimigos antig
     t.clearMonsterFx();
     assert.equal(t.pickMonster(5,'Minion'),'Priest'); // a fase 5 ainda introduz o sacerdote
     t.clearMonsterFx();
+    assert.equal(t.pickMonster(7,'Minion'),'Skull'); // só a estreia da fase 7 (enxame) é forçada
     assert.equal(t.pickMonster(7,'Minion'),'Minion'); // fases 2–5 não reaparecem como estreias
     t.clearMonsterFx();
     assert.deepEqual([2,3,4,5].map(p=>t.pickMonster(p,'Minion')),['Shieldbearer','Bomber','Ghost','Priest']);
@@ -1103,6 +1104,95 @@ test('com a onda longe, o grupo avança ao encontro dela até o limite da fase',
   t.game.guideS=60;const back=foe('Minion',0,-50);t.pressForward(1,[far,back]);assert.equal(t.game.guideS,60,'inimigo atrás segura o grupo');
   t.game.guideS=60;back.dead=true;const near=foe('Minion',0,-64);t.pressForward(1,[near]);assert.equal(t.game.guideS,60,'inimigo perto: luta no posto');
   t.game.guideS=0;clear();
+});
+// ---------- inimigos novos: enxame, xamã, cavaleiro sombrio e o Carrasco (fase 9) ----------
+const mFx=()=>vm.runInContext('mFx',context);
+test('enxame de crânios chega em bando, marca um círculo pequeno, mergulha e não vira cova',()=>{
+  clear();t.clearMonsterFx();const rnd=cMath.random;
+  try{
+    const h=hero('paladin',0,0);h.hp=h.maxHp=1e4;
+    const lead=foe('Skull',0,8);tick(.05);
+    const pack=t.skeletonsAlive().filter(u=>u.enemyKind==='Skull');
+    assert.equal(pack.length,1+(t.getDifficulty().count>=1.25?3:2),'o primeiro crânio traz o bando');
+    assert.ok(pack.every(u=>u.phasing&&u.size<1),'crânios voam e são pequenos');
+    for(const u of pack)if(u!==lead)u.remove();
+    lead.pos.set(0,0,2);lead.hp=lead.maxHp=1e4;lead.busy=0;lead.attackTimer=0;cMath.random=()=>.99;tick(.05);
+    const mark=mFx().find(f=>f.warning&&f.owner===lead);
+    assert.ok(mark&&!mark.harmless&&mark.radius<1,'mergulho marca um círculo pequeno');
+    const hp=h.hp;tick(.1,9);assert.ok(h.hp<hp,'o mergulho acerta quem ficou no círculo');
+    assert.ok(t.game.damageSources['Enxame de Crânios']?.hits>0,'relatório credita o enxame');
+    clear();t.clearMonsterFx();hero('pyro',0,0);
+    const p=foe('Priest',0,6),k=foe('Skull',1,6);k.pack=0;k.die();p.cd.revive=0;p.cd.heal=99;
+    const before=t.skeletonsAlive().length;tick(.1,15);assert.equal(t.skeletonsAlive().length,before,'sacerdote não reergue crânios');
+  }finally{cMath.random=rnd;clear();t.clearMonsterFx();}
+});
+test('xamã avisa, cobre um aliado com escudo de ossos e o escudo some quando o xamã cai',()=>{
+  clear();t.clearMonsterFx();const rnd=cMath.random;cMath.random=()=>.99;
+  try{
+    const h=hero('pyro',0,0);h.hp=h.maxHp=1e4;
+    const sh=foe('Shaman',0,7),w=foe('Warrior',1.5,7);sh.hp=sh.maxHp=w.hp=w.maxHp=1e4;sh.cd.ward=0;
+    tick(.05);assert.ok(!w.ward,'antes do escudo vem o aviso');
+    const mark=mFx().find(f=>f.warning&&f.owner===sh);assert.ok(mark&&mark.harmless,'aviso azul segue o aliado e não é perigo');
+    tick(.1,12);assert.ok(w.ward?.hp>0,'aliado recebe o escudo');
+    const shield=w.ward.hp;w.takeDamage(10,h.pos);assert.equal(w.hp,w.maxHp);assert.equal(w.ward.hp,shield-10);
+    assert.ok(t.heroTargetScore(h,sh)<t.heroTargetScore(h,w),'heróis priorizam o xamã ao protegido');
+    w.takeDamage(w.ward.hp+20,h.pos);assert.equal(w.hp,w.maxHp-20,'o que passa do escudo entra na vida');tick(.05);assert.equal(w.ward,null);
+    sh.busy=0;sh.cd.ward=0;tick(.05);tick(.1,12);assert.ok(w.ward,'escudo de novo');
+    sh.stunT=1;tick(.05);assert.equal(w.ward,null,'xamã atordoado desfaz o escudo');
+    sh.stunT=0;sh.busy=0;sh.cd.ward=0;tick(.05);tick(.1,12);assert.ok(w.ward);sh.die();tick(.05);assert.equal(w.ward,null,'xamã caído desfaz o escudo');
+    assert.equal(mFx().length,0,'nenhum efeito do xamã sobra');
+  }finally{cMath.random=rnd;clear();t.clearMonsterFx();}
+});
+test('cavaleiro sombrio marca a linha, investe, atropela e fica exausto; quem percebe sai da linha',()=>{
+  clear();t.clearMonsterFx();const rnd=cMath.random;cMath.random=()=>.99;
+  try{
+    const h=hero('pyro',0,6);h.hp=h.maxHp=1e4;
+    const k=foe('DarkKnight',0,0);k.hp=k.maxHp=1e4;k.root.rotation.y=0;k.cd.charge=0;
+    tick(.05);const mark=mFx().find(f=>f.warning&&f.owner===k);assert.ok(mark?.line,'investida marcada em linha');assert.ok(!k.dash);
+    const hp=h.hp;tick(.05,20);for(let i=0;i<20&&(k.dash||!mark.alive);i++)tick(.05);
+    assert.ok(h.hp<hp,'quem ficou na linha é atropelado');assert.equal(k.dash,null);
+    assert.ok(t.game.damageSources['Cavaleiro Sombrio']?.hits>0);
+    t.clearMonsterFx();h.pos.set(0,0,6);k.pos.set(0,0,0);k.busy=0;k.cd.charge=0;tick(.05);
+    cMath.random=()=>0;const away=t.dangerAt(h);assert.ok(away&&Math.abs(away.x)>0.8,'herói que percebe foge para o lado');
+  }finally{cMath.random=rnd;clear();t.clearMonsterFx();}
+});
+test('Carrasco fecha a fase 9 e aparece no painel da missão',()=>{
+  const isBoss=vm.runInContext('isBossPhase',context);
+  assert.deepEqual([5,6,8,9,10,12].map(isBoss),[false,true,false,true,false,true]);
+  assert.equal(t.waveLeader(9,true),'Executioner');assert.equal(t.waveLeader(9,false),null);
+  const ids=(a,b)=>t.campaignThreats(a,b).map(x=>x.id);
+  assert.ok(ids(9,10).includes('Executioner'));assert.ok(!ids(10,11).includes('Executioner'));
+  for(const id of ['Skull','Shaman'])assert.ok(ids(7,8).includes(id),id);assert.ok(ids(10,11).includes('DarkKnight'));
+  for(const x of t.campaignThreats(1,12))assert.ok(x.icon!=='✦'&&x.detail.length>10,'toda ameaça tem ícone e dica: '+x.id);
+  clear();t.game.phase=9;t.startPhase();assert.equal(t.game.bossPending,true);
+  const D=t.getDifficulty(),toSpawn=t.game.toSpawn;Object.assign(t.game,{toSpawn:1});t.spawnSkeleton();
+  const b=t.skeletonsAlive().at(-1);assert.equal(b.enemyKind,'Executioner');assert.ok(b.phaseBoss&&b.kind.title==='Chefe');
+  assert.ok(b.maxHp>8*50*D.hp,'tem vida de chefe');clear();t.clearMonsterFx();t.game.state='fight';void toSpawn;
+});
+test('Carrasco: machadada em linha derruba, corrente puxa o atirador e a fúria abaixo de 50% abre o leque e o giro',()=>{
+  clear();t.clearMonsterFx();const rnd=cMath.random;cMath.random=()=>.99;
+  try{
+    const front=hero('paladin',0,2.5);front.hp=front.maxHp=1e4;
+    const b=foe('Executioner',0,0,true);b.hp=b.maxHp=1e5;b.root.rotation.y=0;b.cd={cleave:0,hook:99,whirl:99};
+    tick(.05);const lines=mFx().filter(f=>f.warning&&f.owner===b);assert.equal(lines.length,1);assert.ok(lines[0].line&&lines[0].announce);
+    const hp=front.hp;tick(.1,15);assert.ok(front.hp<hp,'machadada acerta a linha');assert.ok(front.busy>0,'e derruba');
+    assert.ok(t.game.damageSources.Carrasco?.hits>0,'relatório credita o Carrasco');
+    clear();t.clearMonsterFx();
+    const archer=hero('pyro',0,9);archer.hp=archer.maxHp=1e4;
+    const c=foe('Executioner',0,0,true);c.hp=c.maxHp=1e5;c.cd={cleave:99,hook:0,whirl:99};
+    tick(.05);assert.ok(mFx().some(f=>f.warning&&f.line&&f.owner===c),'corrente marcada em linha');
+    tick(.1,11);tick(.05,8);assert.ok(archer.pos.distanceTo(c.pos)<5,'corrente arrasta o atirador para perto');
+    c.hp=c.maxHp*.45;c.busy=0;const speed=c.speed;tick(.05);assert.equal(c.enraged,true);assert.ok(c.speed>speed);
+    t.clearMonsterFx();c.busy=0;c.cd={cleave:0,hook:99,whirl:99};archer.pos.set(0,0,2.5);tick(.05);
+    assert.equal(mFx().filter(f=>f.warning&&f.owner===c).length,3,'em fúria a machadada vira leque de três linhas');
+    t.clearMonsterFx();c.busy=0;c.cd={cleave:99,hook:99,whirl:0};tick(.05);
+    const whirl=mFx().find(f=>f.warning&&f.owner===c);assert.ok(whirl&&!whirl.line&&whirl.radius>3,'giro sangrento marca um círculo em volta');
+    c.die();tick(.05);assert.equal(mFx().length,0,'avisos somem com o Carrasco morto');
+  }finally{cMath.random=rnd;clear();t.clearMonsterFx();}
+});
+test('relatório de batalha dá dica própria para enxame e Carrasco',()=>{
+  const tip=name=>vm.runInContext('buildBattleReport',context)({won:false,heroes:[{name:'A',damage:10,received:100}],damageSources:[{name,damage:90,hits:9}]}).at(-1).text;
+  assert.match(tip('Enxame de Crânios'),/área/);assert.match(tip('Carrasco'),/áreas marcadas/);assert.match(tip('Cavaleiro Sombrio'),/áreas marcadas/);
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

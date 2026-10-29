@@ -110,7 +110,13 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
   const partyReceived = heroes.reduce((sum, hero) => sum + number(hero.received), 0);
   if (dangerous && number(dangerous.damage) > 0) {
     const name = label(dangerous.name, 'o inimigo mais perigoso');
-    if (/bombardeir|golem|rei esqueleto|lich|chefe/i.test(name)) {
+    if (/enxame|crânio/i.test(name)) {
+      return `${name} causou mais dano ao grupo. Saia dos círculos laranja dos mergulhos e use golpes em área para limpar o bando de uma vez.`;
+    }
+    if (/xamã/i.test(name)) {
+      return `${name} causou mais dano ao grupo. Derrube o xamã primeiro: o escudo de ossos dos aliados some com ele.`;
+    }
+    if (/bombardeir|golem|rei esqueleto|lich|carrasco|cavaleiro sombrio|chefe/i.test(name)) {
       return `${name} causou mais dano ao grupo. Afaste-se das áreas marcadas e considere levar um Guardião para proteger os aliados.`;
     }
     if (/arqueir|besteir|crossbow|mago|sacerdote|atirador/i.test(name)) {

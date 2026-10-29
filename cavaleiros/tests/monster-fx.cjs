@@ -68,3 +68,77 @@ assert.equal(scenario('dead'), 0, 'crânios ainda caindo somem quando o Lich mor
 assert.equal(scenario('stunned'), 0, 'crânios ainda caindo somem quando o Lich é atordoado');
 assert.ok(scenario('alive') > 0, 'crânios ainda acertam se o Lich continua vivo');
 console.log('OK: crânios atrasados cancelam com a morte/atordoamento do Lich e atingem enquanto ele vive');
+
+// ---------- escudo de ossos do xamã e avisos do Carrasco: tudo sai da cena e os materiais são descartados ----------
+function freshContext() {
+  let made = 0, disposed = 0;
+  class CountedMaterial { constructor() { made++; this.dispose = () => { disposed++; }; } }
+  class Piece extends Group { removeFromParent() { this.removed = true; } }
+  const THREE = {
+    Vector3, Group: Piece, Mesh: Piece,
+    MeshLambertMaterial: CountedMaterial, MeshBasicMaterial: CountedMaterial,
+    BoxGeometry: Geometry, SphereGeometry: Geometry, ConeGeometry: Geometry, CylinderGeometry: Geometry,
+    OctahedronGeometry: Geometry, CircleGeometry: Geometry, RingGeometry: Geometry, PlaneGeometry: Geometry, TorusGeometry: Geometry,
+    DoubleSide: 2,
+  };
+  const context = vm.createContext({ THREE, Math });
+  vm.runInContext(source, context);
+  const base = made;   // materiais compartilhados do módulo não contam
+  const inScene = new Set();
+  const hero = { pos: new Vector3(), size: 1, dead: false, damage: 0, busy: 0, takeDamage(n) { this.damage += n; } };
+  const units = [], skeletons = [];
+  const unit = (extra) => {
+    const root = new Piece();
+    const u = { dead: false, stunT: 0, busy: 0, spawning: false, size: 1, maxHp: 100, hp: 100, dmg: 10, pos: new Vector3(), root, mats: [],
+      vel: { set() {} }, once() { return 1; }, action() { return { getClip: () => ({ duration: 1 }) }; }, ...extra };
+    units.push(u); skeletons.push(u);
+    return u;
+  };
+  context.api = {
+    allies: () => [hero], heroes: () => [hero], skeletonsAlive: () => skeletons.filter((s) => !s.dead), units,
+    difficulty: { count: 1 }, scene: { add(m) { inScene.add(m); }, remove(m) { inScene.delete(m); } }, world: { groundHeight: () => 0, canStep: () => true },
+    ring() {}, poof() {}, beam() {}, popText() {}, showBanner() {},
+  };
+  vm.runInContext('linkMonsters(api)', context);
+  return { context, hero, unit, inScene, counts: () => ({ made: made - base, disposed }) };
+}
+
+{
+  const { context, hero, unit, inScene, counts } = freshContext();
+  const shaman = unit({ cd: { ward: 0 } });
+  shaman.pos.set(0, 0, 6);
+  const ally = unit({ maxHp: 200, hp: 200 });
+  ally.pos.set(1, 0, 6);
+  Object.assign(context, { shaman, hero });
+  vm.runInContext('MONSTER_TYPES.Shaman.think(shaman, 0, hero)', context);
+  assert.equal(inScene.size, 1, 'aviso do escudo entra na cena');
+  vm.runInContext('updateMonsterFx(1.2)', context);
+  assert.ok(ally.ward && ally.ward.hp > 0, 'aliado recebe o escudo depois do aviso');
+  assert.equal(inScene.size, 0, 'aviso sai da cena');
+  const pieces = ally.root.children.slice();
+  assert.equal(pieces.length, 2, 'bolha e anel presos no aliado');
+  assert.equal(vm.runInContext('absorbWard', context)(ally, 30), 0, 'escudo absorve o golpe');
+  shaman.dead = true;
+  vm.runInContext('updateMonsterFx(0.05)', context);
+  assert.equal(ally.ward, null, 'xamã morto desfaz o escudo');
+  assert.ok(pieces.every((p) => p.removed), 'bolha e anel saem do aliado');
+  const { made, disposed } = counts();
+  assert.equal(made, disposed, 'materiais dos avisos descartados');
+}
+
+{
+  const { context, hero, unit, inScene, counts } = freshContext();
+  hero.pos.set(0, 0, 2.5);
+  const boss = unit({ boss: true, size: 2.1, maxHp: 1000, hp: 300, enraged: true, cd: { cleave: 0, hook: 99, whirl: 99 } });
+  Object.assign(context, { boss, hero });
+  vm.runInContext('MONSTER_TYPES.Executioner.think(boss, 0, hero)', context);
+  assert.equal(inScene.size, 3, 'em fúria, três linhas no chão');
+  boss.dead = true;
+  vm.runInContext('updateMonsterFx(2)', context);
+  assert.equal(inScene.size, 0, 'linhas somem com o Carrasco morto');
+  assert.equal(hero.damage, 0, 'machadada cancelada não acerta');
+  const { made, disposed } = counts();
+  assert.ok(made > 0);
+  assert.equal(made, disposed, 'materiais das linhas descartados');
+}
+console.log('OK: escudo de ossos e avisos do Carrasco saem da cena e descartam materiais');
