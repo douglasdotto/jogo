@@ -857,7 +857,7 @@ const CAMPAIGN_TACTICS = {
 };
 
 /** Lista ameaças possíveis num trecho usando as mesmas fases de estreia e chefes do combate. */
-export function campaignThreats(from, to) {
+export function campaignThreats(from, to, goal = null) {
   const first = Math.max(1, Math.trunc(Number(from) || 1));
   const last = Math.max(first, Math.trunc(Number(to) || first));
   const found = new Map();
@@ -871,6 +871,7 @@ export function campaignThreats(from, to) {
   for (const phase of GOLEM_PHASES) if (phase >= first && phase <= last) add('Golem', phase);
   if (last >= 9 && !found.has('Golem')) add('Golem', 9, true); // só pode surgir aleatoriamente nas dificuldades altas
   for (const phase of BOSS_PHASES) if (phase >= first && phase <= last) add(waveLeader(phase, true), phase);
+  if (goal?.type === 'twin') add('Executioner', last);   // trono: o Carrasco volta ao lado do Lich
 
   return [...found.values()].sort((a, b) => a.phase - b.phase || a.name.localeCompare(b.name, 'pt-BR'));
 }

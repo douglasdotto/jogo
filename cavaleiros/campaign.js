@@ -9,12 +9,18 @@
 // Trechos: o início avança pelas 12 fases; missões de chefe passam pelas fases 6 (Rei) e 12 (Lich) e o Carrasco fecha a fase 9;
 // o lago precisa da fase 5 e o lago sombrio da fase 9, onde o mundo tem água.
 // militia = aldeões de guarda em volta de quem a missão manda defender
+// breach = segurar a ponte por `time` s; a missão cai se `leaks` esqueletos passarem
+// duel = um herói só contra o chefe da fase (o herói tem vida × `heroHp`; ondas × `waves`; chefe com vida × `bossHp` e dano × `bossDmg`); 3★ pede vencer em até `time` s
+// elite = `waves` ondas de elite seguidas (mais vida e dano; cada onda × `scale`)
+// twin = o Lich e o Carrasco juntos na fase 12 · ending = frase de encerramento na vitória
 export const MISSIONS = [
   { id: 'vila', name: 'A Vila', desc: 'Os primeiros esqueletos chegaram à praça.', chapter: 'Capítulo I · Sinais na estrada', story: 'A patrulha cai na praça. No estandarte inimigo, uma marca de ossos aponta para a ponte ao norte.', tip: 'Aprenda o ritmo de ataque dos inimigos e preserve a vida do herói para buscar as três estrelas.', icon: '⌂', from: 1, to: 2, heroes: 1, level: 1, goal: { type: 'win' } },
   { id: 'ponte', name: 'A Ponte do Rio', desc: 'Atiradores no rochedo vigiam a ponte.', chapter: 'Capítulo I · Sinais na estrada', story: 'Os arqueiros fecharam a travessia. Do outro lado, tochas acendem rumo às fazendas.', tip: 'Inimigos perto do aldeão são uma ameaça imediata. Cura, provocação e empurrões ajudam a mantê-lo protegido.', icon: '≈', from: 2, to: 4, heroes: 2, level: 1, militia: 4, goal: { type: 'escort' } },
   { id: 'santuario', name: 'O Santuário', desc: 'Saqueadores querem quebrar o cristal da vila.', chapter: 'Capítulo I · Sinais na estrada', story: 'O cristal do santuário guarda a estrada. Se ele cair, as fazendas ficam sem proteção para o que vem do sul.', tip: 'Alguns esqueletos ignoram os heróis e correm para o santuário. Mantenha alguém perto dele e derrube os saqueadores primeiro.', icon: '✪', from: 3, to: 3, heroes: 2, level: 1, militia: 4, goal: { type: 'defend', time: 75 } },
+  { id: 'chamas', name: 'Ponte em Chamas', desc: 'Não deixe ninguém cruzar.', chapter: 'Capítulo I · Sinais na estrada', story: 'A ponte de madeira arde; se os ossos cruzarem, as fazendas caem.', tip: 'Esqueletos correm para a ponte. Fique entre eles e ela e derrube primeiro quem corre.', icon: '♨', from: 4, to: 4, heroes: 2, level: 2, goal: { type: 'breach', time: 70, leaks: 6 } },
   { id: 'fazendas', name: 'Fazendas', desc: 'O primeiro chefe ronda os campos.', chapter: 'Capítulo II · A marca de ossos', story: 'O chefe carrega um fragmento de totem. As pegadas dele terminam perto do lago.', tip: 'Guarde habilidades de alto impacto para o chefe e use efeitos de controle para reduzir a pressão dos reforços.', icon: '☘', from: 4, to: 6, heroes: 2, level: 2, goal: { type: 'boss' } },
   { id: 'lago', name: 'O Lago', desc: 'Eles saem da água rasa.', chapter: 'Capítulo II · A marca de ossos', story: 'Cada onda traz mais esqueletos. Segure a margem até a água revelar o caminho às ruínas.', tip: 'Na fase 5, sobreviva aos 90 segundos. Evite perseguições longas e fique atento aos avisos de ataques no chão.', icon: '≋', from: 4, to: 5, heroes: 3, level: 2, goal: { type: 'survive', time: 90, phase: 5 } },
+  { id: 'duelo', name: 'Duelo', desc: 'Um herói. Um rei.', chapter: 'Capítulo II · A marca de ossos', story: 'O Rei Esqueleto exige um campeão: só um herói entra na arena.', tip: 'Sozinho, cada golpe conta. Leve um herói resistente e guarde a ultimate para a fúria do Rei.', icon: '⚔', from: 6, to: 6, heroes: 1, level: 3, goal: { type: 'duel', time: 75, waves: 0.25, heroHp: 2.5, bossHp: 0.45, bossDmg: 0.5 } },
   { id: 'caca', name: 'A Caçada', desc: 'Um batedor do necromante leva o mapa das ruínas.', chapter: 'Capítulo III · O véu da morte', story: 'O batedor marcado carrega o mapa das ruínas. Abata-o antes que ele desapareça na névoa do bosque.', tip: 'O alvo marcado foge de quem chega perto. Encurrale-o no fim da clareira e use atiradores, lentidão e raízes para segurá-lo.', icon: '➹', from: 7, to: 7, heroes: 3, level: 2, goal: { type: 'hunt', time: 60 } },
   { id: 'resgate', name: 'Resgate no Bosque', desc: 'Uma pessoa desaparecida foi vista entre as árvores.', chapter: 'Capítulo III · O véu da morte', story: 'Um prisioneiro conhece a origem da névoa. Encontre-o antes que os esqueletos o levem para as ruínas.', tip: 'Aproxime-se do prisioneiro para libertá-lo. Limpe o caminho ao redor antes de avançar.', icon: '⚑', from: 7, to: 8, heroes: 3, level: 2, goal: { type: 'rescue' } },
   { id: 'ruinas', name: 'Ruínas Antigas', desc: 'Entre colunas caídas, o mundo começa a morrer.', chapter: 'Capítulo III · O véu da morte', story: 'Os totens alimentam uma névoa que cobre as ruínas. Quebre os focos para abrir a passagem ao lago sombrio.', tip: 'Totens invocam reforços com o tempo. Destruí-los cedo reduz a quantidade de inimigos na estrada.', icon: '☗', from: 8, to: 10, heroes: 3, level: 3, goal: { type: 'totems', count: 3 } },
@@ -23,6 +29,8 @@ export const MISSIONS = [
   { id: 'cemiterio', name: 'Cemitério', desc: 'Os mortos não descansam.', chapter: 'Capítulo IV · A marcha final', story: 'O cemitério inteiro se ergue em resposta ao chamado. Atravesse antes que os mortos cheguem ao castelo.', tip: 'O limite é de quatro minutos. Elimine rapidamente inimigos que curam ou trazem esqueletos de volta.', icon: '✝', from: 10, to: 11, heroes: 4, level: 3, goal: { type: 'timer', time: 240 } },
   { id: 'horda', name: 'Noite sem Fim', desc: 'A horda não para de chegar.', chapter: 'Capítulo IV · A marcha final', story: 'Antes do castelo, o necromante solta a horda inteira. Segure a estrada o máximo que puder até o amanhecer.', tip: 'Não há cura entre fases: cada minuto vale uma estrela. Guarde as ultimates para quando a horda engrossar.', icon: '❂', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'endless', marks: [60, 120, 180], dawn: 300 } },
   { id: 'castelo', name: 'Castelo do Necromante', desc: 'A batalha final contra o chefe.', chapter: 'Capítulo IV · A marcha final', story: 'A fonte da invasão espera atrás dos portões. Derrote o necromante e encerre a marcha dos ossos.', tip: 'Observe os círculos de perigo, saia deles antes do impacto e concentre o dano no chefe quando houver abertura.', icon: '♜', from: 11, to: 12, heroes: 4, level: 3, goal: { type: 'boss' } },
+  { id: 'cripta', name: 'Cripta Sombria', desc: 'A guarda de elite desperta.', chapter: 'Capítulo V · Além do Castelo', story: 'Sob o castelo, a guarda de elite do necromante ainda marcha.', tip: 'Três ondas fortes em seguida. Concentre o dano num alvo por vez e guarde cura para o fim.', icon: '⚰', from: 11, to: 11, heroes: 4, level: 3, goal: { type: 'elite', waves: 3, scale: 0.6 } },
+  { id: 'trono', name: 'Trono de Ossos', desc: 'Dois chefes, uma última luta.', chapter: 'Capítulo V · Além do Castelo', story: 'No trono, o Lich ergue o Carrasco para a última luta.', tip: 'O Lich e o Carrasco chegam juntos. Derrube um de cada vez e fuja das áreas marcadas.', icon: '♔', from: 12, to: 12, heroes: 4, level: 3, goal: { type: 'twin' }, ending: 'O trono ruiu. O reino amanhece livre.' },
 ];
 
 // Mantém as arenas estáveis enquanto o jogador navega entre mapa e dificuldade;
@@ -62,6 +70,10 @@ export function goalText(goal) {
     defend: `Defenda o santuário por ${goal.time} s`,
     hunt: 'Abata o alvo marcado antes que fuja',
     endless: 'Aguente a horda o máximo possível',
+    breach: `Segure a ponte por ${goal.time} s`,
+    duel: 'Vença o duelo contra o chefe',
+    elite: `Vença ${goal.waves} ondas de elite`,
+    twin: 'Derrote o Lich e o Carrasco',
   }[goal.type];
 }
 
@@ -164,7 +176,7 @@ export const variantOpen = () => true;
 
 // Critérios cumulativos servem tanto para calcular estrelas quanto para
 // explicar o resultado no fim da missão.
-export function starConditions({ won, falls, hpRatio, goal, shrineRatio, timeLeft, endlessTime }) {
+export function starConditions({ won, falls, hpRatio, goal, shrineRatio, timeLeft, endlessTime, leaks, seconds }) {
   const completed = Boolean(won);
   const hpPercent = Math.round(Math.max(0, Math.min(1, Number(hpRatio) || 0)) * 100);
   const fallCount = Math.max(0, Number(falls) || 0);
@@ -188,6 +200,23 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, timeLef
       { label: 'Abater o alvo marcado', achieved: completed },
       { label: `Sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: noFalls },
       { label: `Sem quedas e com metade do tempo sobrando (${Math.ceil(left)} s de ${goal.time} s)`, achieved: noFalls && left >= goal.time / 2 },
+    ];
+  }
+  if (goal?.type === 'breach') {
+    const passed = Math.max(0, Math.floor(Number(leaks) || 0));
+    return [
+      { label: 'Segurar a ponte', achieved: completed },
+      { label: `No máximo 2 passaram (passaram ${passed})`, achieved: completed && passed <= 2 },
+      { label: `Ninguém passou (passaram ${passed})`, achieved: completed && passed === 0 },
+    ];
+  }
+  if (goal?.type === 'duel') {
+    const time = Math.max(0, Number(seconds) || 0);
+    const healthy = completed && hpRatio >= 0.4;
+    return [
+      { label: 'Vencer o duelo', achieved: completed },
+      { label: `Terminar com 40%+ de vida (atual ${hpPercent}%)`, achieved: healthy },
+      { label: `40%+ de vida e em até ${formatMissionTime(goal.time)} (${formatMissionTime(time)})`, achieved: healthy && time <= goal.time },
     ];
   }
   if (goal?.type === 'nofall') return [
@@ -227,6 +256,8 @@ export function starTargetsFor(goal) {
   if (goal.type === 'endless') return goal.marks.map((mark, i) => `${i + 1}★ Aguentar ${mark} s`);
   if (goal.type === 'defend') return ['1★ Defender o santuário', '2★ Santuário com 50%+ de vida', '3★ Santuário 50%+ e sem quedas'];
   if (goal.type === 'hunt') return ['1★ Abater o alvo', '2★ Sem quedas', '3★ Sem quedas e metade do tempo sobrando'];
+  if (goal.type === 'breach') return ['1★ Segurar a ponte', '2★ No máximo 2 passam', '3★ Ninguém passa'];
+  if (goal.type === 'duel') return ['1★ Vencer o duelo', '2★ 40%+ de vida', `3★ 40%+ de vida em até ${formatMissionTime(goal.time)}`];
   return ['1★ Concluir a missão', '2★ Sem quedas', '3★ Sem quedas e 50%+ de vida'];
 }
 
@@ -257,7 +288,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
       </span>
     </div>
     <div class="camp-body">
-      <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 50 91 C 43 89, 40 86, 44 82 C 48 78, 54 75, 56 72 C 53 68, 45 65, 36 65 C 42 64, 50 59, 55 56 C 61 53, 67 45, 72 40 C 68 43, 62 45, 58 44 C 50 42, 39 39, 30 39 C 36 35, 48 29, 62 31 C 72 33, 81 44, 86 57 C 82 45, 70 36, 60 31 C 55 27, 50 22, 47 20 C 54 15, 62 10, 67 9" /></svg></div>
+      <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 50 91 C 43 89, 40 86, 44 82 C 48 78, 54 75, 56 72 C 53 68, 45 65, 36 65 C 42 64, 50 59, 55 56 C 61 53, 67 45, 72 40 C 68 43, 62 45, 58 44 C 50 42, 39 39, 30 39 C 36 35, 48 29, 62 31 C 72 33, 81 44, 86 57 C 82 45, 70 36, 60 31 C 55 27, 50 22, 47 20 C 54 15, 62 10, 67 9 C 73 9, 79 14, 82 20 C 87 16, 89 11, 90 7" /></svg></div>
       <aside class="camp-info" role="region" aria-label="Detalhes da missão selecionada"></aside>
     </div>`;
   const map = root.querySelector('.camp-map'), info = root.querySelector('.camp-info');
@@ -268,7 +299,8 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
   announcement.setAttribute('aria-atomic', 'true');
   root.appendChild(announcement);
   // Marcos seguem a estrada e as referências visuais da ilustração.
-  const spots = [[50, 91], [56, 72], [46, 68], [36, 65], [55, 56], [64, 48], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [58, 13], [67, 9]];
+  // Ponte em Chamas fica à beira do rio; o Duelo, na curva da estrada; o capítulo final passa do castelo, no topo.
+  const spots = [[50, 91], [56, 72], [46, 68], [68, 66], [36, 65], [55, 56], [42, 50], [64, 48], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [58, 13], [67, 9], [82, 20], [90, 7]];
   const nodes = MISSIONS.map((m, i) => {
     const b = document.createElement('button');
     const open = unlocked(i), stars = starsOf(m.id), medal = missionMedal(m.id);

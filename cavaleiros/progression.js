@@ -47,6 +47,8 @@ export const ACHIEVEMENTS = [
   { id: 'muralha', icon: '⛨', name: 'Muralha intacta', desc: 'Vença uma missão com 4 heróis sem nenhuma queda.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.partySize >= 4 && r.falls === 0 },
   { id: 'perfeito', icon: '★', name: 'Perfeccionista', desc: 'Ganhe 3 estrelas numa missão.', test: (s, r) => !!r && r.stars >= 3 },
   { id: 'constelacao', icon: '✶', name: 'Constelação', desc: 'Junte 30 estrelas na campanha.', goal: 30, count: (s) => s.counters.bestStars },
+  { id: 'alem-do-castelo', icon: '♔', name: 'Além do Castelo', desc: 'Vença o Trono de Ossos, a última missão.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.missionId === 'trono' },
+  { id: 'duelista', icon: '⚔', name: 'Duelista', desc: 'Vença o Duelo contra o Rei.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.missionId === 'duelo' },
   { id: 'jornada', icon: '♜', name: 'Até o castelo', desc: 'Vença a Jornada completa.', test: (s, r) => !!r && r.won && r.mode === 'journey' },
   { id: 'veterano', icon: '⚒', name: 'Veterano', desc: 'Vença a Jornada no Difícil ou no Pesadelo.', test: (s, r) => !!r && r.won && r.mode === 'journey' && (r.difficultyId === 'dificil' || r.difficultyId === 'pesadelo') },
   { id: 'elenco', icon: '♣', name: 'Elenco variado', desc: 'Jogue partidas com 10 heróis diferentes.', goal: 10, count: (s) => Object.values(s.heroes).filter((h) => h.games > 0).length },

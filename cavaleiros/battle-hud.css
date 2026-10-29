@@ -143,3 +143,5 @@
 #overlayNext { display: contents; }
 #overlay.results #overlayBtn { min-width: 0; margin: 0; padding: 10px 24px 12px; font-size: 18px; }
 #overlay .mission-next-btn { padding: 10px 26px 12px; font-size: 20px; background: linear-gradient(#ffe995, #f2b32a 55%, #c98a12); }
+/* esqueleto de elite (Cripta Sombria): contorno dourado na barra de vida */
+.hp.elite { outline: 2px solid #f2c94c; outline-offset: 1px; }

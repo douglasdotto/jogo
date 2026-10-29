@@ -84,6 +84,12 @@ function objectiveTip(mission) {
       ? 'O alvo marcado fugiu: prenda ou desacelere antes do tempo.'
       : 'O grupo caiu antes de abater o alvo marcado.';
   }
+  if (goal.type === 'breach') return number(mission.leaks) >= number(goal.leaks) ? 'Muitos cruzaram a ponte: derrube primeiro quem corre para ela.' : 'O grupo caiu antes de salvar a ponte: lute perto dela.';
+  if (goal.type === 'duel' && !mission.bossDown) return 'O chefe venceu o duelo: saia das áreas e guarde a ultimate.';
+  if (goal.type === 'elite') return `Caiu na onda de elite ${Math.max(1, number(mission.eliteWave))}/${number(goal.waves) || 3}: foque um alvo por vez.`;
+  if (goal.type === 'twin' && !mission.bossDown) {
+    return number(mission.bossesLeft) === 1 ? 'Faltou um chefe: guarde a ultimate para o segundo.' : 'Os dois chefes seguem de pé: derrube um de cada vez.';
+  }
   if (goal.type === 'endless') {
     const seconds = Math.floor(number(mission.endlessTime));
     return `A horda venceu após ${seconds} s; a 1ª estrela pede ${number(goal.marks?.[0]) || 60} s.`;
@@ -105,7 +111,11 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
           : mission.goal?.type === 'defend' ? 'Santuário de pé! '
             : mission.goal?.type === 'hunt' && mission.huntDown ? 'Alvo marcado abatido! '
               : mission.goal?.type === 'endless' ? `A horda foi contida por ${Math.floor(number(mission.endlessTime))} s! `
-                : '';
+                : mission.goal?.type === 'breach' ? 'Ponte salva! '
+                  : mission.goal?.type === 'duel' ? 'Duelo vencido! '
+                    : mission.goal?.type === 'elite' ? 'Cripta limpa! '
+                      : mission.goal?.type === 'twin' ? 'O trono caiu! '
+                        : '';
       if (mission.nextMission) {
         return stars < 3
           ? `${objective}Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada.`
