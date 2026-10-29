@@ -16,6 +16,7 @@ import * as audio from './audio.js';
 import { initTooltips, registerTooltip } from './tooltip.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
+import { disposeSkeletons } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
 import { vfxMesh, spriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
@@ -1289,7 +1290,16 @@ async function pumpPortraits() {
   if (portraitPumping) return;
   portraitPumping = true;
   try {
-    for (let cfg; (cfg = portraitUrgent.shift() || portraitQueue.shift());) {
+    for (;;) {
+      let cfg = portraitUrgent.shift();
+      // a fila de fundo espera a batalha pausar: cada retrato lê a imagem da GPU (trava o quadro);
+      // os pedidos urgentes (retratos que já estão na tela) seguem na hora
+      while (!cfg && portraitQueue.length && !game.paused && !document.body.classList.contains('no-battle')) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        cfg = portraitUrgent.shift();
+      }
+      cfg ||= portraitQueue.shift();
+      if (!cfg) break;
       if (cfg.portraitURLs.length === 3 || cfg.portraitFailed) continue;
       try { await renderPortrait(cfg); } catch (error) {
         cfg.portraitFailed = true;
@@ -1794,6 +1804,7 @@ class Unit {
     this.bar.remove();
     for (const m of this.mats) m.dispose();
     if (this.aura) this.aura.material.dispose();
+    disposeSkeletons(this.root);   // texturas de ossos da GPU (uma por malha animada)
     units.splice(units.indexOf(this), 1);
   }
 
@@ -6050,11 +6061,46 @@ function frameView() {
 }
 new ResizeObserver(frameView).observe($('skills'));
 
+// ?bench=1: medição de desempenho (bench.js) — monta uma jornada com 4 heróis sem passar pelos menus
+const benchApi = () => ({
+  renderer, scene, game, units, heroes, world, VARIANTS, frame, spawnSkeleton, withBattleAssets,
+  isLowQuality: () => lowQuality,
+  setupJourney(phase) {
+    clearTimeout(pick.timer);
+    pick.open = false;
+    $('pick').classList.add('hidden');
+    game.mission = null;
+    difficulty = DIFFICULTIES[1];
+    placeParty(phase);
+  },
+  addHero(cfg) {
+    const h = new Hero(cfg);
+    arrangeParty();
+    h.gainXp(XP_LEVELS[2]);
+    autoUpgrade();
+    h.pos.copy(h.post);
+  },
+  beginBattle() {
+    $('overlay').classList.add('hidden');
+    document.body.classList.remove('no-battle');
+    game.paused = false;
+    startPhase();
+  },
+  jumpToPhase(phase) {
+    while (skeletonsAlive().length) skeletonsAlive()[0].remove();
+    game.phase = phase;
+    game.guideS = world.anchorS(phase);
+    for (const h of heroes()) { h.setAnchor(game.guideS); h.pos.copy(h.post); }
+    startPhase();
+  },
+});
+
 try {
   await loadAssets();
   preparePortraits();
   startGame();
   frame();
+  if (new URLSearchParams(location.search).has('bench')) (await import('./bench.js')).runBench(benchApi()).catch((e) => console.error('bench:', e));
 } catch (error) {
   console.error('Falha ao iniciar o jogo:', error);
   $('overlayText').textContent = 'Não foi possível carregar o jogo. Verifique sua conexão e tente novamente.';

@@ -89,6 +89,7 @@ vm.runInContext(upgradeBranches.replaceAll('export ',''),context);
 vm.runInContext(battleReport.replaceAll('export ',''),context);
 vm.runInContext(monsters.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
 vm.runInContext(progression.replaceAll('export ',''),context);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'..','scene-perf.js'),'utf8').replaceAll('export ',''),context);   // disposeSkeletons
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
