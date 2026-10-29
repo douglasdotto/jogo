@@ -16,6 +16,7 @@ const synergies = fs.readFileSync(path.join(dir, 'synergies.js'), 'utf8');
 const upgradeBranches = fs.readFileSync(path.join(dir, 'upgrade-branches.js'), 'utf8');
 const battleReport = fs.readFileSync(path.join(dir, 'battle-report.js'), 'utf8');
 const monsters = fs.readFileSync(path.join(dir, 'monsters.js'), 'utf8');
+const progression = fs.readFileSync(path.join(dir, 'progression.js'), 'utf8');
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
   set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -77,6 +78,7 @@ vm.runInContext(synergies.replaceAll('export ', ''), context);
 vm.runInContext(upgradeBranches.replaceAll('export ', ''), context);
 vm.runInContext(battleReport.replaceAll('export ', ''), context);
 vm.runInContext(monsters.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
+vm.runInContext(progression.replaceAll('export ', ''), context);   // sem localStorage: progressão só na memória, zerada
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
 vm.runInContext(part(source, 'let skillKey', 'function pressSkill'), context);   // glifos das habilidades usados na ficha da escolha
@@ -85,7 +87,10 @@ vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), cont
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts,
-  DIFFICULTIES, Unit, setDifficulty: (d) => { difficulty = d; } })`, context);
+  DIFFICULTIES, Unit, progress, setDifficulty: (d) => { difficulty = d; } })`, context);
+// calibração sem meta-progressão: nada salvo antes, nada ganho durante (bônus de maestria/oficina mudariam os números)
+const progressAtStart = JSON.stringify(t.progress.snapshot());
+if (progressAtStart !== JSON.stringify(vm.runInContext('freshProgress()', context))) throw new Error('A simulação precisa começar com a progressão zerada');
 for (const v of vm.runInContext('VARIANTS', context)) v.built = asset(), v.portraits = ['', '', ''];
 
 function play(diff, profile) {
@@ -163,3 +168,4 @@ console.log('Por herói (partidas em que estava no grupo): dano médio · dano p
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
 for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
   console.log(`  ${id.padEnd(10)} ${String(Math.round(mean(list, 0))).padStart(6)} · ${mean(list, 1).toFixed(1).padStart(5)}/s (${list.length})`);
+if (JSON.stringify(t.progress.snapshot()) !== progressAtStart) throw new Error('A simulação não pode acumular progressão entre partidas');

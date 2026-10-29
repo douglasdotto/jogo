@@ -15,6 +15,7 @@ const synergies = fs.readFileSync(path.join(dir, 'synergies.js'), 'utf8');
 const upgradeBranches = fs.readFileSync(path.join(dir, 'upgrade-branches.js'), 'utf8');
 const battleReport = fs.readFileSync(path.join(dir, 'battle-report.js'), 'utf8');
 const monsters = fs.readFileSync(path.join(dir, 'monsters.js'), 'utf8');
+const progression = fs.readFileSync(path.join(dir, 'progression.js'), 'utf8');
 class Vector3 {
   constructor(x=0,y=0,z=0) { Object.assign(this,{x,y,z}); }
   set(x,y,z) { Object.assign(this,{x,y,z}); return this; }
@@ -87,6 +88,7 @@ vm.runInContext(synergies.replaceAll('export ',''),context);
 vm.runInContext(upgradeBranches.replaceAll('export ',''),context);
 vm.runInContext(battleReport.replaceAll('export ',''),context);
 vm.runInContext(monsters.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
+vm.runInContext(progression.replaceAll('export ',''),context);
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
@@ -324,7 +326,7 @@ test('contexto tático reutiliza seus arrays sem carregar alvos removidos',()=>{
 test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
   assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'mode');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
-  assert.equal(t.pick.cards.length,2);
+  assert.equal(t.pick.cards.length,3);
   let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
   t.confirmPick(1);next();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
   t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'Difícil');
@@ -1103,6 +1105,84 @@ test('com a onda longe, o grupo avança ao encontro dela até o limite da fase',
   t.game.guideS=60;const back=foe('Minion',0,-50);t.pressForward(1,[far,back]);assert.equal(t.game.guideS,60,'inimigo atrás segura o grupo');
   t.game.guideS=60;back.dead=true;const near=foe('Minion',0,-64);t.pressForward(1,[near]);assert.equal(t.game.guideS,60,'inimigo perto: luta no posto');
   t.game.guideS=0;clear();
+});
+// ---------- progressão entre partidas (ouro, maestria, oficina, conquistas) ----------
+const prog=vm.runInContext('progress',context);
+const withLiveGame=fn=>{   // partida "de verdade": sem ?tudo=1, storage restaurado no fim
+  const previousSummary=context.summaryHTML,previousLocation=context.location,previousStorage={...context.localStorage.data};
+  try{context.summaryHTML=()=>'';context.location={search:''};fn();}
+  finally{context.summaryHTML=previousSummary;context.location=previousLocation;context.localStorage.data=previousStorage;clear();}
+};
+test('progressão: ultimates usadas entram na contagem da partida',()=>{
+  clear();t.game.ultimates=0;const h=new t.Hero(cfg('champion'));h.pos.set(0,0,0);h.skillTimers[2]=0;h.skillTimers[1]=0;
+  const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,3);e.hp=e.maxHp=1000;
+  assert.equal(h.useSkill(e,false,true,2),true,'lança a ultimate');assert.equal(t.game.ultimates,1,'ultimate: '+t.game.ultimates);
+  h.busy=0;h.useSkill(e,false,true,1);assert.equal(t.game.ultimates,1,'técnica não conta como ultimate');
+  clear();
+});
+test('progressão: fim de partida credita ouro, maestria e contadores e mostra a recompensa',()=>withLiveGame(()=>{
+  const before=prog.snapshot();const h=new t.Hero(cfg('ninja'));h.stats.abates=40;
+  Object.assign(t.game,{test:false,roster:[h],mission:null,start:1,phase:12,last:12,kills:150,relics:['keen-edge','oak-charm'],ultimates:3});
+  elements.get('overlayStars').innerHTML='';
+  t.endGame('Vitória',true);
+  const after=prog.snapshot();
+  const mult=vm.runInContext('DIFFICULTY_REWARD',context)[t.getDifficulty().id]*(1+0.08*prog.upgradeLevel('bounty'));
+  assert.equal(after.gold-before.gold,Math.round((150+12*6+60)*mult),'abates + fases + vitória da Jornada, pela dificuldade');
+  assert.equal(after.counters.ultimates-before.counters.ultimates,3);assert.equal(after.counters.relics-before.counters.relics,2);
+  assert.equal(after.counters.wins-before.counters.wins,1);
+  assert.ok(after.heroes.ninja.xp>(before.heroes.ninja?.xp||0));
+  assert.match(elements.get('overlayStars').innerHTML,/progress-reward/);assert.match(elements.get('overlayStars').innerHTML,/Ouro/);
+  assert.equal(JSON.parse(context.localStorage.data['cavaleiros-progresso']).version,2,'save versionado no localStorage');
+}));
+test('progressão: atalhos de teste não ganham nem aplicam progresso',()=>withLiveGame(()=>{
+  const before=JSON.stringify(prog.snapshot());const h=new t.Hero(cfg('ninja'));
+  Object.assign(t.game,{test:true,roster:[h],mission:null,start:1,phase:12,last:12,kills:150,relics:[],ultimates:3});
+  elements.get('overlayStars').innerHTML='';
+  t.endGame('Vitória',true);
+  assert.equal(JSON.stringify(prog.snapshot()),before);assert.doesNotMatch(elements.get('overlayStars').innerHTML,/progress-reward/);
+}));
+test('progressão: maestria dá bônus pequeno e aura só fora do modo de teste',()=>withLiveGame(()=>{
+  for(let i=0;i<25&&prog.mastery('ninja').level<5;i++)prog.recordMatch({mode:'mission',won:true,difficultyId:'normal',kills:0,phasesCleared:2,heroes:[{id:'ninja',kills:60}]});
+  assert.equal(prog.mastery('ninja').level,5);
+  const base=cfg('ninja'),bonus=prog.heroBonus('ninja');
+  t.game.test=true;const plainHero=new t.Hero(base);assert.equal(plainHero.maxHp,base.hp);assert.equal(plainHero.dmg,base.dmg);assert.equal(plainHero.masteryAura,undefined);
+  t.game.test=false;const master=new t.Hero(base);
+  assert.equal(master.maxHp,Math.round(base.hp*(1+bonus.hp)));assert.equal(master.hp,master.maxHp);
+  assert.ok(Math.abs(master.dmg/base.dmg-1.04)<1e-9,'+4% de dano na maestria máxima');
+  assert.ok(master.maxHp/base.hp<=1.11,'vida extra somada fica perto de 10%');assert.ok(master.masteryAura,'aura dourada na maestria 5');
+}));
+test('progressão: ficha e cartão da escolha mostram a maestria com discrição',()=>{
+  clear();t.showPick('Escolha','teste');const i=idx('ninja');
+  assert.match(t.pick.cards[i].innerHTML,/mastery-badge[^>]*>✦5</);assert.ok(t.pick.cards[i].classList.contains('mastery-5'));
+  t.selectCard(i);assert.match(t.pick.info.innerHTML,/Maestria 5/);assert.match(t.pick.info.innerHTML,/máxima/);
+  const fresh=t.pick.options.findIndex(v=>prog.mastery(v.id).level===1);
+  assert.doesNotMatch(t.pick.cards[fresh].innerHTML,/mastery-badge/);t.selectCard(fresh);assert.match(t.pick.info.innerHTML,/Maestria 1/);
+  t.pick.open=false;clear();
+});
+test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do teste',()=>withLiveGame(()=>{
+  prog.recordMatch({mode:'journey',won:false,difficultyId:'normal',kills:2000,phasesCleared:0,heroes:[]});
+  if(prog.upgradeLevel('relic-choice')<1)assert.equal(prog.buy('relic-choice').ok,true);
+  if(prog.upgradeLevel('reroll')<1)assert.equal(prog.buy('reroll').ok,true);
+  t.game.mission=mission('fazendas');vm.runInContext('placeParty(5)',context);t.game.mission=mission('fazendas');Object.assign(t.game,{phase:5,last:6});
+  assert.equal(t.game.test,false);assert.equal(t.game.rerolls,prog.rerolls());
+  const list=elements.get('pickList');list.children.length=0;
+  context.showRelicPick();assert.equal(t.pick.options.length,4);assert.equal(t.pick.cards.length,4);
+  const reroll=list.children.find(c=>c.className==='relic-reroll');assert.ok(reroll,'botão de trocar relíquias');
+  const rerolls=t.game.rerolls;list.children.length=0;reroll.onclick();
+  assert.equal(t.game.rerolls,rerolls-1);assert.equal(t.pick.options.length,4);
+  if(!t.game.rerolls)assert.ok(!list.children.some(c=>c.className==='relic-reroll'),'sem trocas, sem botão');
+  t.game.test=true;t.game.rerolls=0;context.showRelicPick();assert.equal(t.pick.options.length,3,'modo de teste mantém 3 opções');
+  t.pick.open=false;
+}));
+test('progressão: menu leva ao acampamento e Esc volta',()=>{
+  clear();t.showMenu();assert.equal(t.pick.cards.length,3);
+  assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/conquistas/);
+  let next;context.setTimeout=(fn,ms)=>{if(ms===450)next=fn};
+  t.confirmPick(2);next();context.setTimeout=noop;
+  const camp=elements.get('camp');assert.equal(camp.classList.contains('hidden'),false);assert.equal(t.pick.open,false);
+  assert.match(camp.innerHTML,/Oficina/);assert.match(camp.innerHTML,/Treino de vigor/);assert.match(camp.innerHTML,/Conquistas \d+\/1\d/);
+  t.showMenu();assert.equal(camp.classList.contains('hidden'),true);
+  t.pick.open=false;clear();
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}
