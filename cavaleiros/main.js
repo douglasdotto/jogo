@@ -108,9 +108,9 @@ const DIFFICULTIES = [
   { id: 'facil', name: 'Fácil', icon: '❀', desc: 'Um passeio pelo reino.', color: ['#cdf0b4', '#6aa84f'],
     hp: 0.85, dmg: 0.8, count: 0.9, interval: 1.15, boss: 0.8, heal: 0.5, revive: 0.5, reviveDelay: 0, behind: 0.15, behindFrom: 5, shooters: 0 },
   { id: 'normal', name: 'Normal', icon: '⚔︎', desc: 'Os esqueletos vêm com tudo.', color: ['#bfe0ff', '#5a8fd0'],
-    hp: 1.08, dmg: 1.05, count: 1.1, interval: 0.95, boss: 1, heal: 0.4, revive: 0.35, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.06 },
+    hp: 1.3, dmg: 1.22, count: 1.28, interval: 0.88, boss: 1.1, heal: 0.3, revive: 0.35, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.06 },
   { id: 'dificil', name: 'Difícil', icon: '♜', desc: 'Escolha bem cada herói.', color: ['#ffd29e', '#d17a2a'],
-    hp: 1.25, dmg: 1.2, count: 1.25, interval: 0.9, boss: 1.15, heal: 0.25, revive: 0.3, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.1 },
+    hp: 1.4, dmg: 1.3, count: 1.35, interval: 0.85, boss: 1.15, heal: 0.22, revive: 0.3, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.1 },
   { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
     hp: 1.4, dmg: 1.3, count: 1.4, interval: 0.75, boss: 1.15, heal: 0.2, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
