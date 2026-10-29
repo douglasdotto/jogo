@@ -66,23 +66,6 @@ test('oficina: custo crescente, teto e ouro insuficiente', () => {
   for (const u of P.UPGRADES) for (let k = 1; k < u.costs.length; k++) assert.ok(u.costs[k] > u.costs[k - 1], `${u.id}: custo cresce`);
 });
 
-test('oficina: Milícia tem 2 níveis e traz 1 e depois 2 aldeões armados', () => {
-  const s = storage({ [P.PROGRESS_KEY]: JSON.stringify({ version: 2, gold: 700 }) }), p = P.createProgression(s);
-  const militia = P.UPGRADES.find((u) => u.id === 'militia');
-  same(militia.costs, [200, 420]);
-  assert.match(militia.desc(1), /1 aldeão armado luta/);
-  assert.match(militia.desc(2), /2 aldeões armados lutam/);
-  assert.equal(p.militia(), 0, 'sem a melhoria, ninguém extra');
-  assert.equal(p.buy('militia').ok, true);
-  assert.equal(p.militia(), 1);
-  assert.equal(p.buy('militia').ok, true);
-  assert.equal(p.militia(), 2);
-  assert.equal(p.gold, 700 - 620);
-  same(p.buy('militia'), { ok: false, reason: 'max' });
-  assert.equal(P.createProgression(s).militia(), 2, 'fica salva');
-  assert.equal(P.createProgression(storage({ [P.PROGRESS_KEY]: JSON.stringify({ version: 2, upgrades: { militia: 9 } }) })).militia(), 2, 'teto de 2');
-});
-
 test('maestria: níveis 1–5, XP por partida e bônus pequenos', () => {
   assert.deepEqual([0, 59, 60, 179, 180, 400, 799, 800, 99999].map(P.masteryLevel), [1, 1, 2, 2, 3, 4, 4, 5, 5]);
   const p = P.createProgression(null);

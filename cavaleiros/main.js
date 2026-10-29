@@ -765,7 +765,6 @@ function confirmPick(i) {
     }
     const begin = () => {
       if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
-      else if (!game.mission && !game.militia) musterMilitia();   // Jornada: a milícia sai junto com o primeiro herói
       document.body.classList.remove('no-battle');
       game.paused = false;
       audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
@@ -4796,7 +4795,6 @@ function startMission() {
 
 function startPhase() {
   game.state = 'fight';
-  if (!game.mission && game.phase > MILITIA_LAST_PHASE) dismissLocalMilitia();
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
@@ -4889,14 +4887,13 @@ class Villager extends Unit {
   }
 }
 
-// milícia: aldeões armados (o bárbaro sem as armas dele, em cores de terra) que seguem atrás do grupo e brigam com quem chega perto.
+// milícia: aldeões armados pequenos (o bárbaro sem as armas dele, em azul) que guardam quem a missão manda defender
+// (o aldeão da escolta, o santuário). Ficam num anel em volta do protegido e só brigam com quem chega perto dele.
 // Fracos de propósito, sem XP nem evolução; quem cai não volta na partida e não conta como queda de herói.
-// Os da vila entram nas missões da vila e dos campos (mission.militia) e, na Jornada, até a fase MILITIA_LAST_PHASE;
-// os do acampamento (melhoria Milícia) acompanham qualquer partida.
-const MILITIA_LAST_PHASE = 4;   // depois dos campos, a milícia da vila volta para casa
-const MILITIA_REACH = 6;        // quão longe do posto o aldeão vai brigar
+const MILITIA_REACH = 4;        // quão perto do protegido o inimigo precisa estar para a guarda atacar
+const MILITIA_RING = 1.9;       // raio do anel de guarda
 const MILITIA_WEAPONS = ['forcado', 'tocha', 'machadinha', 'clava'];
-const MILITIA_TINTS = [0x8a6a44, 0x6f7a45, 0x9a5a3a, 0x7d6b58];
+const MILITIA_TINTS = [0x7fb6e8, 0x6aa3d8, 0x8cc4f0, 0x5e93c8];   // azuis claros: ajudantes, não heróis
 let militiaParts = null;
 function militiaWeapon(kind) {
   militiaParts ||= { wood: new THREE.MeshLambertMaterial({ color: 0x7a5230 }), iron: new THREE.MeshLambertMaterial({ color: 0x9aa0a6 }),
@@ -4920,24 +4917,22 @@ function militiaWeapon(kind) {
 }
 
 class Militia extends Unit {
-  constructor(slot, local = true) {
-    super(assets.Barbarian, { hp: 90, dmg: 8, range: 1.5, speed: 3.1, cooldown: 1.3 }, 'ally');
+  constructor(slot) {
+    super(assets.Barbarian, { hp: 50, dmg: 4, range: 1.5, speed: 3.1, cooldown: 1.3 }, 'ally');
     this.militia = true;
-    this.local = local;   // da vila (fica para trás na Jornada) ou do acampamento
     this.slot = slot;
     this.cfg = { id: 'militia' };
     this.level = 1;
-    this.size = 0.88;
+    this.size = 0.7;
     this.weapon = MILITIA_WEAPONS[slot % MILITIA_WEAPONS.length];
     this.attackAnim = this.weapon === 'forcado' ? '2H_Melee_Attack_Stab' : '1H_Melee_Attack_Chop';
     if (this.weapon === 'forcado') this.range = 1.9;
     const tint = new THREE.Color(MILITIA_TINTS[slot % MILITIA_TINTS.length]);
     this.root.traverse((o) => { if (HEROES[1].weapons.includes(o.name)) o.visible = false; });
-    for (const m of this.mats) m.color?.lerp(tint, 0.55);
+    for (const m of this.mats) m.color?.lerp(tint, 0.7);
     this.root.getObjectByName('handslotr')?.add(militiaWeapon(this.weapon));
     this.bar.classList.add('ally', 'militia');
     this.post = new THREE.Vector3();
-    this.retreat = new THREE.Vector3();
     this.follow();
     this.pos.copy(this.post);
     this.popT = 0;
@@ -4945,11 +4940,12 @@ class Militia extends Unit {
     this.loop('Idle');
   }
 
-  // posto atrás da formação, abrindo para os lados conforme o número do aldeão
+  // posto no anel em volta do protegido; sem protegido, fica onde está
   follow() {
-    const fwd = world.tangentAt(game.guideS), side = world.sideOf(fwd), row = Math.floor(this.slot / 2);
-    this.post.copy(world.pointAt(game.guideS)).addScaledVector(fwd, -2.6 - row * 0.6).addScaledVector(side, (this.slot % 2 ? 1 : -1) * (1.3 + row * 1.5));
-    return fwd;
+    const ward = guardedObjective();
+    if (!ward) return this.post.copy(this.pos);
+    const a = (this.slot / Math.max(1, game.militia?.size || 1)) * Math.PI * 2;
+    return this.post.set(ward.pos.x + Math.cos(a) * MILITIA_RING, ward.pos.y, ward.pos.z + Math.sin(a) * MILITIA_RING);
   }
 
   update(dt) {
@@ -4957,18 +4953,15 @@ class Militia extends Unit {
     this.updateCommon(dt);
     if (this.dead) { if ((this.deadTime += dt) > 2.5) this.remove(); return; }
     if (game.over || this.busy > 0) return;
-    const fwd = this.follow();
-    const wounded = this.hp < this.maxHp * 0.35;   // com pouca vida recua para trás dos heróis e não briga
+    this.follow();
+    const ward = guardedObjective();
     const foes = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
-    const target = !wounded && game.state === 'fight' ? nearest(this.pos, foes) : null;
-    if (target && tacticalDistance(target.pos, this.post) <= MILITIA_REACH) {
+    const target = ward && game.state === 'fight' ? nearest(ward.pos, foes) : null;
+    if (target && tacticalDistance(target.pos, ward.pos) <= MILITIA_REACH) {
       if (target.pos.distanceTo(this.pos) > this.range) this.moveTo(target.pos, dt);
       else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
-    } else {
-      const home = wounded ? this.retreat.copy(this.post).addScaledVector(fwd, -3.5) : this.post;
-      if (this.pos.distanceTo(home) > 0.3) this.moveTo(home, dt);
-      else this.face(tmp.copy(home).addScaledVector(fwd, 10), dt);
-    }
+    } else if (this.pos.distanceTo(this.post) > 0.3) this.moveTo(this.post, dt);
+    else if (ward) this.face(tmp.copy(this.post).multiplyScalar(2).sub(ward.pos), dt);   // de costas para o protegido
     if (this.busy <= 0) this.locomote('Running_A', 'Walking_A', 'Idle');
   }
 
@@ -4985,32 +4978,27 @@ class Militia extends Unit {
 
 const militiaAlive = () => units.reduce((n, u) => n + (u.militia && !u.dead ? 1 : 0), 0);
 
-// a milícia entra com o grupo: os da vila (missão da vila/campos ou começo da Jornada) e os do acampamento
-function musterMilitia() {
-  const local = game.mission ? game.mission.militia || 0 : game.start <= MILITIA_LAST_PHASE ? 2 : 0;
-  const camp = game.test ? 0 : progress.militia();   // atalhos de teste não usam a oficina
-  const size = local + camp;
-  game.militia = { size, local, camp, damage: 0, kills: 0, fallen: 0 };
-  if (!size) return 0;
-  for (let k = 0; k < size; k++) new Militia(k, k < local);
-  const text = `A milícia chegou! ${size} ${size === 1 ? 'aldeão armado' : 'aldeões armados'}`;
-  if (!game.mission) showBanner(text, 2.5);
-  else {   // na missão a faixa já mostra o nome: o aviso entra embaixo
-    const note = document.createElement('small');
-    note.className = 'banner-story';
-    note.textContent = text;
-    $('banner').appendChild(note);
-  }
-  return size;
+// quem a guarda protege: o aldeão da escolta ou o santuário
+function guardedObjective() {
+  const v = game.villager;
+  if (v && !v.dead && !v.captive) return v;
+  return game.shrine && !game.shrine.dead ? game.shrine : null;
 }
 
-// Jornada: passados os campos, a milícia da vila volta para casa (a do acampamento segue)
-function dismissLocalMilitia() {
-  for (const u of [...units]) if (u.militia && u.local && !u.dead) {
-    popText(u.pos, 'De volta à vila', 'heal');
-    poof(u.pos, 0.8);
-    u.remove();
+// a guarda só existe nas missões em que há alguém para defender (mission.militia)
+function musterMilitia() {
+  const size = game.mission && guardedObjective() ? game.mission.militia || 0 : 0;
+  game.militia = { size, damage: 0, kills: 0, fallen: 0 };
+  if (!size) return 0;
+  for (let k = 0; k < size; k++) {
+    const m = new Militia(k);
+    m.pos.copy(m.follow());
   }
+  const note = document.createElement('small');   // a faixa já mostra o nome da missão: o aviso entra embaixo
+  note.className = 'banner-story';
+  note.textContent = `${size} aldeões de guarda`;
+  $('banner').appendChild(note);
+  return size;
 }
 
 // totem de ossos: pilha de ossos com caveira e brilho roxo; tem vida, não anda e faz surgir esqueletos por perto
