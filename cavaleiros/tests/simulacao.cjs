@@ -79,6 +79,7 @@ vm.runInContext(battleReport.replaceAll('export ', ''), context);
 vm.runInContext(monsters.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
+vm.runInContext(part(source, 'let skillKey', 'function pressSkill'), context);   // glifos das habilidades usados na ficha da escolha
 vm.runInContext(part(source, 'const units =', '// projéteis e áreas'), context);
 vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), context);
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);

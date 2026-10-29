@@ -464,11 +464,11 @@
   #overlay.results #overlayStars .star-best, #overlay.results #overlayStars .unlock { grid-column: auto; }
 }
 
-/* Seletor de heróis: catálogo por classe, comparação rápida e ficha objetiva. */
+/* Seletor de heróis: abas por classe, cartões grandes, ficha legível e equipe sempre visível. */
 #pick:has(#pickList.grid) {
   justify-content: flex-start;
-  gap: 7px;
-  padding: clamp(16px, 2.2vh, 24px) clamp(24px, 3vw, 52px) 12px;
+  gap: 8px;
+  padding: clamp(14px, 2.2vh, 24px) clamp(20px, 2.6vw, 44px) 10px;
   overflow: hidden;
   background:
     radial-gradient(ellipse at 18% 0%, rgba(81, 143, 218, .18), transparent 44%),
@@ -479,7 +479,7 @@
   margin: 0;
   padding: 0;
   color: #f5f8ff;
-  font: 600 clamp(28px, 2.5vw, 36px)/1.05 'Fredoka', sans-serif;
+  font: 600 clamp(30px, 2.7vw, 38px)/1.05 'Fredoka', sans-serif;
   letter-spacing: -.3px;
   -webkit-text-stroke: 0;
   text-shadow: none;
@@ -489,93 +489,105 @@
 }
 #pick:has(#pickList.grid) #pickSub {
   margin: 0;
-  color: #aebfd5;
-  font: 500 13px/1.25 'Fredoka', sans-serif;
+  color: #c3d2e5;
+  font: 500 16px/1.25 'Fredoka', sans-serif;
   -webkit-text-stroke: 0;
   text-shadow: none;
 }
 #pick:has(#pickList.grid) #pickList.grid {
-  width: min(1480px, calc(100vw - 64px));
-  height: min(780px, calc(100dvh - 160px));
+  width: min(1560px, calc(100vw - 48px));
+  height: min(900px, calc(100dvh - 150px));
   min-height: 0;
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(360px, .82fr);
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 34vw, 500px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "tabs tabs" "cards info" "team info";
   align-items: stretch;
-  gap: 12px;
+  gap: 12px 14px;
   padding: 0;
   overflow: hidden;
   perspective: none;
 }
+
+/* abas de classe: ícone + nome inteiro + quantidade, nunca truncadas */
 #pick:has(#pickList.grid) .pick-filters {
-  grid-column: 1;
-  grid-row: 1;
+  grid-area: tabs;
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 0;
   border: 0;
   background: none;
 }
 #pick:has(#pickList.grid) .pick-filters .pick-filter {
+  flex: 1 1 auto;
   min-width: 0;
-  height: 40px;
-  padding: 0 9px;
+  min-height: 46px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  overflow: hidden;
+  justify-content: center;
+  gap: 7px;
   appearance: none;
-  border: 1px solid rgba(184, 207, 237, .14);
-  border-bottom: 2px solid color-mix(in srgb, var(--class-color) 68%, transparent);
-  border-radius: 10px;
-  color: #becde0;
-  background: rgba(26, 42, 65, .76);
+  border: 1px solid rgba(184, 207, 237, .16);
+  border-bottom: 3px solid color-mix(in srgb, var(--class-color) 70%, transparent);
+  border-radius: 11px;
+  color: #d3dfee;
+  background: rgba(26, 42, 65, .8);
   box-shadow: none;
-  font: 500 12px/1 'Fredoka', sans-serif;
+  font: 600 16px/1.1 'Fredoka', sans-serif;
+  text-align: left;
   text-shadow: none;
   -webkit-text-stroke: 0;
   cursor: pointer;
   transition: color .15s, background .15s, border-color .15s;
 }
-#pick:has(#pickList.grid) .pick-filter:hover { color: #fff; background: rgba(54, 75, 106, .86); }
+#pick:has(#pickList.grid) .pick-filter i {
+  flex: 0 0 auto;
+  width: 22px;
+  color: color-mix(in srgb, var(--class-color) 75%, white);
+  font: 400 19px/1 'Fredoka', sans-serif;
+  font-style: normal;
+  text-align: center;
+}
+#pick:has(#pickList.grid) .pick-filter span { flex: 0 1 auto; white-space: nowrap; }
+#pick:has(#pickList.grid) .pick-filter small {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 3px 5px;
+  box-sizing: border-box;
+  border-radius: 99px;
+  color: #c3d2e5;
+  background: rgba(5, 13, 25, .45);
+  text-align: center;
+  font: 600 13px/1 'Fredoka', sans-serif;
+}
+#pick:has(#pickList.grid) .pick-filter:hover { color: #fff; background: rgba(54, 75, 106, .9); }
 #pick:has(#pickList.grid) .pick-filter.active {
   color: #fff;
   border-color: color-mix(in srgb, var(--class-color) 72%, white);
-  background: color-mix(in srgb, var(--class-color) 22%, #1b2b45);
+  background: color-mix(in srgb, var(--class-color) 24%, #1b2b45);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.1);
 }
-#pick:has(#pickList.grid) .pick-filter span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#pick:has(#pickList.grid) .pick-filter small {
-  flex: 0 0 auto;
-  min-width: 17px;
-  padding: 3px 4px;
-  border-radius: 99px;
-  color: #adbed3;
-  background: rgba(5, 13, 25, .4);
-  text-align: center;
-  font: 600 9px/1 'Fredoka', sans-serif;
-}
-#pick:has(#pickList.grid) .pick-filter.active small { color: #f7e5a8; }
+#pick:has(#pickList.grid) .pick-filter.active small { color: #ffe9a8; }
 #pick:has(#pickList.grid) .pick-filter:focus-visible,
 #pick:has(#pickList.grid) .card:focus-visible,
 #pick:has(#pickList.grid) .hero-select-btn:focus-visible,
+#pick:has(#pickList.grid) .skill-detail:focus-visible,
 #pick:has(#pickList.grid) .hero-more summary:focus-visible {
-  outline: 2px solid #ffe08a;
+  outline: 3px solid #ffe08a;
   outline-offset: 3px;
 }
+
+/* cartões: 2×2 grande que preenche a área (uma fileira só em telas largas) */
 #pick:has(#pickList.grid) .pick-rows {
-  grid-column: 1;
-  grid-row: 2;
+  grid-area: cards;
   min-width: 0;
   min-height: 0;
-  padding: 16px;
+  padding: 14px;
   display: flex;
-  align-items: stretch;
-  justify-content: center;
   overflow: auto;
   border: 1px solid rgba(174, 202, 237, .13);
   border-radius: 15px;
@@ -584,30 +596,30 @@
 #pick:has(#pickList.grid) .pick-row {
   width: 100%;
   min-width: 0;
-  display: flex;
-  align-content: center;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
 }
 #pick:has(#pickList.grid) .pick-row[hidden] { display: none !important; }
+#pick:has(#pickList.grid) .pick-row:has(> .card:only-child) { grid-template-columns: minmax(0, 420px); justify-content: center; }
+#pick:has(#pickList.grid) .pick-row > .card:nth-child(3):last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 7px); }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card {
   position: relative;
-  flex: 0 1 188px;
   width: auto;
-  min-width: 145px;
-  max-width: 205px;
-  height: clamp(230px, 33vh, 310px);
+  min-width: 0;
+  max-width: none;
+  height: auto;
   min-height: 0;
-  padding: 8px;
+  padding: 10px;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  align-content: stretch;
-  gap: 7px;
+  gap: 8px;
   box-sizing: border-box;
-  border: 1px solid rgba(195, 214, 240, .18);
-  border-radius: 14px;
+  border: 1px solid rgba(195, 214, 240, .2);
+  border-radius: 16px;
   color: #f4f7fc;
   background: linear-gradient(155deg, color-mix(in srgb, var(--c) 18%, #263c5c), #111f36 82%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 5px 14px rgba(0,0,0,.2);
@@ -625,7 +637,7 @@
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--c) 36%, #eef5ff), color-mix(in srgb, var(--cd) 55%, #15243a));
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.13);
   clip-path: none;
@@ -633,7 +645,7 @@
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .portrait img {
   width: 100%;
   height: 100%;
-  border-radius: 10px;
+  border-radius: 12px;
   object-fit: contain;
   object-position: center bottom;
   clip-path: none;
@@ -643,11 +655,10 @@
 }
 #pick:has(#pickList.grid) .pick-card-copy {
   min-width: 0;
-  padding: 7px 4px 2px;
+  padding: 4px 6px 2px;
   display: grid;
-  gap: 3px;
+  gap: 4px;
   text-align: center;
-  border-top: 1px solid rgba(193, 214, 242, .12);
 }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .ribbon {
   min-width: 0;
@@ -655,9 +666,9 @@
   margin: 0;
   padding: 0;
   overflow: hidden;
-  color: #f4f7fc;
+  color: #fff;
   background: none;
-  font: 600 15px/1.1 'Fredoka', sans-serif;
+  font: 600 clamp(19px, 1.6vw, 23px)/1.1 'Fredoka', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
   -webkit-text-stroke: 0;
@@ -665,80 +676,172 @@
   clip-path: none;
 }
 #pick:has(#pickList.grid) .pick-card-copy .pick-card-role {
-  overflow: hidden;
-  color: color-mix(in srgb, var(--c) 72%, white);
-  font: 600 10px/1.1 'Fredoka', sans-serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: color-mix(in srgb, var(--c) 65%, white);
+  font: 600 15px/1.2 'Fredoka', sans-serif;
 }
 #pick:has(#pickList.grid) .pick-card-copy .pick-card-skill {
-  overflow: hidden;
-  color: #aebfd5;
-  font: 500 10px/1.1 'Fredoka', sans-serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #c6d4e6;
+  font: 500 14px/1.25 'Fredoka', sans-serif;
 }
+#pick:has(#pickList.grid) .pick-card-copy .pick-card-skill i { color: #f2d27a; font-style: normal; }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card:hover,
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card.sel {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--c) 78%, white);
-  background: linear-gradient(155deg, color-mix(in srgb, var(--c) 26%, #273d5c), #14233b 82%);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 42%, white), 0 10px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.16);
+  background: linear-gradient(155deg, color-mix(in srgb, var(--c) 28%, #273d5c), #14233b 82%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 45%, white), 0 10px 22px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.16);
 }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card:hover .portrait img,
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card.sel .portrait img { transform: translateY(-2px) scale(1.03); }
-#pick:has(#pickList.grid) #pickList.grid .pick-row .card.owned { opacity: .45; filter: saturate(.35); }
+#pick:has(#pickList.grid) #pickList.grid .pick-row .card.owned { opacity: .5; filter: saturate(.35); cursor: not-allowed; }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card.owned:hover { transform: none; border-color: rgba(191,211,239,.18); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 5px 12px rgba(0,0,0,.2); }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card.locked { cursor: default; }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .seal,
-#pick:has(#pickList.grid) #pickList.grid .pick-row .card .lock {
+#pick:has(#pickList.grid) #pickList.grid .pick-row .card .lock,
+#pick:has(#pickList.grid) .pick-suggestion {
   position: absolute;
   z-index: 4;
-  top: 10px;
-  right: 10px;
-  max-width: calc(100% - 20px);
-  padding: 4px 7px;
+  top: 16px;
+  right: 16px;
+  max-width: calc(100% - 32px);
+  padding: 5px 10px;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,.22);
+  border: 1px solid rgba(255,255,255,.24);
   border-radius: 99px;
   color: #f4f7fc;
-  background: rgba(8, 18, 32, .84);
+  background: rgba(8, 18, 32, .88);
   box-shadow: none;
-  font: 600 9px/1 'Fredoka', sans-serif;
+  font: 600 13px/1.1 'Fredoka', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
   -webkit-text-stroke: 0;
 }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .lock { color: #ffe27a; }
-#pick:has(#pickList.grid) .pick-suggestion {
-  position: absolute;
-  z-index: 4;
-  top: 10px;
-  left: 10px;
-  padding: 4px 7px;
-  border: 1px solid rgba(255, 229, 154, .48);
-  border-radius: 99px;
-  color: #ffe6a0;
-  background: rgba(8, 18, 32, .84);
-  font: 600 9px/1 'Fredoka', sans-serif;
+#pick:has(#pickList.grid) .pick-suggestion { right: auto; left: 16px; color: #ffe6a0; border-color: rgba(255, 229, 154, .5); }
+
+/* equipe: lugar fixo abaixo dos cartões, com mini-retratos e cobertura de papéis */
+#pick:has(#pickList.grid) .pick-team-bar {
+  grid-area: team;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(174, 202, 237, .15);
+  border-radius: 15px;
+  color: #e3ecf7;
+  background: linear-gradient(145deg, rgba(27, 44, 70, .9), rgba(13, 25, 44, .92));
 }
+#pick:has(#pickList.grid) .pick-team-bar .party-composition {
+  width: auto;
+  padding: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 18px;
+  border: 0;
+  background: none;
+}
+#pick:has(#pickList.grid) .pick-team-bar .party-composition header {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 4px 12px;
+  color: #f0d684;
+  font: 600 16px/1.2 'Fredoka', sans-serif;
+}
+#pick:has(#pickList.grid) .pick-team-count { color: #9fe0f4; font: 600 15px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-team-bar .party-objective {
+  display: inline;
+  padding: 2px 8px;
+  border-left: 3px solid #f0d684;
+  color: #dfe8f4;
+  font: 500 14px/1.3 'Fredoka', sans-serif;
+}
+#pick:has(#pickList.grid) .pick-team-bar .party-objective b { color: #f0d684; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members { margin: 0; display: flex; flex-wrap: nowrap; gap: 8px; align-items: flex-start; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members span {
+  position: relative;
+  width: 76px;
+  padding: 0;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  border-radius: 0;
+  color: #e9f0f9;
+  background: none;
+  font: 500 13px/1.15 'Fredoka', sans-serif;
+  text-align: center;
+}
+#pick:has(#pickList.grid) .pick-team-bar .party-members img,
+#pick:has(#pickList.grid) .pick-team-bar .party-members .empty i {
+  width: 58px;
+  height: 58px;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--c, #8aa3c4) 70%, white);
+  border-radius: 12px;
+  object-fit: contain;
+  background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--c, #8aa3c4) 46%, #fff), var(--cd, #2a3c58));
+}
+#pick:has(#pickList.grid) .pick-team-bar .party-members em { max-width: 100%; overflow: hidden; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members span.candidate { color: #ffeaa2; outline: 0; background: none; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members span.candidate img { border: 2px dashed #ffd96a; box-shadow: 0 0 0 3px rgba(255, 217, 106, .22); }
+#pick:has(#pickList.grid) .pick-team-bar .party-members small {
+  position: absolute;
+  top: -6px;
+  margin: 0;
+  padding: 1px 6px;
+  border-radius: 99px;
+  color: #2a1d05;
+  background: #ffd96a;
+  font: 600 13px/1.2 'Fredoka', sans-serif;
+  opacity: 1;
+}
+#pick:has(#pickList.grid) .pick-team-bar .party-members .empty { opacity: .8; color: #a9bbd1; }
+#pick:has(#pickList.grid) .pick-team-bar .party-members .empty i {
+  display: grid;
+  place-items: center;
+  border: 2px dashed rgba(169, 187, 209, .45);
+  background: rgba(7, 18, 34, .35);
+  color: #a9bbd1;
+  font: 500 26px/1 'Fredoka', sans-serif;
+  font-style: normal;
+}
+#pick:has(#pickList.grid) .pick-team-bar .pick-team-status { min-width: 0; padding: 0; display: grid; gap: 8px; align-content: start; border: 0; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles { display: flex; flex-wrap: wrap; gap: 6px; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  color: #b8c8dc;
+  background: rgba(0, 0, 0, .25);
+  font: 500 14px/1.2 'Fredoka', sans-serif;
+  opacity: .85;
+}
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span b { color: inherit; font-weight: 700; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span.covered { color: #fff0a6; background: rgba(255, 212, 74, .16); opacity: 1; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span.priority { outline: 1px dashed rgba(255, 212, 74, .7); opacity: 1; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span.priority.covered { outline-style: solid; }
+#pick:has(#pickList.grid) .pick-team-bar .pick-team-status p { margin: 0; color: #dbe6f3; font: 500 15px/1.3 'Fredoka', sans-serif; opacity: 1; }
+
+/* ficha do herói em foco */
 #pick:has(#pickList.grid) .pick-info {
-  grid-column: 2;
-  grid-row: 1 / 3;
+  grid-area: info;
+  width: auto;
   min-width: 0;
   min-height: 0;
   max-width: none;
   max-height: 100%;
-  padding: 14px;
+  padding: 16px 18px 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   align-items: start;
-  gap: 9px;
+  gap: 12px;
   overflow: auto;
   border: 1px solid rgba(190, 213, 243, .16);
   border-radius: 15px;
-  background: linear-gradient(155deg, rgba(34, 54, 84, .96), rgba(17, 31, 53, .98));
+  background: linear-gradient(155deg, rgba(34, 54, 84, .97), rgba(17, 31, 53, .98));
   box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.08);
   scrollbar-color: rgba(148, 174, 207, .5) transparent;
 }
@@ -746,38 +849,40 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 0 0 9px;
+  gap: 16px;
+  padding: 0 0 12px;
   border-bottom: 1px solid rgba(194, 216, 246, .14);
 }
 #pick:has(#pickList.grid) .pick-info .crest {
-  width: 68px;
-  height: 68px;
-  flex: 0 0 68px;
-  padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--c) 58%, white);
-  border-radius: 12px;
+  width: 116px;
+  height: 116px;
+  flex: 0 0 116px;
+  padding: 3px;
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--c) 58%, white);
+  border-radius: 16px;
   background: color-mix(in srgb, var(--c) 30%, #172941);
   box-shadow: 0 4px 12px rgba(0,0,0,.18);
+  clip-path: none;
 }
 #pick:has(#pickList.grid) .pick-info .crest img {
   width: 100%;
   height: 100%;
-  border-radius: 10px;
+  border-radius: 12px;
   object-fit: contain;
   background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--c) 46%, #fff), var(--cd));
 }
-#pick:has(#pickList.grid) .hero-profile-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-#pick:has(#pickList.grid) .hero-profile-copy small { margin: 0; color: #aebfd5; font: 500 10px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .hero-profile-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#pick:has(#pickList.grid) .hero-profile-copy small { margin: 0; color: #b8c8dc; font: 500 14px/1.2 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-info .ribbon {
   max-width: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
-  color: #f7f9fd;
+  color: #fff;
   background: none;
   border: 0;
-  font: 600 22px/1.05 'Fredoka', sans-serif;
+  font: 600 30px/1.05 'Fredoka', sans-serif;
   text-overflow: ellipsis;
   white-space: nowrap;
   -webkit-text-stroke: 0;
@@ -786,178 +891,278 @@
 }
 #pick:has(#pickList.grid) .hero-role-pill {
   max-width: 100%;
-  padding: 3px 7px;
-  overflow: hidden;
-  border: 1px solid rgba(188, 214, 246, .16);
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
   border-radius: 99px;
-  color: #dce9f8;
-  background: rgba(8, 19, 35, .42);
-  font: 600 9px/1.1 'Fredoka', sans-serif;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #eef4fc;
+  background: color-mix(in srgb, var(--c) 18%, rgba(8, 19, 35, .5));
+  font: 600 14px/1.2 'Fredoka', sans-serif;
 }
 #pick:has(#pickList.grid) .hero-overview { min-width: 0; }
-#pick:has(#pickList.grid) .hero-overview p { margin: 0; color: #c4d3e5; font: 400 11px/1.3 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .hero-overview p { margin: 0; color: #d3dfed; font: 400 15px/1.4 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-info .skill-list {
   width: 100%;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 5px;
+  gap: 8px;
   box-sizing: border-box;
   border: 0;
   background: none;
 }
-#pick:has(#pickList.grid) .pick-info .skill-list > header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 1px;
-}
-#pick:has(#pickList.grid) .pick-info .skill-list > header b { color: #e7d28f; font: 600 12px/1.2 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .pick-info .skill-list > header span { color: #96abc4; font: 500 9px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-info .skill-list > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+#pick:has(#pickList.grid) .pick-info .skill-list > header b { color: #f0d684; font: 600 17px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-info .skill-list > header span { color: #a9bbd1; font: 500 13px/1.2 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .pick-info .skill-detail {
+  --kind: #8cc4ff;
   min-width: 0;
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   align-items: center;
-  gap: 3px 7px;
-  padding: 6px 7px;
-  border: 1px solid rgba(177, 202, 233, .1);
-  border-radius: 8px;
-  background: rgba(7, 18, 34, .24);
-  font: 400 10px/1.3 'Fredoka', sans-serif;
+  gap: 2px 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(177, 202, 233, .14);
+  border-left: 3px solid var(--kind);
+  border-radius: 10px;
+  background: rgba(7, 18, 34, .3);
+  text-align: left;
+  cursor: help;
 }
-#pick:has(#pickList.grid) .pick-info .skill-kind {
+#pick:has(#pickList.grid) .pick-info .technique-detail { --kind: #7fdc9a; }
+#pick:has(#pickList.grid) .pick-info .ultimate-detail { --kind: #f4d88b; background: linear-gradient(100deg, rgba(131, 94, 38, .2), rgba(7, 18, 34, .3)); }
+#pick:has(#pickList.grid) .pick-info .skill-detail:hover { border-color: color-mix(in srgb, var(--kind) 55%, transparent); border-left-color: var(--kind); }
+#pick:has(#pickList.grid) .pick-info .skill-icon {
   grid-column: 1;
   grid-row: 1 / 3;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #fff8dc;
+  background: radial-gradient(circle at 40% 30%, color-mix(in srgb, var(--kind) 55%, #22344f), #14233a);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind) 60%, transparent);
+  font: 400 24px/1 'Fredoka', sans-serif;
+}
+#pick:has(#pickList.grid) .pick-info .skill-kind {
+  grid-column: 2;
+  grid-row: 1;
   justify-self: start;
-  padding: 3px 5px;
-  border: 1px solid rgba(172, 198, 231, .14);
-  border-radius: 5px;
-  color: #b9cce2;
-  background: rgba(5, 13, 25, .3);
-  font: 700 7px/1 'Fredoka', sans-serif;
-  letter-spacing: .25px;
+  padding: 0;
+  border: 0;
+  color: var(--kind);
+  background: none;
+  font: 700 13px/1.1 'Fredoka', sans-serif;
+  letter-spacing: .4px;
 }
-#pick:has(#pickList.grid) .pick-info .skill-detail strong { grid-column: 2; grid-row: 1; color: #eef4fc; font: 600 11px/1.15 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .pick-info .skill-detail .skill-copy { grid-column: 2 / 4; grid-row: 2; color: #bdcde0; font: 400 9px/1.25 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .pick-info .skill-detail .skill-meta { grid-column: 3; grid-row: 1; margin: 0; color: #91a9c3; font: 500 8px/1.1 'Fredoka', sans-serif; white-space: nowrap; }
-#pick:has(#pickList.grid) .pick-info .ultimate-detail { border-color: rgba(237, 205, 115, .25); background: linear-gradient(100deg, rgba(131, 94, 38, .16), rgba(7, 18, 34, .2)); }
-#pick:has(#pickList.grid) .pick-info .ultimate-detail .skill-kind { color: #f4d88b; border-color: rgba(237, 205, 115, .24); background: rgba(131, 94, 38, .17); }
-#pick:has(#pickList.grid) .pick-team-status {
-  min-width: 0;
-  padding: 7px 0;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  border-top: 1px solid rgba(177, 202, 233, .1);
-  border-bottom: 1px solid rgba(177, 202, 233, .1);
-}
-#pick:has(#pickList.grid) .pick-team-status > span { flex: 0 0 auto; color: #9eddf2; font: 600 10px/1.15 'Fredoka', sans-serif; white-space: nowrap; }
-#pick:has(#pickList.grid) .pick-team-status > span b { margin-left: 3px; color: #f4d77f; }
-#pick:has(#pickList.grid) .pick-team-status p { min-width: 0; margin: 0; color: #c4d3e5; font: 400 10px/1.25 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-info .skill-detail strong { grid-column: 2; grid-row: 2; color: #fff; font: 600 17px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .pick-info .skill-detail .skill-meta { grid-column: 3; grid-row: 1 / 3; align-self: center; margin: 0; color: #b8c8dc; font: 500 13px/1.1 'Fredoka', sans-serif; white-space: nowrap; }
+#pick:has(#pickList.grid) .pick-info .skill-detail .skill-copy { grid-column: 1 / 4; grid-row: 3; margin-top: 6px; color: #d0dcea; font: 400 14px/1.4 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .hero-more {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgba(177, 202, 233, .12);
-  border-radius: 9px;
-  background: rgba(7, 18, 34, .18);
+  border: 1px solid rgba(177, 202, 233, .14);
+  border-radius: 10px;
+  background: rgba(7, 18, 34, .2);
 }
 #pick:has(#pickList.grid) .hero-more > summary {
-  min-height: 32px;
-  padding: 6px 9px;
+  min-height: 40px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
-  color: #d9e6f5;
+  color: #e3ecf7;
   cursor: pointer;
   list-style: none;
-  font: 600 10px/1.2 'Fredoka', sans-serif;
+  font: 600 15px/1.2 'Fredoka', sans-serif;
 }
 #pick:has(#pickList.grid) .hero-more > summary::-webkit-details-marker { display: none; }
-#pick:has(#pickList.grid) .hero-more > summary::after { content: '+'; margin-left: auto; color: #f0d47e; font: 600 15px/1 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .hero-more > summary::after { content: '+'; margin-left: auto; color: #f0d47e; font: 600 18px/1 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .hero-more[open] > summary { border-bottom: 1px solid rgba(177, 202, 233, .1); }
 #pick:has(#pickList.grid) .hero-more[open] > summary::after { content: '−'; }
-#pick:has(#pickList.grid) .hero-more-content { min-width: 0; padding: 7px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+#pick:has(#pickList.grid) .hero-more-content { min-width: 0; padding: 10px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 #pick:has(#pickList.grid) .hero-more-content .hero-tips,
-#pick:has(#pickList.grid) .hero-more-content .party-composition,
 #pick:has(#pickList.grid) .hero-more-content .guide-note { grid-column: 1 / -1; }
 #pick:has(#pickList.grid) .pick-info .stats,
 #pick:has(#pickList.grid) .pick-info .hero-numbers {
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 7px;
+  padding: 10px;
   box-sizing: border-box;
   border: 1px solid rgba(177, 202, 233, .1);
   border-radius: 8px;
-  color: #dce7f5;
+  color: #e3ecf7;
   background: rgba(7, 18, 34, .25);
-  font: 500 9px/1.25 'Fredoka', sans-serif;
+  font: 500 14px/1.3 'Fredoka', sans-serif;
 }
-#pick:has(#pickList.grid) .pick-info .stats { grid-column: span 1; grid-template-columns: auto 1fr; gap: 4px 5px; }
-#pick:has(#pickList.grid) .pick-info .stats .pips { gap: 2px; }
-#pick:has(#pickList.grid) .pick-info .stats .pips i { width: 7px; height: 7px; }
-#pick:has(#pickList.grid) .pick-info .stats .pips.hearts i { width: auto; height: auto; font-size: 10px; line-height: 9px; }
-#pick:has(#pickList.grid) .pick-info .hero-numbers { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 5px; align-content: center; }
-#pick:has(#pickList.grid) .hero-numbers dt { color: #aebfd5; }
+#pick:has(#pickList.grid) .pick-info .stats { grid-template-columns: auto 1fr; gap: 6px 8px; }
+#pick:has(#pickList.grid) .pick-info .stats .pips { gap: 3px; }
+#pick:has(#pickList.grid) .pick-info .stats .pips i { width: 10px; height: 10px; }
+#pick:has(#pickList.grid) .pick-info .stats .pips.hearts i { width: auto; height: auto; font-size: 14px; line-height: 12px; }
+#pick:has(#pickList.grid) .pick-info .hero-numbers { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; align-content: center; }
+#pick:has(#pickList.grid) .hero-numbers dt { color: #b8c8dc; }
 #pick:has(#pickList.grid) .hero-numbers dd { margin: 0; color: #f0f5fc; font-weight: 600; text-align: right; }
-#pick:has(#pickList.grid) .party-composition { padding: 7px; border: 1px solid rgba(177, 202, 233, .1); border-radius: 8px; background: rgba(7, 18, 34, .25); }
-#pick:has(#pickList.grid) .party-composition header { color: #e6c976; font: 600 10px 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .party-members { margin: 5px 0; }
-#pick:has(#pickList.grid) .party-members span { padding: 3px 5px; font: 500 9px 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .party-roles { gap: 3px; }
-#pick:has(#pickList.grid) .party-roles span { padding: 3px 5px; font: 500 9px 'Fredoka', sans-serif; }
-#pick:has(#pickList.grid) .guide-note { margin: 0; color: #839ab5; font: 400 8px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .hero-tips h4 { margin: 0 0 4px; color: #f0d684; font: 600 15px/1.2 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .hero-tips p { margin: 0; color: #d3dfed; font: 400 14px/1.4 'Fredoka', sans-serif; }
+#pick:has(#pickList.grid) .guide-note { margin: 0; color: #a9bbd1; font: 400 13px/1.3 'Fredoka', sans-serif; }
 #pick:has(#pickList.grid) .hero-select-btn {
-  min-height: 42px;
-  padding: 10px 14px;
-  border: 1px solid rgba(155, 219, 169, .48);
-  border-radius: 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  min-height: 52px;
+  margin: 0 -18px;
+  padding: 12px 18px;
+  border: 0;
+  border-top: 1px solid rgba(190, 213, 243, .14);
+  border-radius: 0 0 14px 14px;
   color: #f2fff1;
   background: linear-gradient(180deg, #4dbb70, #2e8b4c);
-  box-shadow: 0 4px 12px rgba(10, 55, 32, .24), inset 0 1px 0 rgba(255,255,255,.18);
-  font: 600 15px/1 'Fredoka', sans-serif;
+  box-shadow: 0 -8px 16px rgba(17, 31, 53, .85), inset 0 1px 0 rgba(255,255,255,.18);
+  font: 600 19px/1 'Fredoka', sans-serif;
   cursor: pointer;
-  transition: filter .15s, transform .15s, box-shadow .15s;
+  transition: filter .15s, box-shadow .15s;
 }
-#pick:has(#pickList.grid) .hero-select-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
-#pick:has(#pickList.grid) .hero-select-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 2px 6px rgba(10, 55, 32, .2); }
-#pick:has(#pickList.grid) .hero-select-btn:disabled { color: #8293aa; background: rgba(42, 56, 76, .82); border-color: rgba(177, 202, 233, .1); box-shadow: none; cursor: not-allowed; }
+#pick:has(#pickList.grid) .hero-select-btn:hover:not(:disabled) { filter: brightness(1.08); }
+#pick:has(#pickList.grid) .hero-select-btn:active:not(:disabled) { filter: brightness(.95); }
+#pick:has(#pickList.grid) .hero-select-btn:disabled { color: #a2b1c4; background: #2a384c; box-shadow: 0 -8px 16px rgba(17, 31, 53, .85); cursor: not-allowed; }
 #pick:has(#pickList.grid) .pick-info .lock-info {
   margin: 0;
-  padding: 7px;
-  border: 1px solid rgba(255, 212, 74, .28);
-  border-radius: 8px;
-  color: #f3d987;
-  background: rgba(74, 57, 20, .2);
-  font: 500 10px/1.25 'Fredoka', sans-serif;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 212, 74, .3);
+  border-radius: 10px;
+  color: #f6dc8c;
+  background: rgba(74, 57, 20, .25);
+  font: 500 15px/1.3 'Fredoka', sans-serif;
   -webkit-text-stroke: 0;
 }
 #pick:has(#pickList.grid) #pickHint {
   min-height: 0;
   margin: 0;
-  padding: 6px 10px;
+  padding: 4px 10px;
   border: 0;
-  color: #96abc4;
+  color: #b8c8dc;
   background: none;
   box-shadow: none;
-  font: 500 10px/1.2 'Fredoka', sans-serif;
+  font: 500 14px/1.2 'Fredoka', sans-serif;
   animation: none;
 }
-@media (max-height: 650px) and (min-width: 1101px) {
-  #pick:has(#pickList.grid) { gap: 4px; padding-block: 8px 6px; }
-  #pick:has(#pickList.grid) #pickTitle { font-size: 26px; }
-  #pick:has(#pickList.grid) #pickSub { font-size: 11px; }
-  #pick:has(#pickList.grid) #pickList.grid { height: calc(100dvh - 116px); grid-template-rows: 36px minmax(0, 1fr); gap: 8px; }
-  #pick:has(#pickList.grid) .pick-info { padding: 10px; gap: 6px; }
-  #pick:has(#pickList.grid) .pick-info .skill-detail { padding: 5px 6px; }
+
+/* telas largas: os heróis da classe numa fileira só */
+@media (min-width: 1500px) and (min-height: 800px) {
+  #pick:has(#pickList.grid) .pick-row { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 300px); grid-auto-rows: auto; justify-content: center; }
+  #pick:has(#pickList.grid) .pick-row:has(> .card:only-child) { grid-template-columns: none; }
+  #pick:has(#pickList.grid) .pick-row > .card:nth-child(3):last-child { grid-column: auto; width: auto; justify-self: stretch; }
+}
+/* janelas baixas (ex.: 1280×720): cartões deitados, retrato à esquerda */
+@media (max-height: 820px) {
+  #pick:has(#pickList.grid) { gap: 5px; padding-block: 10px 6px; }
+  #pick:has(#pickList.grid) #pickTitle { font-size: 28px; }
+  #pick:has(#pickList.grid) #pickSub { font-size: 15px; }
+  #pick:has(#pickList.grid) #pickList.grid { height: calc(100dvh - 118px); gap: 10px 12px; }
+  #pick:has(#pickList.grid) .pick-filters .pick-filter { min-height: 40px; }
+  #pick:has(#pickList.grid) .pick-rows { padding: 10px; }
+  #pick:has(#pickList.grid) .pick-row { gap: 10px; }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row .card { grid-template-rows: minmax(0, 1fr); grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row .card .portrait { width: auto; height: 100%; aspect-ratio: 1; max-height: 150px; }
+  #pick:has(#pickList.grid) .pick-card-copy { text-align: left; }
+  #pick:has(#pickList.grid) .pick-team-bar { padding: 9px 12px; }
+  #pick:has(#pickList.grid) .pick-team-bar .party-members img,
+  #pick:has(#pickList.grid) .pick-team-bar .party-members .empty i { width: 46px; height: 46px; }
+  #pick:has(#pickList.grid) .pick-team-bar .party-members span { width: 68px; }
+  #pick:has(#pickList.grid) .pick-info { gap: 9px; padding-top: 12px; }
+  #pick:has(#pickList.grid) .pick-info .crest { width: 88px; height: 88px; flex-basis: 88px; }
+  #pick:has(#pickList.grid) .pick-info .ribbon { font-size: 26px; }
+  #pick:has(#pickList.grid) .pick-info .skill-detail { padding: 8px 10px; }
+  #pick:has(#pickList.grid) .pick-info .skill-detail .skill-copy { margin-top: 4px; }
+}
+/* janelas estreitas: tudo empilhado com rolagem vertical, sem vazar para os lados */
+@media (max-width: 1000px) {
+  #pick:has(#pickList.grid) { overflow-y: auto; }
+  #pick:has(#pickList.grid) #pickList.grid {
+    width: 100%;
+    height: auto;
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "tabs" "cards" "info" "team";
+    overflow: visible;
+  }
+  #pick:has(#pickList.grid) .pick-rows { overflow: visible; }
+  #pick:has(#pickList.grid) .pick-row { grid-auto-rows: 220px; }
+  #pick:has(#pickList.grid) .pick-info { max-height: none; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
   #pick:has(#pickList.grid) .pick-filters .pick-filter,
   #pick:has(#pickList.grid) #pickList.grid .pick-row .card,
   #pick:has(#pickList.grid) #pickList.grid .pick-row .card .portrait img,
   #pick:has(#pickList.grid) .hero-select-btn { transition: none; }
+  .game-tooltip { transition: none !important; }
 }
+
+/* Dica flutuante (tooltip.js): uma só, posicionada junto ao alvo, sem capturar cliques */
+.game-tooltip {
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: 12px 14px;
+  box-sizing: border-box;
+  border: 1px solid rgba(190, 213, 243, .28);
+  border-radius: 12px;
+  color: #e6eef8;
+  background: linear-gradient(160deg, #22365a, #121f36);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .45);
+  font: 400 14px/1.4 'Fredoka', sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px) scale(.97);
+  transform-origin: var(--arrow-x, 50%) 100%;
+  transition: opacity .12s ease, transform .12s ease, visibility 0s linear .12s;
+}
+.game-tooltip[data-side="below"] { transform-origin: var(--arrow-x, 50%) 0; transform: translateY(-4px) scale(.97); }
+.game-tooltip.show { opacity: 1; visibility: visible; transform: none; transition: opacity .12s ease, transform .12s ease, visibility 0s; }
+.game-tooltip.measuring { visibility: hidden; transition: none; transform: none; }
+.game-tooltip-arrow {
+  position: absolute;
+  left: var(--arrow-x, 50%);
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  translate: -50% 0;
+  rotate: 45deg;
+  border-right: 1px solid rgba(190, 213, 243, .28);
+  border-bottom: 1px solid rgba(190, 213, 243, .28);
+  background: #131f37;
+}
+.game-tooltip[data-side="below"] .game-tooltip-arrow { top: -7px; bottom: auto; rotate: 225deg; background: #22365a; }
+.game-tooltip .tt-skill { --kind: #8cc4ff; display: grid; gap: 8px; }
+.game-tooltip .tt-technique { --kind: #7fdc9a; }
+.game-tooltip .tt-ultimate { --kind: #f4d88b; }
+.game-tooltip .tt-skill header { display: flex; align-items: center; gap: 10px; }
+.game-tooltip .tt-icon {
+  flex: 0 0 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff8dc;
+  background: radial-gradient(circle at 40% 30%, color-mix(in srgb, var(--kind) 55%, #22344f), #14233a);
+  box-shadow: inset 0 0 0 1px var(--kind);
+  font-size: 22px;
+}
+.game-tooltip .tt-skill header b { display: block; color: #fff; font-size: 17px; font-weight: 600; line-height: 1.2; }
+.game-tooltip .tt-kind { color: var(--kind); font-size: 13px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+.game-tooltip p { margin: 0; }
+.game-tooltip .tt-desc { color: #dbe5f1; }
+.game-tooltip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; }
+.game-tooltip dt { color: #a9bbd1; }
+.game-tooltip dd { margin: 0; color: #f0f5fc; font-weight: 600; }
+.game-tooltip .tt-now, .game-tooltip .tt-next { font-size: 13px; color: #c6d4e6; }
+.game-tooltip .tt-now b { color: var(--kind); }
+.game-tooltip .tt-next { padding-top: 6px; border-top: 1px solid rgba(190, 213, 243, .15); }
+.game-tooltip .tt-next b { color: #7fdc9a; }
+.game-tooltip .tt-routes { font-size: 13px; color: #f0d684; }

@@ -100,6 +100,11 @@ const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
 vm.runInContext('t.makeTargetContext=makeTargetContext;',context);
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
+// a composição da equipe fica numa faixa fixa (pick.team) ao lado da ficha (pick.info)
+const pickText=()=>t.pick.info.innerHTML+t.pick.team.innerHTML;
+// barra de habilidades (glifos usados também na ficha da escolha)
+vm.runInContext(part(source,'let skillKey','function pressSkill'),context);
+vm.runInContext('t.buildSkillBar=buildSkillBar;t.skillItems=()=>skillItems;',context);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
 for(const n of ['Minion','Warrior','Rogue','Mage']) context.assets['Skeleton_'+n]={scene:{},animations:[]};
 context.assets.Barbarian={scene:{},animations:[]};
@@ -170,8 +175,8 @@ test('navegação respeita as linhas de classe, pula ocupadas e usa postos disti
   t.showPick('','');
   for(const id of ['pyro','arcane'])assert.ok(t.pick.cards[at(id)].innerHTML.includes('No grupo'));
   assert.ok(!t.pick.cards[at('cryo')].innerHTML.includes('No grupo'));
-  assert.ok(t.pick.info.innerHTML.includes('Equipe se escolher')&&t.pick.info.innerHTML.includes('class="candidate"')
-    &&t.pick.info.innerHTML.includes('Controle')&&t.pick.info.innerHTML.includes('Nas próximas vagas'));
+  assert.ok(pickText().includes('Equipe se escolher')&&pickText().includes('class="candidate"')
+    &&pickText().includes('Controle')&&pickText().includes('Nas próximas vagas'));
   t.confirmPick(at('pyro'));assert.equal(t.pick.open,true);
   t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'));
   t.moveGrid(0,1);assert.equal(t.pick.sel,at('cryo'));t.moveGrid(-1,0);assert.equal(t.pick.sel,at('necro'));
@@ -181,20 +186,20 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   const previousLocation=context.location,previousStorage=context.localStorage.data,previousMission=t.game.mission;
   clear();context.location={search:''};context.localStorage.data={};t.setMission(t.MISSIONS.find(m=>m.id==='ponte'));
   t.showPick('','');const at=id=>t.pick.options.findIndex(hero=>hero.id===id);t.selectCard(at('paladin'));
-  assert.ok(t.pick.info.innerHTML.includes('Proteja o aldeão'));
-  assert.ok(t.pick.info.innerHTML.includes('priority')&&t.pick.info.innerHTML.includes('Para esta missão, priorize: Controle.'));
+  assert.ok(pickText().includes('Proteja o aldeão'));
+  assert.ok(pickText().includes('priority')&&pickText().includes('Para esta missão, priorize: Controle.'));
   t.selectCard(at('pyro'));
-  assert.ok(t.pick.info.innerHTML.includes('Para esta missão, priorize: Defesa · Cura · Controle.'));
+  assert.ok(pickText().includes('Para esta missão, priorize: Defesa · Cura · Controle.'));
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
-  assert.ok(t.pick.info.innerHTML.includes('Derrote o chefe')&&t.pick.info.innerHTML.includes('class="covered priority">Dano a chefe<b>1</b>'));
+  assert.ok(pickText().includes('Derrote o chefe')&&pickText().includes('class="covered priority">Dano a chefe<b>1</b>'));
   clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);
 });
 test('prévia da equipe não trata heróis bloqueados como se fossem escolhidos',()=>{
   const previousLocation=context.location,previousStorage=context.localStorage.data;
   clear();context.location={search:''};context.localStorage.data={};new t.Hero(cfg('pyro'));
   t.showPick('','');const locked=t.pick.options.findIndex(hero=>hero.id==='cleric');t.selectCard(locked);
-  assert.ok(t.pick.info.innerHTML.includes('Equipe atual')&&t.pick.info.innerHTML.includes('Ganhe ★ 2 na campanha'));
-  assert.ok(!t.pick.info.innerHTML.includes('class="candidate"'));
+  assert.ok(pickText().includes('Equipe atual')&&pickText().includes('Ganhe ★ 2 na campanha'));
+  assert.ok(!pickText().includes('class="candidate"'));
   context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
@@ -866,5 +871,21 @@ test('chefes e golem fecham as ondas certas; tipos novos entram aos poucos',()=>
   t.clearMonsterFx();for(let i=0;i<50;i++)assert.equal(t.pickMonster(1,'Minion'),'Minion');
   assert.equal(t.pickMonster(2,'Minion'),'Shieldbearer');for(let i=0;i<50;i++)assert.ok(['Minion','Shieldbearer'].includes(t.pickMonster(2,'Minion')));
   t.clearMonsterFx();const seen=new Set();for(let i=0;i<300;i++)seen.add(t.pickMonster(12,'Minion'));for(const k of ['Shieldbearer','Bomber','Ghost'])assert.ok(seen.has(k),k);
+});
+test('habilidades usam a dica própria em vez do title nativo',()=>{
+  clear();const hero=new t.Hero(cfg('pyro'));
+  const create=context.document.createElement;
+  context.document.createElement=()=>{const e=el();e.attrs={};e.setAttribute=(k,v)=>{e.attrs[k]=String(v)};return e};
+  try{t.buildSkillBar([hero]);}finally{context.document.createElement=create;}
+  const items=t.skillItems();assert.equal(items.length,3);
+  for(const it of items){
+    assert.equal(it.b.title,undefined,'o botão não deve usar title');
+    assert.ok(!/\stitle=/.test(it.b.innerHTML),'nada de title no conteúdo do botão');
+    assert.equal(it.b.attrs['data-tip'],'skill');assert.equal(it.b.attrs['data-hero'],'pyro');assert.equal(it.b.attrs['data-slot'],String(it.slot));
+  }
+  assert.ok(!/\.title\s*=|\stitle=/.test(part(source,'function buildSkillBar','function pressSkill')));
+  t.showPick('','');t.selectCard(t.pick.options.findIndex(v=>v.id==='pyro'));
+  assert.equal((t.pick.info.innerHTML.match(/data-tip="skill"/g)||[]).length,3,'habilidades da ficha também têm a dica');
+  clear();
 });
 console.log(results.length+' verificações passaram.');

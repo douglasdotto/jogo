@@ -13,6 +13,7 @@ import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './u
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
+import { initTooltips, registerTooltip } from './tooltip.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
 
@@ -202,6 +203,7 @@ function setGoalUI(text, progress) {
 
 // tela de escolha estilo arcade: grade com uma linha por classe, todas as variantes à mostra
 const pick = { options: [], cards: [], classFilters: [], classRows: [], activeClass: -1, suggestedId: null, sel: 0, open: false, timer: null };
+const PICK_CLASS_GLYPHS = ['♜', '⚒', '✦', '☾', '⚕', '☘', '⌛'];
 
 function showPick(title, sub) {
   pick.mode = 'hero';
@@ -233,7 +235,7 @@ function showPick(title, sub) {
     filter.setAttribute('aria-label', `${hero.name}: ${count} heróis`);
     filter.setAttribute('aria-pressed', 'false');
     filter.style.setProperty('--class-color', hero.color?.[0] || '#8bb9e7');
-    filter.innerHTML = `<span>${hero.name}</span><small>${count}</small>`;
+    filter.innerHTML = `<i aria-hidden="true">${PICK_CLASS_GLYPHS[classId] || '✦'}</i><span>${hero.name}</span><small>${count}</small>`;
     filter.onclick = () => focusClass(classId);
     filter.onfocus = () => focusClass(classId);
     filters.appendChild(filter);
@@ -265,7 +267,7 @@ function showPick(title, sub) {
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 30}ms`);
     const signatureSkill = skillSetFor(cfg)[0]?.name || cfg.ability;
-    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill">${signatureSkill}</small></div>${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill"><i aria-hidden="true">✦</i> ${signatureSkill}</small></div>${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
     b.onclick = () => selectCard(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i);
@@ -274,7 +276,10 @@ function showPick(title, sub) {
   });
   pick.info = document.createElement('aside');
   pick.info.className = 'pick-info';
-  list.append(filters, rows, pick.info);
+  pick.team = document.createElement('section');
+  pick.team.className = 'pick-team-bar';
+  pick.team.setAttribute('aria-label', 'Equipe e cobertura de papéis');
+  list.append(filters, rows, pick.team, pick.info);
   const suggestedIndex = previousSuggestion ? pick.options.findIndex((cfg) => cfg.id === previousSuggestion && isFree(cfg)) : -1;
   selectCard(suggestedIndex >= 0 ? suggestedIndex : pick.options.findIndex(isFree));
   pick.open = true;
@@ -559,9 +564,8 @@ function renderInfo(cfg) {
         ? 'A equipe está completa.'
         : nextHint;
   const teamRoles = team.roles.map((role) => `<span class="${role.count ? 'covered' : ''}${priorityRoles.includes(role.name) ? ' priority' : ''}">${role.name}<b>${role.count}</b></span>`).join('');
-  const teamMembers = projectedTeam.length
-    ? projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}">${member.name}${canAddCandidate && member.id === cfg.id ? '<small>em foco</small>' : ''}</span>`).join('')
-    : '<span class="empty">Ainda sem aliados</span>';
+  const teamMembers = projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}"><img src="${member.portrait}" alt=""><em>${member.name}</em>${canAddCandidate && member.id === cfg.id ? '<small>em foco</small>' : ''}</span>`).join('')
+    + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty"><i aria-hidden="true">+</i><em>Vaga livre</em></span>').join('');
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
     `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
   pick.info.style.setProperty('--c', cfg.color[0]);
@@ -570,21 +574,20 @@ function renderInfo(cfg) {
       <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? 'À distância' : 'Corpo a corpo'}</small><div class="ribbon">${cfg.name}</div>
         <span class="hero-role-pill">${info.role}</span></div></div>
     <div class="hero-overview"><p>${CLASSES[cfg.classId].summary}</p></div>
-    <section class="ability skill-list" aria-label="Habilidades do herói"><header><b>Habilidades</b><span>3 poderes</span></header>${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : ''}"><span class="skill-kind">${skill.ultimate ? 'ULTIMATE' : skill.slot === 1 ? 'TÉCNICA' : 'BÁSICA'}</span><strong>${skill.name}</strong><span class="skill-copy">${skill.description}</span><span class="skill-meta">Recarga · ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
-    <div class="pick-team-status"><span>Equipe <b>${projectedTeam.length}/${teamLimit}</b></span><p>${teamHint}</p></div>
-    <details class="hero-more"><summary>Ver atributos e equipe</summary><div class="hero-more-content">
+    <section class="ability skill-list" aria-label="Habilidades do herói"><header><b>Habilidades</b><span>passe o mouse para detalhes</span></header>${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><span class="skill-kind">${skill.ultimate ? 'ULTIMATE' : skill.slot === 1 ? 'TÉCNICA' : 'BÁSICA'}</span><strong>${skill.name}</strong><span class="skill-copy">${skill.description}</span><span class="skill-meta">Recarga · ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
+    ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}
+    <details class="hero-more"><summary>Ver atributos e dicas</summary><div class="hero-more-content">
       <div class="stats">${stats}</div>
       <dl class="hero-numbers"><dt>Vida</dt><dd>${cfg.hp}</dd><dt>Dano por golpe</dt><dd>${cfg.dmg}</dd><dt>Intervalo</dt><dd>${cfg.cooldown.toLocaleString('pt-BR')} s</dd><dt>Alcance</dt><dd>${cfg.range.toLocaleString('pt-BR')} m</dd></dl>
       <div class="hero-guide hero-tips"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
-      <section class="party-composition" aria-label="Composição e cobertura da equipe">
-      <header><b>${canAddCandidate ? 'Equipe se escolher' : 'Equipe atual'}</b><span>${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span></header>
-      ${objective ? `<div class="party-objective"><b>Objetivo</b><span>${goalText(objective)}</span></div>` : ''}
-      <div class="party-members">${teamMembers}</div>
-      <div class="party-roles">${teamRoles}</div>
-    </section>
       <p class="guide-note">Valores do nível 1. Evoluções e melhorias alteram os atributos.</p>
-    </div></details>
-    ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}`;
+    </div></details>`;
+  // equipe fixa ao lado dos cartões: mini-retratos, cobertura de papéis e o que falta
+  pick.team.innerHTML = `<section class="party-composition">
+      <header><b>${canAddCandidate ? 'Equipe se escolher' : 'Equipe atual'}</b><span class="pick-team-count">Equipe ${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>${objective ? `<span class="party-objective"><b>Objetivo</b> ${goalText(objective)}</span>` : ''}</header>
+      <div class="party-members">${teamMembers}</div>
+      <div class="pick-team-status"><div class="party-roles">${teamRoles}</div><p>${teamHint}</p></div>
+    </section>`;
   const selectButton = document.createElement('button');
   selectButton.type = 'button';
   selectButton.className = 'hero-select-btn';
@@ -996,10 +999,13 @@ function buildSkillBar(party) {
       b.setAttribute('aria-label', `${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : 'habilidade'}. Tecla ${key}.`);
       b.style.setProperty('--c', h.cfg.color[0]);
       b.style.setProperty('--cd', h.cfg.color[1]);
-      b.title = `${h.cfg.name} — ${skill.name}: ${skill.description} (tecla ${key})`;
+      b.setAttribute('data-tip', 'skill');
+      b.setAttribute('data-hero', h.cfg.id);
+      b.setAttribute('data-slot', String(slot));
+      b.setAttribute('data-key', key);
       const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
       const kind = skill.ultimate ? 'ULTIMATE' : slot === 0 ? 'ASSINATURA' : 'TÉCNICA';
-      b.innerHTML = `<span class="key">${key}</span><button class="auto" title="Alternar uso automático desta habilidade" aria-label="Alternar automático">AUTO</button>
+      b.innerHTML = `<span class="key">${key}</span><button class="auto" data-tip="Alternar uso automático desta habilidade" aria-label="Alternar automático">AUTO</button>
         <div class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><div class="cd"></div><b class="secs"></b></div>
         <div class="name"><small>${kind}</small><b>${skill.name}</b></div>`;
       const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
@@ -1057,6 +1063,51 @@ function updateSkillBar() {
     it.b.classList.toggle('nope', h.noTarget > 0 || now < it.nopeT);
   }
 }
+
+// dica rica das habilidades (escolha de herói e barra de batalha): nível atual, próximo nível e alvo
+const SKILL_KIND = [['basic', 'Básica'], ['technique', 'Técnica'], ['ultimate', 'Ultimate']];
+const CONTROL_TEXT = { stun: 'Atordoa', slow: 'Desacelera', root: 'Prende no lugar', push: 'Empurra', burn: 'Queima' };
+const num = (n) => (Math.round(n * 10) / 10).toLocaleString('pt-BR');
+function skillTooltip(el) {
+  const cfg = VARIANTS.find((v) => v.id === el.getAttribute('data-hero'));
+  const slot = Number(el.getAttribute('data-slot'));
+  const skill = cfg && skillSetFor(cfg).find((item) => item.slot === slot);
+  if (!skill) return '';
+  const hero = heroes().find((h) => h.cfg.id === cfg.id);
+  const level = hero?.level || 1, maxLevel = cfg.names?.length || 3, rate = hero?.skillRate || 1;
+  const [kindId, kindName] = SKILL_KIND[skill.ultimate ? 2 : slot === 1 ? 1 : 0];
+  const glyph = SKILL_GLYPHS[cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
+  const facts = [['Recarga', `${num(cooldownForSkill(cfg, slot, level, rate))} s`]];
+  if (slot === 0) {
+    const aim = aimSpec(hero || { cfg, level, skillPower: 1, range: cfg.range });
+    facts.push(['Alvo', aim ? `${aim.mode === 'enemy' ? 'Inimigo' : 'Ponto no chão'} · alcance ${num(aim.range)} m` : 'Automático']);
+    if (aim?.radius > 0.7) facts.push(['Área', `raio ${num(aim.radius)} m`]);
+  } else {
+    if (skill.radius) facts.push(['Área', `raio ${num(skill.radius * (hero?.skillPower || 1))} m`]);
+    if (skill.shots) facts.push(['Projéteis', skill.shots]);
+    if (skill.jumps) facts.push(['Saltos', skill.jumps]);
+    if (skill.count) facts.push(['Invocações', skill.count]);
+    if (skill.duration) facts.push(['Duração', `${num(skill.duration)} s`]);
+    if (skill.bonus) facts.push(['Bônus de dano', `+${Math.round(skill.bonus * 100)}%`]);
+    if (skill.power) facts.push(['Força', `×${num(skill.power * (hero?.skillPower || 1))}`]);
+  }
+  if (skill.control) facts.push(['Efeito', CONTROL_TEXT[skill.control] || skill.control]);
+  const key = el.getAttribute('data-key');
+  if (key) facts.push(['Tecla', key]);
+  const next = level < maxLevel
+    ? `<p class="tt-next"><b>Nível ${level + 1}</b> recarga ${num(cooldownForSkill(cfg, slot, level + 1, rate))} s${slot === 0 ? ' · efeito mais forte' : ''}</p>`
+    : '<p class="tt-next"><b>Nível máximo</b> alcançado</p>';
+  const routes = Object.keys(hero?.evolutionBranches || {}).map((id) => EVOLUTION_BRANCHES.find((b) => b.id === id)).filter(Boolean);
+  return `<div class="tt-skill tt-${kindId}">
+    <header><span class="tt-icon" aria-hidden="true">${glyph}</span><div><b>${skill.name}</b><span class="tt-kind">${kindName}</span></div></header>
+    <p class="tt-desc">${skill.description}</p>
+    <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    <p class="tt-now"><b>Nível ${level}</b>${hero ? ` · ${cfg.name}` : ' · valores iniciais'}</p>${next}
+    ${routes.length ? `<p class="tt-routes">${routes.map((r) => `${r.icon} ${r.name}: ${r.desc}`).join('<br>')}</p>` : ''}
+  </div>`;
+}
+registerTooltip('skill', skillTooltip);
+initTooltips();
 
 addEventListener('keydown', (e) => {
   if (pick.open || game.over || e.repeat || !/^[1-4qwerasdf]$/i.test(e.key)) return;
