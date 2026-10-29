@@ -2312,21 +2312,42 @@ function holyLight(h, friends, reach) {
   }
 }
 
-// Guardião: cúpula azul translúcida (com malha de escudo) enquanto a proteção durar
+// Campo de força: brilho só na borda (fresnel) e faixas de energia subindo; o centro fica limpo para ver o herói
+function shieldMaterial(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 }, time: { value: 0 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vY = position.y;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 color; uniform float opacity; uniform float time; varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() {
+        float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+        float band = 1.0 - smoothstep(0.0, 0.06, abs(fract(vY * 2.5 - time * 0.5) - 0.5));
+        float a = (rim * 0.9 + 0.05 + band * 0.22 * (1.0 - vY)) * opacity;
+        gl_FragColor = vec4(color + rim * 0.55, a);
+      }`,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+}
+
+// Guardião: cúpula de energia azul enquanto a proteção durar
 function dome(h, radius) {
-  const d = new THREE.Mesh(domeGeo, glow(0x3f9bff, 0.3, false));   // azul de verdade: o brilho aditivo some no chão claro
-  const net = new THREE.Mesh(domeGeo, glow(0x1f6fe0, 0.6, false));
-  net.material.wireframe = true;
-  net.scale.setScalar(1.01);
-  d.add(net);
+  const d = new THREE.Mesh(domeGeo, shieldMaterial(0x4aa8ff));
+  const base = new THREE.Mesh(thinRingGeo, glow(0x8fd4ff, 0.7));   // borda da cúpula marcada no chão
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = 0.04;
+  d.add(base);
   addFx(d, h.guardT + 1, (e, dt) => {
     d.position.copy(h.pos);
     const pop = Math.min(1, e.t / 0.3);
     d.scale.setScalar(1.7 * (1 - (1 - pop) ** 3) + Math.sin(pop * Math.PI) * 0.35);
-    net.rotation.y += dt * 0.6;
     const fade = Math.min(1, Math.max(0, h.guardT) / 0.4);
-    d.material.opacity = (0.24 + 0.06 * Math.sin(e.t * 6)) * fade;
-    net.material.opacity = (0.5 + 0.15 * Math.sin(e.t * 6)) * fade;
+    d.material.uniforms.time.value = e.t;
+    d.material.uniforms.opacity.value = (0.85 + 0.15 * Math.sin(e.t * 6)) * fade;
+    base.material.opacity = (0.55 + 0.15 * Math.sin(e.t * 6)) * fade;
     if (h.dead || h.guardT <= 0 || !units.includes(h)) e.done = true;
   });
   wave(h.pos, 0x6fc3ff, 0.5, radius, 0.7);
