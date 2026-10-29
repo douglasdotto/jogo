@@ -112,7 +112,7 @@ const DIFFICULTIES = [
   { id: 'dificil', name: 'Difícil', icon: '♜', desc: 'Escolha bem cada herói.', color: ['#ffd29e', '#d17a2a'],
     hp: 1.25, dmg: 1.2, count: 1.25, interval: 0.9, boss: 1.15, heal: 0.25, revive: 0.3, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.1 },
   { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
-    hp: 1.5, dmg: 1.4, count: 1.45, interval: 0.75, boss: 1.35, heal: 0.15, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
+    hp: 1.4, dmg: 1.3, count: 1.4, interval: 0.75, boss: 1.15, heal: 0.2, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
 let difficulty = DIFFICULTIES[1];
 
@@ -131,11 +131,11 @@ scene.fog = new THREE.Fog(0xa9d6f0, 45, 110);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 300);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.maxPolarAngle = Math.PI * 0.45;
-controls.minDistance = 8;
+controls.minDistance = 12;
 controls.maxDistance = 50;
 const follow = new THREE.Vector3();   // ponto que a câmera persegue
 // zoom cinematográfico: multiplica a distância escolhida pelo jogador (roda do mouse) conforme a situação
-const cam = { zoom: 1, userDist: 0, wheel: false };
+const cam = { zoom: 1, userDist: 0, wheel: false, fit: 0 };
 renderer.domElement.addEventListener('wheel', () => (cam.wheel = true), { passive: true });
 
 const hemi = new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8);   // sombras mais suaves
@@ -5616,6 +5616,8 @@ const clock = new THREE.Clock();
 // Buffers reutilizáveis do quadro: evita alocar arrays de unidades/alvos a 60 Hz.
 const frameUnits = [], frameHeroes = [], frameFoes = [], frameNearFoes = [];
 const frameFoeCenter = new THREE.Vector3();
+const CAM_MIN_FIT = 14;   // mais perto que isso a briga sai da tela
+let frameSpread = 0;
 function frame() {
   requestAnimationFrame(frame);   // agenda antes: um erro no quadro não congela o jogo
   const real = Math.min(clock.getDelta(), 0.05);
@@ -5669,17 +5671,23 @@ function frame() {
       frameFoeCenter.divideScalar(frameNearFoes.length);
       tmp.lerp(frameFoeCenter, 0.3);
     }
+    // quanto o grupo e a briga se espalham: a câmera nunca fica perto demais para mostrar todos
+    frameSpread = 0;
+    for (const u of frameHeroes) frameSpread = Math.max(frameSpread, u.pos.distanceTo(tmp));
+    for (const u of frameNearFoes) frameSpread = Math.max(frameSpread, u.pos.distanceTo(tmp));
     follow.lerp(tmp, Math.min(1, real * 2));
   }
   tmp.subVectors(follow, controls.target);
   controls.target.add(tmp);
   camera.position.add(tmp);
   // zoom cinematográfico em cima do zoom do jogador: perto na luta, longe andando, aberto com chefe
-  const wantZoom = bossVisible ? 0.95 : frameFoes.length ? 0.78 : game.state === 'advance' ? 1.08 : 1;
+  const wantZoom = bossVisible ? 1.05 : frameFoes.length ? 0.92 : game.state === 'advance' ? 1.05 : 1;
   cam.zoom += (wantZoom - cam.zoom) * Math.min(1, real * 1.5);
   const offset = tmp.subVectors(camera.position, controls.target);
   if (cam.userDist === 0) cam.userDist = offset.length();
-  offset.setLength(cam.userDist * cam.zoom);
+  const fit = Math.max(CAM_MIN_FIT, frameSpread * 2.6);   // distância que ainda mostra todo mundo
+  cam.fit = (cam.fit || fit) + (fit - (cam.fit || fit)) * Math.min(1, real * 2);
+  offset.setLength(Math.min(controls.maxDistance, Math.max(cam.userDist * cam.zoom, cam.fit)));
   camera.position.copy(controls.target).add(offset);
   sun.position.set(follow.x + 14, 30, follow.z + 12);
   sun.target.position.copy(follow);
