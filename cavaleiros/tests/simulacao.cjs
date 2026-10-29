@@ -57,6 +57,7 @@ const THREE = new Proxy({ Vector3, Mesh: class { constructor() { Object.assign(t
 const asset = () => ({ scene: root(), animations: [] });
 const assets = {};
 for (const n of ['Minion', 'Warrior', 'Rogue', 'Mage', 'Blade', 'Axe', 'Shield_Small_A', 'Crossbow', 'Staff', 'Arrow']) assets['Skeleton_' + n] = asset();
+assets.Barbarian = asset();   // aldeões da milícia
 const stats = () => ({ dano: 0, recebido: 0, cura: 0, abates: 0, ataques: 0, habilidades: 0, criticos: 0, esquivas: 0, distancia: 0, tempo: 0 });
 const context = vm.createContext({ THREE, document: { createElement: el, body: el(), getElementById: el }, URLSearchParams, location: { search: '?tudo=1' },   // todas as variantes liberadas
   addEventListener: noop, requestAnimationFrame: noop, setTimeout: (fn) => fn(), clearTimeout: noop, innerWidth: 1440, innerHeight: 1000, aiming: null, battleGateId: 0, battleLoadingVisible: false,
