@@ -538,7 +538,7 @@ function showMenu() {
   $('campaign').classList.add('hidden');
   $('camp').classList.add('hidden');
   pick.options = MODES;
-  $('pickTitle').textContent = 'Cavaleiros vs Esqueletos';
+  $('pickTitle').textContent = 'Age of Popozitos';
   $('pickSub').textContent = '';
   $('pickHint').textContent = '← → · Enter';
   const list = $('pickList');

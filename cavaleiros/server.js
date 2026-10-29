@@ -27,4 +27,4 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
-}).listen(port, () => console.log(`Cavaleiros vs Esqueletos em http://localhost:${port}`));
+}).listen(port, () => console.log(`Age of Popozitos em http://localhost:${port}`));
