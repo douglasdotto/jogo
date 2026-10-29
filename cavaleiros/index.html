@@ -445,17 +445,23 @@
     .skill.cooling .face img { opacity: .32; filter: saturate(.62) brightness(.72); }
     .skill.cooling .glyph { opacity: .66; }
     .skill.ready .face { border-color: #fff0a6; box-shadow: 0 0 0 2px rgba(255,212,74,.68), 0 0 19px 4px rgba(255, 212, 74, .5), inset 0 2px 0 rgba(255, 255, 255, .58), 0 4px 0 var(--outline); }
-    .skill.ready.manual .face { animation: skillReady 1.35s ease-in-out infinite; }
-    .skill.ready.manual .name { border-color: rgba(255,212,74,.52); }
+    .skill.ready .face { animation: skillReady 1.35s ease-in-out infinite; }
+    .skill.ready .glyph { animation: skillGlyphReady 2.2s ease-in-out infinite; }
+    .skill.ready.slot-1 .glyph { animation-delay: .35s; }
+    .skill.ready.slot-2 .glyph { animation-delay: .7s; }
+    .skill.ready .name { border-color: rgba(255,212,74,.52); }
     .skill.ultimate.ready .face { box-shadow: 0 0 0 3px #ffe27a, 0 0 25px 7px rgba(255, 198, 45, .72), inset 0 2px 0 rgba(255,255,255,.6), 0 4px 0 var(--outline); }
+    .skill.ultimate.ready .face::after { transform-origin: center; animation: skillStarReady 1.8s ease-in-out infinite; }
     .skill.down { cursor: not-allowed; }
     .skill.down .face, .skill.down .name { filter: grayscale(1) brightness(.6); }
     .skill.nope .face { animation: skillNope .35s; }
-    @keyframes skillReady { 50% { transform: scale(1.07); filter: brightness(1.18); } }
+    @keyframes skillReady { 50% { scale: 1.07; filter: brightness(1.18); } }
+    @keyframes skillGlyphReady { 50% { transform: rotate(9deg) scale(1.12); filter: brightness(1.3); } }
+    @keyframes skillStarReady { 50% { transform: rotate(60deg) scale(1.3); opacity: 1; } }
     @keyframes skillNope { 20%, 60% { translate: -5px 0; } 40%, 80% { translate: 5px 0; } }
     @media (prefers-reduced-motion: reduce) {
       .skill .face, .skill .name { transition: none !important; }
-      .skill.ready.manual .face, .skill.nope .face { animation: none !important; }
+      .skill.ready .face, .skill.ready .glyph, .skill.ultimate.ready .face::after, .skill.nope .face { animation: none !important; }
     }
     @media (max-width: 600px) {
       #skills { width: calc(100vw - 16px); max-width: calc(100vw - 16px); box-sizing: border-box; justify-content: space-around;
