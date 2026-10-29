@@ -216,7 +216,7 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   t.selectCard(at('pyro'));
   assert.ok(pickText().includes('Para esta missão, priorize: Defesa · Cura · Controle.'));
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
-  assert.ok(pickText().includes('Derrote o chefe')&&pickText().includes('class="covered priority">Dano a chefe<b>1</b>'));
+  assert.ok(pickText().includes('Derrote o chefe')&&pickText().includes('class="covered priority">Dano a chefe</span>'));
   clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{

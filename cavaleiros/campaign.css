@@ -814,7 +814,8 @@
   font-style: normal;
 }
 #pick:has(#pickList.grid) .pick-team-bar .pick-team-status { min-width: 0; padding: 0; display: grid; gap: 8px; align-content: start; border: 0; }
-#pick:has(#pickList.grid) .pick-team-bar .party-roles { display: flex; flex-wrap: wrap; gap: 6px; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles small { color: #9fb2c8; font: 500 13px 'Fredoka', sans-serif; margin-right: 2px; }
 #pick:has(#pickList.grid) .pick-team-bar .party-roles span {
   display: inline-flex;
   align-items: center;

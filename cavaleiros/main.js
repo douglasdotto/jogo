@@ -622,21 +622,17 @@ function renderInfo(cfg) {
   const objective = game.mission?.goal;
   const priorityRoles = missionRoleNeeds(objective);
   const uncoveredPriorities = priorityRoles.filter((name) => !team.roles.find((role) => role.name === name)?.count);
-  const nextHint = objective
-    ? uncoveredPriorities.length
-      ? projectedTeam.length >= teamLimit ? `Esta formação ainda não cobre: ${uncoveredPriorities.join(' · ')}.` : `Para esta missão, priorize: ${uncoveredPriorities.join(' · ')}.`
-      : 'A equipe cobre os papéis prioritários da missão.'
-    : team.missing.length
-      ? projectedTeam.length >= teamLimit ? `Equipe completa; sem cobertura de: ${team.missing.join(' · ')}.` : `Nas próximas vagas, priorize: ${team.missing.join(' · ')}.`
-      : 'A equipe já cobre os papéis essenciais.';
-  const teamHint = alreadySelected
-    ? 'Este herói já está na equipe.'
-    : !variantOpen(cfg.id)
-      ? `Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para adicionar ${cfg.name}.`
-      : currentTeam.length >= teamLimit
-        ? 'A equipe está completa.'
-        : nextHint;
-  const teamRoles = team.roles.map((role) => `<span class="${role.count ? 'covered' : ''}${priorityRoles.includes(role.name) ? ' priority' : ''}">${role.name}<b>${role.count}</b></span>`).join('');
+  // a dica só aparece quando ainda há vaga: com a equipe fechada não há o que fazer com ela
+  const slotsLeft = projectedTeam.length < teamLimit;
+  const wanted = objective ? uncoveredPriorities : team.missing;
+  const nextHint = slotsLeft && wanted.length
+    ? objective ? `Para esta missão, priorize: ${wanted.join(' · ')}.` : `Nas próximas vagas, priorize: ${wanted.join(' · ')}.`
+    : '';
+  const teamHint = alreadySelected ? 'Este herói já está na equipe.' : currentTeam.length >= teamLimit ? 'A equipe está completa.' : nextHint;
+  const coveredRoles = team.roles.filter((role) => role.count);
+  const teamRoles = coveredRoles.length
+    ? `<small>A equipe faz:</small>${coveredRoles.map((role) => `<span class="covered${priorityRoles.includes(role.name) ? ' priority' : ''}">${role.name}</span>`).join('')}`
+    : '';
   const teamMembers = projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}"><img src="${member.portrait}" alt=""><em>${member.name}</em>${canAddCandidate && member.id === cfg.id ? '<small>novo</small>' : ''}</span>`).join('')
     + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty"><i aria-hidden="true">+</i><em>Vaga livre</em></span>').join('');
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
@@ -659,7 +655,7 @@ function renderInfo(cfg) {
   pick.team.innerHTML = `<section class="party-composition">
       <header><b>${canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe'}</b><span class="pick-team-count">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit} heróis</span>${objective ? `<span class="party-objective"><b>Objetivo</b> ${goalText(objective)}</span>` : ''}</header>
       <div class="party-members">${teamMembers}</div>
-      <div class="pick-team-status"><div class="party-roles">${teamRoles}</div><p>${teamHint}</p></div>
+      <div class="pick-team-status"><div class="party-roles">${teamRoles}</div>${teamHint ? `<p>${teamHint}</p>` : ''}</div>
     </section>`;
   const selectButton = document.createElement('button');
   selectButton.type = 'button';
@@ -1022,8 +1018,8 @@ function portraitStudioFor() {
   key.position.set(2, 4, 3);
   sc.add(key);
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-  cam.position.set(1.4, 1.9, 4.2);
-  cam.lookAt(0, 1.15, 0);
+  cam.position.set(1.72, 2.3, 5.15);   // afastada o bastante para chapéus altos e a auréola do nível 3
+  cam.lookAt(0, 1.38, 0);
   return (portraitStudio = { r, sc, cam });
 }
 

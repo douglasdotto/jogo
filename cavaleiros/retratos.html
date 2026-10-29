@@ -42,8 +42,8 @@
     key.position.set(2, 4, 3);
     sc.add(key);
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-    cam.position.set(1.4, 1.9, 4.2);
-    cam.lookAt(0, 1.15, 0);
+    cam.position.set(1.72, 2.3, 5.15);   // afastada o bastante para chapéus altos e a auréola do nível 3
+    cam.lookAt(0, 1.38, 0);
     // ?perto = close no rosto; ?so=id1,id2 = só esses heróis; ?costas = vista de trás
     const q = new URLSearchParams(location.search);
     if (q.has('perto')) { cam.position.set(0.5, 1.8, 2.3); cam.lookAt(0, 1.55, 0); }
