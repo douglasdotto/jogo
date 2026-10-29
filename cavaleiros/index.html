@@ -520,7 +520,7 @@
     .modal-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
     .modal .danger { background: linear-gradient(#ff8a7a, #d0402f 55%, #9e2318); }
     /* dica discreta: o som começa desligado e só liga pelo botão */
-    #soundHint { position: absolute; z-index: 35; top: 64px; left: 12px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 6px 12px; border: 2px solid rgba(184, 212, 255, .6); border-radius: 10px;
+    #soundHint { position: absolute; z-index: 35; bottom: 18px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 24px); box-sizing: border-box; padding: 6px 12px; border: 2px solid rgba(184, 212, 255, .6); border-radius: 10px;
       color: #fff; background: rgba(20, 33, 60, .92); font: 500 13px 'Fredoka', sans-serif; pointer-events: none; animation: fadeHint 5s forwards; }
     #soundHint[hidden] { display: none; }
     @keyframes fadeHint { 0% { opacity: 0; } 8%, 85% { opacity: 1; } 100% { opacity: 0; } }
