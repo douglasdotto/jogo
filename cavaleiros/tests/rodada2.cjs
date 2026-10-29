@@ -94,7 +94,7 @@ vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 const t=context.t;
@@ -137,6 +137,28 @@ test('20 variantes, receitas e animações existentes nos GLB',()=>{
     for(const clip of [v.idle,...v.attacks,'Death_A','Block_Hit',t.SKILL_MOVES[v.id][0],'Dualwield_Melee_Attack_Stab']) assert.ok(clips.includes(clip),v.id+': '+clip);
     if(v.recipe) for(const add of v.recipe.add) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
+});
+test('60 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+  const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
+  let total=0;
+  for(const v of t.VARIANTS){
+    const anims=t.SKILL_ANIMS[v.id],clips=glb(v.recipe?.base||v.model).animations.map(a=>a.name);
+    assert.ok(anims,v.id+' sem SKILL_ANIMS');assert.equal(anims.length,t.skillSetFor(v).length,v.id);
+    anims.forEach((a,slot)=>{
+      for(const clip of [a.clip,a.hold].filter(Boolean)) assert.ok(clips.includes(clip),v.id+'['+slot+']: '+clip);
+      assert.ok(a.f>0&&a.f<1,v.id+'['+slot+']: impacto');
+      if(a.arc) assert.ok(['slash','chop','ring','thrust'].includes(a.arc),v.id+'['+slot+']: '+a.arc);
+      total++;
+    });
+    assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,3,v.id+': as três habilidades devem ter corpos diferentes');
+  }
+  assert.equal(total,60);
+  // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
+  clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
+  assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
+  for(let i=0;i<200;i++) h.tickSkillBody(0.02);
+  assert.equal(h.skillMove,null);assert.equal(h.lift,0);assert.equal(h.root.rotation.x,0);
+  clear();
 });
 test('classes agrupam apoio, dão categoria própria à natureza e Bardo usa silhueta leve',()=>{
   assert.equal(t.HEROES.length,7);assert.equal(t.CLASSES.length,7);

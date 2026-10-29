@@ -1406,13 +1406,13 @@ class Unit {
     this.current = a;
   }
 
-  once(name, timeScale = 1) {
+  once(name, timeScale = 1, fade = 0.1) {
     const a = this.action(name);
     a.reset().setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
     a.timeScale = timeScale;
     a.play();
-    if (this.current && this.current !== a) a.crossFadeFrom(this.current, 0.1, false);
+    if (this.current && this.current !== a) a.crossFadeFrom(this.current, fade, false);
     this.current = a;
     return a.getClip().duration / timeScale;
   }
@@ -1566,7 +1566,7 @@ class Unit {
       const next = stepNext.copy(this.pos).addScaledVector(this.vel, dt);
       if (this.phasing || world.canStep(this.pos, next)) this.pos.copy(next);   // fantasmas atravessam obstáculos
       else this.vel.set(0, 0, 0);
-      this.pos.y = world.groundHeight(this.pos.x, this.pos.z) + (this.hover || 0);
+      this.pos.y = world.groundHeight(this.pos.x, this.pos.z) + (this.hover || 0) + (this.lift || 0);   // lift: salto/levitação visual das habilidades
       if (world.isShallow(this.pos.x, this.pos.z) && this.vel.lengthSq() > 0.1) {
         this.rippleT = (this.rippleT || 0) - dt;
         if (this.rippleT <= 0) { waterSplash(this.pos); this.rippleT = 0.45; }
@@ -2816,6 +2816,36 @@ function slashX(target, h) {
   shake(0.15);
 }
 
+// Rastro do golpe das habilidades corpo a corpo (SKILL_ANIMS.arc): meia-lua horizontal, corte de cima, anel giratório ou estocada.
+const swingGeo = new THREE.RingGeometry(0.85, 1.6, 28, 1, -1.2, 2.4);   // arco centrado em +x
+const thrustGeo = new THREE.ConeGeometry(0.16, 2.4, 6).rotateX(Math.PI / 2).translate(0, 0, 1.5);
+function swing(h, kind, color, ultimate = false) {
+  const yaw = h.root.rotation.y, size = (ultimate ? 1.3 : 1) * h.size;
+  const holder = new THREE.Group(), pivot = new THREE.Group();
+  holder.position.copy(h.pos).setY(h.pos.y + (kind === 'ring' ? 0.75 : 1.05));
+  holder.rotation.y = yaw;
+  holder.add(pivot);
+  for (const [c, scale, opacity] of [[color, 1, 0.75], [0xffffff, 0.94, 0.9]]) {
+    const m = new THREE.Mesh(kind === 'thrust' ? thrustGeo : kind === 'ring' ? ringGeo : swingGeo, glow(c, opacity));
+    if (kind === 'slash') m.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);   // deitado, centrado à frente
+    else if (kind === 'chop') m.rotation.y = -Math.PI / 2;                 // em pé, no plano do golpe
+    else if (kind === 'ring') m.rotation.x = -Math.PI / 2;
+    m.scale.setScalar(scale * (kind === 'ring' ? 1.7 : 1));
+    if (kind === 'thrust') m.scale.set(scale * 0.8, scale * 0.8, scale);
+    m.userData.op = opacity;
+    pivot.add(m);
+  }
+  const life = kind === 'ring' ? 0.42 : 0.3;
+  addFx(holder, life, (e, dt, k) => {
+    const ease = 1 - (1 - k) ** 3;
+    if (kind === 'slash') pivot.rotation.y = 1.1 - 2.2 * ease;          // varre da direita para a esquerda
+    else if (kind === 'chop') pivot.rotation.x = -1.1 + 1.8 * ease;     // desce de cima para a frente
+    else if (kind === 'ring') pivot.rotation.y -= dt * 14;
+    holder.scale.setScalar(size * (kind === 'thrust' ? 0.6 + 0.6 * ease : 0.85 + 0.3 * ease));
+    for (const m of pivot.children) m.material.opacity = m.userData.op * (1 - k) ** 1.5;
+  });
+}
+
 // Rei: coroa dourada girando acima dele e ondas douradas pelo grupo
 function royal(h, party) {
   const crown = new THREE.Group();
@@ -2934,7 +2964,7 @@ function dress(b) {
 
 function trail(b, dt) {
   const m = b.mesh, L = b.style || {};
-  if (b.kind === 'ninja' && b.skill) m.rotation.y += dt * 25;
+  if (b.kind === 'ninja' && b.skill) m.rotation.y += dt * 32;   // shuriken gira rápido no plano horizontal
   b.age = (b.age ?? 0) + dt;
   if (L.spin) { m.rotation.x += dt * 8; m.rotation.y += dt * 11; }
   if (L.aim) {   // cristal e espinho apontam para o alvo; o espinho gira no próprio eixo
@@ -2950,6 +2980,10 @@ function trail(b, dt) {
     V(rnd(0.6), rnd(0.6) + (fire ? 0.8 : 0), rnd(0.6)), fire ? 0.5 : 0.35, { size, grow: -0.6 });
   if (fire) particle(sparkGeo, 0xff3a1a, m.position.clone(), V(rnd(1), 0.5, rnd(1)), 0.6, { size: size * 0.5, gravity: 5 });   // brasas que caem
   if (b.look === 'necro' && Math.random() < 0.4) particle(puffGeo, 0x14301c, m.position.clone(), V(0, 0.4, 0), 0.5, { smoke: true, opacity: 0.4, size: 0.3, grow: 1, spin: 0 });
+  if (b.kind === 'ninja' && b.skill) {   // faíscas nas pontas da shuriken desenham o giro no rastro
+    const r = 0.32 * m.scale.x, ang = m.rotation.y;
+    for (const s of [1, -1]) particle(sparkGeo, s > 0 ? 0xffffff : c, m.position.clone().add(V(Math.cos(ang) * r * s, 0, -Math.sin(ang) * r * s)), V(0, 0, 0), 0.22, { size: 0.8, grow: -0.8 });
+  }
 }
 
 // tremida de câmera curta nos golpes fortes
@@ -3051,7 +3085,7 @@ function stasis(enemy) {
   burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0x8feaff, 0xb6a4ff], 6, 2.5, { gravity: 0 });
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column };
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -3113,11 +3147,13 @@ class Hero extends Unit {
     this.ranged = !!cfg.ranged;
     this.cleave = cfg.cleave || 0;
     this.root.traverse((o) => { if (cfg.hide.includes(o.name)) o.visible = false; });
+    this.weaponMaterials();   // guarda o brilho original das armas antes de qualquer piscada
     this.post = new THREE.Vector3();
     this.fwd = new THREE.Vector3();
     this.setAnchor(game.guideS);
     this.pos.copy(this.post);
     this.root.rotation.y = Math.atan2(this.fwd.x, this.fwd.z);
+    this.root.rotation.order = 'YXZ';   // a inclinação das habilidades (x) segue a direção do herói
     this.popT = 0;
     this.loop(cfg.idle);
   }
@@ -3366,11 +3402,11 @@ class Hero extends Unit {
         FX.leaves(this, radius);
       };
     } else return false;
-    const [anim, pace, at, sound] = SKILL_MOVES[id];
+    const [, pace, at, sound] = SKILL_MOVES[id];
     const run = effect;
     effect = () => { audio.play(sound); FX.release(this); run(); };
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
-    this.busy = this.once(anim, pace);
+    this.busy = this.skillBody(0, pace);
     this.pendingHit = { target, effect, t: this.busy * at };
     FX.charge(this, this.pendingHit.t);
     this.skillTimers[0] = this.skillMaxes[0] = cooldownForSkill(this.cfg, 0, level, this.skillRate);
@@ -3540,15 +3576,96 @@ class Hero extends Unit {
       default: return false;
     }
 
-    const [anim, pace, at, sound] = SKILL_MOVES[this.cfg.id];
+    const [, pace, at, sound] = SKILL_MOVES[this.cfg.id];
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
-    this.busy = this.once(anim, pace * (skill.ultimate ? 0.82 : 0.92));
+    this.busy = this.skillBody(slot, pace * (skill.ultimate ? 0.82 : 0.92), skill.ultimate);
     const hitAt = this.busy * at;
     this.pendingHit = { target, skill, slot, effect: () => { audio.play(sound); FX.release(this, skill.ultimate); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target); }, t: hitAt };
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
     this.stats.habilidades++;
     return true;
+  }
+
+  // Toca o corpo da habilidade (SKILL_ANIMS) no mesmo tempo de antes: duração e impacto vêm do clipe de SKILL_MOVES.
+  skillBody(slot, pace, ultimate = false) {
+    const [base, , at] = SKILL_MOVES[this.cfg.id];
+    const busy = this.action(base).getClip().duration / pace, hit = busy * at;
+    const e = SKILL_ANIMS[this.cfg.id]?.[slot] || { clip: base, f: at };
+    this.endSkillBody();
+    const lead = e.hold ? Math.min(0.3, hit * 0.5) : hit;   // com pose segurada, o golpe só começa perto do impacto
+    if (e.hold) {
+      const a = this.action(e.hold);
+      a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+      a.timeScale = 1;
+      if (this.current && this.current !== a) a.crossFadeFrom(this.current, 0.15, false);
+      this.current = a;
+    } else this.fitSkillClip(e.clip, e.f ?? 0.5, lead);
+    this.skillMove = { e, t: 0, busy, hit, lead, ultimate, spun: 0, released: !e.hold, fired: false, color: FX.skillColor(this) ?? 0xffffff };
+    return busy;
+  }
+
+  // ajusta o timeScale para o impacto do clipe (fração f) cair no fim da janela; clipe longo pula o começo
+  // em vez de correr demais (no máximo 1,6x até o impacto)
+  fitSkillClip(name, f, window) {
+    const a = this.action(name), impact = f * a.getClip().duration, w = Math.max(0.05, window);
+    const start = Math.max(0, impact - w * 1.6);
+    this.once(name, THREE.MathUtils.clamp((impact - start) / w, 0.35, 3), 0.15);
+    a.time = start;
+  }
+
+  // armas nas mãos (handslots) brilham durante a carga
+  weaponMaterials() {
+    if (this.weaponMats) return this.weaponMats;
+    this.weaponMats = [];
+    this.root.traverse((slot) => {
+      if (!/^handslot[lr]$/i.test(slot.name)) return;
+      slot.traverse((o) => {
+        let shown = true;
+        for (let p = o; p && p !== slot; p = p.parent) shown &&= p.visible;
+        if (o.isMesh && shown && o.material?.emissive && !this.weaponMats.some((w) => w.mat === o.material)) this.weaponMats.push({ mat: o.material, base: o.material.emissive.clone() });
+      });
+    });
+    return this.weaponMats;
+  }
+
+  endSkillBody() {
+    if (!this.skillMove) return;
+    this.skillMove = null;
+    this.lift = 0;
+    this.root.rotation.x = 0;
+    for (const w of this.weaponMaterials()) w.mat.emissive.copy(w.base);
+  }
+
+  // detalhes procedurais da habilidade: pose segurada, salto/levitação, giro, inclinação, brilho, rastro e passo
+  tickSkillBody(dt) {
+    const m = this.skillMove;
+    if (!m) return;
+    if (this.dead || game.over) { this.endSkillBody(); return; }
+    const { e } = m;
+    m.t += dt;
+    if (!m.released && m.t >= m.hit - m.lead) {
+      m.released = true;
+      if (this.current === this.action(e.hold)) this.fitSkillClip(e.clip, e.f ?? 0.5, m.lead);
+    }
+    const fwd = tmp.set(Math.sin(this.root.rotation.y), 0, Math.cos(this.root.rotation.y));
+    if (!m.fired && m.t >= m.hit) {
+      m.fired = true;
+      if (e.arc) FX.swing(this, e.arc, m.color, m.ultimate);
+      if (e.kick) this.vel.addScaledVector(fwd, e.kick);
+    }
+    const toHit = Math.min(1, m.t / Math.max(0.05, m.hit));
+    this.lift = (e.hop ? e.hop * Math.sin(Math.PI * toHit) : 0)
+      + (e.float ? e.float * Math.sin(Math.PI * Math.min(1, m.t / m.busy)) : 0);
+    if (e.lean) this.root.rotation.x = e.lean * Math.sin(Math.PI * Math.min(1, m.t / (m.hit + 0.3)));
+    if (e.spin) {   // as voltas completas terminam na mesma direção em que começaram
+      const s = THREE.MathUtils.clamp((m.t - m.hit + 0.3) / 0.55, 0, 1), p = s * s * (3 - 2 * s) * e.spin * Math.PI * 2;
+      this.root.rotation.y += p - m.spun;
+      m.spun = p;
+    }
+    const k = m.t < m.hit ? (m.ultimate ? 1.1 : 0.8) * toHit ** 1.5 : Math.max(0, 1 - (m.t - m.hit) / 0.3);
+    for (const w of this.weaponMaterials()) w.mat.emissive.setHex(m.color).multiplyScalar(k * (0.75 + 0.25 * Math.sin(m.t * 30))).add(w.base);
+    if (m.t >= Math.max(m.busy, m.hit + 0.35)) this.endSkillBody();
   }
 
   // pedido do jogador (botão ou tecla): vale por um instante, até o golpe atual terminar
@@ -3621,6 +3738,7 @@ class Hero extends Unit {
     this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     this.updateCommon(dt);
+    this.tickSkillBody(dt);
     if (this.dead || this.busy > 0 || game.over) return;
     const escape = game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
     const move = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Running_A';
@@ -3690,6 +3808,114 @@ const SKILL_MOVES = {
   bard: ['Cheer', 1.6, 0.3, 'shout'],
   angel: ['Spellcast_Raise', 1.8, 0.42, 'heal'],
   chronist: ['Spellcast_Raise', 1.6, 0.42, 'zap'],
+};
+
+// Corpo de cada habilidade [básica, técnica, ultimate]. O tempo continua o de SKILL_MOVES (o clipe novo é
+// acelerado/freado para caber nele). clip: golpe solto; hold: pose em laço segurada durante a carga;
+// f: fração do clipe em que acontece o impacto; arc: rastro do golpe (slash, chop, ring, thrust);
+// hop: salto que aterrissa no impacto; float: levita durante a carga; spin: voltas do corpo no impacto;
+// lean: inclinação (+ para a frente, - para trás); kick: passo no impacto (+ avança, - recua).
+const SKILL_ANIMS = {
+  paladin: [
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.12, kick: -0.8 },
+    { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: 1 },
+    { clip: '1H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.5, arc: 'chop', hop: 0.45 },
+  ],
+  guardian: [
+    { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: -1 },
+    { clip: '1H_Melee_Attack_Stab', f: 0.45, arc: 'thrust', kick: 1.4 },
+    { clip: 'Cheer', hold: 'Blocking', f: 0.35, arc: 'ring', lean: -0.15, hop: 0.25 },
+  ],
+  champion: [
+    { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 1 },
+    { clip: '2H_Melee_Attack_Stab', f: 0.45, arc: 'thrust', lean: 0.18 },
+    { clip: '2H_Melee_Attack_Spin', hold: '2H_Melee_Idle', f: 0.55, arc: 'ring', spin: 2, hop: 0.3 },
+  ],
+  king: [
+    { clip: 'Cheer', f: 0.35, lean: -0.18 },
+    { clip: 'Spellcast_Raise', f: 0.5, lean: -0.1, kick: 0.8 },
+    { clip: '2H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.5, arc: 'chop', hop: 0.5 },
+  ],
+  berserker: [
+    { clip: 'Cheer', f: 0.3, lean: 0.2, hop: 0.2 },
+    { clip: 'Dualwield_Melee_Attack_Chop', f: 0.5, arc: 'chop', hop: 0.7, lean: 0.15 },
+    { clip: '2H_Melee_Attack_Spinning', hold: 'Unarmed_Idle', f: 0.5, arc: 'ring', spin: 2 },
+  ],
+  crusher: [
+    { clip: '2H_Melee_Attack_Chop', f: 0.55, arc: 'chop', hop: 0.55 },
+    { clip: 'Jump_Full_Short', f: 0.72, arc: 'ring', kick: 1 },
+    { clip: '2H_Melee_Attack_Spin', hold: '2H_Melee_Idle', f: 0.6, arc: 'ring', spin: 1, hop: 0.4 },
+  ],
+  viking: [
+    { clip: 'Throw', f: 0.45, lean: 0.15 },
+    { clip: 'Throw', hold: '1H_Ranged_Aiming', f: 0.45, lean: 0.2, kick: -0.8 },
+    { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 2 },
+  ],
+  iceviking: [
+    { clip: 'Throw', hold: 'Block', f: 0.45, lean: 0.2, hop: 0.2 },
+    { clip: '2H_Melee_Attack_Chop', f: 0.55, arc: 'chop', hop: 0.5 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.6, arc: 'ring', float: 0.35 },
+  ],
+  pyro: [
+    { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -1 },
+    { clip: '2H_Melee_Attack_Spin', f: 0.5, arc: 'ring', spin: 1 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.6, lean: -0.22, float: 0.25 },
+  ],
+  arcane: [
+    { clip: '1H_Ranged_Shoot', hold: 'Spellcasting', f: 0.3, kick: -0.8 },
+    { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -1 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, float: 0.45 },
+  ],
+  cryo: [
+    { clip: '1H_Ranged_Shoot', hold: '1H_Ranged_Aiming', f: 0.3, kick: -1 },
+    { clip: 'Spellcast_Raise', f: 0.5, lean: -0.1 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
+  ],
+  assassin: [
+    { clip: 'Dodge_Forward', f: 0.6, lean: 0.25 },
+    { clip: 'Dualwield_Melee_Attack_Slice', f: 0.55, arc: 'slash', hop: 0.3 },
+    { clip: 'Dualwield_Melee_Attack_Chop', hold: 'Blocking', f: 0.5, arc: 'chop', hop: 0.45, lean: 0.2 },
+  ],
+  crossbow: [
+    { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, kick: -1.4 },
+    { clip: '2H_Ranged_Shooting', f: 0.3, kick: -1 },
+    { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, lean: -0.3, hop: 0.3 },
+  ],
+  ninja: [
+    { clip: 'Throw', f: 0.45, lean: 0.15, hop: 0.25 },
+    { clip: 'Dodge_Backward', f: 0.5, hop: 0.35 },
+    { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 3, hop: 0.3 },
+  ],
+  necro: [
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.1 },
+    { clip: 'Spellcast_Shoot', f: 0.5, kick: -0.8 },
+    { clip: '2H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.3 },
+  ],
+  druid: [
+    { clip: 'PickUp', f: 0.5, lean: 0.15 },
+    { clip: '2H_Melee_Attack_Chop', f: 0.55, arc: 'ring', hop: 0.3 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, float: 0.4, lean: -0.12 },
+  ],
+  cleric: [
+    { clip: 'Spellcast_Long', f: 0.45, lean: -0.15 },
+    { clip: 'Block', hold: 'Blocking', f: 0.5, kick: -0.6 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.4 },
+  ],
+  bard: [
+    { clip: 'Cheer', f: 0.3, hop: 0.3 },
+    { clip: '2H_Melee_Attack_Slice', f: 0.5, arc: 'slash', kick: 0.8 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
+  ],
+  angel: [
+    { clip: 'Jump_Full_Long', f: 0.6, hop: 0.6, lean: 0.15 },
+    { clip: 'Block', hold: 'Blocking', f: 0.5 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.6 },
+  ],
+  chronist: [
+    { clip: 'Spellcast_Shoot', hold: 'Spellcasting', f: 0.5, kick: -0.8 },
+    { clip: '1H_Ranged_Shoot', f: 0.3, lean: 0.1, kick: -0.8 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.35 },
+  ],
 };
 
 class Minion extends Unit {
