@@ -18,6 +18,7 @@ import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, stars
 import { materialPool } from './fx-pool.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
 import { vfxMesh, spriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
+import { startKingdom, linkKingdom } from './kingdom.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -207,7 +208,7 @@ $('restartNo').onclick = () => confirmRestart(false);
 // pausa do jogador (botão, P ou Espaço); as pausas dos menus não passam por aqui
 function setUserPause(on) {
   if (on === !!game.userPaused) return;
-  if (on && (game.paused || game.over || pick.open || !heroes().length)) return;
+  if (on && (game.paused || game.over || pick.open || (!heroes().length && !game.realm))) return;
   game.userPaused = on;
   game.paused = on;
   $('pauseOverlay').hidden = !on;
@@ -226,7 +227,7 @@ addEventListener('keydown', (e) => {
   }
   const typing = e.target.closest?.('button, input, select, textarea, summary, [role="button"]');
   if (e.repeat || !(e.key === 'p' || e.key === 'P' || (e.key === ' ' && !typing))) return;
-  if (!game.userPaused && (game.paused || game.over || pick.open || !heroes().length)) return;
+  if (!game.userPaused && (game.paused || game.over || pick.open || (!heroes().length && !game.realm))) return;
   e.preventDefault();
   setUserPause(!game.userPaused);
 });
@@ -518,6 +519,7 @@ const MODES = [
   { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
   { name: 'Jornada', icon: '♛', desc: 'Jornada completa: as 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
   { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
+  { name: 'Reino', icon: '♜', desc: 'Construa a vila, colete recursos, treine soldados e heróis e destrua o Portal de Ossos.', color: ['#b9f0a8', '#4f9a3a'] },
 ];
 // Cartões do menu: nome e um número; a explicação de cada modo fica na dica e no aria-label.
 function showMenu() {
@@ -537,10 +539,10 @@ function showMenu() {
   const best = records.length ? Math.max(...records.map((r) => r.phase)) : 0;
   const lines = [`★ ${totalStars()}/${MISSIONS.length * 3}`,
     records.some((r) => r.won) ? '♛ Vencida' : best ? `Fase ${best}` : '',
-    `${GOLD.icon} ${progress.gold} · ✦ ${achieved}/${achievements.length}`];
+    `${GOLD.icon} ${progress.gold} · ✦ ${achieved}/${achievements.length}`, ''];
   const spoken = [`${totalStars()} de ${MISSIONS.length * 3} estrelas`,
     records.some((r) => r.won) ? 'Jornada vencida' : best ? `Recorde: fase ${best}` : 'Sem recorde ainda',
-    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas`];
+    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas`, 'Estratégia: vila, recursos e ondas'];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = 'card diff mode';
@@ -567,7 +569,7 @@ function showMenu() {
 function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : (game.mission = null, showDifficulty())), 450);
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : i === 3 ? startGame('reino') : (game.mission = null, showDifficulty())), 450);
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
@@ -1065,7 +1067,7 @@ function confirmRelic(i) {
 
 function showEvolution() {
   if (!evolutions.length || pick.open || game.paused || game.over) return;
-  if (autoEvolve) {
+  if (autoEvolve || game.realm) {   // no Reino a evolução é sempre automática (sem pausar a estratégia)
     while (evolutions.length && !game.over) {
       const entry = evolutions.shift();
       const option = chooseAutoEvolution(entry.hero);
@@ -1449,7 +1451,7 @@ registerTooltip('relic', relicTooltip);
 initTooltips();
 
 addEventListener('keydown', (e) => {
-  if (pick.open || game.over || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
+  if (pick.open || game.over || game.realm || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
@@ -1847,7 +1849,7 @@ class Unit {
           else { fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic'); relicExtraShot(this, target); }
         }
         else if (this.cleave) damageCleave(this, target);
-        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos, this);
+        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size + (target.reach || 0)) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos, this);
       }
     }
   }
@@ -4348,7 +4350,7 @@ class Hero extends Unit {
       if (this.pos.distanceTo(captive.pos) > RESCUE_RADIUS - 0.8) this.moveTo(captive.pos, dt);
       else this.face(captive.pos, dt);
     } else if (engage) {
-      const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
+      const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1) - (target.reach || 0);   // reach: raio de prédios e do portal
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
@@ -4640,7 +4642,7 @@ class Skeleton extends Unit {
       return;
     }
     if (target) {
-      const d = target.pos.distanceTo(this.pos);
+      const d = target.pos.distanceTo(this.pos) - (target.reach || 0);   // prédios do Reino: golpeia a parede, não o centro
       if (this.ranged) this.vel.set(0, 0, 0);
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
       else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
@@ -4815,6 +4817,7 @@ const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false
 
 // view: 'menu' (tela inicial) ou 'map' (mapa da campanha)
 function startGame(view = 'menu') {
+  game.realm?.stop();   // saindo do modo Reino: some a arena e volta a estrada
   battleGateId++;
   battleLoadingVisible = false;
   document.body.classList.add('no-battle');   // menu e mapa sem o HUD da batalha por trás
@@ -4853,6 +4856,7 @@ function startGame(view = 'menu') {
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
   else if (view?.goal) showCampaign(view);   // "Próxima missão" / "Tentar de novo" vão direto à dificuldade
+  else if (view === 'reino') startKingdom();
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
 }
 
@@ -5521,7 +5525,7 @@ function spawnSkeleton() {
 }
 
 // monsters.js usa estas peças do jogo (ele não importa o main.js)
-linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, world, ring, beam, poof, popText, showBanner,
+linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, get world() { return world; }, ring, beam, poof, popText, showBanner,
   get game() { return game; }, get difficulty() { return difficulty; } });
 
 // Com a onda ainda longe, a formação anda ao encontro dela em vez de esperar parada no posto;
@@ -5701,7 +5705,7 @@ function updateBars() {
   const w = innerWidth / 2, h = innerHeight / 2;
   for (const u of units) {
     if (u.dead) continue;
-    tmp.copy(u.pos).setY(u.pos.y + 2.6 * u.size).project(camera);
+    tmp.copy(u.pos).setY(u.pos.y + (u.barHeight ?? 2.6 * u.size)).project(camera);
     const visible = tmp.z < 1;
     const wasVisible = u.barVisible;
     if (wasVisible !== visible) {
@@ -5755,9 +5759,42 @@ function frame() {
   updateEnemyBolts(dt);
   updateFx(dt);
   FX.update(dt);
-  if (dt > 0) updateGame(dt);
+  if (dt > 0) game.realm ? game.realm.tick(dt) : updateGame(dt);
   showEvolution();
-  // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez
+  // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez; no Reino a câmera é livre
+  if (game.realm) game.realm.camera(real);
+  else followParty(real);
+  sun.position.set(follow.x + 14, 30, follow.z + 12);
+  sun.target.position.copy(follow);
+  world.update(real, follow.z);
+  const gloom = world.gloomAt(follow.z);
+  scene.background.lerpColors(SKY[0], SKY[1], gloom);
+  scene.fog.color.copy(scene.background);
+  scene.fog.near = 45 - gloom * 22;
+  scene.fog.far = 110 - gloom * 45;
+  hemi.color.lerpColors(HEMI[0], HEMI[1], gloom);
+  hemi.groundColor.lerpColors(HEMI_GROUND[0], HEMI_GROUND[1], gloom);
+  hemi.intensity = 1.35 - gloom * 0.3;   // menos luz ambiente e sol mais forte: sombras marcadas
+  sun.color.lerpColors(SUN[0], SUN[1], gloom);
+  sun.intensity = 3.1 - gloom * 1.4;
+  const sel = panelHero();   // anel embaixo do herói com o cartão aberto
+  selectRing.visible = !!sel && !sel.dead && units.includes(sel);
+  if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
+  tickHeroPanel(real);
+  controls.update();
+  if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; }   // o jogador mudou o zoom
+  const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
+  camera.position.add(kick);
+  renderer.render(scene, camera);
+  camera.position.sub(kick);
+  updateBars();
+  updateSkillBar();
+  updateAim();
+  audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
+}
+
+// enquadra o grupo e a briga por perto (Campanha e Jornada)
+function followParty(real) {
   frameHeroes.length = 0;
   frameFoes.length = 0;
   let bossVisible = false;
@@ -5801,33 +5838,6 @@ function frame() {
   cam.fit = (cam.fit || fit) + (fit - (cam.fit || fit)) * Math.min(1, real * 2);
   offset.setLength(Math.min(controls.maxDistance, Math.max(cam.userDist * cam.zoom, cam.fit)));
   camera.position.copy(controls.target).add(offset);
-  sun.position.set(follow.x + 14, 30, follow.z + 12);
-  sun.target.position.copy(follow);
-  world.update(real, follow.z);
-  const gloom = world.gloomAt(follow.z);
-  scene.background.lerpColors(SKY[0], SKY[1], gloom);
-  scene.fog.color.copy(scene.background);
-  scene.fog.near = 45 - gloom * 22;
-  scene.fog.far = 110 - gloom * 45;
-  hemi.color.lerpColors(HEMI[0], HEMI[1], gloom);
-  hemi.groundColor.lerpColors(HEMI_GROUND[0], HEMI_GROUND[1], gloom);
-  hemi.intensity = 1.35 - gloom * 0.3;   // menos luz ambiente e sol mais forte: sombras marcadas
-  sun.color.lerpColors(SUN[0], SUN[1], gloom);
-  sun.intensity = 3.1 - gloom * 1.4;
-  const sel = panelHero();   // anel embaixo do herói com o cartão aberto
-  selectRing.visible = !!sel && !sel.dead && units.includes(sel);
-  if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
-  tickHeroPanel(real);
-  controls.update();
-  if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; }   // o jogador mudou o zoom
-  const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
-  camera.position.add(kick);
-  renderer.render(scene, camera);
-  camera.position.sub(kick);
-  updateBars();
-  updateSkillBar();
-  updateAim();
-  audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
 }
 
 // Mira manual: alcance azul, alvo válido verde e alvo inválido vermelho.
@@ -6049,6 +6059,15 @@ function frameView() {
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(frameView).observe($('skills'));
+
+// modo Reino (kingdom.js): recebe as peças do jogo sem importar o main.js, como o monsters.js
+linkKingdom({ Unit, Hero, Skeleton, units, scene, camera, controls, renderer, sun, follow, assets, HEROES, VARIANTS, variantOpen, militiaWeapon,
+  fireBolt, ring, poof, popText, showBanner, FX, audio, pickMonster, skeletonsAlive, skillSetFor, startGame, withBattleAssets,
+  skillGlyph: (id, slot) => SKILL_GLYPHS[id]?.[slot] || ['✦', '⚔', '☼'][slot],
+  pickOpen: () => pick.open,
+  replaceWorld(next) { world.dispose?.(); world = next; },
+  restoreWorld() { world.dispose?.(); world = createWorld(scene, ROAD, PHASES, 11); },
+  get game() { return game; }, get difficulty() { return difficulty; } });
 
 try {
   await loadAssets();

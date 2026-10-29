@@ -331,7 +331,7 @@ test('contexto tático reutiliza seus arrays sem carregar alvos removidos',()=>{
 test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
   assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'mode');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
-  assert.equal(t.pick.cards.length,3);
+  assert.equal(t.pick.cards.length,4);assert.match(t.pick.cards[3].innerHTML,/Reino/);
   let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
   t.confirmPick(1);next();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
   t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'♜','HUD mostra o ícone da dificuldade; o nome fica na dica');
@@ -1189,7 +1189,7 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
   t.pick.open=false;
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
-  clear();t.showMenu();assert.equal(t.pick.cards.length,3);
+  clear();t.showMenu();assert.equal(t.pick.cards.length,4);
   assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/✦ \d+\/\d+/);   // menu enxuto: conquistas viram ícone + contagem
   assert.ok(t.pick.cards.every(card=>!card.innerHTML.includes('<p>')),'menu sem frases nos cartões: a descrição fica na dica');
   let next;context.setTimeout=(fn,ms)=>{if(ms===450)next=fn};

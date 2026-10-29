@@ -1,0 +1,100 @@
+/* ==================== modo Reino: recursos no topo, painel contextual embaixo ====================
+   Pouco texto: ícone + número; nomes e custos por extenso ficam na dica (data-tip). */
+body.kingdom #wave, body.kingdom #left, body.kingdom #militia, body.kingdom #relics, body.kingdom #goal,
+body.kingdom #level, body.kingdom #skills, body.kingdom #heroPanel, body.kingdom #autoEvolve { display: none !important; }
+body.kingdom #hud { width: min(1180px, calc(100vw - 24px)); }
+
+.k-top { display: flex; align-items: center; gap: 4px; }
+.k-chip { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 4px; border-radius: 99px;
+  font: 400 18px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill;
+  text-shadow: 0 2px 0 var(--outline); font-variant-numeric: tabular-nums; cursor: default; }
+.k-chip svg, .k-wave svg { width: 22px; height: 22px; flex: none; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .55)); }
+.k-chip b { min-width: 30px; font-weight: 400; }
+.k-chip.short { animation: k-short .6s ease 2; }
+@keyframes k-short { 50% { background: rgba(255, 70, 60, .55); transform: scale(1.12); } }
+.k-pop.full b { color: #ffb0a6; }
+#hud .k-idle { padding: 3px 9px; font: 400 16px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 0; text-shadow: 0 1px 2px #000;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(184, 212, 255, .3); box-shadow: none; }
+#hud .k-idle.none { opacity: .4; }
+#hud .k-idle b { min-width: 0; margin-left: 4px; }
+
+.k-wave { display: flex; align-items: center; gap: 10px; padding: 3px 12px; border-radius: 99px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(184, 212, 255, .2);
+  font: 400 18px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; text-shadow: 0 2px 0 var(--outline); font-variant-numeric: tabular-nums; }
+.k-wave > span { display: inline-flex; align-items: center; gap: 5px; cursor: default; }
+.k-wave-n { color: #e8e8f0; }
+.k-wave-n b, .k-wave-t b { font-weight: 400; color: #fff; }
+.k-wave.soon { background: rgba(223, 69, 69, .22); border-color: rgba(255, 120, 110, .6); animation: k-pulse 1s ease-in-out infinite; }
+@keyframes k-pulse { 50% { box-shadow: 0 0 14px rgba(255, 90, 70, .6); } }
+.k-portal-hp { width: 84px; height: 9px; padding: 0; border-radius: 99px; background: rgba(0, 0, 0, .5); border: 2px solid var(--outline); overflow: hidden; }
+.k-portal-hp::before { content: none; }
+.k-portal-hp i { display: block; height: 100%; width: 100%; background: linear-gradient(#d9a4ff, #8a3fd8); transition: width .2s linear; }
+
+/* ---------- painel inferior: minimapa · seleção · comandos ---------- */
+.k-panel { position: absolute; z-index: 20; left: 50%; bottom: 10px; translate: -50% 0; width: min(1040px, calc(100vw - 24px)); height: 178px; box-sizing: border-box;
+  display: grid; grid-template-columns: 236px minmax(0, 1fr) 312px; gap: 12px; padding: 8px; font-family: 'Fredoka', sans-serif; color: #eaf2ff;
+  background: linear-gradient(rgba(16, 26, 48, .86), rgba(10, 17, 33, .84)); backdrop-filter: blur(6px);
+  border: 1px solid rgba(184, 212, 255, .25); border-radius: 16px; box-shadow: 0 8px 22px rgba(0, 0, 0, .35); }
+body.no-battle .k-panel { visibility: hidden; }
+.k-map { width: 224px; height: 160px; align-self: center; border-radius: 10px; border: 2px solid rgba(184, 212, 255, .35); cursor: crosshair; image-rendering: pixelated; }
+
+.k-sel { min-width: 0; display: flex; align-items: center; }
+.k-empty { width: 100%; text-align: center; font: 400 54px/1 'Lilita One', sans-serif; color: rgba(184, 212, 255, .18); }
+.k-one { display: flex; align-items: center; gap: 14px; width: 100%; }
+.k-portrait { width: 96px; height: 96px; flex: none; display: grid; place-items: center; overflow: hidden; border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #4f78bf, #1c3158 74%); border: 3px solid var(--gold); box-shadow: inset 0 3px 0 #ffffff33, 0 4px 0 var(--outline); }
+.k-portrait img { width: 112%; height: 112%; object-fit: cover; object-position: 50% 15%; }
+.k-glyph { font: 400 46px/1 'Lilita One', sans-serif; color: #fff4c8; -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill; text-shadow: 0 3px 0 var(--outline); }
+.k-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.k-hp { position: relative; height: 18px; border-radius: 99px; background: #1b223a; border: 2px solid var(--outline); overflow: hidden; }
+.k-hp i { display: block; height: 100%; background: linear-gradient(#8ef07a, #3fb83a); transition: width .15s linear; }
+.k-hp b { position: absolute; inset: 0; display: grid; place-items: center; font: 400 13px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 2.5px var(--outline); paint-order: stroke fill; }
+.k-progress { height: 12px; border-radius: 99px; background: #1b223a; border: 2px solid var(--outline); overflow: hidden; }
+.k-progress i { display: block; height: 100%; width: 0; background: linear-gradient(#ffe58a, #e0a52a); }
+.k-stats { display: flex; gap: 12px; flex-wrap: wrap; font: 400 16px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 2.5px var(--outline); paint-order: stroke fill; }
+.k-stats span { display: inline-flex; align-items: center; gap: 4px; cursor: default; }
+.k-stats svg, .k-carry svg { width: 20px; height: 20px; }
+.k-carry { display: inline-flex; align-items: center; gap: 4px; min-height: 22px; font: 400 17px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 2.5px var(--outline); paint-order: stroke fill; }
+.k-carry b { font-weight: 400; }
+.k-queue { display: flex; gap: 6px; min-height: 40px; }
+.k-qi, .k-mini { position: relative; width: 40px; height: 40px; padding: 0; overflow: hidden; display: grid; place-items: center; border-radius: 10px;
+  background: radial-gradient(circle at 40% 30%, #4f78bf, #1c3158 74%); border: 2px solid rgba(255, 212, 74, .8); box-shadow: 0 2px 0 var(--outline); }
+.k-qi img, .k-mini img { width: 115%; height: 115%; object-fit: cover; object-position: 50% 15%; }
+.k-qi .k-glyph, .k-mini .k-glyph { font-size: 22px; -webkit-text-stroke: 1.5px var(--outline); }
+.k-qi i { position: absolute; left: 0; bottom: 0; height: 4px; background: #8ef07a; }
+.k-qi.blocked { border-color: #ff7a6a; animation: k-pulse 1s ease-in-out infinite; }
+.k-many { display: flex; flex-wrap: wrap; gap: 5px; max-height: 158px; overflow: hidden; }
+.k-mini i { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 4px; width: auto; max-width: calc(100% - 6px); border-radius: 99px; background: #5fd35f; }
+
+.k-cmds { display: grid; grid-template-columns: repeat(4, 70px); grid-auto-rows: 74px; gap: 8px; align-content: center; justify-content: end; }
+.k-cmd { position: relative; padding: 4px 2px 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; border-radius: 14px;
+  background: linear-gradient(#557bbb, #2a467c); border: 2px solid var(--gold); box-shadow: inset 0 2px 0 #ffffff33, 0 4px 0 var(--outline); text-shadow: none; }
+.k-cmd .k-glyph { font-size: 30px; margin-top: 4px; }
+.k-cmd kbd { position: absolute; top: -7px; left: -7px; min-width: 20px; height: 20px; display: grid; place-items: center; padding: 0 3px; box-sizing: border-box;
+  font: 700 11px/1 'Fredoka', sans-serif; color: #fff; background: #1d6fd6; border: 2px solid var(--outline); border-radius: 7px; }
+.k-costs { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.k-cost { display: inline-flex; align-items: center; gap: 1px; font: 400 12px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill; }
+.k-cost svg { width: 14px; height: 14px; }
+.k-cmd.poor { filter: saturate(.35) brightness(.75); }
+.k-cmd.limit { filter: grayscale(1) brightness(.6); }
+.k-skill.ready { box-shadow: inset 0 2px 0 #ffffff33, 0 4px 0 var(--outline), 0 0 12px rgba(255, 224, 102, .7); }
+.k-skill .k-cd { position: absolute; inset: 0; display: grid; place-items: center; font: 400 22px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; border-radius: 12px; pointer-events: none; }
+.k-skill:not(.ready) .k-cd { background: rgba(6, 12, 27, .55); }
+.k-skill .k-auto { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; display: grid; place-items: center; font: 700 13px/1 'Fredoka', sans-serif;
+  color: #fff; background: #50607e; border: 2px solid var(--outline); border-radius: 50%; cursor: pointer; }
+.k-skill .k-auto.on { background: #3fb83a; }
+.k-cmds.heroes { grid-template-columns: repeat(6, 44px); grid-auto-rows: 44px; gap: 6px; overflow-y: auto; max-height: 160px; padding: 6px; align-content: start; }
+.k-hero { position: relative; width: 44px; height: 44px; padding: 0; overflow: hidden; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #fff9e9, var(--c, #8cb6ff));
+  border: 2px solid var(--gold); box-shadow: 0 3px 0 var(--outline); text-shadow: none; }
+.k-hero img { width: 120%; height: 120%; margin: -10%; object-fit: cover; object-position: 50% 15%; }
+.k-hero.k-back { font: 400 20px/1 'Lilita One', sans-serif; background: #2a467c; color: #fff; }
+
+/* retângulo de seleção e barras de vida discretas (só feridas, selecionadas ou em obra) */
+.k-box { position: fixed; z-index: 15; pointer-events: none; border: 1.5px solid #7dff8a; background: rgba(125, 255, 138, .12); border-radius: 3px; }
+body.kingdom .hp.k-quiet { visibility: hidden; }
+.hp.k-worker { width: 26px; height: 5px; margin-left: -15px; }
+.hp.k-soldier { width: 32px; height: 5px; margin-left: -18px; }
+.hp.k-building { width: 72px; height: 7px; margin-left: -38px; }
+.hp.k-portal { width: 120px; height: 10px; margin-left: -62px; }
+
+.k-end { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.k-end .end-chip svg { width: 18px; height: 18px; vertical-align: -3px; }
