@@ -43,53 +43,53 @@ function objectiveTip(mission) {
   const goal = mission?.goal;
   if (!goal) return null;
   if (goal.type === 'escort') {
-    if (mission.villagerDown) return 'O aldeão caiu. Intercepte inimigos perto dele e leve cura ou provocação para mantê-lo vivo.';
-    return 'O grupo caiu antes de concluir a escolta. Reforce a linha de frente e leve cura ou provocação para proteger a equipe e o aldeão.';
+    if (mission.villagerDown) return 'O aldeão caiu: fique perto dele com cura ou provocação.';
+    return 'O grupo caiu antes de concluir a escolta: reforce a linha de frente.';
   }
   if (goal.type === 'nofall') {
-    return 'A missão exige que ninguém caia. Guarde cura, escudo ou controle para salvar o aliado que ficar com pouca vida.';
+    return 'A regra é que ninguém caia: guarde cura e escudo para o mais fraco.';
   }
   if (goal.type === 'rescue' && mission.villagerDown) {
     return mission.rescueComplete
-      ? 'A pessoa foi resgatada, mas caiu antes de chegar em segurança. Proteja-a depois de libertá-la.'
-      : 'O prisioneiro caiu antes do resgate. Aproxime-se dele e mantenha os esqueletos afastados.';
+      ? 'A pessoa caiu depois do resgate: proteja-a até o fim.'
+      : 'O prisioneiro caiu antes do resgate: afaste os esqueletos dele.';
   }
   if (goal.type === 'rescue' && !mission.rescueComplete) {
-    return 'O prisioneiro continua preso. Aproxime-se dele para libertá-lo e mantenha os esqueletos afastados.';
+    return 'O prisioneiro continua preso: fique perto dele para libertá-lo.';
   }
   if (goal.type === 'tower' && number(mission.towersDown) < number(goal.count)) {
     const remaining = Math.max(0, number(goal.count) - number(mission.towersDown));
-    return `Faltou derrubar ${remaining === 1 ? 'a torre' : `${remaining} torres`} de ossos. Aproxime os heróis e concentre os ataques nela.`;
+    return `Faltou derrubar ${remaining === 1 ? 'a torre' : `${remaining} torres`}: concentre os ataques nela.`;
   }
   if (goal.type === 'timer' && number(mission.time) > number(goal.time)) {
-    return 'O limite de tempo acabou. Use dano em área nas ondas, priorize sacerdotes e arqueiros e evite perseguições longas.';
+    return 'O limite de tempo acabou: use dano em área e evite perseguições.';
   }
   if (goal.type === 'totems' && number(mission.totemsDown) < number(goal.count)) {
     const remaining = Math.max(0, number(goal.count) - number(mission.totemsDown));
-    return `Faltaram ${remaining} ${remaining === 1 ? 'totem' : 'totens'}. Destrua cada um cedo: enquanto ficam ativos, invocam reforços.`;
+    return `Faltaram ${remaining} ${remaining === 1 ? 'totem' : 'totens'}: destrua cada um cedo.`;
   }
   if (goal.type === 'boss' && !mission.bossDown) {
     if (!mission.bossSeen) {
       const phase = Math.max(1, number(mission.phase));
       const bossPhase = Math.max(6, Math.ceil(phase / 6) * 6);
-      return `O grupo caiu antes da estreia do chefe. Sobreviva às ondas até a fase ${bossPhase} e priorize os inimigos de suporte.`;
+      return `O grupo caiu antes da estreia do chefe, na fase ${bossPhase}.`;
     }
-    return 'O chefe ainda está ativo. Concentre o dano nele e saia das áreas marcadas antes do impacto.';
+    return 'O chefe ainda está ativo: foque nele e saia das áreas marcadas.';
   }
   if (goal.type === 'defend' && mission.shrineDown) {
-    return 'O santuário caiu. Deixe um herói de defesa perto dele e derrube primeiro os saqueadores que correm para o cristal.';
+    return 'O santuário caiu: deixe um defensor perto do cristal.';
   }
   if (goal.type === 'hunt' && !mission.huntDown) {
     return mission.huntEscaped
-      ? 'O alvo marcado fugiu. Encurrale-o no fim da clareira e use lentidão, raízes ou atiradores antes que o tempo acabe.'
-      : 'O grupo caiu antes de abater o alvo marcado. Concentre o dano nele quando ele parar para lutar.';
+      ? 'O alvo marcado fugiu: prenda ou desacelere antes do tempo.'
+      : 'O grupo caiu antes de abater o alvo marcado.';
   }
   if (goal.type === 'endless') {
     const seconds = Math.floor(number(mission.endlessTime));
-    return `A horda venceu após ${seconds} s. A primeira estrela pede ${number(goal.marks?.[0]) || 60} s: guarde ultimates e cura para quando a onda engrossar.`;
+    return `A horda venceu após ${seconds} s; a 1ª estrela pede ${number(goal.marks?.[0]) || 60} s.`;
   }
   if (goal.type === 'survive' && number(mission.surviveRemaining) > 0) {
-    return `Faltavam ${Math.ceil(number(mission.surviveRemaining))} s para sobreviver. Não persiga longe da formação e guarde controle para grupos perigosos.`;
+    return `Faltavam ${Math.ceil(number(mission.surviveRemaining))} s: fique na formação.`;
   }
   return null;
 }
@@ -108,15 +108,15 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
                 : '';
       if (mission.nextMission) {
         return stars < 3
-          ? `${objective}Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada; confira os critérios acima para conquistar as que faltam.`
-          : `${objective}Três estrelas! ${label(mission.nextMission, 'A próxima arena')} está liberada no mapa da campanha.`;
+          ? `${objective}Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada.`
+          : `${objective}Três estrelas! ${label(mission.nextMission, 'A próxima arena')} está liberada.`;
       }
       const remaining = number(mission.remainingStars);
       return remaining > 0
-        ? `${objective}Todas as arenas foram vencidas. Rejogue as missões para conquistar as ${remaining} estrelas restantes.`
-        : `${objective}Campanha perfeita! Todas as arenas e as ${number(mission.maxStars) || 24} estrelas foram conquistadas.`;
+        ? `${objective}Rejogue as missões pelas ${remaining} estrelas restantes.`
+        : `${objective}Campanha perfeita! ${number(mission.maxStars) || 24} estrelas.`;
     }
-    return 'Na próxima jornada, experimente outra composição para descobrir novas combinações entre as classes.';
+    return 'Experimente outra composição de grupo.';
   }
 
   const objective = objectiveTip(mission);
@@ -127,32 +127,32 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
   if (dangerous && number(dangerous.damage) > 0) {
     const name = label(dangerous.name, 'o inimigo mais perigoso');
     if (/enxame|crânio/i.test(name)) {
-      return `${name} causou mais dano ao grupo. Saia dos círculos laranja dos mergulhos e use golpes em área para limpar o bando de uma vez.`;
+      return `${name} causou mais dano: saia dos círculos e use golpes em área.`;
     }
     if (/xamã/i.test(name)) {
-      return `${name} causou mais dano ao grupo. Derrube o xamã primeiro: o escudo de ossos dos aliados some com ele.`;
+      return `${name} causou mais dano: derrube o xamã primeiro.`;
     }
     if (/bombardeir|golem|rei esqueleto|lich|carrasco|cavaleiro sombrio|chefe/i.test(name)) {
-      return `${name} causou mais dano ao grupo. Afaste-se das áreas marcadas e considere levar um Guardião para proteger os aliados.`;
+      return `${name} causou mais dano: saia das áreas marcadas.`;
     }
     if (/arqueir|besteir|crossbow|mago|sacerdote|atirador/i.test(name)) {
-      return `${name} causou mais dano ao grupo. Priorize os inimigos à distância ou leve um herói que consiga alcançá-los rapidamente.`;
+      return `${name} causou mais dano: priorize os atiradores.`;
     }
     if (number(dangerous.hits) >= 3 && number(dangerous.damage) >= partyReceived * 0.3) {
-      return `${name} acertou o grupo repetidamente. Controle seus movimentos com gelo, raízes ou atordoamento antes de atacar.`;
+      return `${name} acertou muitas vezes: use gelo, raízes ou atordoamento.`;
     }
   }
 
   if (partyDamage > 0 && partyReceived > partyDamage * 1.35) {
-    return 'O grupo recebeu muito mais dano do que causou. Experimente combinar um Guardião na linha de frente com heróis de dano à distância.';
+    return 'O grupo apanhou mais do que bateu: leve um Guardião na frente.';
   }
   if (falls.length && partyReceived > 0) {
-    return 'Proteja quem está com pouca vida: mantenha os heróis próximos e use cura ou provocação para aliviar a linha de frente.';
+    return 'Mantenha o grupo junto e cure quem estiver fraco.';
   }
   if (partyDamage === 0) {
-    return 'Inclua uma classe de dano à distância ou de ataque em área para vencer as ondas com mais rapidez.';
+    return 'Leve dano à distância ou em área.';
   }
-  return 'Ajuste a composição do grupo e guarde as habilidades para os inimigos que mais ameaçam seus heróis.';
+  return 'Guarde as habilidades para os inimigos mais perigosos.';
 }
 
 /** Produz destaques curtos sem ler ou modificar o estado da partida. */
@@ -169,23 +169,23 @@ export function buildBattleReport({ won = false, heroes = [], falls = [], damage
   if (first) {
     highlights.push({
       id: 'first-fall',
-      title: 'Primeiro herói caído',
+      title: 'Primeira queda',
       text: label(first.name, 'Herói sem nome') + (number(first.phase) ? ` · fase ${number(first.phase)}` : ''),
     });
   } else if (!won && party.length) {
-    highlights.push({ id: 'survivors', title: 'Queda dos heróis', text: 'Nenhuma queda foi registrada antes da derrota.' });
+    highlights.push({ id: 'survivors', title: 'Quedas', text: 'Nenhum herói caiu.' });
   }
   if (topSource) {
     highlights.push({
       id: 'biggest-threat',
-      title: 'Maior fonte de dano',
+      title: 'Maior ameaça',
       text: `${label(topSource.name, 'Inimigo desconhecido')} · ${Math.round(number(topSource.damage)).toLocaleString('pt-BR')} de dano${number(topSource.hits) ? ` em ${Math.round(number(topSource.hits))} golpes` : ''}`,
     });
   }
   if (bestHero) {
     highlights.push({
       id: 'top-hero',
-      title: 'Herói em destaque',
+      title: 'Destaque',
       text: label(bestHero.name, 'Herói sem nome'),
     });
   }
@@ -198,6 +198,6 @@ export function buildBattleReport({ won = false, heroes = [], falls = [], damage
         + (fallen ? ` · ${fallen} ${fallen === 1 ? 'caiu' : 'caíram'}` : ''),
     });
   }
-  highlights.push({ id: 'next-try', title: won ? (mission?.stars != null ? 'Progresso da campanha' : 'Próxima jornada') : 'Dica para a próxima tentativa', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls, mission }) });
+  highlights.push({ id: 'next-try', title: won ? (mission?.stars != null ? 'Progresso da campanha' : 'Próxima jornada') : 'Dica', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls, mission }) });
   return highlights;
 }

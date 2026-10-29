@@ -247,20 +247,21 @@ export function toastAchievements(list, doc = globalThis.document) {
   });
 }
 
-// bloco do fim da partida: ouro ganho (com a conta) e maestria de cada herói
-export function rewardHTML(reward, variants = []) {
+// bloco do fim da partida: chip de ouro (a conta fica na dica) e mini-retratos com o XP de maestria
+export function rewardHTML(reward, variants = [], mvpId = null) {
   if (!reward) return '';
   const { gold, heroes, unlocked } = reward;
-  const lines = gold.lines.map(([label, v]) => `<span>${label} <b>+${v}</b></span>`).join('');
-  const mult = gold.mult !== 1 ? `<span>Bônus <b>×${gold.mult.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</b></span>` : '';
+  const lines = gold.lines.map(([label, v]) => `${label} +${v}`);
+  if (gold.mult !== 1) lines.push(`Bônus ×${gold.mult.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`);
+  const goldTip = escapeProgressText(`+${gold.total} ${GOLD.name}: ${lines.join(' · ')} · Total ${reward.total}`);
   const heroRows = heroes.map((h) => {
     const cfg = variants.find((v) => v.id === h.id);
     const up = h.after > h.before;
-    return `<span class="prog-hero${up ? ' up' : ''}"${cfg ? ` style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"` : ''}>${cfg ? `<img src="${cfg.portrait}" alt="">` : ''}<em>${escapeProgressText(cfg?.name || h.id)}</em><small>+${h.gained} XP</small>${up ? `<b>Maestria ${h.after}!</b>` : `<i>Maestria ${h.after}</i>`}</span>`;
+    const tip = escapeProgressText(`${cfg?.name || h.id}${h.id === mvpId ? ' · MVP' : ''} · +${h.gained} XP · Maestria ${h.after}${up ? '!' : ''}`);
+    return `<span class="prog-hero${up ? ' up' : ''}${h.id === mvpId ? ' mvp' : ''}" tabindex="0" data-tip="${tip}" aria-label="${tip}"${cfg ? ` style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"` : ''}>${h.id === mvpId ? '<i class="crown" aria-hidden="true">♛</i>' : ''}${cfg ? `<img src="${cfg.portrait}" alt="">` : ''}<small>+${h.gained}</small>${up ? '<b aria-hidden="true">⬆</b>' : ''}</span>`;
   }).join('');
-  const ach = unlocked.length ? `<div class="prog-ach">${unlocked.map((a) => `<span><i aria-hidden="true">${a.icon}</i>${escapeProgressText(a.name)}</span>`).join('')}</div>` : '';
-  return `<div class="progress-reward" aria-label="Ouro e maestria ganhos"><div class="prog-gold"><b><i aria-hidden="true">${GOLD.icon}</i> +${gold.total} ${GOLD.name}</b><span class="prog-total">Total: ${reward.total}</span></div>
-    <div class="prog-lines">${lines}${mult}</div>${heroRows ? `<div class="prog-heroes">${heroRows}</div>` : ''}${ach}</div>`;
+  const ach = unlocked.map((a) => `<span class="end-chip ach" tabindex="0" data-tip="Conquista: ${escapeProgressText(a.name)}" aria-label="Conquista: ${escapeProgressText(a.name)}"><i aria-hidden="true">${a.icon}</i></span>`).join('');
+  return `<div class="progress-reward" aria-label="Ouro e maestria ganhos"><span class="end-chip gold" tabindex="0" data-tip="${goldTip}" aria-label="${goldTip}">+${gold.total} <i aria-hidden="true">${GOLD.icon}</i></span>${ach}${heroRows ? `<div class="prog-heroes">${heroRows}</div>` : ''}</div>`;
 }
 
 // Tela do acampamento: oficina, maestria dos heróis e conquistas.

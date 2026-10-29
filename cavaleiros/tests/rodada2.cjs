@@ -334,7 +334,7 @@ test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à 
   assert.equal(t.pick.cards.length,3);
   let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
   t.confirmPick(1);next();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
-  t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'Difícil');
+  t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'♜','HUD mostra o ícone da dificuldade; o nome fica na dica');
   next();assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);
   context.setTimeout=noop;t.setDifficulty(1);
 });
@@ -379,7 +379,8 @@ test('fase revive aliados, oferece reforço, gera chefe e termina em vitória',(
   t.skeletonsAlive()[0].remove();t.updateGame(.1);assert.equal(t.game.toSpawn,0);assert.ok(t.units.some(u=>u.phaseBoss));
   for(const u of [...t.units])if(u.team==='skeleton')u.remove();
   Object.assign(t.game,{phase:12,state:'cleared',timer:0});t.updateGame(.1);assert.equal(t.game.over,true);
-  assert.ok(elements.get('overlayText').textContent.startsWith('Vitória'));
+  // título grande separado; a linha de baixo diz só o motivo
+  assert.equal(elements.get('overlayTitle').textContent,'Vitória!');assert.ok(elements.get('overlayText').textContent.startsWith('O grupo chegou ao castelo'));
 });
 test('manual espera o jogador; pedido sem alvo avisa e não gasta a recarga',()=>{
   clear();context.localStorage.data={};
@@ -882,7 +883,7 @@ test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   assert.ok(stars.includes('Concluir a missão')&&stars.includes('Terminar sem quedas (0 quedas)')&&stars.includes('atual 100%'));
   assert.ok(stars.includes('Novo recorde · Normal · 1:23'));
   assert.deepEqual(Array.from(t.missionRecords('vila'),r=>r.difficultyId),['normal']);
-  assert.ok(t.variantOpen('viking'));assert.equal(elements.get('overlayBtn').textContent,'Voltar ao mapa');
+  assert.ok(t.variantOpen('viking'));assert.equal(elements.get('overlayBtn').textContent,'Mapa');
   t.game.paused=false;t.startGame('map');assert.equal(t.game.paused,true);t.updateGame(.1);assert.equal(t.game.over,false);   // o mapa segura a partida
   begin('ponte',['paladin','pyro']);t.heroes()[0].die();t.heroes()[1].hp=1;Object.assign(t.game,{phase:5,state:'cleared',timer:0});t.updateGame(.1);t.updateGame(.1);
   assert.equal(t.starsOf('ponte'),1);   // venceu, mas um caiu e terminou com pouca vida
@@ -939,19 +940,21 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
     const html=elements.get('overlayStars').innerHTML;
     assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/39'));
     assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
-    assert.ok(html.includes('Nova missão liberada: <b>A Ponte do Rio</b>')&&html.includes('Próxima missão'));
+    // o próximo passo virou só o botão "Próxima ▸" ao lado de "Mapa"; o nome da missão fica na dica e no aria-label
+    const next=elements.get('overlayNext').innerHTML;
+    assert.ok(next.includes('Nova missão liberada: A Ponte do Rio')&&next.includes('Próxima missão: A Ponte do Rio')&&next.includes('Próxima ▸'));
     context.createWorld=()=>t.world;   // a próxima missão recria o cenário; aqui o duplo basta
     t.startGame(mission('ponte'));assert.equal(t.game.mission.id,'ponte');assert.equal(t.pick.mode,'difficulty');
     begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
-    assert.ok(elements.get('overlayStars').innerHTML.includes('Tentar de novo'));
+    assert.ok(elements.get('overlayNext').innerHTML.includes('Tentar de novo'));
     assert.ok(!elements.get('overlayStars').innerHTML.includes('Recompensa'));
   }finally{t.setDifficulty(1);}
 });
-test('primeira fase da missão abre com capítulo e história na faixa',()=>{
+test('primeira fase da missão abre com faixa curta, sem a história',()=>{
   context.location={search:''};
   begin('ponte',['paladin','pyro']);const banner=elements.get('banner');banner.children.length=0;t.startPhase();
   assert.equal(banner.textContent,'A Ponte do Rio · Fase 2');
-  assert.ok(banner.children.at(-1).textContent.includes(mission('ponte').chapter)&&banner.children.at(-1).textContent.includes(mission('ponte').story));
+  assert.equal(banner.children.length,0,'capítulo e história ficam no mapa, não na faixa da luta');
   banner.children.length=0;t.game.phase=3;t.startPhase();assert.equal(banner.textContent,'Fase 3');assert.equal(banner.children.length,0);
 });
 test('Ferrão de gigante só aparece com chefe ou golem pela frente',()=>{

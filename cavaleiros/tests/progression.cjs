@@ -170,9 +170,12 @@ test('save corrompido ou ausente não quebra o jogo', () => {
 
 test('recompensa do fim de partida mostra ouro, conta e maestria', () => {
   const p = P.createProgression(null);
-  const html = P.rewardHTML(p.recordMatch(run({ heroes: [{ id: 'paladin', kills: 200 }] })), [{ id: 'paladin', name: 'Paladino', portrait: 'p.png', color: ['#fff', '#000'] }]);
+  const html = P.rewardHTML(p.recordMatch(run({ heroes: [{ id: 'paladin', kills: 200 }] })), [{ id: 'paladin', name: 'Paladino', portrait: 'p.png', color: ['#fff', '#000'] }], 'paladin');
+  // à vista só o chip "+82 ◆" e o mini-retrato; a conta do ouro e o nome ficam na dica
+  assert.match(html, />\+82 <i aria-hidden="true">◆<\/i><\/span>/);
   assert.match(html, /\+82 Ouro/);
-  assert.match(html, /Abates <b>\+20<\/b>/);
+  assert.match(html, /data-tip="[^"]*Abates \+20/);
+  assert.match(html, /class="prog-hero up mvp"[^>]*>.*♛/, 'MVP ganha coroa');
   assert.match(html, /Paladino/);
   assert.match(html, /Maestria 2!/, '63 XP sobem o Paladino para a maestria 2');
   assert.equal(P.rewardHTML(null), '');

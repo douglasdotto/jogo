@@ -163,7 +163,7 @@ function applyQuality() {
   const button = document.getElementById('quality');
   button.textContent = `Gráficos: ${lowQuality ? 'baixa' : 'alta'}`;
   button.setAttribute('aria-pressed', String(lowQuality));
-  button.title = lowQuality ? 'Gráficos leves: sem sombras e resolução 1x. Clique para a qualidade alta.' : 'Clique para gráficos leves (sem sombras, resolução 1x) se o jogo estiver lento.';
+  button.setAttribute('data-tip', lowQuality ? 'Leves: sem sombras, resolução 1x' : 'Altos · troque para leves se o jogo travar');
 }
 document.getElementById('quality').onclick = () => {
   lowQuality = !lowQuality;
@@ -179,10 +179,16 @@ const $ = (id) => document.getElementById(id);
 const campaignMapSession = createCampaignMapSeedSession(MISSIONS);
 const bars = $('bars');
 let speed = 1;
-$('speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('speed').textContent = `Velocidade ${speed}x`; };
+// HUD: botões de ícone; o texto completo fica no aria-label e na dica
+function paintSpeed() {
+  $('speed').innerHTML = `⏩&#xFE0E;<small>${speed}x</small>`;
+  $('speed').setAttribute('aria-label', `Velocidade ${speed}x`);
+}
+$('speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; paintSpeed(); };
 $('autoEvolve').onclick = () => { setAutoEvolve(!autoEvolve); audio.play('click'); };
 // Reiniciar no meio da partida pede confirmação; no menu ou no fim volta direto
 $('restart').onclick = () => {
+  closeHudMenu();
   if (!heroes().length || game.over || pick.open) return startGame();   // volta para o menu inicial
   confirmRestart.wasPaused = game.paused;
   game.paused = true;
@@ -206,7 +212,8 @@ function setUserPause(on) {
   game.paused = on;
   $('pauseOverlay').hidden = !on;
   $('pause').setAttribute('aria-pressed', String(on));
-  $('pause').textContent = on ? 'Continuar' : 'Pausar';
+  $('pause').textContent = on ? '▶\uFE0E' : '⏸\uFE0E';
+  $('pause').setAttribute('aria-label', on ? 'Continuar (P ou Espaço)' : 'Pausar (P ou Espaço)');
   if (on) $('resume').focus();
   else if (document.activeElement === $('resume')) $('pause').focus();
 }
@@ -223,11 +230,21 @@ addEventListener('keydown', (e) => {
   e.preventDefault();
   setUserPause(!game.userPaused);
 });
-// no celular as opções do HUD abrem pela engrenagem
+// opções do HUD (evolução, gráficos, reiniciar) ficam no menu da engrenagem
+function closeHudMenu() {
+  $('hud').classList.remove('open');
+  $('hudMenu').setAttribute('aria-expanded', 'false');
+}
 $('hudMenu').onclick = () => {
   const open = $('hud').classList.toggle('open');
   $('hudMenu').setAttribute('aria-expanded', String(open));
 };
+addEventListener('pointerdown', (e) => { if (!e.target.closest?.('.hud-right')) closeHudMenu(); });
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !$('hud').classList.contains('open')) return;
+  closeHudMenu();
+  $('hudMenu').focus();
+});
 $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');   // na campanha volta para o mapa
 
 function showBanner(text, seconds = 2) {
@@ -242,6 +259,27 @@ function showBanner(text, seconds = 2) {
 }
 
 function setText(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
+// dica e nome acessível de um item do HUD, só quando mudam
+const hudTips = new Map();
+function setTip(id, text) {
+  if (hudTips.get(id) === text) return;
+  hudTips.set(id, text);
+  $(id).setAttribute('data-tip', text);
+  $(id).setAttribute('aria-label', text);
+}
+function paintDifficulty() {
+  const el = $('level');
+  el.textContent = difficulty.icon;
+  el.style.setProperty('--c', difficulty.color[0]);
+  el.style.setProperty('--cd', difficulty.color[1]);
+  setTip('level', `Dificuldade: ${difficulty.name}`);
+}
+// objetivo compacto: ícone por tipo + barra + valor curto (o texto inteiro vai na dica)
+const GOAL_ICONS = { escort: '⛨', rescue: '⚿', boss: '♛', survive: '⌛', totems: '♜', tower: '♜', nofall: '♥', timer: '⏱', defend: '✧', hunt: '◎', endless: '☾', win: '⚑' };
+function goalShort(text, percent) {
+  if (/!$/.test(text) && !/\d/.test(text)) return '✓';
+  return text.match(/\d+\s?%|\d+\/\d+|\d+:\d{2}|\d+ s/g)?.at(-1) || `${percent}%`;
+}
 let goalUiRoot = null, goalUiLabel = null, goalUiFill = null, goalUiPercent = -1, goalUiText = '';
 function setGoalUI(text, progress) {
   const root = $('goal');
@@ -255,13 +293,14 @@ function setGoalUI(text, progress) {
     root.setAttribute('aria-valuemin', '0');
     root.setAttribute('aria-valuemax', '100');
   }
-  if (goalUiText !== text) {
+  const percent = Math.round(THREE.MathUtils.clamp(progress, 0, 1) * 100);
+  if (goalUiText !== text || percent !== goalUiPercent) {
     goalUiText = text;
-    goalUiLabel.textContent = text;
+    goalUiLabel.textContent = goalShort(text, percent);
     root.setAttribute('aria-label', `Objetivo da missão: ${text}`);
     root.setAttribute('aria-valuetext', text);
+    root.setAttribute('data-tip', `Objetivo: ${text}`);
   }
-  const percent = Math.round(THREE.MathUtils.clamp(progress, 0, 1) * 100);
   if (percent !== goalUiPercent) {
     goalUiPercent = percent;
     goalUiFill.style.width = `${percent}%`;
@@ -611,7 +650,7 @@ function showDifficulty() {
 
 function confirmDifficulty(i) {
   difficulty = DIFFICULTIES[i];
-  setText('level', difficulty.name);
+  paintDifficulty();
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   const m = game.mission;
@@ -777,7 +816,7 @@ function confirmPick(i) {
       return startMission();
     }
     const begin = () => {
-      if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
+      if (heroes().length > 1) showBanner(`+ ${cfg.name}`);
       document.body.classList.remove('no-battle');
       game.paused = false;
       audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
@@ -1033,7 +1072,7 @@ function showEvolution() {
       if (!option) continue;
       applyUpgrade(entry.hero, option);
       popText(entry.hero.pos, option.name + '!', 'evolve');
-      showBanner(`${entry.hero.cfg.names[entry.level - 1]} evoluiu: ${option.icon} ${option.name}`, 2.2);   // escolha automática visível
+      showBanner(`${option.icon} ${option.name}`, 2);   // escolha automática visível
     }
     return;
   }
@@ -1292,7 +1331,7 @@ function buildSkillBar(party) {
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', h.cfg.name);
     const heroMark = SKILL_GLYPHS[h.cfg.id]?.[0] || '✦';
-    group.innerHTML = `<div class="skillHero"><span class="skillHeroMark" aria-hidden="true">${heroMark}</span><span class="skillHeroName">${h.cfg.name}</span><span class="skillHeroCount">3 HABILIDADES</span></div><div class="skillSlots"></div>`;
+    group.innerHTML = `<div class="skillHero"><span class="skillHeroMark" aria-hidden="true">${heroMark}</span><span class="skillHeroName">${h.cfg.name}</span></div><div class="skillSlots"></div>`;
     const slots = group.querySelector('.skillSlots');
     for (const skill of skillSetFor(h.cfg)) {
       const slot = skill.slot, key = SKILL_KEYS[slot][heroIndex];
@@ -1305,11 +1344,9 @@ function buildSkillBar(party) {
       b.setAttribute('data-slot', String(slot));
       b.setAttribute('data-key', key);
       const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
-      const kind = skill.ultimate ? 'ULTIMATE' : slot === 0 ? 'ASSINATURA' : 'TÉCNICA';
-      // dois botões irmãos (usar e AUTO): botão dentro de botão não é acessível
-      b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" data-tip="Alternar uso automático desta habilidade" aria-label="Uso automático de ${skill.name}" aria-pressed="true">AUTO</button>
-        <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : 'habilidade'}. Tecla ${key}."><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span>
-        <span class="name"><small>${kind}</small><b>${skill.name}</b></span></button>`;
+      // dois botões irmãos (usar e auto): botão dentro de botão não é acessível; nome e tipo ficam na dica
+      b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" data-tip="Uso automático: liga e desliga" aria-label="Uso automático de ${skill.name}" aria-pressed="true">↻</button>
+        <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : slot === 0 ? 'assinatura' : 'técnica'}. Tecla ${key}."><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span></button>`;
       const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
       b.querySelector('.use').onclick = () => pressSkill(it);
       it.auto.onclick = (e) => {
@@ -1353,9 +1390,9 @@ function updateSkillBar() {
     const ready = !h.dead && timer <= 0;
     const p = (h.dead ? 1 : THREE.MathUtils.clamp(timer / max, 0, 1)).toFixed(3);
     if (p !== it.p) { it.p = p; it.cd.style.setProperty('--p', p); }
-    const secs = h.dead ? 'Caído' : ready ? '' : String(Math.ceil(timer));
+    const secs = h.dead ? '✖' : ready ? '' : String(Math.ceil(timer));
     if (it.secs.textContent !== secs) it.secs.textContent = secs;
-    const auto = h.autoSkills[slot] ? 'AUTO' : 'MANUAL';
+    const auto = h.autoSkills[slot] ? '↻' : '☝\uFE0E';
     if (it.auto.textContent !== auto) { it.auto.textContent = auto; it.auto.setAttribute('aria-pressed', String(!!h.autoSkills[slot])); }
     it.b.classList.toggle('ready', ready);
     it.b.classList.toggle('cooling', !ready && !h.dead);
@@ -3593,7 +3630,7 @@ class Hero extends Unit {
   gainXp(n) {
     this.xp += n;
     while (this.level < 3 && this.xp >= XP_LEVELS[this.level]) {
-      const oldName = this.cfg.names[this.level - 1], oldHp = this.maxHp;
+      const oldHp = this.maxHp;
       this.level++;
       evolutions.push({ hero: this, level: this.level });
       this.maxHp = Math.round(this.maxHp * 1.1);
@@ -3610,7 +3647,7 @@ class Hero extends Unit {
       poof(this.pos, 1.5);
       ring(this.pos, 2, this.cfg.color[0], 1);
       popText(this.pos, this.cfg.names[this.level - 1] + '!', 'evolve');
-      showBanner(oldName + ' evoluiu para ' + this.cfg.names[this.level - 1] + '!', 3);
+      showBanner(`⬆\uFE0E ${this.cfg.names[this.level - 1]}`, 2.5);
     }
   }
 
@@ -4761,6 +4798,8 @@ function startGame(view = 'menu') {
   closeHeroPanel();
   $('overlayStats').innerHTML = '';
   $('overlayStars').innerHTML = '';
+  $('overlayNext').innerHTML = '';
+  $('overlayTitle').textContent = '';
   $('overlayBtn').hidden = true;
   $('overlayBtn').textContent = 'Jogar de novo';
   $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');
@@ -4769,7 +4808,7 @@ function startGame(view = 'menu') {
   clearMonsterFx();   // avisos, covas e barra do chefe
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   placeParty(THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES));
-  $('overlay').classList.remove('results');
+  $('overlay').classList.remove('results', 'lost');
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
   else if (view?.goal) showCampaign(view);   // "Próxima missão" / "Tentar de novo" vão direto à dificuldade
@@ -4791,7 +4830,10 @@ function placeParty(first) {
   controls.target.copy(follow);
   camera.position.set(follow.x, 23, follow.z + 21);
   $('goal').classList.toggle('hidden', !m);
-  if (m) setGoalUI(goalText(m.goal), 0);
+  if (m) {
+    $('goal').setAttribute('data-icon', GOAL_ICONS[m.goal.type] || '⚑');
+    setGoalUI(goalText(m.goal), 0);
+  }
   $('goal').classList.remove('warn', 'done');
 }
 
@@ -4803,7 +4845,6 @@ function startMission() {
     if (m.goal.type === 'escort') game.villager = new Villager();
     if (m.goal.type === 'rescue') game.villager = new Villager(true);
     if (m.goal.type === 'defend') game.shrine = new Shrine(world.along(world.anchorS(m.from) - 5, 0));
-    showBanner(`${m.name} · ${world.biome}`, 3);
     musterMilitia();
     document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
@@ -4834,17 +4875,13 @@ function startPhase() {
   if (goal?.type === 'hunt' && !game.huntMark) spawnHuntMark();
   relicPhaseStart();
   const text = goal?.type === 'survive' && game.phase === goal.phase ? `Aguente ${goal.time} s!`
-    : goal?.type === 'defend' ? `Defenda o santuário por ${goal.time} s!`
-      : goal?.type === 'hunt' ? 'Abata o alvo marcado!'
-        : goal?.type === 'endless' ? 'A horda não para!'
-          : game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`;
+    : goal?.type === 'defend' ? `Defenda ${goal.time} s!`
+      : goal?.type === 'hunt' ? 'Abata o alvo!'
+        : goal?.type === 'endless' ? 'Horda!'
+          : game.bossPending ? 'Chefe!' : `Fase ${game.phase}`;
+  // faixa curta; na primeira fase da missão leva só o nome dela (a história fica no mapa)
   if (!game.mission || game.phase !== game.start) return showBanner(text);
-  // primeira fase da missão: a faixa leva o capítulo e a história (a faixa do bioma sai logo em seguida)
-  showBanner(`${game.mission.name} · ${text}`, 5);
-  const story = document.createElement('small');
-  story.className = 'banner-story';
-  story.textContent = `${game.mission.chapter} — ${game.mission.story}`;
-  $('banner').appendChild(story);
+  showBanner(`${game.mission.name} · ${text}`, 3);
 }
 
 // ---------- campanha: aldeão, totens e objetivos ----------
@@ -5013,10 +5050,7 @@ function musterMilitia() {
     const m = new Militia(k);
     m.pos.copy(m.follow());
   }
-  const note = document.createElement('small');   // a faixa já mostra o nome da missão: o aviso entra embaixo
-  note.className = 'banner-story';
-  note.textContent = `${size} aldeões de guarda`;
-  $('banner').appendChild(note);
+  showBanner(`⚔︎ Guarda +${size}`, 2);
   return size;
 }
 
@@ -5090,7 +5124,7 @@ class Totem extends Unit {
     if (this.tower) game.towersDown++;
     for (const h of heroes()) if (!h.dead) h.gainXp(8);
     const destroyed = this.tower ? game.towersDown : game.totemsDown;
-    showBanner(`${this.tower ? 'Torre derrubada' : 'Totem destruído'}! ${destroyed}/${game.mission.goal.count}`);
+    showBanner(`♜ ${destroyed}/${game.mission.goal.count}`);
   }
 }
 
@@ -5248,7 +5282,7 @@ function newGoalTick(goal, dt, skeletons) {
     if (mark?.dead) {
       game.huntDown = true;
       closeMission();
-      showBanner('Alvo marcado abatido!', 2.5);
+      showBanner('Alvo abatido!', 2.5);
     } else if (mark && (game.surviveT = Math.max(0, game.surviveT - dt)) <= 0) {
       game.huntEscaped = true;
       poof(mark.pos, 1.4);
@@ -5257,8 +5291,8 @@ function newGoalTick(goal, dt, skeletons) {
   } else if (goal.type === 'endless' && game.state === 'fight' && game.endlessT < goal.dawn) {
     game.endlessT = Math.min(goal.dawn, game.endlessT + dt);
     const reached = goal.marks.filter((mark) => game.endlessT >= mark).length;
-    if (reached > game.endlessStars) { game.endlessStars = reached; showBanner(`${'★'.repeat(reached)} ${goal.marks[reached - 1]} s aguentados!`, 2.5); }
-    if (game.endlessT >= goal.dawn) { closeMission(); showBanner('Amanheceu! A horda recua.', 3); }
+    if (reached > game.endlessStars) { game.endlessStars = reached; showBanner(`${'★'.repeat(reached)} ${goal.marks[reached - 1]} s`, 2.5); }
+    if (game.endlessT >= goal.dawn) { closeMission(); showBanner('Amanheceu!', 3); }
     else {   // a horda engrossa com o tempo: mais esqueletos ao mesmo tempo e reforços maiores
       const cap = Math.min(22, 6 + Math.floor(game.endlessT / 20) * 2);
       if (game.toSpawn === 0 && skeletons.length < cap) game.toSpawn = Math.min(cap - skeletons.length, 3 + Math.floor(game.endlessT / 30));
@@ -5290,7 +5324,7 @@ function campaignTick(dt, skeletons) {
     game.rescueComplete = true;
     game.villager.nameTag.textContent = 'Resgatado';
     popText(game.villager.pos, 'Resgatado!', 'heal');
-    showBanner('Pessoa resgatada!', 2.5);
+    showBanner('Resgatada!', 2.5);
   }
   if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
   if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
@@ -5354,24 +5388,30 @@ function campaignTick(dt, skeletons) {
   return false;
 }
 
-// recompensa da vitória: estrelas novas na campanha, medalha da dificuldade e desafio opcional
+// recompensa da vitória: chips curtos (estrelas novas, medalha, desafio); o texto inteiro fica na dica
+const escAttr = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const endChip = (icon, text, tip, cls = '') => `<span class="end-chip${cls ? ` ${cls}` : ''}" tabindex="0" data-tip="${escAttr(tip)}" aria-label="${escAttr(tip)}"><i aria-hidden="true">${icon}</i>${text}</span>`;
 function missionRewardHTML(stars, gained, medal) {
   const max = MISSIONS.length * 3;
-  const items = [gained > 0 ? `+${gained} ★ na campanha · ${totalStars()}/${max}` : `Seu melhor nesta missão segue em ${starsOf(game.mission.id)} ★ · ${totalStars()}/${max}`,
-    medal.newBest ? `Medalha ${difficulty.name} conquistada!` : `Medalha mantida: ${missionMedal(game.mission.id).best?.difficultyName || difficulty.name}`];
-  if (medal.newChallenge) items.push(`Desafio cumprido: ${medal.newChallenge.label}!`);
+  const chips = [];
+  if (gained > 0) chips.push(endChip('★', `+${gained}`, `+${gained} ★ na campanha · ${totalStars()}/${max}`, 'star'));
+  if (medal.newBest) chips.push(endChip('⚜', '', `Medalha ${difficulty.name} conquistada!`, 'medal'));
+  if (medal.newChallenge) chips.push(endChip('✓', '', `Desafio cumprido: ${medal.newChallenge.label}!`, 'medal'));
   else {
     const open = missionMedal(game.mission.id).challenges.find((c) => c.difficultyId === difficulty.id && !c.done);
-    if (open && stars < 3) items.push(`Desafio opcional: ${open.label}`);
+    if (open && stars < 3) chips.push(endChip('◎', '', `Desafio opcional: ${open.label}`));
   }
-  return `<div class="mission-reward" aria-label="Recompensa da missão"><b>Recompensa</b>${items.map((item) => `<span>${item}</span>`).join('')}</div>`;
+  return chips.length ? `<div class="mission-reward end-chips" aria-label="Recompensa da missão">${chips.join('')}</div>` : '';
 }
 
 // próximo passo no fim da missão: seguir para a próxima arena ou tentar de novo
 function missionNextHTML(won, next, unlockedNow) {
-  if (won && next) return `<div class="mission-next"><span>${unlockedNow ? `Nova missão liberada: <b>${next.name}</b>` : `Próximo passo: <b>${next.name}</b>`}</span><button class="mission-next-btn" type="button" aria-label="Próxima missão: ${next.name}">Próxima missão ▸</button></div>`;
-  if (won) return '<div class="mission-next"><span>Campanha concluída! No mapa, busque as estrelas e os desafios que faltam.</span></div>';
-  return '<div class="mission-next"><span>Ajuste o grupo e tente de novo.</span><button class="mission-next-btn" type="button">Tentar de novo</button></div>';
+  if (won && next) {
+    const tip = `${unlockedNow ? 'Nova missão liberada' : 'Próxima missão'}: ${next.name}`;
+    return `<button class="mission-next-btn" type="button" aria-label="Próxima missão: ${escAttr(next.name)}" data-tip="${escAttr(tip)}">Próxima ▸</button>`;
+  }
+  if (won) return '';
+  return '<button class="mission-next-btn" type="button" data-tip="Ajuste o grupo e tente de novo">↻ Tentar de novo</button>';
 }
 
 // fim da missão: estrelas animadas, gravação e aviso de variante nova
@@ -5389,13 +5429,18 @@ function missionEnd(won) {
   // na horda, tempo maior é melhor: quem mede são as estrelas, não o recorde de tempo
   const bestTime = !game.test && game.mission.goal.type !== 'endless' && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
   const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
-  const row = `<span class="stars big">${[1, 2, 3].map((k) => `<i class="${k <= stars ? 'on' : ''}">★</i>`).join('')}</span>`;
-  const criteria = `<ul class="star-criteria" aria-label="Critérios das estrelas">${conditions.map((condition) => `<li class="${condition.achieved ? 'earned' : 'missed'}"><span aria-hidden="true">${condition.achieved ? '✓' : '○'}</span><span>${condition.label}</span></li>`).join('')}</ul>`;
-  $('overlayStars').innerHTML = row + criteria + (best && stars ? '<div class="star-best">Novo melhor resultado!</div>' : '')
-    + (bestTime ? `<div class="star-best">Novo recorde · ${difficulty.name} · ${clockText(game.missionT)}</div>` : '')
+  // estrelas grandes; o critério de cada uma fica na dica (e no nome acessível da fileira)
+  const criterion = (c) => c ? `${c.achieved ? '✓' : '○'} ${c.label}` : '';
+  const row = `<span class="stars big" role="img" aria-label="${stars} de 3 estrelas. ${escAttr(conditions.map(criterion).join('; '))}">${[1, 2, 3].map((k) =>
+    `<i class="${k <= stars ? 'on' : ''}" data-tip="${escAttr(criterion(conditions[k - 1]))}">★</i>`).join('')}</span>`;
+  const chips = [
+    best && stars ? endChip('★', 'Melhor', 'Novo melhor resultado nesta missão!', 'star') : '',
+    bestTime ? endChip('⏱', clockText(game.missionT), `Novo recorde · ${difficulty.name} · ${clockText(game.missionT)}`) : '',
+    ...fresh.map((cfg) => `<span class="end-chip unlock" tabindex="0" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="Nova variante liberada: ${escAttr(cfg.name)}" aria-label="Nova variante liberada: ${escAttr(cfg.name)}"><img src="${cfg.portrait}" alt="">Nova!</span>`),
+  ].join('');
+  $('overlayStars').innerHTML = row + (chips ? `<div class="end-chips">${chips}</div>` : '')
     + (game.test ? '<div class="star-best">Modo de teste: estrelas e recordes não contam</div>' : '')
-    + (won && medal ? missionRewardHTML(stars, totalStars() - before, medal) : '')
-    + fresh.map((cfg) => `<div class="unlock" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"><img src="${cfg.portrait}" alt=""><span><b>Nova variante liberada!</b>${cfg.name}</span></div>`).join('');
+    + (won && medal ? missionRewardHTML(stars, totalStars() - before, medal) : '');
   return stars;
 }
 
@@ -5463,9 +5508,9 @@ function updateGame(dt) {
 
   if (!alive.length && game.mission?.goal.type === 'endless') {   // na horda, cair faz parte: vale o tempo aguentado
     const held = game.endlessT >= game.mission.goal.marks[0];
-    return endGame(`${held ? 'A horda foi contida' : 'A horda venceu'} por ${clockText(game.endlessT)}. Abates: ${game.kills}`, held);
+    return endGame(`${held ? 'A horda foi contida' : 'A horda venceu'} por ${clockText(game.endlessT)}.`, held);
   }
-  if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}. Abates: ${game.kills}`, false);
+  if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}.`, false);
   if (game.mission && campaignTick(dt, skeletons)) return;
 
   if (game.state === 'fight') {
@@ -5479,7 +5524,7 @@ function updateGame(dt) {
         const party = heroes();
         game.missionHpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
       }
-      showBanner(`Fase ${game.phase} vencida!`, 2.5);
+      showBanner(`✓ Fase ${game.phase}`, 2);
       for (const h of heroes()) {
         if (h.dead) {
           if (difficulty.reviveDelay && game.phase - h.diedIn < difficulty.reviveDelay) continue;   // ainda espera a fase seguinte
@@ -5499,7 +5544,7 @@ function updateGame(dt) {
   } else if (game.state === 'cleared') {
     game.timer -= dt;
     if (game.timer <= 0) {
-      if (game.phase >= game.last) return endGame(game.mission ? `Missão cumprida: ${game.mission.name}! Abates: ${game.kills}` : `Vitória! O grupo chegou ao castelo. Abates: ${game.kills}`, true);
+      if (game.phase >= game.last) return endGame(game.mission ? `Missão cumprida: ${game.mission.name}!` : 'O grupo chegou ao castelo!', true);
       game.phase++;
       game.state = 'advance';
       showRelicPick();
@@ -5512,16 +5557,18 @@ function updateGame(dt) {
     if (game.guideS >= goal && alive.every((h) => h.pos.distanceTo(h.post) < 0.6)) startPhase();
   }
 
-  setText('wave', `Fase ${game.phase}/${game.last}`);
+  setText('wave', `${game.phase}/${game.last}`);
+  setTip('wave', `Fase ${game.phase} de ${game.last}`);
   // totens, torre e prisioneiro seguram a fase: sem esqueletos comuns, o HUD diz o que falta
   const objective = game.state === 'fight' && !game.toSpawn && skeletons.every((s) => s.totem) ? objectiveHint(skeletons) : null;
-  setText('left', objective || `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
+  const foes = skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0);
+  setText('left', objective || String(foes));
+  $('left').classList.toggle('objective', !!objective);
+  setTip('left', objective ? `Objetivo: ${objective}` : `${foes} inimigos restantes · ${game.kills} abates`);
   if (objective && game.objectiveCall !== game.phase) { game.objectiveCall = game.phase; showBanner(`${objective}!`, 2.5); }
-  setText('kills', `Abates: ${game.kills}`);
-  setText('party', `Heróis: ${heroes().length}/${MAX_PARTY}`);
   const militia = militiaAlive();
   if ($('militia').hidden !== !militia) $('militia').hidden = !militia;   // contador discreto: some sem milícia de pé
-  if (militia) setText('militia', `⚔ Milícia: ${militia}`);
+  if (militia) { setText('militia', String(militia)); setTip('militia', `Milícia: ${militia} ${militia === 1 ? 'aldeão armado' : 'aldeões armados'}`); }
 }
 
 function objectiveHint(skeletons) {
@@ -5546,7 +5593,9 @@ function endGame(text, won = false) {
   closeHeroPanel();
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
-  $('overlayText').textContent = text + (saveRecord(won) ? ` · Novo recorde no ${difficulty.name}!` : '');
+  $('overlayTitle').textContent = won ? 'Vitória!' : 'Derrota';
+  $('overlayText').textContent = text + (saveRecord(won) ? ' · Novo recorde!' : '');
+  $('overlayNext').innerHTML = '';
   const missionIndex = MISSIONS.indexOf(game.mission);
   const followingWasOpen = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1);
   const missionStars = game.mission ? missionEnd(won) : null;
@@ -5557,8 +5606,8 @@ function endGame(text, won = false) {
     const following = missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1) ? MISSIONS[missionIndex + 1] : null;
     const next = !won ? null : MISSIONS.find((mission) => mission.name === nextMission) || following;
     const target = won ? next : game.mission;
-    $('overlayStars').innerHTML += missionNextHTML(won, next, next === following && following && !followingWasOpen);
-    const nextBtn = $('overlayStars').querySelector('.mission-next-btn');
+    $('overlayNext').innerHTML = missionNextHTML(won, next, next === following && following && !followingWasOpen);
+    const nextBtn = $('overlayNext').querySelector('.mission-next-btn');
     if (nextBtn && target) nextBtn.onclick = () => startGame(target);
   }
   const party = game.roster;
@@ -5589,15 +5638,18 @@ function endGame(text, won = false) {
       endlessTime: game.endlessT,
     } : null,
   });
-  $('overlayStats').innerHTML = summaryHTML(party, report);
+  $('overlayStats').innerHTML = summaryHTML(party, report, { won, kills: game.kills, falls: game.fallLog?.length || 0 });
   if (!game.test) {   // ouro, maestria e conquistas (atalhos de teste não contam)
     const reward = progress.recordMatch(matchSummary(won, missionStars));
-    $('overlayStars').innerHTML += rewardHTML(reward, VARIANTS);
+    const mvp = party.length ? party.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a)) : null;
+    $('overlayStars').innerHTML += rewardHTML(reward, VARIANTS, mvp?.cfg.id);
     toastAchievements(reward.unlocked);
   }
-  $('overlayBtn').textContent = game.mission ? 'Voltar ao mapa' : 'Jogar de novo';
+  $('overlayBtn').textContent = game.mission ? 'Mapa' : 'Jogar de novo';
+  $('overlayBtn').setAttribute('aria-label', game.mission ? 'Voltar ao mapa' : 'Jogar de novo');
   $('overlayBtn').hidden = false;
   $('overlay').classList.add('results');
+  $('overlay').classList.toggle('lost', !won);
   $('overlay').classList.remove('hidden');
 }
 
