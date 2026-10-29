@@ -101,3 +101,13 @@ body.kingdom #soundHint { bottom: 200px; }
 
 .k-end { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .k-end .end-chip svg { width: 18px; height: 18px; vertical-align: -3px; }
+
+/* aviso de onda: caveira pulsando na borda da tela, seta apontando para a origem */
+.k-alert { position: fixed; left: 0; top: 0; z-index: 30; width: 0; height: 0; pointer-events: none; }
+.k-alert[hidden] { display: none; }
+.k-alert span { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%;
+  font: 400 20px/1 'Lilita One', sans-serif; color: #fff; background: rgba(150, 30, 30, .85); border: 2px solid #ffb0a6;
+  box-shadow: 0 0 14px rgba(255, 70, 50, .8); animation: k-alert .7s ease-in-out infinite alternate; }
+.k-alert i { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+.k-alert i::before { content: ''; position: absolute; left: 20px; top: -8px; border: 8px solid transparent; border-left: 12px solid #ff6a55; }
+@keyframes k-alert { to { transform: scale(1.18); box-shadow: 0 0 22px rgba(255, 70, 50, 1); } }

@@ -200,6 +200,20 @@ export function makeBuilding(type) {
         box(g, C.stone, x, 2.025, z, 0.5, 0.35, 0.5);
       }
       break;
+    case 'farm': {
+      // canteiro arado com fileiras de trigo e uma cerquinha (pegada 2x2 = 4 m)
+      box(g, 0x7a5232, 0, 0.06, 0, 3.7, 0.12, 3.7);
+      for (let i = 0; i < 5; i++) {
+        const x = -1.4 + i * 0.7;
+        box(g, 0x5e3c22, x, 0.15, 0, 0.32, 0.1, 3.3);
+        for (let k = 0; k < 5; k++) part(g, 'cone', k % 2 ? 0xe2c04a : 0x9ccc4a, [x, 0.48, -1.3 + k * 0.65], [0.16, 0.6, 0.16]);
+      }
+      for (const z of [-1.9, 1.9]) box(g, C.beam, 0, 0.45, z, 3.9, 0.08, 0.08);
+      for (const x of [-1.9, 1.9]) box(g, C.beam, x, 0.45, 0, 0.08, 0.08, 3.9);
+      for (const x of [-1.9, 0, 1.9]) for (const z of [-1.9, 1.9]) box(g, C.beam, x, 0.35, z, 0.12, 0.7, 0.12);
+      part(g, 'ico', 0xe2c04a, [1.45, 0.45, 1.45], [0.42, 0.45, 0.42]);
+      break;
+    }
     default: throw new RangeError(`Construção desconhecida: ${type}`);
   }
   return g;
@@ -254,16 +268,73 @@ export function makeRock(variant) {
   return g;
 }
 
-export function makeMine() {
+export function makeMine(rich = 1) {
   const g = new THREE.Group();
   part(g, 'dodeca', C.gray, [0, 0.85, 0], [1.65, 0.85, 1.65]);
-  const gold = material(C.gold, 0x6a4a00);
+  const gold = material(C.gold, rich > 1 ? 0xa87400 : 0x6a4a00);
   for (let i = 0; i < 6; i++) {
     const angle = i * Math.PI / 3;
     part(g, 'crystal', C.gold, [Math.sin(angle), 1.3 + (i % 2) * 0.15,
       Math.cos(angle)], [0.27, 0.9, 0.27],
     [Math.cos(angle) * 0.35, angle, -Math.sin(angle) * 0.35], gold);
   }
+  // brilho dourado no chão (mais forte nas minas ricas do meio do mapa)
+  part(g, 'circle', 0xffd23a, [0, 0.04, 0], [2.3, 2.3, 1], [-Math.PI / 2, 0, 0],
+    material(0xffd23a, 0, true, rich > 1 ? 0.32 : 0.2)).castShadow = false;
+  return g;
+}
+
+// arbusto de frutas silvestres (comida rápida perto da base)
+export function makeBerryBush(variant = 0) {
+  const g = new THREE.Group();
+  const v = ((Math.trunc(variant) % 4) + 4) % 4;
+  part(g, 'ico', v % 2 ? 0x3f8f34 : 0x4a9e3a, [0, 0.55, 0], [0.85, 0.6, 0.85], [0, v, 0]);
+  part(g, 'ico', 0x56a83f, [0.45, 0.45, 0.25], [0.5, 0.42, 0.5]);
+  const berry = material(v % 2 ? 0xd63a4a : 0x7a3fd1, v % 2 ? 0x400a10 : 0x200a40);
+  for (let i = 0; i < 9; i++) {
+    const a = i * 2.4 + v, y = 0.45 + (i % 3) * 0.22;
+    part(g, 'ico', 0, [Math.cos(a) * 0.78, y, Math.sin(a) * 0.78], [0.11, 0.11, 0.11], [0, 0, 0], berry);
+  }
+  return g;
+}
+
+// ponte de madeira ao longo de x: tabuado, guarda-corpo e pilares de pedra nas pontas
+export function makeBridge(length, width) {
+  const g = new THREE.Group();
+  const n = Math.max(4, Math.round(length / 0.55));
+  for (let i = 0; i < n; i++) {
+    const x = -length / 2 + (i + 0.5) * length / n;
+    box(g, i % 2 ? C.wood : 0xd6b07e, x, 0.2, 0, length / n - 0.06, 0.16, width);
+  }
+  for (const z of [-width / 2 + 0.15, width / 2 - 0.15]) {
+    box(g, C.beam, 0, -0.05, z, length, 0.3, 0.22);
+    box(g, C.beam, 0, 1.0, z, length, 0.12, 0.12);
+    for (let x = -length / 2 + 0.2; x <= length / 2 - 0.1; x += 1.6) box(g, C.beam, x, 0.6, z, 0.16, 0.9, 0.16);
+  }
+  for (const x of [-length / 2 + 2.2, length / 2 - 2.2]) for (const z of [-width / 2 + 0.3, width / 2 - 0.3]) {
+    part(g, 'cylinder', 0x8f8a82, [x, -0.6, z], [0.32, 1.4, 0.32]);
+  }
+  for (const x of [-length / 2 + 0.6, length / 2 - 0.6]) box(g, 0xa8a399, x, 0.02, 0, 1.4, 0.32, width + 0.5);
+  return g;
+}
+
+// cova de ossos na borda do mapa (as ondas também saem daqui); 'glow' pulsa no aviso
+export function makeBurrow() {
+  const g = new THREE.Group();
+  part(g, 'cylinder', 0x16121c, [0, 0.03, 0], [1.9, 0.08, 1.6]);
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI * 0.15 + i * Math.PI * 1.7 / 8;
+    part(g, i % 2 ? 'dodeca' : 'ico', i % 3 ? 0x4c4552 : 0x3a3440, [Math.cos(a) * 2.3, 0.35, -Math.sin(a) * 2],
+      [0.55 + (i % 3) * 0.2, 0.5 + (i % 2) * 0.35, 0.55], [0, i, 0]);
+  }
+  const bone = 0xefe6d2;
+  for (const s of [-1, 1]) {
+    rod(g, bone, [s * 1.4, 0, -0.9], [s * 0.7, 1.9, -0.6], 0.09);
+    part(g, 'cone', bone, [s * 1.8, 0.6, 0.4], [0.12, 1.2, 0.12], [0.3, 0, s * 0.5]);
+  }
+  part(g, 'ico', bone, [0, 1.05, -1.4], [0.42, 0.45, 0.38]);
+  for (const dx of [-0.15, 0.15]) part(g, 'ico', 0x1a1420, [dx, 1.1, -1.05], [0.1, 0.12, 0.06]);
+  part(g, 'ring', 0xb36bff, [0, 0, 0], [1.05, 1.05, 1], [0, 0, 0], material(0xb36bff, 0, true, 0.85)).name = 'glow';
   return g;
 }
 
