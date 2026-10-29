@@ -1,0 +1,19 @@
+/* Mesma tinta azul e ouro do HUD; a camada deixa todos os controles livres. */
+.tutorial-layer { position: fixed; inset: 0; z-index: 80; pointer-events: none; }
+.tutorial-bubble, .tutorial-skip { pointer-events: auto; cursor: pointer; font-family: 'Fredoka', sans-serif; }
+.tutorial-bubble { position: absolute; box-sizing: border-box; max-width: min(230px, calc(100vw - 24px));
+  padding: 10px 15px; border: 2px solid var(--gold, #ffe27a); border-radius: 16px;
+  background: #101a30; color: #fff2c6; font-size: 17px; font-weight: 500; line-height: 1.2;
+  box-shadow: 0 5px 16px #0005; text-align: center; }
+.tutorial-bubble::after { content: ''; position: absolute; left: var(--arrow-x); bottom: -9px;
+  width: 13px; height: 13px; background: #101a30; border-right: 2px solid var(--gold, #ffe27a);
+  border-bottom: 2px solid var(--gold, #ffe27a); transform: translateX(-50%) rotate(45deg); pointer-events: none; }
+.tutorial-bubble[data-side="below"]::after { bottom: auto; top: -9px; transform: translateX(-50%) rotate(225deg); }
+.tutorial-skip { position: absolute; right: 14px; top: max(64px, env(safe-area-inset-top)); padding: 7px 12px;
+  border: 1px solid #b8d4ff66; border-radius: 99px; background: #101a30ed; color: #e4edff; font-size: 13px;
+  box-shadow: 0 3px 10px #0003; z-index: 1; }
+.tutorial-bubble:focus-visible, .tutorial-skip:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.tutorial-pulse { position: absolute; box-sizing: border-box; border: 2px solid var(--gold, #ffe27a);
+  border-radius: 16px; pointer-events: none; animation: tutorial-pulse 1.2s ease-in-out infinite; }
+@keyframes tutorial-pulse { 50% { box-shadow: 0 0 0 5px #ffe27a44, 0 0 18px #ffe27a66; } }
+@media (prefers-reduced-motion: reduce) { .tutorial-pulse { animation: none; box-shadow: 0 0 0 3px #ffe27a44; } }

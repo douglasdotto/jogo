@@ -16,6 +16,7 @@ import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summ
 import * as audio from './audio.js';
 import { initTooltips, registerTooltip, hideTooltip } from './tooltip.js';
 import { logoSVG } from './logo.js';
+import { tutorial } from './tutorial.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { disposeSkeletons } from './scene-perf.js';
@@ -410,6 +411,7 @@ function showPick(title, sub) {
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
+  tutorial.on('pick', { missionId: game.mission?.id, card: () => pick.cards[pick.sel], button: () => document.querySelector('.hero-select-btn') });
 }
 
 const isOwned = (cfg) => heroes().some((h) => h.cfg.id === cfg.id);
@@ -534,6 +536,7 @@ const MODES = [
 ];
 // Cartões do menu: nome e um número; a explicação de cada modo fica na dica e no aria-label.
 function showMenu() {
+  tutorial.on('leave');
   pick.mode = 'mode';
   $('banner').style.opacity = 0;
   $('campaign').classList.add('hidden');
@@ -596,6 +599,7 @@ function showCamp() {
 
 // mapa da campanha; escolher uma missão leva à dificuldade
 function showCampaign(autoPlay = null) {
+  tutorial.on('leave');
   game.mission = null;
   pick.open = false;
   game.paused = true;   // sem grupo ainda: a partida não pode correr por trás do mapa
@@ -1038,6 +1042,7 @@ function showRelicPick() {
   }
   selectCard(0);
   $('pick').classList.remove('hidden');
+  tutorial.on('relic', { target: pick.cards[0] });
 }
 
 // relíquias ativas no HUD: um ícone por relíquia (com contagem); os detalhes ficam na dica
@@ -1413,6 +1418,7 @@ function updateSkillBar() {
     if (it.level !== h.level) { it.level = h.level; it.img.src = h.cfg.portraits?.[h.level - 1] || h.cfg.portrait; }
     const timer = h.skillTimers[slot], max = h.skillMaxes[slot];
     const ready = !h.dead && timer <= 0;
+    if (ready && !h.autoSkills[slot] && !game.paused && !game.over && game.state === 'fight') tutorial.on('skillReady', { target: it.b, auto: false });
     const p = (h.dead ? 1 : THREE.MathUtils.clamp(timer / max, 0, 1)).toFixed(3);
     if (p !== it.p) { it.p = p; it.cd.style.setProperty('--p', p); }
     const secs = h.dead ? '✖' : ready ? '' : String(Math.ceil(timer));
@@ -5391,6 +5397,7 @@ function startMission() {
 
 function startPhase() {
   game.state = 'fight';
+  tutorial.on('battleStart');
   for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
@@ -6052,6 +6059,10 @@ function updateGame(dt) {
   if (game.mission && campaignTick(dt, skeletons)) return;
 
   if (game.state === 'fight') {
+    if (tutorial.wants('enemyNear')) {
+      const foe = skeletons.find(s => alive.some(h => h.pos.distanceTo(s.pos) < 10));
+      if (foe) tutorial.on('enemyNear', { enemy: foe, camera, fighting: () => game.state === 'fight' });
+    }
     pressForward(dt, skeletons);
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
@@ -6063,6 +6074,7 @@ function updateGame(dt) {
         game.missionHpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
       }
       showBanner(`✓ Fase ${game.phase}`, 2);
+      tutorial.on('phaseCleared', { phase: game.phase });
       for (const h of heroes()) {
         if (h.dead) {
           if (difficulty.reviveDelay && game.phase - h.diedIn < difficulty.reviveDelay) continue;   // ainda espera a fase seguinte
@@ -6127,6 +6139,7 @@ function matchSummary(won, stars) {
 }
 
 function endGame(text, won = false) {
+  tutorial.on('leave');
   game.over = true;
   closeHeroPanel();
   audio.stopMusic();
