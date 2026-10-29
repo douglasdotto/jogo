@@ -1416,7 +1416,7 @@ const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', pyro: 'fire', cryo: '
 
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
-const allies = () => units.filter((u) => u.team !== 'skeleton');
+const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued));   // o prisioneiro preso não é alvo
 let activeTargetContext = null;
 const frameTargetContext = { party: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [] };
 
@@ -1444,10 +1444,10 @@ function makeTargetContext(reuse = null) {
     attackableSkeletons.length = 0;
     for (const unit of skeletons) if (!unit.spawning) attackableSkeletons.push(unit);
   }
-  const alliedUnits = reuse ? reuse.alliedUnits : units.filter((unit) => unit.team !== 'skeleton');
+  const alliedUnits = reuse ? reuse.alliedUnits : allies();
   if (reuse) {
     alliedUnits.length = 0;
-    for (const unit of units) if (unit.team !== 'skeleton') alliedUnits.push(unit);
+    for (const unit of units) if (unit.team !== 'skeleton' && !(unit.captive && !unit.rescued)) alliedUnits.push(unit);
   }
   const context = reuse || {};
   context.goal = goal;
@@ -1561,7 +1561,9 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   }
   if (goal?.type === 'nofall' && fromPost <= interceptLimit && (threatenedHero || nearCriticalHero)) return true;
 
-  // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão.
+  // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão;
+  // sem inimigos comuns restantes, o grupo vai até o objetivo a qualquer distância.
+  if (hasDestructionGoal(goal) && target.totem && !context.attackableSkeletons.some((s) => !s.totem)) return true;
   return hasDestructionGoal(goal) && target.totem && fromPost <= LEASH + hero.range + 5;
 }
 
@@ -3300,7 +3302,11 @@ class Hero extends Unit {
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
     const engage = target && canHeroReachTarget(this, target);
-    if (engage) {
+    const captive = !engage && game.state === 'fight' ? captivePrisoner() : null;   // sem luta, vai libertar o prisioneiro
+    if (captive) {
+      if (this.pos.distanceTo(captive.pos) > RESCUE_RADIUS - 0.8) this.moveTo(captive.pos, dt);
+      else this.face(captive.pos, dt);
+    } else if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
@@ -3681,7 +3687,7 @@ function placeParty(first) {
   const m = game.mission;
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, bossSeen: false, bossDown: false, villager: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
@@ -3719,11 +3725,19 @@ function startPhase() {
   if (goal?.type === 'tower' && game.totemsPlaced < goal.count) {
     for (let k = 0; k < goal.count - game.totemsPlaced; k++) placeTotem(k, true);
   }
+  const captive = goal?.type === 'rescue' && game.phase === game.start ? captivePrisoner() : null;
+  if (captive) for (const off of [-1.8, 1.8]) {   // guardas ao lado do prisioneiro
+    const s = new Skeleton(off < 0 ? 'Warrior' : 'Minion', game.phase);
+    s.pos.set(captive.pos.x + off, 0, captive.pos.z + 1.2);
+    s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  }
   if (goal?.type === 'survive' && game.phase === goal.phase) return showBanner(`Aguente ${goal.time} s!`);
   showBanner(game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`);
 }
 
 // ---------- campanha: aldeão, totens e objetivos ----------
+const RESCUE_RADIUS = 2.4, RESCUE_TIME = 2.5;   // um herói fica perto do prisioneiro por RESCUE_TIME s para soltá-lo
+const captivePrisoner = () => game.mission?.goal.type === 'rescue' && game.villager && !game.villager.dead && !game.villager.rescued ? game.villager : null;
 // aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
 class Villager extends Unit {
   constructor(captive = false) {
@@ -3739,8 +3753,11 @@ class Villager extends Unit {
     this.captive = captive;
     this.rescued = !captive;
     this.post = new THREE.Vector3();
-    if (captive) {
-      this.pos.copy(world.along(game.guideS + 4.5, -1.5));
+    if (captive) {   // atrás da primeira onda, longe do grupo
+      for (let tries = 0; tries < 12; tries++) {
+        this.pos.copy(world.along(game.guideS + 14 + tries * 0.5, -1.5));
+        if (!world.obstacles.some((o) => Math.hypot(o.x - this.pos.x, o.z - this.pos.z) < o.r + 1)) break;
+      }
       this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
       this.post.copy(this.pos);
     } else {
@@ -3873,7 +3890,7 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
   const phaseCount = Math.max(1, mission.to - mission.from + 1);
   const phaseProgress = THREE.MathUtils.clamp((game.phase - mission.from + Number(game.state === 'cleared')) / phaseCount, 0, 1);
   if (goal.type === 'escort') return villager ? THREE.MathUtils.clamp(villager.hp / villager.maxHp, 0, 1) : 0;
-  if (goal.type === 'rescue') return game.rescueComplete ? 1 : 0;
+  if (goal.type === 'rescue') return game.rescueComplete ? 1 : THREE.MathUtils.clamp(game.rescueT / RESCUE_TIME, 0, 1);
   if (goal.type === 'boss') return game.bossDown ? 1 : phaseProgress;
   if (goal.type === 'survive') {
     if (game.phase < goal.phase) return 0;
@@ -3898,16 +3915,19 @@ function campaignTick(dt, skeletons) {
   if (goal.type === 'rescue' && game.villager?.dead) return fail(game.rescueComplete
     ? 'A pessoa resgatada caiu antes de chegar em segurança.'
     : 'A pessoa presa caiu antes do resgate.');
-  if (goal.type === 'rescue' && game.villager && !game.villager.rescued
-    && heroes().some((hero) => !hero.dead && tacticalDistance(hero.pos, game.villager.pos) <= 2.8)) {
+  const captive = captivePrisoner();
+  if (captive && game.state === 'fight') {   // libertar leva tempo; longe dele o progresso cai devagar
+    const near = heroes().some((hero) => !hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS);
+    game.rescueT = near ? game.rescueT + dt : Math.max(0, game.rescueT - dt * 0.5);
+    captive.nameTag.textContent = game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';
+  }
+  if (captive && game.rescueT >= RESCUE_TIME) {
     game.villager.rescued = true;
     game.rescueComplete = true;
     game.villager.nameTag.textContent = 'Resgatado';
     popText(game.villager.pos, 'Resgatado!', 'heal');
     showBanner('Pessoa resgatada!', 2.5);
   }
-  if (finalPhaseCleared && goal.type === 'rescue' && !game.villager?.rescued) return fail('A pessoa presa não foi encontrada a tempo.');
-  if (finalPhaseCleared && goal.type === 'tower' && game.towersDown < goal.count) return fail('A torre de ossos ainda está de pé!');
   if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
   if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
     const boss = units.find((u) => u.phaseBoss);
@@ -3940,7 +3960,7 @@ function campaignTick(dt, skeletons) {
   switch (goal.type) {
     case 'win': text = `Vença até a fase ${game.mission.to}`; break;
     case 'escort': text = v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão'; break;
-    case 'rescue': text = v?.rescued ? 'Pessoa resgatada!' : 'Encontre e resgate a pessoa'; break;
+    case 'rescue': text = v?.rescued ? 'Pessoa resgatada!' : game.rescueT > 0 ? 'Libertando o prisioneiro' : 'Encontre e resgate a pessoa'; break;
     case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`; break;
     case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!'; break;
     case 'totems': text = `Totens ${game.totemsDown}/${goal.count}`; break;
@@ -4025,7 +4045,7 @@ function updateGame(dt) {
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
       if (game.spawnTimer <= 0) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
-    } else if (!skeletons.length) {
+    } else if (!skeletons.length && !captivePrisoner()) {   // o prisioneiro preso segura a fase
       if (game.mission && game.phase >= game.last) {
         const party = heroes();
         game.missionHpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
@@ -4063,9 +4083,18 @@ function updateGame(dt) {
   }
 
   setText('wave', `Fase ${game.phase}/${game.last}`);
-  setText('left', `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
+  // totens, torre e prisioneiro seguram a fase: sem esqueletos comuns, o HUD diz o que falta
+  const objective = game.state === 'fight' && !game.toSpawn && skeletons.every((s) => s.totem) ? objectiveHint(skeletons) : null;
+  setText('left', objective || `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
+  if (objective && game.objectiveCall !== game.phase) { game.objectiveCall = game.phase; showBanner(`${objective}!`, 2.5); }
   setText('kills', `Abates: ${game.kills}`);
   setText('party', `Heróis: ${heroes().length}/${MAX_PARTY}`);
+}
+
+function objectiveHint(skeletons) {
+  if (skeletons.some((s) => s.tower)) return 'Derrube a torre';
+  if (skeletons.length) return skeletons.length > 1 ? `Destrua os ${skeletons.length} totens` : 'Destrua o totem';
+  return captivePrisoner() ? 'Liberte o prisioneiro' : null;
 }
 
 function endGame(text, won = false) {
