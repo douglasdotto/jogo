@@ -13,7 +13,8 @@ import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './u
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
-import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
+import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
+import { materialPool } from './fx-pool.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -394,7 +395,7 @@ function saveAuto(id, on, slot = null) {
 
 // menu inicial: Campanha (missões com estrelas) ou Jornada completa (as 12 fases seguidas)
 const MODES = [
-  { name: 'Campanha', icon: '⚑', desc: '8 missões com objetivos e estrelas.', color: ['#ffe27a', '#c98a12'] },
+  { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
   { name: 'Jornada completa', icon: '♛', desc: 'As 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
 ];
 function showMenu() {
@@ -1059,7 +1060,7 @@ function updateSkillBar() {
 }
 
 addEventListener('keydown', (e) => {
-  if (pick.open || game.over || e.repeat || !/^[1-4qwerasdf]$/i.test(e.key)) return;
+  if (pick.open || game.over || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
@@ -1252,8 +1253,9 @@ class Unit {
       dir.x += px * s * push; dir.z += pz * s * push;
     }
     dir.normalize();
-    const slow = Math.min(1, d / 0.8);                        // freia chegando no ponto
-    this.vel.lerp(dir.multiplyScalar(this.speed * slow * (this.slowT > 0 ? 0.5 : 1) * (world.isShallow(this.pos.x, this.pos.z) ? 0.6 : 1)), Math.min(1, dt * 7));
+    const terrainSpeed = (this.slowT > 0 ? 0.5 : 1) * (world.isShallow(this.pos.x, this.pos.z) ? 0.6 : 1);
+    const approachSpeed = Math.min(this.speed, d * 1.75) * terrainSpeed; // limita a frenagem para não ultrapassar o alvo
+    this.vel.lerp(dir.multiplyScalar(approachSpeed), Math.min(1, dt * 7));
     this.moving = true;
     this.face(tmp.copy(this.pos).add(this.vel), dt);
   }
@@ -1315,9 +1317,11 @@ class Unit {
     }
     this.hp -= n;
     if (owner) this.lastHit = owner;
-    this.flash = 0.14;
+    const heavy = critical || !!owner?.ultHit;   // crítico e ultimate piscam branco e mostram o número grande
+    this.flash = heavy ? 0.12 : 0.14;
+    this.flashHeavy = heavy;
     this.squashT = 0.25;
-    popText(this.pos, Math.round(n), this.team === 'hero' ? 'hurt' : critical ? 'crit' : 'dmg');
+    popText(this.pos, Math.round(n), this.team === 'hero' ? 'hurt' : heavy ? 'crit' : 'dmg');
     audio.play(this.team === 'hero' ? 'hurt' : 'hit');
     if (from) {   // recua com o impacto
       const k = (this.boss ? 0.6 : this.team === 'hero' ? 1.6 : 3.2);
@@ -1393,7 +1397,7 @@ class Unit {
     if (this.flash > 0 || this.flashOn) {
       this.flash -= dt;
       this.flashOn = this.flash > 0;
-      for (const m of this.mats) if (m.emissive) m.emissive.setHex(this.flashOn ? 0xff3b2f : 0x000000);
+      for (const m of this.mats) if (m.emissive) m.emissive.setHex(this.flashOn ? (this.flashHeavy ? 0xffffff : 0xff3b2f) : 0x000000);
     }
     if (this.pendingHit && !game.over) {
       this.pendingHit.t -= dt;
@@ -1404,7 +1408,7 @@ class Unit {
         if (effect) effect();
         else if (this.ranged && !target.dead) this.team === 'skeleton' ? fireEnemyBolt(this, target) : fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic');
         else if (this.cleave) damageCleave(this, target);
-        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos);
+        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos, this);
       }
     }
   }
@@ -1415,7 +1419,7 @@ const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', pyro: 'fire', cryo: '
 
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
-const allies = () => units.filter((u) => u.team !== 'skeleton');
+const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued));   // o prisioneiro preso não é alvo
 let activeTargetContext = null;
 const frameTargetContext = { party: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [] };
 
@@ -1426,7 +1430,7 @@ function makeTargetContext(reuse = null) {
     party.length = 0;
     for (const unit of units) if (unit.team === 'hero') party.push(unit);
   }
-  const villager = goal?.type === 'escort' && !game.villager?.dead ? game.villager : null;
+  const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager : null;
   const friends = reuse ? reuse.friends : villager ? [...party, villager] : party;
   if (reuse) {
     friends.length = 0;
@@ -1443,10 +1447,10 @@ function makeTargetContext(reuse = null) {
     attackableSkeletons.length = 0;
     for (const unit of skeletons) if (!unit.spawning) attackableSkeletons.push(unit);
   }
-  const alliedUnits = reuse ? reuse.alliedUnits : units.filter((unit) => unit.team !== 'skeleton');
+  const alliedUnits = reuse ? reuse.alliedUnits : allies();
   if (reuse) {
     alliedUnits.length = 0;
-    for (const unit of units) if (unit.team !== 'skeleton') alliedUnits.push(unit);
+    for (const unit of units) if (unit.team !== 'skeleton' && !(unit.captive && !unit.rescued)) alliedUnits.push(unit);
   }
   const context = reuse || {};
   context.goal = goal;
@@ -1529,6 +1533,8 @@ function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
+
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
@@ -1558,8 +1564,10 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   }
   if (goal?.type === 'nofall' && fromPost <= interceptLimit && (threatenedHero || nearCriticalHero)) return true;
 
-  // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão.
-  return goal?.type === 'totems' && target.totem && fromPost <= LEASH + hero.range + 5;
+  // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão;
+  // sem inimigos comuns restantes, o grupo vai até o objetivo a qualquer distância.
+  if (hasDestructionGoal(goal) && target.totem && !context.attackableSkeletons.some((s) => !s.totem)) return true;
+  return hasDestructionGoal(goal) && target.totem && fromPost <= LEASH + hero.range + 5;
 }
 
 function heroTargetScore(hero, target, from = hero.pos, context = targetContext()) {
@@ -1569,7 +1577,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   let distanceToVulnerable = Infinity;
 
   if (target.boss) score -= goal?.type === 'boss' ? 12 : 3.5;
-  if (target.totem) score -= goal?.type === 'totems' ? 12 : 1;
+  if (target.totem) score -= hasDestructionGoal(goal) ? 12 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
 
   if (target.enemyKind === 'Bomber') {
@@ -1706,7 +1714,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const urgentBomber = best.enemyKind === 'Bomber'
     && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
   const urgentObjectiveTarget = (goal?.type === 'boss' && best.boss)
-    || (goal?.type === 'totems' && best.totem)
+    || (hasDestructionGoal(goal) && best.totem)
     || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
   let criticalAllyNearFocus = false;
   if (focused && goal?.type === 'nofall') for (const ally of party) {
@@ -1781,7 +1789,7 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   const dir = new THREE.Vector3().subVectors(target.pos, from.pos).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(mesh);
-  const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' ? 1 : from.skillPower, skill };
+  const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
   if (skill && kind === 'pyro') {   // a bola grande faz um arco no ar até o alvo
     bolt.base = mesh.position.clone();
@@ -1801,7 +1809,7 @@ function updateBolts(dt) {
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i];
     b.life -= dt;
-    if (b.skill || b.look) FX.trail(b, dt);
+    FX.trail(b, dt);   // rastro leve em todo projétil; habilidades deixam um rastro mais denso
     const piercing = b.kind === 'crossbow' || b.kind === 'ninja';
     if (piercing) {
       const step = 18 * dt, start = piercingStartScratch.copy(b.mesh.position);
@@ -1893,7 +1901,7 @@ function updateEnemyBolts(dt) {
     if (!b.target.dead) {
       b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), goal.clone().sub(b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
-      if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos); b.life = 0; }
+      if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos, b.from); b.life = 0; }
     }
     if (b.life <= 0 || b.target.dead) { scene.remove(b.mesh); enemyBolts.splice(i, 1); }
   }
@@ -2028,12 +2036,18 @@ const SKILL_ART = {
   chronist:  { color: 0x8feaff, accent: 0xb6a4ff, glyph: boltGeo, scale: 1.8 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
-let shakeK = 0;
+let shakeK = 0, stopT = 0;
 const jolt = new THREE.Vector3();
 
 function glow(color, opacity = 0.85, additive = true) {
   return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
 }
+// as partículas (faíscas, fumaça, pedrinhas) pegam o material destes estoques e o devolvem ao sumir
+const particleMats = {
+  add: materialPool(() => glow(0xffffff)),
+  soft: materialPool(() => glow(0xffffff, 0.85, false)),
+  solid: materialPool(() => new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true })),
+};
 
 // registra um efeito com vida própria; tick(e, dt, k) anima (k vai de 0 a 1)
 function addFx(mesh, life, tick, delay = 0) {
@@ -2045,7 +2059,12 @@ function addFx(mesh, life, tick, delay = 0) {
 
 function dropFx(e) {
   scene.remove(e.mesh);
-  e.mesh.traverse((o) => { if (o.material && !o.material.userData.keep) o.material.dispose(); });
+  e.mesh.traverse((o) => {
+    const m = o.material;
+    if (!m || m.userData.keep) return;
+    if (m.userData.pool) m.userData.pool.give(m);   // material de partícula volta ao estoque
+    else m.dispose();
+  });
 }
 
 function updateSkillFx(dt) {
@@ -2065,11 +2084,12 @@ function updateSkillFx(dt) {
 function clearSkillFx() {
   while (skillFx.length) dropFx(skillFx.pop());
   shakeK = 0;
+  stopT = 0;
 }
 
 // partícula que voa, cai (gravity) e some; smoke = fumaça opaca em vez de brilho
 function particle(geo, color, at, vel, life, o = {}) {
-  const m = new THREE.Mesh(geo, o.solid ? new THREE.MeshLambertMaterial({ color, transparent: true }) : glow(color, o.opacity ?? 0.95, !o.smoke));
+  const m = new THREE.Mesh(geo, (o.solid ? particleMats.solid : o.smoke ? particleMats.soft : particleMats.add).take(color, o.solid ? 1 : o.opacity ?? 0.95));
   const s0 = o.size ?? 1;
   m.position.copy(at);
   m.scale.setScalar(s0);
@@ -2235,6 +2255,17 @@ function charge(h, duration) {
     targetLock(pending.target, life, art, active);
     castLink(h, pending.target, life, art, active);
   }
+  if (ultimate) {   // ultimate avisa: coluna da cor do herói que acende e aperta até o disparo
+    const glowCol = new THREE.Mesh(columnGeo, glow(art.color, 0.4));
+    addFx(glowCol, life, (e, dt, k) => {
+      if (!active()) { e.done = true; return; }
+      glowCol.position.copy(h.pos);
+      const r = 1.15 - 0.6 * k + Math.sin(e.t * 26) * 0.05 * k;
+      glowCol.scale.set(r, 2.4 + k * 1.6, r);
+      glowCol.rotation.y += dt * 4;
+      glowCol.material.opacity = 0.12 + 0.38 * k * k;
+    });
+  }
   // Trajetórias curvas, em vez de faíscas retas: convergem à frente do peito.
   const sparkCount = ultimate ? 16 : 10;
   for (let i = 0; i < sparkCount; i++) {
@@ -2280,6 +2311,11 @@ function release(h, ultimate = false) {
     wave(h.pos, art.accent, 0.35, 6.2, 0.82, { geo: ringGeo, opacity: 0.82, spin: 3.5 });
     wave(h.pos, art.color, 0.55, 4.8, 0.68, { delay: 0.08, geo: ringGeo, opacity: 0.72, spin: -2.5 });
     burst(origin, [art.color, art.accent, 0xfff2b0, 0xffffff], 18, 7, { life: 0.68, size: 1.35 });
+    const blaze = new THREE.Mesh(shellGeo, glow(0xffffff, 0.9));
+    blaze.position.copy(origin);
+    addFx(blaze, 0.28, (e, dt, k) => { blaze.scale.setScalar(1 + 9 * (1 - (1 - k) ** 3)); blaze.material.opacity = e.base * (1 - k) ** 2; });
+    shake(0.3);
+    hitStop(0.07);
   }
   for (let i = 0; i < 2; i++) {
     const arc = new THREE.Mesh(arcGeo, glow(color, 0.8));
@@ -2309,21 +2345,42 @@ function holyLight(h, friends, reach) {
   }
 }
 
-// Guardião: cúpula azul translúcida (com malha de escudo) enquanto a proteção durar
+// Campo de força: brilho só na borda (fresnel) e faixas de energia subindo; o centro fica limpo para ver o herói
+function shieldMaterial(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 1 }, time: { value: 0 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vY = position.y;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 color; uniform float opacity; uniform float time; varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() {
+        float rim = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2);
+        float band = 1.0 - smoothstep(0.0, 0.06, abs(fract(vY * 2.5 - time * 0.5) - 0.5));
+        float a = (rim * 0.9 + 0.05 + band * 0.22 * (1.0 - vY)) * opacity;
+        gl_FragColor = vec4(color + rim * 0.55, a);
+      }`,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+}
+
+// Guardião: cúpula de energia azul enquanto a proteção durar
 function dome(h, radius) {
-  const d = new THREE.Mesh(domeGeo, glow(0x3f9bff, 0.3, false));   // azul de verdade: o brilho aditivo some no chão claro
-  const net = new THREE.Mesh(domeGeo, glow(0x1f6fe0, 0.6, false));
-  net.material.wireframe = true;
-  net.scale.setScalar(1.01);
-  d.add(net);
+  const d = new THREE.Mesh(domeGeo, shieldMaterial(0x4aa8ff));
+  const base = new THREE.Mesh(thinRingGeo, glow(0x8fd4ff, 0.7));   // borda da cúpula marcada no chão
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = 0.04;
+  d.add(base);
   addFx(d, h.guardT + 1, (e, dt) => {
     d.position.copy(h.pos);
     const pop = Math.min(1, e.t / 0.3);
     d.scale.setScalar(1.7 * (1 - (1 - pop) ** 3) + Math.sin(pop * Math.PI) * 0.35);
-    net.rotation.y += dt * 0.6;
     const fade = Math.min(1, Math.max(0, h.guardT) / 0.4);
-    d.material.opacity = (0.24 + 0.06 * Math.sin(e.t * 6)) * fade;
-    net.material.opacity = (0.5 + 0.15 * Math.sin(e.t * 6)) * fade;
+    d.material.uniforms.time.value = e.t;
+    d.material.uniforms.opacity.value = (0.85 + 0.15 * Math.sin(e.t * 6)) * fade;
+    base.material.opacity = (0.55 + 0.15 * Math.sin(e.t * 6)) * fade;
     if (h.dead || h.guardT <= 0 || !units.includes(h)) e.done = true;
   });
   wave(h.pos, 0x6fc3ff, 0.5, radius, 0.7);
@@ -2680,7 +2737,7 @@ function dress(b) {
 
 function trail(b, dt) {
   const m = b.mesh, L = b.style || {};
-  if (b.kind === 'ninja') m.rotation.y += dt * 25;
+  if (b.kind === 'ninja' && b.skill) m.rotation.y += dt * 25;
   b.age = (b.age ?? 0) + dt;
   if (L.spin) { m.rotation.x += dt * 8; m.rotation.y += dt * 11; }
   if (L.aim) {   // cristal e espinho apontam para o alvo; o espinho gira no próprio eixo
@@ -2689,7 +2746,7 @@ function trail(b, dt) {
   }
   b.trailT = (b.trailT ?? 0) - dt;
   if (b.trailT > 0) return;
-  b.trailT = b.skill ? 0.025 : 0.035;
+  b.trailT = b.skill ? 0.025 : b.look ? 0.035 : 0.07;
   const [a, c] = TRAIL[b.look || b.kind] || [0xffffff, 0xffffff];
   const fire = b.look === 'pyro', size = fire ? (b.skill ? 2.6 : 1.5) : b.skill ? 1.5 : 1.1;
   particle(b.look === 'druid' ? leafGeo : sparkGeo, Math.random() < 0.5 ? a : c, m.position.clone().add(V(rnd(0.1), rnd(0.1), rnd(0.1)).multiplyScalar(size)),
@@ -2700,12 +2757,104 @@ function trail(b, dt) {
 
 // tremida de câmera curta nos golpes fortes
 function shake(n) { shakeK = Math.max(shakeK, n); }
+// hit-stop: o jogo quase congela por um instante no disparo da ultimate (só o tempo do quadro, sem mudar números)
+function hitStop(n) { stopT = Math.max(stopT, n); }
+function timeScale(real) {
+  if (stopT <= 0) return 1;
+  stopT -= real;
+  return 0.12;
+}
 function cameraJolt(real) {
   shakeK = Math.max(0, shakeK - real * 1.6);
   return jolt.set(rnd(), rnd() * 0.6, rnd()).multiplyScalar(shakeK);
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column };
+// Partículas do elemento de cada herói ao soltar uma habilidade extra (fogo, gelo, arcano, luz, natureza, sombra, tempo, som).
+function element(h, skill, target) {
+  const id = h.cfg.id, ult = !!skill.ultimate, n = ult ? 18 : 10;
+  const area = !!skill.radius || !target, at = (area ? h.pos : target.pos).clone();
+  const reach = area ? (skill.radius || 4.5) * 0.7 : 1.4;
+  const spot = (y = 0.2) => { const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * reach; return V(at.x + Math.cos(a) * r, at.y + y, at.z + Math.sin(a) * r); };
+  if (id === 'pyro') {   // brasas subindo e fumaça escura
+    for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xff7a1a : 0xffe070, spot(), V(rnd(0.6), 2.5 + Math.random() * 2.5, rnd(0.6)), 0.9, { size: 1.3, gravity: -1, delay: Math.random() * 0.25 });
+    for (let i = 0; i < n / 3; i++) particle(puffGeo, 0x3a2a24, spot(0.4), V(rnd(0.4), 1.2, rnd(0.4)), 1, { smoke: true, opacity: 0.4, size: 0.5, grow: 1.4, spin: 0 });
+  } else if (id === 'cryo' || id === 'iceviking') {   // flocos caindo devagar
+    for (let i = 0; i < n; i++) particle(sparkGeo, i % 2 ? 0xe6fbff : 0x8be8ff, spot(2.6 + Math.random()), V(rnd(0.4), -1.2, rnd(0.4)), 1.2, { size: 1.1, delay: Math.random() * 0.4 });
+  } else if (id === 'arcane') {   // runas girando para dentro
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU, p = V(at.x + Math.cos(a) * reach, at.y + 1, at.z + Math.sin(a) * reach);
+      particle(sparkGeo, i % 2 ? 0x8a3cff : 0xe0c8ff, p, V(-Math.cos(a) * reach * 2.2 - Math.sin(a) * 2, 0.6, -Math.sin(a) * reach * 2.2 + Math.cos(a) * 2), 0.45, { size: 1.3 });
+    }
+  } else if (id === 'paladin' || id === 'cleric' || id === 'angel') {   // raios de luz e fagulhas douradas
+    for (let i = 0; i < (ult ? 5 : 3); i++) column(spot(0), i % 2 ? 0xffffff : 0xffe27a, 0.18, 6, 0.6, { opacity: 0.7, delay: i * 0.06 });
+    for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xffe27a : 0xffffff, spot(), V(rnd(0.3), 3 + Math.random() * 2, rnd(0.3)), 1, { size: 1.2, delay: Math.random() * 0.3 });
+  } else if (id === 'druid') {   // folhas rodando
+    for (let i = 0; i < n; i++) particle(leafGeo, i % 2 ? 0x8fe05a : 0xc8f07a, spot(), V(rnd(1.5), 1.5 + Math.random() * 1.5, rnd(1.5)), 1.2, { size: 1.4, gravity: 0.6, delay: Math.random() * 0.3 });
+  } else if (id === 'necro' || id === 'assassin' || id === 'ninja') {   // sombra: fumaça escura e fagulhas frias
+    const tint = id === 'necro' ? 0x6dff8a : 0xb48cff;
+    for (let i = 0; i < n / 2; i++) particle(puffGeo, id === 'necro' ? 0x14301c : 0x2a1640, spot(0.3), V(rnd(0.6), 0.8, rnd(0.6)), 0.9, { smoke: true, opacity: 0.5, size: 0.5, grow: 1.2, spin: 0 });
+    for (let i = 0; i < n / 2; i++) particle(sparkGeo, tint, spot(0.6), V(rnd(1), 1.6, rnd(1)), 0.6, { size: 1.1 });
+  } else if (id === 'chronist') {   // mostrador de relógio no chão, com os ponteiros voltando
+    clockFace(at, reach + 0.6, ult ? 1.4 : 0.9);
+  } else if (id === 'bard') {   // ondas sonoras em pé saindo do bardo e notinhas
+    for (let i = 0; i < (ult ? 4 : 3); i++) {
+      const m = new THREE.Mesh(thinRingGeo, glow(i % 2 ? 0xffe27a : 0xe9a7ff, 0.8));
+      m.position.copy(h.pos).setY(h.pos.y + 1.2);
+      m.rotation.y = h.root.rotation.y;
+      addFx(m, 0.6, (e, dt, k) => { m.scale.setScalar(0.4 + k * 3.2); m.material.opacity = e.base * (1 - k); }, i * 0.1);
+    }
+    for (let i = 0; i < n; i++) particle(sparkGeo, i % 2 ? 0xf4c6ff : 0xffe27a, spot(1), V(rnd(1.2), 1.8, rnd(1.2)), 0.8, { size: 1.2, gravity: -0.5, delay: Math.random() * 0.3 });
+  }
+}
+
+// Cronomante: relógio no chão com doze marcas e ponteiros girando ao contrário
+function clockFace(at, radius, life) {
+  const g = new THREE.Group(), mat = glow(0x8feaff, 0.85);
+  const rim = new THREE.Mesh(thinRingGeo, mat);
+  rim.rotation.x = -Math.PI / 2;
+  g.add(rim);
+  for (let i = 0; i < 12; i++) {
+    const tick = new THREE.Mesh(crackGeo, mat), a = i / 12 * TAU;
+    tick.position.set(Math.cos(a) * 0.78, 0, Math.sin(a) * 0.78);
+    tick.rotation.y = -a;
+    tick.scale.set(0.14, 1, i % 3 ? 0.6 : 1.4);
+    g.add(tick);
+  }
+  const hands = [[0.7, 0xffffff, -9], [0.45, 0xb6a4ff, -2.5]].map(([len, color, speed]) => {
+    const hand = new THREE.Mesh(crackGeo, glow(color, 0.95));
+    hand.scale.set(len, 1, 1.2);
+    hand.userData.speed = speed;
+    g.add(hand);
+    return hand;
+  });
+  g.position.copy(at).setY(at.y + 0.1);
+  addFx(g, life, (e, dt, k) => {
+    g.scale.setScalar(radius * (1 - (1 - Math.min(1, e.t / 0.2)) ** 3));
+    for (const hand of hands) { hand.rotation.y += hand.userData.speed * dt; hand.material.opacity = 0.95 * (1 - k); }
+    mat.opacity = 0.85 * (1 - k * k);
+  });
+}
+
+// Cronomante: anel de tempo parado em volta do inimigo preso, até ele se soltar
+function stasis(enemy) {
+  const g = new THREE.Group();
+  const band = new THREE.Mesh(thinRingGeo, glow(0x8feaff, 0.8)), inner = new THREE.Mesh(hexGeo, glow(0xb6a4ff, 0.6));
+  band.rotation.x = inner.rotation.x = -Math.PI / 2;
+  g.add(band, inner);
+  addFx(g, 99, (e, dt) => {
+    if (enemy.dead || enemy.rootT <= 0 || !units.includes(enemy)) e.done = true;
+    g.position.copy(enemy.pos).setY(enemy.pos.y + 0.9 * enemy.size + Math.sin(e.t * 3) * 0.15);
+    const pop = Math.min(1, e.t / 0.2);
+    band.scale.setScalar(0.75 * enemy.size * pop);
+    inner.scale.setScalar(0.55 * enemy.size * pop);
+    band.rotation.z -= dt * 0.8;
+    inner.rotation.z += dt * 0.5;
+    band.material.opacity = 0.55 + 0.25 * Math.sin(e.t * 5);
+  });
+  burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0x8feaff, 0xb6a4ff], 6, 2.5, { gravity: 0 });
+}
+
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column };
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -2888,7 +3037,7 @@ class Hero extends Unit {
           enemy.pendingHit = null;
           enemy.vel.set(0, 0, 0);
           heroHit(this, enemy, this.dmg * 0.55 * power);
-          FX.roots(enemy);
+          FX.stasis(enemy);   // tempo parado, não raízes
         }
         wave(this.pos, 0x8feaff, 0.2, radius, 0.8);
         burst(this.pos, [0x8feaff, 0xb6a4ff, 0xffffff], 22, 3.5);
@@ -2982,8 +3131,8 @@ class Hero extends Unit {
       effect = () => {
         const party = heroes().filter((h) => !h.dead);
         for (const h of party) {
-          h.royalT = 5 * power;
-          h.royalBonus = 0.2;
+          h.royalT = Math.max(h.royalT, 5 * power);   // não encurta nem enfraquece um hino mais forte
+          h.royalBonus = Math.max(h.royalBonus, 0.2);
         }
         popText(this.pos, 'Brado!', 'evolve');
         FX.royal(this, party);
@@ -2991,7 +3140,7 @@ class Hero extends Unit {
     } else if (id === 'necro') {
       if (!target) return false;
       effect = () => {
-        for (const u of units.filter((u) => u.summoner === this)) { poof(u.pos); u.remove(); }
+        for (const u of units.filter((u) => u.summoner === this && !u.ultimate)) { poof(u.pos); u.remove(); }   // o exército da ultimate fica
         FX.summon(this, [-1, 1].map((side) => new Minion(this, side)));
       };
     } else if (id === 'druid') {
@@ -3173,6 +3322,7 @@ class Hero extends Unit {
         } else {
           effect = () => { damageAreaNow(skill.effect === 'meteor' ? 1 : 0.8);
             if (skill.effect === 'meteor') { column(this.pos, color, radius * 0.55, 6, 0.9); FX.quake(this, radius * 0.35); }
+            else if (skill.effect === 'blizzard' && this.cfg.id === 'chronist') for (const enemy of enemies) FX.stasis(enemy);
             else if (skill.effect === 'blizzard') FX.iceFan(this, target || this);
             else if (skill.effect === 'storm') FX.whirl(this, radius);
             else FX.quake(this, radius * 0.35);
@@ -3184,7 +3334,7 @@ class Hero extends Unit {
       case 'summon':
         effect = () => {
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
-          FX.summon(this, [-1.5, -0.5, 0.5, 1.5].map((side) => new Minion(this, side)));
+          FX.summon(this, [-1.5, -0.5, 0.5, 1.5].map((side) => Object.assign(new Minion(this, side), { ultimate: true })));
           burst(this.pos, color, 20, 3);
         };
         break;
@@ -3195,7 +3345,7 @@ class Hero extends Unit {
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
     this.busy = this.once(anim, pace * (skill.ultimate ? 0.82 : 0.92));
     const hitAt = this.busy * at;
-    this.pendingHit = { target, skill, slot, effect: () => { audio.play(sound); FX.release(this, skill.ultimate); effect(); }, t: hitAt };
+    this.pendingHit = { target, skill, slot, effect: () => { audio.play(sound); FX.release(this, skill.ultimate); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target); }, t: hitAt };
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
     this.stats.habilidades++;
@@ -3251,6 +3401,7 @@ class Hero extends Unit {
     this.dodgeTimer -= dt;
     this.guardT -= dt;
     this.royalT -= dt;
+    if (this.royalT <= 0) this.royalBonus = 0;
     this.songT -= dt;
     if (this.songT <= 0) this.songHaste = 1;
     this.furyT -= dt;
@@ -3297,7 +3448,11 @@ class Hero extends Unit {
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
     const engage = target && canHeroReachTarget(this, target);
-    if (engage) {
+    const captive = !engage && game.state === 'fight' ? captivePrisoner() : null;   // sem luta, vai libertar o prisioneiro
+    if (captive) {
+      if (this.pos.distanceTo(captive.pos) > RESCUE_RADIUS - 0.8) this.moveTo(captive.pos, dt);
+      else this.face(captive.pos, dt);
+    } else if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
@@ -3678,7 +3833,7 @@ function placeParty(first) {
   const m = game.mission;
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, bossSeen: false, bossDown: false, villager: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null });
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
@@ -3695,6 +3850,7 @@ function startMission() {
     const m = game.mission;
     if (!m) return;
     if (m.goal.type === 'escort') game.villager = new Villager();
+    if (m.goal.type === 'rescue') game.villager = new Villager(true);
     showBanner(`${m.name} · ${world.biome}`, 3);
     game.paused = false;
   };
@@ -3712,25 +3868,48 @@ function startPhase() {
     const n = Math.ceil((goal.count - game.totemsPlaced) / (game.last - game.phase + 1));
     for (let k = 0; k < n; k++) placeTotem(k);
   }
+  if (goal?.type === 'tower' && game.totemsPlaced < goal.count) {
+    for (let k = 0; k < goal.count - game.totemsPlaced; k++) placeTotem(k, true);
+  }
+  const captive = goal?.type === 'rescue' && game.phase === game.start ? captivePrisoner() : null;
+  if (captive) for (const off of [-1.8, 1.8]) {   // guardas ao lado do prisioneiro
+    const s = new Skeleton(off < 0 ? 'Warrior' : 'Minion', game.phase);
+    s.pos.set(captive.pos.x + off, 0, captive.pos.z + 1.2);
+    s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  }
   if (goal?.type === 'survive' && game.phase === goal.phase) return showBanner(`Aguente ${goal.time} s!`);
   showBanner(game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`);
 }
 
 // ---------- campanha: aldeão, totens e objetivos ----------
+const RESCUE_RADIUS = 2.4, RESCUE_TIME = 2.5;   // um herói fica perto do prisioneiro por RESCUE_TIME s para soltá-lo
+const captivePrisoner = () => game.mission?.goal.type === 'rescue' && game.villager && !game.villager.dead && !game.villager.rescued ? game.villager : null;
 // aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
 class Villager extends Unit {
-  constructor() {
+  constructor(captive = false) {
     super(assets.Barbarian, { hp: Math.round(240 / difficulty.dmg), dmg: 0, range: 0, speed: 3, cooldown: 1 }, 'villager');
     const tint = new THREE.Color(0xd8b07a);
     this.root.traverse((o) => { if (HEROES[1].weapons.includes(o.name) && o.name !== 'Mug') o.visible = false; });
     for (const m of this.mats) m.color?.lerp(tint, 0.45);
     this.bar.classList.add('ally');
     const label = document.createElement('span');
-    label.textContent = 'Aldeão';
+    label.textContent = captive ? 'Prisioneiro' : 'Aldeão';
     this.bar.appendChild(label);
+    this.nameTag = label;
+    this.captive = captive;
+    this.rescued = !captive;
     this.post = new THREE.Vector3();
-    this.follow();
-    this.pos.copy(this.post);
+    if (captive) {   // atrás da primeira onda, longe do grupo
+      for (let tries = 0; tries < 12; tries++) {
+        this.pos.copy(world.along(game.guideS + 14 + tries * 0.5, -1.5));
+        if (!world.obstacles.some((o) => Math.hypot(o.x - this.pos.x, o.z - this.pos.z) < o.r + 1)) break;
+      }
+      this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
+      this.post.copy(this.pos);
+    } else {
+      this.follow();
+      this.pos.copy(this.post);
+    }
     this.popT = 0;
     this.loop('Idle');
   }
@@ -3745,6 +3924,7 @@ class Villager extends Unit {
     if (dt <= 0) return;
     this.updateCommon(dt);
     if (this.dead || game.over || this.busy > 0) return;
+    if (this.captive && !this.rescued) { this.vel.set(0, 0, 0); this.loop('Idle'); return; }
     const fwd = this.follow();
     if (this.pos.distanceTo(this.post) > 0.3) this.moveTo(this.post, dt);
     else this.face(tmp.copy(this.post).addScaledVector(fwd, 10), dt);
@@ -3791,9 +3971,12 @@ function totemModel() {
 }
 
 class Totem extends Unit {
-  constructor(at) {
-    super(totemModel(), { hp: Math.round(240 * difficulty.hp * (1 + (game.phase - 1) * 0.12)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
+  constructor(at, tower = false) {
+    const towerHealth = tower ? 420 : 240;
+    super(totemModel(), { hp: Math.round(towerHealth * difficulty.hp * (1 + (game.phase - 1) * 0.12)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
     this.totem = true;
+    this.tower = tower;
+    if (tower) this.size = 1.65;
     this.ranged = true;      // o grupo vai até ele (e o separate não o empurra)
     this.busy = Infinity;    // sem animações de golpe
     this.spawnT = 2;
@@ -3801,6 +3984,11 @@ class Totem extends Unit {
     this.pos.copy(at);
     this.popT = 0;
     this.deadTime = 0;
+    if (tower) {
+      const label = document.createElement('span');
+      label.textContent = 'Torre de ossos';
+      this.bar.appendChild(label);
+    }
   }
 
   update(dt) {
@@ -3819,13 +4007,15 @@ class Totem extends Unit {
     poof(this.pos, 1.6);
     ring(this.pos, 2.4, 0xb36bff, 1);
     game.totemsDown++;
+    if (this.tower) game.towersDown++;
     for (const h of heroes()) if (!h.dead) h.gainXp(8);
-    showBanner(`Totem destruído! ${game.totemsDown}/${game.mission.goal.count}`);
+    const destroyed = this.tower ? game.towersDown : game.totemsDown;
+    showBanner(`${this.tower ? 'Torre derrubada' : 'Totem destruído'}! ${destroyed}/${game.mission.goal.count}`);
   }
 }
 
 // totem num lado da estrada, à frente do grupo e longe do desafio da fase
-function placeTotem(k) {
+function placeTotem(k, tower = false) {
   const s0 = world.anchorS(game.phase), zone = world.zoneOf(game.phase);
   const side = zone ? (zone.type === 'lake' ? 1 : -1) : k % 2 ? 1 : -1;
   const at = new THREE.Vector3();
@@ -3834,7 +4024,7 @@ function placeTotem(k) {
     if (!world.obstacles.some((o) => Math.hypot(o.x - at.x, o.z - at.z) < o.r + 1.2)) break;
   }
   at.y = world.groundHeight(at.x, at.z);
-  new Totem(at);
+  new Totem(at, tower);
   game.totemsPlaced++;
 }
 
@@ -3846,12 +4036,14 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
   const phaseCount = Math.max(1, mission.to - mission.from + 1);
   const phaseProgress = THREE.MathUtils.clamp((game.phase - mission.from + Number(game.state === 'cleared')) / phaseCount, 0, 1);
   if (goal.type === 'escort') return villager ? THREE.MathUtils.clamp(villager.hp / villager.maxHp, 0, 1) : 0;
+  if (goal.type === 'rescue') return game.rescueComplete ? 1 : THREE.MathUtils.clamp(game.rescueT / RESCUE_TIME, 0, 1);
   if (goal.type === 'boss') return game.bossDown ? 1 : phaseProgress;
   if (goal.type === 'survive') {
     if (game.phase < goal.phase) return 0;
     if (game.phase > goal.phase || game.surviveT <= 0) return 1;
     return THREE.MathUtils.clamp(1 - game.surviveT / goal.time, 0, 1);
   }
+  if (goal.type === 'tower') return THREE.MathUtils.clamp(game.towersDown / goal.count, 0, 1);
   if (goal.type === 'totems') return THREE.MathUtils.clamp(game.totemsDown / goal.count, 0, 1);
   if (goal.type === 'timer') return THREE.MathUtils.clamp(game.missionT / goal.time, 0, 1);
   return phaseProgress;
@@ -3866,6 +4058,22 @@ function campaignTick(dt, skeletons) {
   const fail = (text) => (endGame(text, false), true);
   if (goal.type === 'nofall' && game.falls) return fail('Um herói caiu! A regra era ninguém cair.');
   if (goal.type === 'escort' && game.villager?.dead) return fail('O aldeão caiu! Proteja-o até o fim.');
+  if (goal.type === 'rescue' && game.villager?.dead) return fail(game.rescueComplete
+    ? 'A pessoa resgatada caiu antes de chegar em segurança.'
+    : 'A pessoa presa caiu antes do resgate.');
+  const captive = captivePrisoner();
+  if (captive && game.state === 'fight') {   // libertar leva tempo; longe dele o progresso cai devagar
+    const near = heroes().some((hero) => !hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS);
+    game.rescueT = near ? game.rescueT + dt : Math.max(0, game.rescueT - dt * 0.5);
+    captive.nameTag.textContent = game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';
+  }
+  if (captive && game.rescueT >= RESCUE_TIME) {
+    game.villager.rescued = true;
+    game.rescueComplete = true;
+    game.villager.nameTag.textContent = 'Resgatado';
+    popText(game.villager.pos, 'Resgatado!', 'heal');
+    showBanner('Pessoa resgatada!', 2.5);
+  }
   if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
   if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
     const boss = units.find((u) => u.phaseBoss);
@@ -3874,7 +4082,7 @@ function campaignTick(dt, skeletons) {
       game.bossDown = true;
       game.last = game.phase;
       game.toSpawn = 0;
-      for (const s of skeletonsAlive()) s.die();
+      for (const s of skeletonsAlive()) { s.exploded = true; s.die(); }   // bombardeiros não explodem ao se desfazer
       showBanner('Chefe derrotado!', 2.5);
     }
   }
@@ -3882,7 +4090,7 @@ function campaignTick(dt, skeletons) {
     game.surviveT = Math.max(0, game.surviveT - dt);
     if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = 4;
   }
-  if (goal.type === 'totems' && game.state === 'fight') {
+  if (hasDestructionGoal(goal) && game.state === 'fight') {
     for (const t of skeletons) if (t.totem && (t.spawnT -= dt) <= 0) {
       t.spawnT = 6 * difficulty.interval;
       if (skeletons.length >= 12) continue;
@@ -3898,16 +4106,18 @@ function campaignTick(dt, skeletons) {
   switch (goal.type) {
     case 'win': text = `Vença até a fase ${game.mission.to}`; break;
     case 'escort': text = v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão'; break;
+    case 'rescue': text = v?.rescued ? 'Pessoa resgatada!' : game.rescueT > 0 ? 'Libertando o prisioneiro' : 'Encontre e resgate a pessoa'; break;
     case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`; break;
     case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!'; break;
     case 'totems': text = `Totens ${game.totemsDown}/${goal.count}`; break;
+    case 'tower': text = game.towersDown >= goal.count ? 'Torre derrubada!' : 'Derrube a torre de ossos'; break;
     case 'nofall': text = `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`; break;
     case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
     default: text = goalText(goal);
   }
   setGoalUI(text, missionProgress(goal, v, skeletons));
-  $('goal').classList.toggle('warn', (goal.type === 'escort' && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
-  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
+  $('goal').classList.toggle('warn', ((goal.type === 'escort' || goal.type === 'rescue' && !v?.rescued) && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
+  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'tower' && game.towersDown >= goal.count) || (goal.type === 'rescue' && game.rescueComplete) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
   return false;
 }
 
@@ -3946,7 +4156,7 @@ function spawnSkeleton() {
     if (p >= 2 && ['Minion', 'Warrior', 'Rogue'].includes(type) && Math.random() < difficulty.shooters)
       type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
-  if (onTop && !lead) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
+  if (onTop && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
   const behind = p >= difficulty.behindFrom && !lead && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
@@ -3981,7 +4191,7 @@ function updateGame(dt) {
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
       if (game.spawnTimer <= 0) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
-    } else if (!skeletons.length) {
+    } else if (!skeletons.length && !captivePrisoner()) {   // o prisioneiro preso segura a fase
       if (game.mission && game.phase >= game.last) {
         const party = heroes();
         game.missionHpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
@@ -4019,9 +4229,18 @@ function updateGame(dt) {
   }
 
   setText('wave', `Fase ${game.phase}/${game.last}`);
-  setText('left', `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
+  // totens, torre e prisioneiro seguram a fase: sem esqueletos comuns, o HUD diz o que falta
+  const objective = game.state === 'fight' && !game.toSpawn && skeletons.every((s) => s.totem) ? objectiveHint(skeletons) : null;
+  setText('left', objective || `Esqueletos: ${skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0)}`);
+  if (objective && game.objectiveCall !== game.phase) { game.objectiveCall = game.phase; showBanner(`${objective}!`, 2.5); }
   setText('kills', `Abates: ${game.kills}`);
   setText('party', `Heróis: ${heroes().length}/${MAX_PARTY}`);
+}
+
+function objectiveHint(skeletons) {
+  if (skeletons.some((s) => s.tower)) return 'Derrube a torre';
+  if (skeletons.length) return skeletons.length > 1 ? `Destrua os ${skeletons.length} totens` : 'Destrua o totem';
+  return captivePrisoner() ? 'Liberte o prisioneiro' : null;
 }
 
 function endGame(text, won = false) {
@@ -4052,6 +4271,9 @@ function endGame(text, won = false) {
       stars: won && !game.test ? missionStars : null,
       nextMission,
       remainingStars: won && !game.test && game.mission ? MISSIONS.length * 3 - totalStars() : null,
+      maxStars: MISSIONS.length * 3,
+      rescueComplete: game.rescueComplete,
+      towersDown: game.towersDown,
     } : null,
   });
   $('overlayStats').innerHTML = summaryHTML(party, report);
@@ -4096,8 +4318,9 @@ const clock = new THREE.Clock();
 const frameUnits = [], frameHeroes = [], frameFoes = [], frameNearFoes = [];
 const frameFoeCenter = new THREE.Vector3();
 function frame() {
+  requestAnimationFrame(frame);   // agenda antes: um erro no quadro não congela o jogo
   const real = Math.min(clock.getDelta(), 0.05);
-  const dt = game.paused ? 0 : real * speed;
+  const dt = game.paused ? 0 : real * speed * FX.timeScale(real);   // hit-stop curtinho das ultimates
   if (dt > 0 && !game.over) game.runTime += dt;
   const updateCount = units.length;
   frameUnits.length = updateCount;
@@ -4186,7 +4409,6 @@ function frame() {
   updateSkillBar();
   updateAim();
   audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
-  requestAnimationFrame(frame);
 }
 
 // Mira manual: alcance azul, alvo válido verde e alvo inválido vermelho.

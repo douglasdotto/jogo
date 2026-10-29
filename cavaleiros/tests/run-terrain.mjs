@@ -125,11 +125,15 @@ const spawn=runInNewContext(main.slice(main.indexOf('function spawnSkeleton()'),
   scene:{},assets:{},ring:()=>{},beam:()=>{},poof:()=>{},popText:()=>{},showBanner:()=>{},
   Skeleton:class {constructor(type,phase,boss){Object.assign(this,{type,phase,boss,pos:new Vector3(),root:{rotation:{}}});spawned.push(this);}}
 });
+difficulty.shooters=0.06;
 for(const phase of [3,7,10])for(const count of [2,1]) {
   Object.assign(spawnGame,{phase,toSpawn:count});spawn();
   const s=spawned.at(-1);
   if(s.pos.y!==3||s.type!==(count===2?'Crossbow':'Mage'))throw Error('Atirador ausente no topo');
 }
+difficulty.shooters=0;   // no Fácil o platô não ganha atirador
+Object.assign(spawnGame,{phase:3,toSpawn:2});spawn();
+if(['Crossbow','Mage'].includes(spawned.at(-1).type))throw Error('Fácil colocou atirador no topo');
 for(const phase of [5,9]) {
   Object.assign(spawnGame,{phase,toSpawn:3});spawn();
   const s=spawned.at(-1);if(!world.isShallow(s.pos.x,s.pos.z))throw Error('Não surgiu na água rasa');
@@ -140,7 +144,7 @@ if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alte
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};
 const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:world.zoneOf(3).top[0]}];
 const tick=runInNewContext(main.slice(main.indexOf('function updateGame('),main.indexOf('function endGame('))+';updateGame',{
-  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,showBanner:()=>{},popText:()=>{},setText:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12
+  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,showBanner:()=>{},popText:()=>{},setText:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12
 });
 tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador vivo');
 living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não terminou após último inimigo');

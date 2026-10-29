@@ -76,7 +76,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   wave:noop,burst:noop,column:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
-  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
+  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
 vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('export ',''),context);
 vm.runInContext(campaign.replaceAll('export ',''),context);
@@ -99,6 +99,7 @@ vm.runInContext('t.world=world;',context);
 const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
 vm.runInContext('t.makeTargetContext=makeTargetContext;',context);
+vm.runInContext('t.allies=allies;t.canHeroReachTarget=canHeroReachTarget;',context);
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
 for(const n of ['Minion','Warrior','Rogue','Mage']) context.assets['Skeleton_'+n]={scene:{},animations:[]};
@@ -106,7 +107,8 @@ context.assets.Barbarian={scene:{},animations:[]};
 context.location={search:'?tudo=1'};   // os testes antigos usam todas as variantes
 for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skeleton_Staff','Skeleton_Crossbow']) context.assets[n]={scene:{clone:root}};
 const results=[];
-function test(name,fn){fn();results.push(name);console.log('OK:',name)}
+const failures=[];
+function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.message.split('\n')[0])}}
 function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,test:false});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.pos.set(0,0,-4);t.updateBars();
@@ -188,14 +190,6 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
   assert.ok(t.pick.info.innerHTML.includes('Derrote o chefe')&&t.pick.info.innerHTML.includes('class="covered priority">Dano a chefe<b>1</b>'));
   clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);
-});
-test('prévia da equipe não trata heróis bloqueados como se fossem escolhidos',()=>{
-  const previousLocation=context.location,previousStorage=context.localStorage.data;
-  clear();context.location={search:''};context.localStorage.data={};new t.Hero(cfg('pyro'));
-  t.showPick('','');const locked=t.pick.options.findIndex(hero=>hero.id==='cleric');t.selectCard(locked);
-  assert.ok(t.pick.info.innerHTML.includes('Equipe atual')&&t.pick.info.innerHTML.includes('Ganhe ★ 2 na campanha'));
-  assert.ok(!t.pick.info.innerHTML.includes('class="candidate"'));
-  context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
@@ -365,6 +359,9 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.useSkill(e,false,true,2),true);
   assert.ok(h.skillTimers[2]>=60);assert.ok(h.pendingHit?.effect);
   const before=e.hp;h.pendingHit.effect();assert.ok(e.hp<before);
+  assert.equal(e.flashHeavy,true,'acerto da ultimate pisca branco no alvo');
+  assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
+  const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
 test('técnicas e ultimates das 20 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2]){
@@ -588,19 +585,13 @@ function begin(id,picks){
   for(const p of picks){t.confirmPick(idx(p));next();}
   context.setTimeout=noop;
 }
-test('8 missões com objetivo; quatro variantes começam liberadas e as novas entram no fluxo de estrelas',()=>{
-  assert.equal(t.MISSIONS.length,8);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+test('10 missões com objetivo e todo o elenco liberado desde o início',()=>{
+  assert.equal(t.MISSIONS.length,10);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).map(v=>v.id).sort().join(),'assassin,berserker,paladin,pyro');
-  assert.equal(t.UNLOCKS.length,16);assert.equal(new Set([...t.UNLOCKS.map(u=>u.id),...t.STARTERS]).size,20);
-  assert.equal(t.UNLOCKS.at(-1).stars,23);
-  assert.ok(t.UNLOCKS.every(u=>u.stars<=24));
-  assert.deepEqual(['cleric','bard','angel','chronist'].map(id=>t.starsToUnlock(id)),[2,8,14,20]);
-  clear();t.showPick('','');assert.ok(t.pick.cards[idx('guardian')].innerHTML.includes('★ 1 para liberar'));
-  t.confirmPick(idx('guardian'));assert.equal(t.pick.open,true);
-  t.selectCard(idx('paladin'));t.moveGrid(1,0);assert.equal(t.pick.sel,idx('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,idx('berserker'));
-  context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.variantOpen('guardian')&&t.variantOpen('viking')&&!t.variantOpen('cryo'));
-  context.location={search:'?tudo=1'};assert.ok(t.variantOpen('druid'));assert.ok(t.unlocked(7));
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,20);assert.equal(t.UNLOCKS.length,0);
+  clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('para liberar'));
+  context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
+  context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));
 });
 test('estrelas da campanha são cumulativas e missão sem quedas usa vida como desafio extra',()=>{
   const stars=context.starsFor;
@@ -693,12 +684,12 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha concluída/);
-  assert.match(view.info.innerHTML,/16 estrelas restantes/);
+  assert.match(view.info.innerHTML,/20 estrelas restantes/);
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,3])))};
   view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.match(view.info.innerHTML,/todas as variantes estão liberadas/);
+  assert.match(view.info.innerHTML,/Todas as 30 estrelas foram conquistadas/);
   context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('atalho ?tudo=1 não grava estrelas de campanha',()=>{
@@ -763,11 +754,39 @@ test('objetivos: sobreviver com ondas contínuas, totens e chefe',()=>{
   boss.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);assert.equal(t.skeletonsAlive().length,0);
   t.updateGame(.1);t.game.timer=0;t.updateGame(.1);assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.startsWith('Missão cumprida'));
 });
-test('estrelas no fim: gravam o melhor, liberam variantes e não contam com ?fase',()=>{
+test('resgate: prisioneiro longe e guardado, fora do alvo dos esqueletos e libertado só após segurar perto',()=>{
+  context.location={search:''};
+  begin('resgate',['paladin','pyro','berserker']);
+  const v=t.game.villager;assert.equal(v.captive,true);assert.equal(v.rescued,false);
+  assert.ok(t.heroes().every(h=>h.pos.distanceTo(v.pos)>10),'o prisioneiro nasce longe do grupo');
+  assert.ok(!t.allies().includes(v));assert.ok(!t.makeTargetContext().alliedUnits.includes(v));
+  t.startPhase();
+  assert.equal(t.skeletonsAlive().filter(s=>s.pos.distanceTo(v.pos)<3).length,2,'guardas ao lado do prisioneiro');
+  for(const u of t.skeletonsAlive())u.remove();t.game.toSpawn=0;
+  t.updateGame(.1);assert.equal(t.game.state,'fight','a fase espera o resgate');assert.equal(elements.get('left').textContent,'Liberte o prisioneiro');
+  const h=t.heroes()[0],before=h.pos.distanceTo(v.pos);h.busy=0;h.update(.2);h.update(.2);assert.ok(h.pos.distanceTo(v.pos)<before,'sem inimigos, o herói vai até o prisioneiro');
+  h.pos.set(v.pos.x+1,0,v.pos.z);t.updateGame(1);
+  assert.equal(v.rescued,false);assert.ok(Math.abs(t.missionProgress({type:'rescue'})-.4)<.01);assert.match(v.nameTag.textContent,/Libertando 40%/);
+  t.updateGame(1.6);assert.equal(v.rescued,true);assert.equal(t.game.rescueComplete,true);assert.equal(t.game.state,'cleared');
+  assert.ok(t.allies().includes(v),'depois de solto ele volta a ser protegido e alvo');
+});
+test('torre: segura a fase, o HUD avisa e o grupo vai até ela quando não há inimigos',()=>{
+  context.location={search:''};
+  begin('torre',['paladin','pyro','berserker','assassin']);t.startPhase();
+  const tower=t.skeletonsAlive().find(u=>u.tower);assert.ok(tower);tower.spawning=false;tower.spawnT=99;t.game.toSpawn=0;
+  const h=t.heroes()[0];h.post.copy(h.pos);tower.pos.set(h.pos.x+30,0,h.pos.z);
+  const guard=new t.Skeleton('Minion',t.game.phase);guard.spawning=false;guard.pos.copy(h.pos);
+  assert.equal(t.canHeroReachTarget(h,tower,t.makeTargetContext()),false,'com inimigos por perto, não persegue a torre longe');
+  guard.remove();assert.equal(t.canHeroReachTarget(h,tower,t.makeTargetContext()),true);
+  t.updateGame(.1);assert.equal(t.game.state,'fight');
+  assert.equal(elements.get('left').textContent,'Derrube a torre');assert.equal(elements.get('banner').textContent,'Derrube a torre!');
+  tower.takeDamage(99999,null,h);assert.equal(t.game.towersDown,1);t.updateGame(.1);assert.equal(t.game.state,'cleared');
+});
+test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   context.location={search:''};context.localStorage.data={};
   begin('vila',['paladin']);Object.assign(t.game,{phase:3,state:'cleared',timer:0,missionT:83});t.updateGame(.1);
   assert.equal(t.starsOf('vila'),3);const stars=elements.get('overlayStars').innerHTML;
-  assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(stars.includes('Nova variante liberada!')&&stars.includes('Guardião')&&stars.includes('Viking'));
+  assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(!stars.includes('Nova variante liberada!'));
   assert.ok(stars.includes('Concluir a missão')&&stars.includes('Terminar sem quedas (0 quedas)')&&stars.includes('atual 100%'));
   assert.ok(stars.includes('Novo recorde · Normal · 1:23'));
   assert.deepEqual(Array.from(t.missionRecords('vila'),r=>r.difficultyId),['normal']);
@@ -867,4 +886,38 @@ test('chefes e golem fecham as ondas certas; tipos novos entram aos poucos',()=>
   assert.equal(t.pickMonster(2,'Minion'),'Shieldbearer');for(let i=0;i<50;i++)assert.ok(['Minion','Shieldbearer'].includes(t.pickMonster(2,'Minion')));
   t.clearMonsterFx();const seen=new Set();for(let i=0;i<300;i++)seen.add(t.pickMonster(12,'Minion'));for(const k of ['Shieldbearer','Bomber','Ghost'])assert.ok(seen.has(k),k);
 });
+test('relatório de batalha registra golpes corpo a corpo e tiros inimigos',()=>{
+  clear();t.clearMonsterFx();const h=hero('king',0,0);h.hp=h.maxHp=10000;
+  const melee=foe('Warrior',0,1);melee.pendingHit={target:h,t:0};melee.update(.01);
+  const total=()=>Object.values(t.game.damageSources).reduce((n,s)=>n+s.hits,0);
+  assert.equal(total(),1);assert.equal(h.lastHit,melee);
+  const archer=foe('Mage',0,6);context.fireEnemyBolt(archer,h);for(let i=0;i<20&&total()<2;i++)context.updateEnemyBolts(.05);
+  assert.equal(total(),2);assert.equal(h.lastHit,archer);clear();
+});
+test('saves antigos mantêm liberada a missão que já tem estrelas',()=>{
+  const previousLocation=context.location,previousStorage=context.localStorage.data;
+  try {
+    context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:3,fazendas:2,ruinas:2,'lago-sombrio':1})};
+    const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
+    assert.equal(t.unlocked(i('lago')),true);assert.equal(t.unlocked(i('ruinas')),true);assert.equal(t.unlocked(i('lago-sombrio')),true);
+    assert.equal(t.unlocked(i('cemiterio')),true);assert.equal(t.unlocked(i('castelo')),false);
+  } finally { context.location=previousLocation;context.localStorage.data=previousStorage; }
+});
+test('primário do Necromante não desfaz o Exército dos Mortos',()=>{
+  clear();const necro=hero('necro',0,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
+  const cast=slot=>{assert.equal(necro.useSkill(e,false,true,slot),true);necro.pendingHit.effect();necro.pendingHit=null};
+  const mine=()=>t.units.filter(u=>u.summoner===necro);
+  cast(2);assert.equal(mine().length,4);cast(0);assert.equal(mine().length,6);
+  cast(0);assert.equal(mine().length,6);assert.equal(mine().filter(u=>u.ultimate).length,4);clear();
+});
+test('brado do Rei não reduz o Hino do Bardo e o bônus zera ao expirar',()=>{
+  clear();const king=hero('king',0,0),bard=hero('bard',1,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
+  assert.equal(bard.useSkill(e,false,true,2),true);bard.pendingHit.effect();bard.pendingHit=null;
+  const song=bard.royalT;assert.equal(bard.royalBonus,.3);
+  assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;
+  assert.equal(bard.royalBonus,.3);assert.equal(bard.royalT,song);
+  bard.update(song+1);assert.ok(bard.royalT<=0);assert.equal(bard.royalBonus,0);
+  assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;assert.equal(bard.royalBonus,.2);clear();
+});
 console.log(results.length+' verificações passaram.');
+if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}
