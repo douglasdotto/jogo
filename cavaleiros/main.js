@@ -4857,7 +4857,6 @@ function placeParty(first) {
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
   camera.position.set(follow.x, 27.6, follow.z + 25.2);   // mesmo ângulo, 20% mais longe: mais campo de visão
-  cam.userDist = 0;   // a distância do jogador recomeça desta posição
   $('goal').classList.toggle('hidden', !m);
   if (m) {
     $('goal').setAttribute('data-icon', GOAL_ICONS[m.goal.type] || '⚑');
