@@ -76,7 +76,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   wave:noop,burst:noop,column:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
-  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
+  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
 vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('export ',''),context);
 vm.runInContext(campaign.replaceAll('export ',''),context);
@@ -359,6 +359,9 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.useSkill(e,false,true,2),true);
   assert.ok(h.skillTimers[2]>=60);assert.ok(h.pendingHit?.effect);
   const before=e.hp;h.pendingHit.effect();assert.ok(e.hp<before);
+  assert.equal(e.flashHeavy,true,'acerto da ultimate pisca branco no alvo');
+  assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
+  const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
 test('técnicas e ultimates das 20 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2]){
