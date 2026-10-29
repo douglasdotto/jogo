@@ -1289,12 +1289,18 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
   clear();t.showMenu();assert.equal(t.pick.cards.length,4);
-  assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/✦ \d+\/\d+/);   // menu enxuto: conquistas viram ícone + contagem
-  assert.ok(t.pick.cards.every(card=>!card.innerHTML.includes('<p>')),'menu sem frases nos cartões: a descrição fica na dica');
+  assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/◆ \d+/);   // acampamento é a loja: mostra o ouro
+  // conquistas, estrelas, ouro e maestria saíram dos cartões para a barra de perfil (ícone + número)
+  const home=elements.get('pickList').children.at(-1),bar=home.children[0];
+  assert.equal(home.className,'menu-home');assert.match(bar.innerHTML,/✦<\/i>\d+\/\d+/);assert.match(bar.innerHTML,/★<\/i>\d+/);assert.match(bar.innerHTML,/✪<\/i>\d+/);
+  assert.match(t.pick.cards[0].className,/menu-battle/,'Campanha é o botão principal');assert.match(t.pick.cards[0].innerHTML,/Batalhar/);assert.match(t.pick.cards[0].innerHTML,/⚑ \d+\. /,'mostra a próxima missão');
+  assert.ok(t.pick.cards.every(card=>!card.innerHTML.includes('<p>')&&!card.innerHTML.includes('class="num"')),'menu sem frases nem números nos cartões: a descrição fica na dica e 1–4 só no teclado');
+  assert.equal(elements.get('pickHint').textContent,'','sem rodapé de teclas no menu');
   let next;context.setTimeout=(fn,ms)=>{if(ms===450)next=fn};
   t.confirmPick(2);next();context.setTimeout=noop;
   const camp=elements.get('camp');assert.equal(camp.classList.contains('hidden'),false);assert.equal(t.pick.open,false);
   assert.match(camp.innerHTML,/Oficina/);assert.match(camp.innerHTML,/Treino de vigor/);assert.match(camp.innerHTML,/Conquistas \d+\/1\d/);
+  assert.notEqual(context.localStorage.getItem('cavaleiros-conquistas-vistas'),null,'abrir o acampamento marca as conquistas como vistas (some o selo do menu)');
   t.showMenu();assert.equal(camp.classList.contains('hidden'),true);
   t.pick.open=false;clear();
 });
