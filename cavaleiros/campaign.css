@@ -969,3 +969,31 @@
   #pick:has(#pickList.grid) #pickList.grid .pick-row .card .portrait img,
   #pick:has(#pickList.grid) .hero-select-btn { transition: none; }
 }
+
+/* Medalha da melhor dificuldade vencida: selo no mapa e bloco no painel da missão. */
+.camp-seal { width: 17px; height: 17px; display: inline-grid; place-items: center; flex: none; border: 1px solid rgba(255, 255, 255, .85); border-radius: 50%;
+  color: #fff; font: 700 9px/1 'Fredoka', sans-serif; -webkit-text-stroke: 0; background: var(--seal, #6aa84f); box-shadow: 0 1px 4px rgba(0, 0, 0, .4); }
+.camp-node .camp-seal { position: absolute; top: -5px; right: -6px; }
+.camp-seal.seal-facil { --seal: #6aa84f; }
+.camp-seal.seal-normal { --seal: #5a8fd0; }
+.camp-seal.seal-dificil { --seal: #d17a2a; }
+.camp-seal.seal-pesadelo { --seal: #a3324a; }
+.camp-seal.challenge { border-color: #ffe27a; box-shadow: 0 0 0 2px rgba(255, 212, 74, .55), 0 0 8px 2px rgba(255, 212, 74, .6); }
+.camp-medals { width: 100%; padding: 8px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(211, 229, 245, .1); border-radius: 10px;
+  background: rgba(7, 23, 40, .24); font: 500 11px/1.35 'Fredoka', sans-serif; }
+.camp-medals b { color: #e8c878; font: 600 11px 'Fredoka', sans-serif; }
+.camp-medals span { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 5px; color: #aebbc8; background: rgba(255, 255, 255, .04); }
+.camp-medals .camp-medal-best { color: #d7e3ed; }
+.camp-medals span.done { color: #a7e3a7; }
+
+/* Fim da missão: recompensa e próximo passo. */
+#overlayStars .mission-reward { width: min(520px, calc(100vw - 36px)); padding: 10px 12px; box-sizing: border-box; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;
+  border: 1px solid rgba(255, 212, 112, .3); border-radius: 12px; background: rgba(92, 68, 29, .3); color: #fff3cf; font: 500 14px/1.3 'Fredoka', sans-serif; }
+#overlayStars .mission-reward b { width: 100%; text-align: center; color: #ffd44a; font: 400 15px 'Lilita One', sans-serif; letter-spacing: .5px; }
+#overlayStars .mission-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 14px; color: #d6e3ee; font: 500 15px/1.3 'Fredoka', sans-serif; }
+#overlay #overlayStars .mission-next button { font-size: 18px; padding: 8px 20px 10px; }
+#overlay.results #overlayStars .mission-reward, #overlay.results #overlayStars .mission-next { grid-column: 1 / -1; }
+
+/* Abertura da missão: capítulo e história em letra menor abaixo da faixa. */
+#banner .banner-story { display: block; max-width: min(560px, 72vw); margin: 6px auto 0; font: 600 17px/1.3 'Fredoka', sans-serif; white-space: normal; -webkit-text-stroke: 4px #0d1426; }
+@media (max-width: 600px) { #banner .banner-story { font-size: 13px; -webkit-text-stroke: 3px #0d1426; } }

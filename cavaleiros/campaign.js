@@ -4,15 +4,17 @@
 // win = vencer · escort = proteger o aldeão · rescue = salvar um prisioneiro · tower = derrubar torres
 // boss = derrotar o chefe · survive = aguentar `time` s na fase `phase` · totems = destruir `count` totens
 // nofall = ninguém cai · timer = vencer em até `time` s
+// Trechos: o início avança pelas 12 fases e só missões de chefe passam pelas fases 6 (Rei) e 12 (Lich);
+// o lago precisa da fase 5 e o lago sombrio da fase 9, onde o mundo tem água.
 export const MISSIONS = [
-  { id: 'vila', name: 'A Vila', desc: 'Os primeiros esqueletos chegaram à praça.', chapter: 'Capítulo I · Sinais na estrada', story: 'A patrulha cai na praça. No estandarte inimigo, uma marca de ossos aponta para a ponte ao norte.', tip: 'Aprenda o ritmo de ataque dos inimigos e preserve a vida do herói para buscar as três estrelas.', icon: '⌂', from: 1, to: 3, heroes: 1, level: 1, goal: { type: 'win' } },
-  { id: 'ponte', name: 'A Ponte do Rio', desc: 'Atiradores no rochedo vigiam a ponte.', chapter: 'Capítulo I · Sinais na estrada', story: 'Os arqueiros fecharam a travessia. Do outro lado, tochas acendem rumo às fazendas.', tip: 'Inimigos perto do aldeão são uma ameaça imediata. Cura, provocação e empurrões ajudam a mantê-lo protegido.', icon: '≈', from: 3, to: 5, heroes: 2, level: 1, goal: { type: 'escort' } },
+  { id: 'vila', name: 'A Vila', desc: 'Os primeiros esqueletos chegaram à praça.', chapter: 'Capítulo I · Sinais na estrada', story: 'A patrulha cai na praça. No estandarte inimigo, uma marca de ossos aponta para a ponte ao norte.', tip: 'Aprenda o ritmo de ataque dos inimigos e preserve a vida do herói para buscar as três estrelas.', icon: '⌂', from: 1, to: 2, heroes: 1, level: 1, goal: { type: 'win' } },
+  { id: 'ponte', name: 'A Ponte do Rio', desc: 'Atiradores no rochedo vigiam a ponte.', chapter: 'Capítulo I · Sinais na estrada', story: 'Os arqueiros fecharam a travessia. Do outro lado, tochas acendem rumo às fazendas.', tip: 'Inimigos perto do aldeão são uma ameaça imediata. Cura, provocação e empurrões ajudam a mantê-lo protegido.', icon: '≈', from: 2, to: 4, heroes: 2, level: 1, goal: { type: 'escort' } },
   { id: 'fazendas', name: 'Fazendas', desc: 'O primeiro chefe ronda os campos.', chapter: 'Capítulo II · A marca de ossos', story: 'O chefe carrega um fragmento de totem. As pegadas dele terminam perto do lago.', tip: 'Guarde habilidades de alto impacto para o chefe e use efeitos de controle para reduzir a pressão dos reforços.', icon: '☘', from: 4, to: 6, heroes: 2, level: 2, goal: { type: 'boss' } },
-  { id: 'lago', name: 'O Lago', desc: 'Eles saem da água rasa.', chapter: 'Capítulo II · A marca de ossos', story: 'Cada onda traz mais esqueletos. Segure a margem até a água revelar o caminho às ruínas.', tip: 'Na fase 5, sobreviva aos 90 segundos. Evite perseguições longas e fique atento aos avisos de ataques no chão.', icon: '≋', from: 5, to: 7, heroes: 3, level: 2, goal: { type: 'survive', time: 90, phase: 5 } },
-  { id: 'resgate', name: 'Resgate no Bosque', desc: 'Uma pessoa desaparecida foi vista entre as árvores.', chapter: 'Capítulo III · O véu da morte', story: 'Um prisioneiro conhece a origem da névoa. Encontre-o antes que os esqueletos o levem para as ruínas.', tip: 'Aproxime-se do prisioneiro para libertá-lo. Limpe o caminho ao redor antes de avançar.', icon: '⚑', from: 6, to: 7, heroes: 3, level: 2, goal: { type: 'rescue' } },
-  { id: 'ruinas', name: 'Ruínas Antigas', desc: 'Entre colunas caídas, o mundo começa a morrer.', chapter: 'Capítulo III · O véu da morte', story: 'Os totens alimentam uma névoa que cobre as ruínas. Quebre os focos para abrir a passagem ao lago sombrio.', tip: 'Totens invocam reforços com o tempo. Destruí-los cedo reduz a quantidade de inimigos na estrada.', icon: '☗', from: 7, to: 9, heroes: 3, level: 2, goal: { type: 'totems', count: 3 } },
-  { id: 'torre', name: 'Torre de Ossos', desc: 'Um farol sombrio reúne o exército do necromante.', chapter: 'Capítulo IV · A marcha final', story: 'A torre marca o caminho até o castelo. Derrube sua estrutura antes que mais reforços cheguem.', tip: 'Concentre os ataques na torre e elimine os guardiões que tentarem afastar o grupo.', icon: '♜', from: 9, to: 10, heroes: 4, level: 3, goal: { type: 'tower', count: 1 } },
-  { id: 'lago-sombrio', name: 'Lago Sombrio', desc: 'Água escura e névoa roxa.', chapter: 'Capítulo IV · A marcha final', story: 'A torre caiu, mas o lago escuro guarda o último caminho. Atravesse sem perder ninguém; a névoa vem do cemitério.', tip: 'A missão termina se qualquer herói cair. Priorize cura, controle de grupo e esquiva dos ataques marcados.', icon: '☽', from: 9, to: 10, heroes: 4, level: 3, goal: { type: 'nofall' } },
+  { id: 'lago', name: 'O Lago', desc: 'Eles saem da água rasa.', chapter: 'Capítulo II · A marca de ossos', story: 'Cada onda traz mais esqueletos. Segure a margem até a água revelar o caminho às ruínas.', tip: 'Na fase 5, sobreviva aos 90 segundos. Evite perseguições longas e fique atento aos avisos de ataques no chão.', icon: '≋', from: 4, to: 5, heroes: 3, level: 2, goal: { type: 'survive', time: 90, phase: 5 } },
+  { id: 'resgate', name: 'Resgate no Bosque', desc: 'Uma pessoa desaparecida foi vista entre as árvores.', chapter: 'Capítulo III · O véu da morte', story: 'Um prisioneiro conhece a origem da névoa. Encontre-o antes que os esqueletos o levem para as ruínas.', tip: 'Aproxime-se do prisioneiro para libertá-lo. Limpe o caminho ao redor antes de avançar.', icon: '⚑', from: 7, to: 8, heroes: 3, level: 2, goal: { type: 'rescue' } },
+  { id: 'ruinas', name: 'Ruínas Antigas', desc: 'Entre colunas caídas, o mundo começa a morrer.', chapter: 'Capítulo III · O véu da morte', story: 'Os totens alimentam uma névoa que cobre as ruínas. Quebre os focos para abrir a passagem ao lago sombrio.', tip: 'Totens invocam reforços com o tempo. Destruí-los cedo reduz a quantidade de inimigos na estrada.', icon: '☗', from: 8, to: 10, heroes: 3, level: 3, goal: { type: 'totems', count: 3 } },
+  { id: 'torre', name: 'Torre de Ossos', desc: 'Um farol sombrio reúne o exército do necromante.', chapter: 'Capítulo IV · A marcha final', story: 'A torre marca o caminho até o castelo. Derrube sua estrutura antes que mais reforços cheguem.', tip: 'Concentre os ataques na torre e elimine os guardiões que tentarem afastar o grupo.', icon: '☠', from: 9, to: 10, heroes: 4, level: 3, goal: { type: 'tower', count: 1 } },
+  { id: 'lago-sombrio', name: 'Lago Sombrio', desc: 'Água escura e névoa roxa.', chapter: 'Capítulo IV · A marcha final', story: 'A torre caiu, mas o lago escuro guarda o último caminho. Atravesse sem perder ninguém; a névoa vem do cemitério.', tip: 'A missão termina se qualquer herói cair. Priorize cura, controle de grupo e esquiva dos ataques marcados.', icon: '☽', from: 9, to: 11, heroes: 4, level: 3, goal: { type: 'nofall' } },
   { id: 'cemiterio', name: 'Cemitério', desc: 'Os mortos não descansam.', chapter: 'Capítulo IV · A marcha final', story: 'O cemitério inteiro se ergue em resposta ao chamado. Atravesse antes que os mortos cheguem ao castelo.', tip: 'O limite é de quatro minutos. Elimine rapidamente inimigos que curam ou trazem esqueletos de volta.', icon: '✝', from: 10, to: 11, heroes: 4, level: 3, goal: { type: 'timer', time: 240 } },
   { id: 'castelo', name: 'Castelo do Necromante', desc: 'A batalha final contra o chefe.', chapter: 'Capítulo IV · A marcha final', story: 'A fonte da invasão espera atrás dos portões. Derrote o necromante e encerre a marcha dos ossos.', tip: 'Observe os círculos de perigo, saia deles antes do impacto e concentre o dano no chefe quando houver abertura.', icon: '♜', from: 11, to: 12, heroes: 4, level: 3, goal: { type: 'boss' } },
 ];
@@ -95,6 +97,50 @@ export function saveMissionRecord(id, result) {
   return true;
 }
 
+// Medalha = dificuldade mais alta já vencida; desafio = 3 estrelas no Difícil e no Pesadelo.
+// Fica à parte das estrelas: 3★ no Fácil continuam valendo 3★, a medalha só mostra o feito.
+const MISSION_MEDALS_KEY = 'cavaleiros-medalhas-missao';
+const CHALLENGE_DIFFICULTIES = ['dificil', 'pesadelo'];
+const difficultyRank = (id) => RECORD_DIFFICULTIES.findIndex(([known]) => known === id);
+const readMissionMedals = () => {
+  try {
+    const data = JSON.parse(localStorage.getItem(MISSION_MEDALS_KEY));
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  } catch { return {}; }
+};
+
+export function missionMedal(id) {
+  const saved = readMissionMedals()[id] || {};
+  // vitórias antigas já deixaram recordes de tempo por dificuldade
+  const rank = Math.max(difficultyRank(saved.best), ...missionRecords(id).map((record) => difficultyRank(record.difficultyId)));
+  const best = rank >= 0 ? { difficultyId: RECORD_DIFFICULTIES[rank][0], difficultyName: RECORD_DIFFICULTIES[rank][1] } : null;
+  const challenges = CHALLENGE_DIFFICULTIES.map((difficultyId) => ({
+    difficultyId,
+    difficultyName: RECORD_DIFFICULTIES[difficultyRank(difficultyId)][1],
+    label: `3★ no ${RECORD_DIFFICULTIES[difficultyRank(difficultyId)][1]}`,
+    done: saved.challenges?.[difficultyId] === true,
+  }));
+  return { best, challenges };
+}
+
+// Grava a vitória; devolve o que é novo para a tela de fim de missão.
+export function saveMissionMedal(id, { won, stars, difficultyId } = {}) {
+  const none = { newBest: false, newChallenge: null };
+  const rank = difficultyRank(difficultyId);
+  if (!MISSIONS.some((mission) => mission.id === id) || won !== true || rank < 0) return none;
+  const before = missionMedal(id);
+  const all = readMissionMedals();
+  const saved = all[id] && typeof all[id] === 'object' && !Array.isArray(all[id]) ? { ...all[id] } : {};
+  const newBest = rank > difficultyRank(before.best?.difficultyId);
+  if (newBest || difficultyRank(saved.best) < rank) saved.best = difficultyId;
+  const challenge = before.challenges.find((item) => item.difficultyId === difficultyId);
+  const newChallenge = challenge && !challenge.done && stars >= 3 ? challenge : null;
+  if (newChallenge) saved.challenges = { ...saved.challenges, [difficultyId]: true };
+  all[id] = saved;
+  try { localStorage.setItem(MISSION_MEDALS_KEY, JSON.stringify(all)); } catch { return none; }
+  return { newBest, newChallenge };
+}
+
 // ?tudo=1 na URL libera todas as missões (para testar)
 export const allOpen = () => { try { return new URLSearchParams(location.search).get('tudo') === '1'; } catch { return false; } };
 export const starsOf = (id) => read()[id] || 0;
@@ -146,6 +192,10 @@ export function saveStars(id, stars) {
 }
 
 const starRow = (n, size = '') => `<span class="stars ${size}">${[1, 2, 3].map((k) => `<i class="${k <= n ? 'on' : ''}">★</i>`).join('')}</span>`;
+// selo da melhor dificuldade vencida (inicial da dificuldade); brilha com algum desafio cumprido
+const medalSeal = (medal) => medal.best
+  ? `<span class="camp-seal seal-${medal.best.difficultyId}${medal.challenges.some((c) => c.done) ? ' challenge' : ''}" aria-hidden="true">${medal.best.difficultyName[0]}</span>`
+  : '';
 
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
 export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null) {
@@ -185,13 +235,13 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
   const spots = [[50, 91], [56, 72], [36, 65], [55, 56], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [67, 9]];
   const nodes = MISSIONS.map((m, i) => {
     const b = document.createElement('button');
-    const open = unlocked(i), stars = starsOf(m.id);
+    const open = unlocked(i), stars = starsOf(m.id), medal = missionMedal(m.id);
     b.className = `camp-node${open ? '' : ' locked'}${stars ? ' done' : ''}`;
     b.style.left = spots[i][0] + '%';
     b.style.top = spots[i][1] + '%';
-    b.setAttribute('aria-label', `${i + 1}. ${m.name}. ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`);
+    b.setAttribute('aria-label', `${i + 1}. ${m.name}. ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.${medal.best ? ` Melhor vitória: ${medal.best.difficultyName}.` : ''}` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`);
     b.setAttribute('aria-pressed', 'false');
-    b.innerHTML = `<span class="medal">${open ? m.icon : '\u{1F512}︎'}</span><span class="num">${i + 1}</span>${open ? starRow(stars, 'small') : ''}`;
+    b.innerHTML = `<span class="medal">${open ? m.icon : '\u{1F512}︎'}</span><span class="num">${i + 1}</span>${open ? starRow(stars, 'small') + medalSeal(medal) : ''}`;
     b.onclick = () => { if (sel !== i) select(i); };
     b.onfocus = () => { if (sel !== i) select(i); };
     b.ondblclick = () => play();
@@ -209,6 +259,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
     const biome = typeof mapBiome === 'function' ? mapBiome(m) : '';
     const threats = typeof getThreats === 'function' ? getThreats(m) : [];
     const records = missionRecords(m.id);
+    const medal = missionMedal(m.id);
     const mapLabel = typeof biome === 'string' && biome.trim() ? biome.trim().toUpperCase() : 'MAPA ALEATÓRIO';
     announcement.textContent = `${i + 1}. ${m.name}. Objetivo: ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`;
     const starTargets = m.goal.type === 'nofall'
@@ -233,6 +284,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
       ${open ? '' : `<div class="camp-unlock"><b>Como desbloquear</b><span>Conclua “${MISSIONS[i - 1].name}” com pelo menos uma estrela.</span></div>`}
       <ul><li>Fases ${m.from}–${m.to}</li><li>Começa com ${m.heroes} herói${m.heroes > 1 ? 's' : ''} no nível ${m.level}</li></ul>
       <div class="camp-goals"><b>Estrelas acumulativas</b>${starTargets.map((target) => `<span>${target}</span>`).join('')}</div>
+      <div class="camp-medals" aria-label="Medalha e desafios opcionais"><b>Medalha</b><span class="camp-medal-best">${medal.best ? `${medalSeal(medal)}Vencida no ${medal.best.difficultyName}` : 'Vença para ganhar a medalha da dificuldade'}</span><b>Desafios opcionais</b>${medal.challenges.map((c) => `<span class="${c.done ? 'done' : ''}">${c.done ? '✓' : '○'} ${c.label}</span>`).join('')}</div>
       <button class="camp-play" ${open ? '' : 'disabled'}>${open ? 'Batalhar' : 'Bloqueada'}</button>`;
     info.querySelector('.camp-play').onclick = play;
     const replayButton = info.querySelector('.camp-replay-button');
