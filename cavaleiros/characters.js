@@ -113,7 +113,7 @@ export const CHARACTERS = [
     id: 'angel', name: 'Anjo', desc: 'Mensageiro celeste que paira com asas de luz.', color: ['#fff4b5', '#d8a632'],
     base: 'Mage',
     shape: silhouette('Mage', { torso: 0.98, arms: 0.96, legs: 0.97, height: 1.06, depth: 0.96 }),
-    hide: ['Mage_Hat', 'Mage_Cape', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    hide: ['Mage_Hat', 'Mage_Cape', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }, { from: 'Mage', part: '1H_Wand' }],
     paint: {
       Mage_Body: { tint: '#fff0c2', amount: 0.88 }, Mage_ArmLeft: { tint: '#fff0c2', amount: 0.82 }, Mage_ArmRight: { tint: '#fff0c2', amount: 0.82 },
