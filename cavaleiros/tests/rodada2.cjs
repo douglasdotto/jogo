@@ -795,7 +795,7 @@ test('campanha: escolhe N heróis em sequência, já no nível da missão e sem 
   let next;context.setTimeout=(fn,ms)=>{if(ms===550)next=fn};t.confirmPick(1);next();
   assert.equal(t.pick.options[t.pick.sel].id,'berserker');assert.ok(t.pick.cards[t.pick.sel].innerHTML.includes('Equipe anterior'));
   assert.match(elements.get('pickHint').textContent,/Sugestão da equipe/);
-  t.selectCard(idx('pyro'));assert.match(elements.get('pickHint').textContent,/Passe para prévia/);
+  t.selectCard(idx('pyro'));assert.match(elements.get('pickHint').textContent,/Clique no herói para ver/);
   assert.equal(t.heroes().length,0,'a formação anterior deve ser apenas uma sugestão');context.setTimeout=noop;
 });
 test('objetivos: aldeão, ninguém cai e tempo derrubam a missão',()=>{
@@ -1429,6 +1429,12 @@ test('Carrasco: machadada em linha derruba, corrente puxa o atirador e a fúria 
 test('relatório de batalha dá dica própria para enxame e Carrasco',()=>{
   const tip=name=>vm.runInContext('buildBattleReport',context)({won:false,heroes:[{name:'A',damage:10,received:100}],damageSources:[{name,damage:90,hits:9}]}).at(-1).text;
   assert.match(tip('Enxame de Crânios'),/área/);assert.match(tip('Carrasco'),/áreas marcadas/);assert.match(tip('Cavaleiro Sombrio'),/áreas marcadas/);
+});
+test('na escolha de herói o mouse passando não troca a ficha; só o clique',()=>{
+  clear();t.showPick('Escolha','teste');const i=idx('pyro'),j=idx('cryo');t.selectCard(i);
+  assert.equal(t.pick.cards[j].onmouseenter,undefined,'hover não seleciona herói');
+  t.pick.cards[j].onclick();assert.equal(t.pick.sel,j,'clique seleciona');assert.equal(t.pick.open,true,'clique não confirma');
+  t.pick.open=false;clear();
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

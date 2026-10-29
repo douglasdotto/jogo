@@ -344,7 +344,7 @@ function showPick(title, sub) {
     b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill"><i aria-hidden="true">✦</i> ${signatureSkill}</small></div>${mastery > 1 ? `<span class="mastery-badge" aria-hidden="true">✦${mastery}</span>` : ''}${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
     b.onclick = () => selectCard(i);
     b.onfocus = () => selectCard(i);
-    bindCard(b, i);
+    bindCard(b, i, false);   // herói só muda com clique: o mouse passando não troca a ficha
     pick.classRows[cfg.classId].appendChild(b);
     return b;
   });
@@ -622,8 +622,8 @@ function confirmDifficulty(i) {
 const pickTitle = () => game.mission.heroes > 1 ? `Escolha o herói ${heroes().length + 1} de ${game.mission.heroes}` : 'Escolha seu herói';
 const pickSub = () => `${game.mission.name}: o grupo começa no nível ${game.mission.level}`;
 
-function bindCard(b, i) {
-  b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
+function bindCard(b, i, hoverSelects = true) {
+  if (hoverSelects) b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
   b.onpointermove = (e) => {
     const r = b.getBoundingClientRect();
     b.style.setProperty('--rx', ((0.5 - (e.clientY - r.top) / r.height) * 9) + 'deg');
@@ -728,8 +728,8 @@ function selectCard(i) {
   if (pick.mode === 'hero') {
     setPickClass(pick.options[pick.sel].classId);
     $('pickHint').textContent = pick.options[pick.sel].id === pick.suggestedId
-      ? 'Sugestão da equipe · passe para prévia · clique em Escolher ou Enter'
-      : 'Passe para prévia · clique em Escolher · setas navegam · Enter confirma';
+      ? 'Sugestão da equipe · clique no herói para ver · Escolher ou Enter confirma'
+      : 'Clique no herói para ver · Escolher confirma · setas navegam · Enter confirma';
     renderInfo(pick.options[pick.sel]);
   }
 }
