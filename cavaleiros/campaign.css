@@ -613,8 +613,8 @@
 }
 #pick:has(#pickList.grid) .pick-row[hidden] { display: none !important; }
 #pick:has(#pickList.grid) .pick-row:has(> .card:only-child) { grid-template-columns: minmax(0, 420px); justify-content: center; }
-#pick:has(#pickList.grid) .pick-row > .card:nth-child(3):last-child,
-#pick:has(#pickList.grid) .pick-row > .card:nth-child(5):last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 7px); }
+#pick:has(#pickList.grid) #pickList.grid .pick-row > .card:nth-child(3):last-child,
+#pick:has(#pickList.grid) #pickList.grid .pick-row > .card:nth-child(5):last-child { grid-column: 1 / -1; justify-self: center; width: calc((100% - 14px) / 2); }
 /* mais de 4 heróis: cartões do mesmo tamanho das outras classes e a área rola, em vez de espremer */
 #pick:has(#pickList.grid) .pick-row:has(> .card:nth-child(5)) { grid-auto-rows: calc((100% - 14px) / 2); }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card {
@@ -1299,3 +1299,6 @@
 /* troca de relíquias (Dados do mascate) */
 #pickList .relic-reroll { align-self: center; }
 @media (prefers-reduced-motion: reduce) { .ach-toast { animation: ach-out .01s linear 4.5s forwards; } }
+
+/* barras de rolagem no visual do jogo (finas e douradas), no lugar das do navegador */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 212, 74, .55) rgba(8, 18, 34, .35); }
