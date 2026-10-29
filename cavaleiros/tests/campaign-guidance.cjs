@@ -55,7 +55,7 @@ function render(stars) {
   return { map, info, focusState, get replayButton() { return replayButton; }, get playButton() { return playButton; } };
 }
 
-const allDone = { vila: 3, ponte: 3, fazendas: 3, lago: 3, resgate: 3, ruinas: 3, torre: 3, 'lago-sombrio': 3, cemiterio: 3, castelo: 3 };
+const allDone = { vila: 3, ponte: 3, santuario: 3, fazendas: 3, lago: 3, caca: 3, resgate: 3, ruinas: 3, torre: 3, 'lago-sombrio': 3, cemiterio: 3, horda: 3, castelo: 3 };
 const imperfect = { ...allDone, vila: 1, 'lago-sombrio': 2 };
 let view = render(imperfect);
 assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém o castelo destacado quando a campanha foi concluída');

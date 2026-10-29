@@ -665,8 +665,8 @@ function begin(id,picks){
   for(const p of picks){t.confirmPick(idx(p));next();}
   context.setTimeout=noop;
 }
-test('10 missões com objetivo e todo o elenco liberado desde o início',()=>{
-  assert.equal(t.MISSIONS.length,10);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+test('13 missões com objetivo e todo o elenco liberado desde o início',()=>{
+  assert.equal(t.MISSIONS.length,13);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
   assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,21);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('para liberar'));
@@ -764,12 +764,12 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha concluída/);
-  assert.match(view.info.innerHTML,/20 estrelas restantes/);
+  assert.match(view.info.innerHTML,/26 estrelas restantes/);
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,3])))};
   view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.match(view.info.innerHTML,/Todas as 30 estrelas foram conquistadas/);
+  assert.match(view.info.innerHTML,/Todas as 39 estrelas foram conquistadas/);
   context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('atalho ?tudo=1 não grava estrelas de campanha',()=>{
@@ -925,7 +925,7 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
   try{
     begin('vila',['paladin']);t.setDifficulty(2);Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});t.updateGame(.1);
     const html=elements.get('overlayStars').innerHTML;
-    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/30'));
+    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/39'));
     assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
     assert.ok(html.includes('Nova missão liberada: <b>A Ponte do Rio</b>')&&html.includes('Próxima missão'));
     context.createWorld=()=>t.world;   // a próxima missão recria o cenário; aqui o duplo basta
@@ -1103,6 +1103,162 @@ test('com a onda longe, o grupo avança ao encontro dela até o limite da fase',
   t.game.guideS=60;const back=foe('Minion',0,-50);t.pressForward(1,[far,back]);assert.equal(t.game.guideS,60,'inimigo atrás segura o grupo');
   t.game.guideS=60;back.dead=true;const near=foe('Minion',0,-64);t.pressForward(1,[near]);assert.equal(t.game.guideS,60,'inimigo perto: luta no posto');
   t.game.guideS=0;clear();
+});
+// ---------- relíquias que mudam o jogo ----------
+vm.runInContext('t.RELICS=RELICS;t.RELIC_RARITY=RELIC_RARITY;',context);
+const R=id=>t.RELICS.find(r=>r.id===id);
+const withRandom=(value,fn)=>{const old=cMath.random;cMath.random=()=>value;try{return fn()}finally{cMath.random=old}};
+const relics=(...ids)=>{t.game.relics=[...ids]};
+test('relíquias têm raridade, dez novas são únicas e a oferta respeita a equipe',()=>{
+  clear();relics();
+  const ids=new Set(t.RELICS.map(r=>r.id));assert.equal(ids.size,t.RELICS.length);
+  for(const r of t.RELICS)assert.ok(t.RELIC_RARITY[r.rarity],r.id);
+  const fresh=['ember-heart','dawn-ward','thorn-mail','bulwark-banner','first-spark','phoenix-feather','ricochet-sling','shadow-mark','archmage-prism','last-oath'];
+  for(const id of fresh)assert.ok(R(id)?.unique,id);
+  assert.ok(['comum','rara','epica'].every(k=>t.RELICS.some(r=>r.rarity===k)));
+  t.game.mission=mission('lago-sombrio');Object.assign(t.game,{phase:10,last:11});
+  hero('paladin',0,0);
+  let pool=context.relicPool().map(r=>r.id);
+  assert.ok(pool.includes('bulwark-banner'),'cavaleiro bloqueia: estandarte serve');
+  assert.ok(!pool.includes('archmage-prism')&&!pool.includes('shadow-mark')&&!pool.includes('ricochet-sling'),'sem mago, ladino ou atirador');
+  hero('pyro',1,0);hero('assassin',2,0);
+  pool=context.relicPool().map(r=>r.id);
+  assert.ok(pool.includes('archmage-prism')&&pool.includes('shadow-mark')&&pool.includes('ricochet-sling'));
+  relics('first-spark','keen-edge');pool=context.relicPool().map(r=>r.id);
+  assert.ok(!pool.includes('first-spark'),'única já pega sai da oferta');assert.ok(pool.includes('keen-edge'),'comum continua acumulável');
+  // o sorteio pesa a raridade: um rolo baixo cai na primeira comum, nunca repete a mesma relíquia
+  const drawn=context.drawRelics(context.relicPool(),3,()=>0);assert.equal(new Set(drawn.map(r=>r.id)).size,3);
+  assert.equal(drawn[0].rarity,'comum');clear();
+});
+test('cartão mostra a raridade com cor e o HUD lista as relíquias ativas com dica',()=>{
+  clear();relics();t.game.mission=mission('lago-sombrio');Object.assign(t.game,{phase:10,last:11});hero('pyro',0,0);hero('paladin',1,0);hero('assassin',2,0);hero('cryo',3,0);
+  context.showRelicPick();
+  t.pick.options=[R('archmage-prism'),R('keen-edge'),R('dawn-ward')];
+  t.confirmPick(0);
+  const tray=context.document.getElementById('relics');
+  assert.match(tray.innerHTML,/data-tip="relic"/);assert.match(tray.innerHTML,/rarity-epica/);assert.equal(tray.classList.contains('hidden'),false);
+  t.game.relics.push('keen-edge','keen-edge');context.renderRelicTray();assert.match(tray.innerHTML,/<b>2<\/b>/);
+  const tip=context.relicTooltip({getAttribute:()=>'keen-edge'});assert.match(tip,/Lâmina afiada/);assert.match(tip,/×2/);
+  relics();context.renderRelicTray();assert.equal(tray.classList.contains('hidden'),true);clear();
+});
+test('Centelha inicial zera a primeira recarga da fase e Pena da fênix cura ao usar a ultimate',()=>{
+  clear();relics('first-spark','phoenix-feather');
+  const necro=hero('necro',0,0),ally=hero('paladin',2,0);ally.hp=ally.maxHp*.5;const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
+  context.relicPhaseStart();
+  assert.equal(necro.useSkill(e,false,true,0),true);assert.equal(necro.skillTimers[0],.5,'primeira habilidade sem recarga');
+  necro.pendingHit=null;necro.busy=0;
+  assert.equal(necro.useSkill(e,false,true,1)||necro.useSkill(e,false,true,0),true);
+  assert.ok(Math.max(...necro.skillTimers)>1,'a segunda já entra em recarga');necro.pendingHit=null;necro.busy=0;
+  const before=ally.hp;assert.equal(necro.useSkill(e,false,true,2),true);
+  assert.ok(Math.abs(ally.hp-before-ally.maxHp*.2)<1e-6,'ultimate cura 20% do aliado próximo');clear();
+});
+test('Égide da aurora absorve dano e Juramento final segura a queda uma vez por fase',()=>{
+  clear();relics('dawn-ward','last-oath');t.game.runTime=10;
+  const h=hero('pyro',0,0),e=foe('Warrior',0,1);
+  context.relicPhaseStart();const shield=h.relicShield;assert.equal(shield,Math.round(h.maxHp*.2));
+  h.takeDamage(shield/2,e.pos,e);assert.equal(h.hp,h.maxHp,'o escudo absorve');assert.ok(h.relicShield<shield);
+  h.relicShield=0;h.hp=10;h.takeDamage(500,e.pos,e);assert.equal(h.hp,1);assert.equal(h.dead,false);
+  h.takeDamage(500,e.pos,e);assert.equal(h.hp,1,'invulnerável por 2 s');
+  t.game.runTime=13;h.takeDamage(500,e.pos,e);assert.equal(h.dead,true,'o juramento vale uma vez por fase');
+  clear();
+});
+test('Cota de espinhos devolve dano corpo a corpo e Estandarte cura no bloqueio',()=>{
+  clear();relics('thorn-mail');const h=hero('pyro',0,0),e=foe('Warrior',0,1);e.hp=e.maxHp=1000;
+  h.takeDamage(40,e.pos,e);const real=h.maxHp-h.hp;assert.ok(Math.abs(e.hp-(1000-real*.35))<1e-6);
+  const archer=foe('Mage',0,5);archer.hp=archer.maxHp=1000;h.takeDamage(10,archer.pos,archer);assert.equal(archer.hp,1000,'à distância não leva espinhos');
+  clear();relics();const plain=hero('paladin',0,0),hit=foe('Warrior',0,1);
+  withRandom(0,()=>plain.takeDamage(40,hit.pos,hit));const lostPlain=plain.maxHp-plain.hp;
+  clear();relics('bulwark-banner');const p=hero('paladin',0,0),hit2=foe('Warrior',0,1);p.hp=p.maxHp*.5;const start=p.hp;
+  withRandom(0,()=>p.takeDamage(40,hit2.pos,hit2));
+  assert.ok(Math.abs((start-p.hp)-(lostPlain-p.maxHp*.05))<1e-6,'bloqueio recupera 5% da vida');clear();
+});
+test('Coração de brasa explode ao abater e Marca das sombras encurta recargas do Ladino',()=>{
+  clear();relics('ember-heart','shadow-mark');
+  const a=hero('assassin',0,0),victim=foe('Minion',0,2),near=foe('Warrior',0,3.5);near.hp=near.maxHp=1000;
+  a.skillTimers=[5,6,7];
+  withRandom(0,()=>victim.takeDamage(9999,a.pos,a));
+  assert.equal(victim.dead,true);assert.ok(near.hp<1000,'a explosão fere quem estava perto');
+  assert.deepEqual(a.skillTimers,[3,4,5]);
+  clear();relics();const b=hero('assassin',0,0),v2=foe('Minion',0,2),n2=foe('Warrior',0,3.5);n2.hp=n2.maxHp=1000;b.skillTimers=[5,6,7];
+  withRandom(0,()=>v2.takeDamage(9999,b.pos,b));assert.equal(n2.hp,1000);assert.deepEqual(b.skillTimers,[5,6,7]);clear();
+});
+test('Funda ricocheteante salta o tiro comum e o Prisma dá +1 alvo aos magos',()=>{
+  clear();t.bolts.length=0;relics('ricochet-sling');
+  const h=hero('cryo',0,0),a=foe('Warrior',0,-5),b=foe('Warrior',0,-8);a.hp=a.maxHp=b.hp=b.maxHp=1000;
+  t.fireBolt(h,a,'magic');for(let i=0;i<40&&!t.bolts.some(x=>x.bounced);i++)t.updateBolts(.05);
+  const bounce=t.bolts.find(x=>x.bounced);assert.ok(bounce,'o tiro ricocheteia');assert.equal(bounce.target,b);assert.ok(Math.abs(bounce.dmg-h.dmg*.6)<1e-6);
+  for(let i=0;i<40&&t.bolts.length;i++)t.updateBolts(.05);assert.ok(b.hp<1000);assert.ok(!t.bolts.length,'ricocheteia só uma vez');
+  clear();t.bolts.length=0;relics('archmage-prism');
+  const mage=hero('pyro',0,0),knight=hero('paladin',1,0);
+  assert.equal(mage.extraTargets,1);assert.ok(!knight.extraTargets,'só magos ganham alvo extra');
+  const x=foe('Warrior',0,-4),y=foe('Warrior',1,-4);context.relicExtraShot(mage,x);
+  assert.equal(t.bolts.length,1);assert.equal(t.bolts[0].target,y);assert.ok(Math.abs(t.bolts[0].dmg-mage.dmg*.7)<1e-6);
+  for(const bolt of t.bolts)context.scene.remove(bolt.mesh);t.bolts.length=0;clear();
+});
+// ---------- objetivos novos da campanha ----------
+const party=n=>['paladin','pyro','cryo','assassin'].slice(0,n);
+test('santuário: estrutura aliada que os saqueadores atacam e que derruba a missão ao cair',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('santuario',party(2));const shrine=t.game.shrine;
+  assert.ok(shrine&&shrine.team==='villager'&&shrine.structure);
+  assert.equal(t.makeTargetContext().villager,shrine,'os heróis tratam o santuário como quem precisa de proteção');
+  t.startPhase();t.game.toSpawn=1;withRandom(0,()=>t.spawnSkeleton());
+  const raider=t.skeletonsAlive().at(-1);assert.equal(raider.raider,true);
+  Object.assign(t.game,{state:'fight',toSpawn:0});for(const s of t.skeletonsAlive())s.die();t.updateGame(1);
+  assert.ok(t.game.toSpawn>0,'ondas continuam enquanto o tempo corre');assert.ok(t.game.surviveT<75);
+  shrine.takeDamage(99999);t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.match(context.document.getElementById('overlayText').textContent,/santuário caiu/i);
+  const stars=context.starConditions({won:true,falls:0,goal:mission('santuario').goal,shrineRatio:.6});assert.ok(stars.every(c=>c.achieved));
+  assert.equal(context.starsFor({won:true,falls:1,goal:mission('santuario').goal,shrineRatio:.6}),2);
+  assert.equal(context.starsFor({won:true,falls:0,goal:mission('santuario').goal,shrineRatio:.3}),1);
+  clear();
+});
+test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abatê-lo',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('caca',party(3));t.startPhase();const mark=t.game.huntMark;
+  assert.ok(mark&&mark.hunted&&mark.maxHp>=30*5,'alvo resistente e marcado');
+  mark.spawning=false;mark.busy=0;mark.pos.copy(t.world.along(t.world.anchorS(t.game.phase)+10,0));
+  const h=t.heroes()[0];h.pos.copy(mark.pos).add(new Vector3(0,0,2));
+  assert.equal(context.huntThink(mark,.1),true);assert.ok(mark.vel.z<0,'corre para a frente da estrada');
+  h.pos.set(50,0,50);for(const o of t.heroes())o.pos.set(50,0,50);assert.equal(context.huntThink(mark,.1),false,'sem perseguidor volta a lutar');
+  const extra=foe('Warrior',0,-30);extra.hp=extra.maxHp=1000;
+  mark.takeDamage(1e6);t.updateGame(.1);
+  assert.equal(t.game.huntDown,true);assert.equal(t.game.last,t.game.phase);assert.equal(extra.dead,true);
+  assert.equal(context.starsFor({won:true,falls:0,goal:mission('caca').goal,timeLeft:40}),3);
+  assert.equal(context.starsFor({won:true,falls:0,goal:mission('caca').goal,timeLeft:10}),2);
+  begin('caca',party(3));t.startPhase();t.game.surviveT=.05;t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.equal(t.game.huntEscaped,true);assert.match(context.document.getElementById('overlayText').textContent,/fugiu/);
+  clear();
+});
+test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s ainda vence',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('horda',party(4));t.startPhase();Object.assign(t.game,{toSpawn:0});for(const s of t.skeletonsAlive())s.die();
+  t.updateGame(.5);assert.ok(t.game.toSpawn>0,'a horda repõe esqueletos');assert.ok(t.game.endlessT>0);
+  const goal=mission('horda').goal;
+  assert.equal(context.starsFor({won:true,goal,endlessTime:61}),1);assert.equal(context.starsFor({won:true,goal,endlessTime:185}),3);
+  t.game.endlessT=125;for(const h of t.heroes()){h.hp=0;h.dead=true;}t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.match(context.document.getElementById('overlayText').textContent,/contida/);assert.equal(t.starsOf('horda'),2);
+  begin('horda',party(4));t.startPhase();t.game.endlessT=40;for(const h of t.heroes()){h.hp=0;h.dead=true;}t.updateGame(.1);
+  assert.match(context.document.getElementById('overlayText').textContent,/A horda venceu/);assert.equal(t.starsOf('horda'),2,'derrota não apaga o melhor');
+  begin('horda',party(4));t.startPhase();t.game.endlessT=goal.dawn-.01;t.updateGame(.1);
+  assert.equal(t.game.last,t.game.phase,'ao amanhecer a horda recua e a fase pode terminar');assert.equal(t.game.toSpawn,0);
+  clear();
+});
+test('missões novas entram na ordem da campanha sem travar saves antigos',()=>{
+  const previousLocation=context.location,previousStorage=context.localStorage.data;
+  try{
+    const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
+    assert.ok(i('ponte')<i('santuario')&&i('santuario')<i('fazendas'));assert.ok(i('lago')<i('caca')&&i('caca')<i('resgate'));assert.ok(i('cemiterio')<i('horda')&&i('horda')<i('castelo'));
+    context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:2})};
+    assert.equal(t.unlocked(i('santuario')),true);assert.equal(t.unlocked(i('fazendas')),false,'a nova missão vem antes das fazendas');
+    context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:2,fazendas:1,lago:1,resgate:2})};
+    assert.equal(t.unlocked(i('fazendas')),true);assert.equal(t.unlocked(i('caca')),true);assert.equal(t.unlocked(i('resgate')),true);
+    for(const id of ['santuario','caca','horda']){const g=mission(id).goal;assert.ok(context.goalText(g),id);assert.equal(context.starTargetsFor(g).length,3,id);}
+    const tip=m=>context.buildBattleReport({won:false,mission:m}).find(item=>item.id==='next-try').text;
+    assert.match(tip({goal:mission('santuario').goal,shrineDown:true}),/santuário caiu/);
+    assert.match(tip({goal:mission('caca').goal,huntDown:false,huntEscaped:true}),/fugiu/);
+    assert.match(tip({goal:mission('horda').goal,endlessTime:42}),/42 s/);
+  }finally{context.location=previousLocation;context.localStorage.data=previousStorage;}
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}
