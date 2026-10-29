@@ -96,6 +96,7 @@ vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
 vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts};',context);
 vm.runInContext('t.world=world;',context);
+vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
 vm.runInContext('t.makeTargetContext=makeTargetContext;',context);
@@ -866,5 +867,18 @@ test('chefes e golem fecham as ondas certas; tipos novos entram aos poucos',()=>
   t.clearMonsterFx();for(let i=0;i<50;i++)assert.equal(t.pickMonster(1,'Minion'),'Minion');
   assert.equal(t.pickMonster(2,'Minion'),'Shieldbearer');for(let i=0;i<50;i++)assert.ok(['Minion','Shieldbearer'].includes(t.pickMonster(2,'Minion')));
   t.clearMonsterFx();const seen=new Set();for(let i=0;i<300;i++)seen.add(t.pickMonster(12,'Minion'));for(const k of ['Shieldbearer','Bomber','Ghost'])assert.ok(seen.has(k),k);
+});
+test('pausa do jogador, reinício com confirmação e cartões de menu focáveis',()=>{
+  clear();const $=id=>context.document.getElementById(id);for(const id of ['resume','pause','restart','restartNo'])$(id).focus=noop;
+  new t.Hero(cfg('paladin'));
+  t.setUserPause(true);assert.equal(t.game.paused,true);assert.equal(t.game.userPaused,true);assert.equal($('pauseOverlay').hidden,false);
+  t.setUserPause(false);assert.equal(t.game.paused,false);assert.equal($('pauseOverlay').hidden,true);
+  t.pick.open=true;t.setUserPause(true);assert.equal(t.game.paused,false,'menu aberto não aceita a pausa do jogador');t.pick.open=false;
+  t.game.paused=true;t.setUserPause(true);assert.notEqual(t.game.userPaused,true,'pausa de tela não vira pausa do jogador');t.game.paused=false;
+  $('restart').onclick();assert.equal($('restartConfirm').hidden,false,'reiniciar no meio da partida pede confirmação');assert.equal(t.game.paused,true);
+  t.confirmRestart(false);assert.equal($('restartConfirm').hidden,true);assert.equal(t.game.paused,false);assert.equal(t.units.length,1,'cancelar mantém a partida');
+  t.showMenu();assert.ok(t.pick.cards.every(card=>card.tabIndex===0));
+  t.showDifficulty();assert.ok(t.pick.cards.every(card=>card.tabIndex===0));
+  clear();
 });
 console.log(results.length+' verificações passaram.');

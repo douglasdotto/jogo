@@ -158,7 +158,53 @@ const bars = $('bars');
 let speed = 1;
 $('speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('speed').textContent = `Velocidade ${speed}x`; };
 $('autoEvolve').onclick = () => { setAutoEvolve(!autoEvolve); audio.play('click'); };
-$('restart').onclick = () => startGame();   // volta para o menu inicial
+// Reiniciar no meio da partida pede confirmação; no menu ou no fim volta direto
+$('restart').onclick = () => {
+  if (!heroes().length || game.over || pick.open) return startGame();   // volta para o menu inicial
+  confirmRestart.wasPaused = game.paused;
+  game.paused = true;
+  $('restartConfirm').hidden = false;
+  $('restartNo').focus();
+};
+function confirmRestart(yes) {
+  $('restartConfirm').hidden = true;
+  if (yes) return startGame();
+  game.paused = confirmRestart.wasPaused;
+  $('restart').focus();
+}
+$('restartYes').onclick = () => confirmRestart(true);
+$('restartNo').onclick = () => confirmRestart(false);
+
+// pausa do jogador (botão, P ou Espaço); as pausas dos menus não passam por aqui
+function setUserPause(on) {
+  if (on === !!game.userPaused) return;
+  if (on && (game.paused || game.over || pick.open || !heroes().length)) return;
+  game.userPaused = on;
+  game.paused = on;
+  $('pauseOverlay').hidden = !on;
+  $('pause').setAttribute('aria-pressed', String(on));
+  $('pause').textContent = on ? 'Continuar' : 'Pausar';
+  if (on) $('resume').focus();
+  else if (document.activeElement === $('resume')) $('pause').focus();
+}
+$('pause').onclick = () => setUserPause(!game.userPaused);
+$('resume').onclick = () => setUserPause(false);
+addEventListener('keydown', (e) => {
+  if (!$('restartConfirm').hidden) {
+    if (e.key === 'Escape') { confirmRestart(false); e.stopImmediatePropagation(); }
+    return;
+  }
+  const typing = e.target.closest?.('button, input, select, textarea, summary, [role="button"]');
+  if (e.repeat || !(e.key === 'p' || e.key === 'P' || (e.key === ' ' && !typing))) return;
+  if (!game.userPaused && (game.paused || game.over || pick.open || !heroes().length)) return;
+  e.preventDefault();
+  setUserPause(!game.userPaused);
+});
+// no celular as opções do HUD abrem pela engrenagem
+$('hudMenu').onclick = () => {
+  const open = $('hud').classList.toggle('open');
+  $('hudMenu').setAttribute('aria-expanded', String(open));
+};
 $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');   // na campanha volta para o mapa
 
 function showBanner(text, seconds = 2) {
@@ -414,6 +460,7 @@ function showMenu() {
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = 'card diff mode';
+    b.tabIndex = 0;
     b.setAttribute('role', 'button');
     b.setAttribute('aria-label', `${m.name}: ${m.desc}`);
     b.style.setProperty('--c', m.color[0]);
@@ -421,6 +468,7 @@ function showMenu() {
     b.style.setProperty('--d', `${i * 90}ms`);
     b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${m.icon}</div><div class="ribbon">${m.name}</div><p>${m.desc}</p><div class="record">${lines[i]}</div>`;
     b.onclick = () => confirmPick(i);
+    b.onfocus = () => selectCard(i);
     bindCard(b, i);
     list.appendChild(b);
     return b;
@@ -479,6 +527,7 @@ function showDifficulty() {
     const record = m ? `Fases ${m.from}–${m.to}` : r ? `${r.won ? '♛ Vitória!' : `Recorde: fase ${r.phase}`} · ${r.kills} abates` : 'Sem recorde ainda';
     const b = document.createElement('div');
     b.className = 'card diff';
+    b.tabIndex = 0;
     b.setAttribute('role', 'button');
     b.setAttribute('aria-label', `${d.name}: ${d.desc} ${record}`);
     b.style.setProperty('--c', d.color[0]);
@@ -487,6 +536,7 @@ function showDifficulty() {
     b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${d.icon}</div><div class="ribbon">${d.name}</div>
       <p>${d.desc}</p><div class="record${r?.won ? ' won' : ''}">${record}</div>`;
     b.onclick = () => confirmPick(i);
+    b.onfocus = () => selectCard(i);
     bindCard(b, i);
     list.appendChild(b);
     return b;
@@ -900,7 +950,8 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'Enter' || e.key === ' ') confirmPick(pick.sel);
   else if (!grid && /^[1-4]$/.test(e.key) && +e.key <= pick.cards.length) confirmPick(+e.key - 1);
   else return;
-  if (grid && e.key.startsWith('Arrow')) {
+  // o foco do teclado acompanha a seleção (nos cartões de modo/dificuldade, se já estiver num deles)
+  if (e.key.startsWith('Arrow') && (grid || document.activeElement?.classList?.contains('card'))) {
     pick.cards[pick.sel].scrollIntoView({ block: 'nearest' });
     pick.cards[pick.sel].focus({ preventScroll: true });
   }
@@ -991,19 +1042,17 @@ function buildSkillBar(party) {
       const slot = skill.slot, key = SKILL_KEYS[slot][heroIndex];
       const b = document.createElement('div');
       b.className = `skill slot-${slot}${skill.ultimate ? ' ultimate' : ''}`;
-      b.setAttribute('role', 'button');
-      b.setAttribute('tabindex', '0');
-      b.setAttribute('aria-label', `${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : 'habilidade'}. Tecla ${key}.`);
       b.style.setProperty('--c', h.cfg.color[0]);
       b.style.setProperty('--cd', h.cfg.color[1]);
       b.title = `${h.cfg.name} — ${skill.name}: ${skill.description} (tecla ${key})`;
       const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
       const kind = skill.ultimate ? 'ULTIMATE' : slot === 0 ? 'ASSINATURA' : 'TÉCNICA';
-      b.innerHTML = `<span class="key">${key}</span><button class="auto" title="Alternar uso automático desta habilidade" aria-label="Alternar automático">AUTO</button>
-        <div class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><div class="cd"></div><b class="secs"></b></div>
-        <div class="name"><small>${kind}</small><b>${skill.name}</b></div>`;
+      // dois botões irmãos (usar e AUTO): botão dentro de botão não é acessível
+      b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" title="Alternar uso automático desta habilidade" aria-label="Uso automático de ${skill.name}" aria-pressed="true">AUTO</button>
+        <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : 'habilidade'}. Tecla ${key}."><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span>
+        <span class="name"><small>${kind}</small><b>${skill.name}</b></span></button>`;
       const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
-      b.onclick = () => pressSkill(it);
+      b.querySelector('.use').onclick = () => pressSkill(it);
       it.auto.onclick = (e) => {
         e.stopPropagation();
         h.autoSkills[slot] = !h.autoSkills[slot];
@@ -1048,7 +1097,7 @@ function updateSkillBar() {
     const secs = h.dead ? 'Caído' : ready ? '' : String(Math.ceil(timer));
     if (it.secs.textContent !== secs) it.secs.textContent = secs;
     const auto = h.autoSkills[slot] ? 'AUTO' : 'MANUAL';
-    if (it.auto.textContent !== auto) it.auto.textContent = auto;
+    if (it.auto.textContent !== auto) { it.auto.textContent = auto; it.auto.setAttribute('aria-pressed', String(!!h.autoSkills[slot])); }
     it.b.classList.toggle('ready', ready);
     it.b.classList.toggle('cooling', !ready && !h.dead);
     it.b.classList.toggle('down', h.dead);
@@ -1072,8 +1121,20 @@ function paintMute() {
   $('mute').classList.toggle('off', audio.isMuted());
   $('mute').setAttribute('aria-label', audio.isMuted() ? 'Ligar o som' : 'Desligar o som');
 }
-$('mute').onclick = () => { audio.setMuted(!audio.isMuted()); paintMute(); audio.play('click'); };
+$('mute').onclick = () => { audio.setMuted(!audio.isMuted()); paintMute(); hideSoundHint(); audio.play('click'); };
 paintMute();
+// o som começa desligado: no primeiro clique ou tecla, uma dica discreta aponta o alto-falante (sem ligar sozinho)
+let soundHintShown = false;
+function hideSoundHint() { $('soundHint').hidden = true; $('mute').classList.remove('hint'); }
+function showSoundHint(e) {
+  if (soundHintShown || !audio.isMuted() || e.target.closest?.('#mute')) return;
+  soundHintShown = true;
+  $('soundHint').hidden = false;
+  $('mute').classList.add('hint');
+  setTimeout(hideSoundHint, 5000);
+}
+addEventListener('pointerdown', showSoundHint, true);
+addEventListener('keydown', showSoundHint, true);
 
 // ---------- carregamento ----------
 const loader = new GLTFLoader();
@@ -3640,6 +3701,7 @@ function startGame(view = 'menu') {
   battleGateId++;
   battleLoadingVisible = false;
   if (aiming) cancelAim();
+  setUserPause(false);
   clearTimeout(pick.timer);
   clearTimeout(showBanner.t);
   $('banner').style.opacity = 0;
@@ -4213,12 +4275,21 @@ aimHint.id = 'aimHint';
 aimHint.setAttribute('role', 'status');
 aimHint.hidden = true;
 document.body.appendChild(aimHint);
+// no toque não há Esc nem botão direito: um botão visível cancela a mira
+const aimCancel = document.createElement('button');
+aimCancel.id = 'aimCancel';
+aimCancel.type = 'button';
+aimCancel.textContent = 'Cancelar mira';
+aimCancel.hidden = true;
+aimCancel.onclick = () => { cancelAim(); audio.play('click'); };
+document.body.appendChild(aimCancel);
 
 function cancelAim() {
   if (aiming) controls.enabled = aiming.controlsEnabled;
   aiming = null;
   aimGroup.visible = false;
   aimHint.hidden = true;
+  aimCancel.hidden = true;
   renderer.domElement.style.cursor = '';
 }
 
@@ -4244,6 +4315,7 @@ function beginAim(hero) {
   controls.enabled = false;
   renderer.domElement.style.cursor = 'crosshair';
   aimHint.hidden = false;
+  aimCancel.hidden = false;
   updateAim();
 }
 
@@ -4385,7 +4457,18 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  frameView();
 });
+// a barra de habilidades cobre o pé da tela: o centro da câmera sobe para o meio da área livre,
+// assim os heróis não ficam escondidos atrás dela
+function frameView() {
+  const bar = $('skills'), cover = bar.offsetHeight ? Math.max(0, innerHeight - bar.getBoundingClientRect().top) : 0;
+  camera.aspect = innerWidth / (innerHeight + cover);
+  if (cover) camera.setViewOffset(innerWidth, innerHeight + cover, 0, cover, innerWidth, innerHeight);
+  else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(frameView).observe($('skills'));
 
 try {
   await loadAssets();

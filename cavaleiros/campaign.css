@@ -501,7 +501,7 @@
   flex: 1 1 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(360px, .82fr);
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
   padding: 0;
@@ -512,21 +512,24 @@
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 7px;
+  /* o nome da classe aparece inteiro; sem espaço, a fileira de abas rola de lado */
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
   padding: 0;
   border: 0;
   background: none;
 }
 #pick:has(#pickList.grid) .pick-filters .pick-filter {
+  flex: 1 0 auto;
   min-width: 0;
   height: 40px;
-  padding: 0 9px;
+  padding: 0 7px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   overflow: hidden;
   appearance: none;
   border: 1px solid rgba(184, 207, 237, .14);
@@ -548,7 +551,7 @@
   background: color-mix(in srgb, var(--class-color) 22%, #1b2b45);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.1);
 }
-#pick:has(#pickList.grid) .pick-filter span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pick:has(#pickList.grid) .pick-filter span { white-space: nowrap; }
 #pick:has(#pickList.grid) .pick-filter small {
   flex: 0 0 auto;
   min-width: 17px;
@@ -951,9 +954,18 @@
   #pick:has(#pickList.grid) { gap: 4px; padding-block: 8px 6px; }
   #pick:has(#pickList.grid) #pickTitle { font-size: 26px; }
   #pick:has(#pickList.grid) #pickSub { font-size: 11px; }
-  #pick:has(#pickList.grid) #pickList.grid { height: calc(100dvh - 116px); grid-template-rows: 36px minmax(0, 1fr); gap: 8px; }
+  #pick:has(#pickList.grid) #pickList.grid { height: calc(100dvh - 116px); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
   #pick:has(#pickList.grid) .pick-info { padding: 10px; gap: 6px; }
   #pick:has(#pickList.grid) .pick-info .skill-detail { padding: 5px 6px; }
+}
+/* celular: uma coluna só (abas, cartões rolando de lado e ficha embaixo) */
+@media (max-width: 760px) {
+  #pick:has(#pickList.grid) { padding: 10px 8px 4px; }
+  #pick:has(#pickList.grid) #pickList.grid { width: 100%; height: calc(100dvh - 128px); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 46%); gap: 8px; }
+  #pick:has(#pickList.grid) .pick-info { grid-column: 1; grid-row: 3; max-height: 100%; padding: 10px; }
+  #pick:has(#pickList.grid) .pick-rows { padding: 8px; }
+  #pick:has(#pickList.grid) .pick-row { flex-wrap: nowrap; justify-content: flex-start; }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row .card { flex: 0 0 128px; min-width: 128px; height: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   #pick:has(#pickList.grid) .pick-filters .pick-filter,
