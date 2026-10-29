@@ -1495,5 +1495,12 @@ test('herói à distância recua de quem encosta, sem sair da corda; corpo a cor
   clear();t.game.state='fight';const knight=hero('paladin',0,0),e2=foe('Minion',0,-1.5);e2.busy=99;e2.hp=e2.maxHp=1e4;
   tick(.05,14);assert.ok(!(knight.kiteCd>0),'corpo a corpo segura a posição');clear();
 });
+test('chefe abaixo de metade da vida se enfurece e recupera parte dela uma vez só',()=>{
+  clear();t.game.state='fight';const b=foe('Warrior',0,-6,true);b.busy=99;
+  b.hp=b.maxHp*0.6;b.update(.05);assert.equal(b.hp,b.maxHp*0.6,'acima da metade: nada');
+  b.hp=b.maxHp*0.4;b.update(.05);assert.ok(Math.abs(b.hp-b.maxHp*0.65)<1e-6,'recupera 25% da vida máxima');
+  b.hp=b.maxHp*0.3;b.update(.05);assert.equal(b.hp,b.maxHp*0.3,'só uma vez');
+  const c=foe('Warrior',0,-8);c.hp=c.maxHp*0.2;c.update(.05);assert.equal(c.hp,c.maxHp*0.2,'inimigo comum não');clear();
+});
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

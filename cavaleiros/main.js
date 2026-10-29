@@ -4536,6 +4536,8 @@ class Minion extends Unit {
   }
 }
 
+// Troca de fase do chefe: ao cair abaixo de metade da vida, ele se enfurece e recupera parte dela de uma vez.
+const BOSS_RALLY_AT = 0.5, BOSS_RALLY_HEAL = 0.25;   // fração da vida que dispara · fração da vida máxima recuperada
 class Skeleton extends Unit {
   constructor(type, phase, boss = false) {
     const base = SKELETONS[type];
@@ -4589,6 +4591,16 @@ class Skeleton extends Unit {
     slot.add(item);
   }
 
+  rally() {
+    if (this.rallied || this.dead || this.spawning || this.hp > this.maxHp * BOSS_RALLY_AT) return;
+    this.rallied = true;
+    const heal = Math.min(this.maxHp - this.hp, this.maxHp * BOSS_RALLY_HEAL);
+    this.hp += heal;
+    popText(this.pos, `+${Math.round(heal)}`, 'heal');
+    showBanner('Chefe furioso!', 1.6);
+    ring(this.pos, 2 * this.size, 0xff5a3a);
+  }
+
   update(dt) {
     if (dt <= 0) return;
     this.rootT = Math.max(0, this.rootT - dt);
@@ -4617,6 +4629,7 @@ class Skeleton extends Unit {
     }
     if (game.over) return;
     this.kind?.tick?.(this, dt);   // recargas, flutuar e investida dos tipos novos
+    if (this.boss) this.rally();   // depois do tick: o chefe entra na fase 2 e então se recupera
     if (this.stunT > 0 || this.busy > 0) return;
     this.spawning = false;
     const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt
