@@ -22,7 +22,7 @@
 <body>
   <div id="grid"></div>
   <script type="module">
-    // vitrine de dev: os 20 heróis com a mesma luz e câmera dos retratos da tela de escolha (renderPortraits em main.js)
+    // vitrine de dev: os 24 heróis com a mesma luz e câmera dos retratos da tela de escolha (renderPortraits em main.js)
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
@@ -55,7 +55,8 @@
       ['paladin', 'guardian', 'champion', 'rei'],
       ['berserker', 'crusher', 'viking', 'viking*'],
       ['pyro', 'arcane', 'cryo', 'necromante', 'cleric', 'angel'],
-      ['assassin', 'crossbow', 'ninja', 'duelist', 'druida', 'bard', 'chronist'],
+      ['assassin', 'crossbow', 'ninja', 'duelist', 'archer', 'druida', 'bard', 'chronist'],
+      ['monk', 'alchemist'],
     ];
     const grid = document.getElementById('grid');
     for (const ids of rows) {
@@ -77,7 +78,7 @@
           ({ scene: model, animations } = buildCharacter(assets, rc));
           name = rc.name;
         }
-        const idle = id === 'angel' ? 'Jump_Idle' : /Barbarian/.test(preview?.model || recipe(id.replace('*', ''))?.base) || id === 'champion' || id === 'rei' ? '2H_Melee_Idle' : 'Idle';
+        const idle = id === 'angel' ? 'Jump_Idle' : id === 'monk' ? 'Unarmed_Idle' : /Barbarian/.test(preview?.model || recipe(id.replace('*', ''))?.base) || id === 'champion' || id === 'rei' ? '2H_Melee_Idle' : 'Idle';
         const mixer = new THREE.AnimationMixer(model);
         mixer.clipAction(THREE.AnimationClip.findByName(animations, idle)).play();
         mixer.update(0.4);

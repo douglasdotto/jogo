@@ -25,6 +25,6 @@ export function synergyDamageTakenMultiplier(target, allies) {
 
 export const SYNERGIES = [
   { id: 'frozen-flames', variants: ['pyro', 'cryo', 'druid'], classes: ['Piromante', 'Criomante ou Druida'], name: 'Combustão congelante', effect: 'Com Criomante ou Druida no grupo, as chamas causam 20% a mais de dano a inimigos lentos ou presos.' },
-  { id: 'root-pierce', variants: ['druid', 'crossbow', 'ninja'], classes: ['Druida', 'Besteiro ou Ninja'], name: 'Alvo imobilizado', effect: 'Com Druida no grupo, virotes e adagas perfuram 20% mais forte contra inimigos presos pelas raízes.' },
+  { id: 'root-pierce', variants: ['druid', 'crossbow', 'ninja', 'archer'], classes: ['Druida', 'Besteiro, Ninja ou Arqueira'], name: 'Alvo imobilizado', effect: 'Com Druida no grupo, virotes, adagas e flechas perfuram 20% mais forte contra inimigos presos pelas raízes.' },
   { id: 'guardian-rage', variants: ['guardian', 'berserker'], classes: ['Guardião', 'Berserker'], name: 'Avanço protegido', effect: 'Com Guardião próximo em guarda, Berserkers enfurecidos recebem 20% menos dano.' },
 ];

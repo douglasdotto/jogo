@@ -18,6 +18,9 @@ export const PALETTES = {
   gloom:  { core: 0x3a5a40, mid: 0x16281a, edge: 0x4dff7a },   // necro: fumaça escura de borda verde
   shadow: { core: 0x5e4282, mid: 0x2a1a42, edge: 0xb48cff },   // assassino: sombra roxa
   frostMist: { core: 0xf4fdff, mid: 0xbfe9f7, edge: 0xffffff },
+  hunt:   { core: 0xeafff8, mid: 0x5ff0c8, edge: 0x1f9a7a },   // Arqueira: verde-água da marca de caça
+  venom:  { core: 0xf0ffb0, mid: 0x9cff3a, edge: 0x3f9a1a },   // Alquimista: veneno borbulhando
+  tonic:  { core: 0xfff0fb, mid: 0xff8ad8, edge: 0xc23a9a },   // Alquimista: tônico e transmutação
 };
 
 const vfxTime = { value: 0 };

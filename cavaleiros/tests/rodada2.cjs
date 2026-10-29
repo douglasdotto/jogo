@@ -135,8 +135,8 @@ test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   hero.pos.z=-4;t.updateBars();assert.equal(hero.bar.style.display,'');
   clear();
 });
-test('21 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,21);
+test('24 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,24);
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
@@ -144,7 +144,7 @@ test('21 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('63 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('72 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   let total=0;
   for(const v of t.VARIANTS){
@@ -158,7 +158,7 @@ test('63 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes no
     });
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,3,v.id+': as três habilidades devem ter corpos diferentes');
   }
-  assert.equal(total,63);
+  assert.equal(total,72);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -195,7 +195,7 @@ test('Anjo tem asas animadas e paira acima do chão',()=>{
 });
 test('navegação respeita as linhas de classe, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,21);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,24);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -426,7 +426,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas e ultimates das 21 variantes executam seus efeitos sem erro',()=>{
+test('técnicas e ultimates das 24 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -491,6 +491,104 @@ test('Duelista: rajada alterna as lâminas, Corte em X atravessa a fila e a Dan�
   const once=ring.map(s=>s.hp);for(let i=0;i<40;i++)d.update(.1);
   for(const [i,s] of ring.entries())assert.ok(s.hp<once[i]-50,'todos ao redor levam vários cortes');
   assert.equal(far.hp,far.maxHp,'longe da dança não é atingido');assert.ok(d.bladeDanceT<=0,'a dança termina');
+  clear();
+});
+const newFoe=(x,z,type='Warrior')=>{const e=new t.Skeleton(type,1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e};
+// roda as áreas no chão (chuva, poças, frasco) por "seconds"
+const runPools=(seconds)=>{for(let i=0;i<Math.round(seconds/0.1);i++)t.updateBolts(.1);};
+test('Arqueira: Flecha longa atravessa a fila, Chuva de flechas cai na área marcada e a marca do caçador aumenta o dano de todos',()=>{
+  clear();t.bolts.length=0;context.flames.length=0;t.frameTargetContext.skeletons.length=0;
+  assert.equal(cfg('archer').classId,3);assert.equal(cfg('archer').model,'Rogue_Hooded');
+  let a=new t.Hero(cfg('archer'));a.pos.set(0,0,0);
+  // básica: escolhe a linha com mais inimigos e a flecha atravessa todos, até além do alcance comum
+  const row=[newFoe(0,-3),newFoe(0.2,-6),newFoe(-0.2,-9.5)],side=newFoe(5,-1);
+  assert.equal(a.useSkill(null),true);a.pendingHit.effect();
+  assert.equal(t.bolts.at(-1).kind,'archer');
+  for(let i=0;i<12;i++)t.updateBolts(.05);
+  for(const s of row)assert.ok(s.hp<s.maxHp,'a flecha atravessa a fila inteira');
+  assert.equal(side.hp,side.maxHp,'fora da linha não é atingido');
+  // técnica: marca a área no grupo e, depois do aviso, as flechas caem só dentro dela
+  clear();t.bolts.length=0;context.flames.length=0;a=new t.Hero(cfg('archer'));a.pos.set(0,0,0);
+  const pack=[newFoe(0,-6),newFoe(1,-6.5),newFoe(-0.8,-6.3)],away=newFoe(6,0);
+  assert.equal(a.useSkill(null,false,false,1),true);a.pendingHit.effect();
+  runPools(0.4);assert.ok(pack.every(s=>s.hp===s.maxHp),'nada cai antes do aviso no chão');
+  runPools(2);const volley=a.dmg*1.5/5;for(const s of pack)assert.ok(s.maxHp-s.hp>volley*4,'várias salvas de flechas no grupo marcado');
+  assert.equal(away.hp,away.maxHp,'fora da área não é atingido');assert.equal(context.flames.length,0,'a chuva termina');
+  // ultimate: marca o chefe (prioridade), fere e todos passam a bater mais forte nele até a marca acabar
+  clear();a=new t.Hero(cfg('archer'));a.pos.set(0,0,0);
+  const minion=newFoe(0,-3,'Minion'),boss=new t.Skeleton('Warrior',1,true);boss.spawning=false;boss.busy=99;boss.pos.set(2,0,-6);boss.hp=boss.maxHp=100000;
+  assert.equal(a.useSkill(null,false,true,2),true);a.pendingHit.effect();
+  assert.ok(boss.markT>0&&boss.markBonus>0,'o chefe é o marcado');assert.ok(boss.hp<boss.maxHp);assert.equal(minion.markT,0);
+  let hp=boss.hp;boss.takeDamage(100,null,null);assert.ok(Math.abs(hp-boss.hp-100*(1+boss.markBonus))<1e-6,'marcado recebe +bônus de qualquer fonte');
+  for(let i=0;i<100;i++)boss.update(.1);
+  hp=boss.hp;boss.takeDamage(100,null,null);assert.ok(Math.abs(hp-boss.hp-100)<1e-6,'a marca acaba');
+  clear();t.bolts.length=0;context.flames.length=0;
+});
+test('Monge: cem punhos terminam em chute que atordoa, Palma do vento empurra em cone e a Meditação deixa imune e cura o grupo',()=>{
+  clear();
+  assert.equal(cfg('monk').classId,1);assert.deepEqual(Array.from(cfg('monk').use),[]);assert.equal(cfg('monk').idle,'Unarmed_Idle');
+  let m=new t.Hero(cfg('monk'));m.pos.set(0,0,0);
+  let e=newFoe(0,1.4);assert.equal(m.useSkill(e),true);
+  let hits=0;while(m.pendingHit?.effect&&hits<10){const hp=e.hp,p=m.pendingHit;m.pendingHit=null;p.effect();if(e.hp<hp)hits++;}
+  assert.equal(hits,5,'quatro socos e um chute');assert.ok(e.stunT>0,'o chute atordoa');
+  // técnica: cone à frente, quem está atrás fica de fora
+  clear();m=new t.Hero(cfg('monk'));m.pos.set(0,0,0);
+  const front=[newFoe(0,2),newFoe(1,3),newFoe(-1,3.2)],back=newFoe(0,-2);
+  assert.equal(m.useSkill(null,false,false,1),true);m.pendingHit.effect();
+  for(const s of front){assert.ok(s.hp<s.maxHp,'no cone leva dano');assert.ok(s.vel.z>4,'e é empurrado para longe');}
+  assert.equal(back.hp,back.maxHp,'atrás do monge não é atingido');
+  // ultimate: imune durante a meditação, cura quem está perto, não quem está longe, e acaba
+  clear();m=new t.Hero(cfg('monk'));const near=new t.Hero(cfg('paladin')),far=new t.Hero(cfg('cleric'));
+  m.pos.set(0,0,0);near.pos.set(2,0,0);far.pos.set(15,0,0);near.hp=far.hp=50;m.hp=m.maxHp*0.4;
+  assert.equal(m.useSkill(null,false,false,2),true,'a IA medita com o grupo ferido');m.pendingHit.effect();
+  assert.ok(m.immuneT>0&&m.meditateT>0);
+  const before=m.hp;m.takeDamage(80,null,newFoe(0,1));assert.equal(m.hp,before,'imune enquanto medita');
+  for(let i=0;i<10;i++)m.update(.1);
+  assert.ok(near.hp>50,'cura o aliado próximo');assert.equal(far.hp,50,'longe não é curado');
+  for(let i=0;i<50;i++)m.update(.1);
+  assert.ok(m.meditateT<=0&&m.immuneT<=0,'a meditação termina');
+  const after=m.hp;m.takeDamage(20,null,null);assert.ok(m.hp<after,'volta a levar dano');
+  clear();
+});
+test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo, frasco volátil explode e a transmutação vira ovelhas até acabar',()=>{
+  clear();t.bolts.length=0;context.flames.length=0;t.frameTargetContext.skeletons.length=0;
+  assert.equal(cfg('alchemist').classId,4);
+  let al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);
+  const ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-4);ally.hp=ally.maxHp*0.4;
+  const foe=newFoe(0,-5);
+  // com aliado ferido o frasco é tônico e cai nele
+  assert.equal(al.useSkill(null),true);al.pendingHit.effect();assert.equal(t.bolts.at(-1).kind,'tonic');
+  const hpBefore=ally.hp;for(let i=0;i<30;i++)t.updateBolts(.05);
+  assert.ok(context.flames.length>0,'a poça fica no chão');
+  runPools(2);assert.ok(ally.hp>hpBefore+20,'a poça de tônico cura aos poucos');assert.equal(foe.hp,foe.maxHp,'tônico não fere');
+  runPools(6);assert.equal(context.flames.length,0,'a poça seca');
+  // sem feridos: veneno no inimigo, dano ao longo de vários pulsos
+  clear();t.bolts.length=0;al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);const target=newFoe(0,-4);
+  assert.equal(al.useSkill(null),true);al.pendingHit.effect();assert.equal(t.bolts.at(-1).kind,'flask');
+  for(let i=0;i<30;i++)t.updateBolts(.05);
+  const first=target.hp;runPools(1);const mid=target.hp;runPools(1);
+  assert.ok(first>mid&&mid>target.hp,'o veneno continua ferindo a cada pulso');
+  runPools(6);context.flames.length=0;
+  // técnica: explode no grupo depois do voo, empurra e deixa veneno
+  clear();t.bolts.length=0;al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);
+  const pack=[newFoe(0,-5),newFoe(0.8,-5.4),newFoe(-0.6,-5.2)];
+  assert.equal(al.useSkill(null,false,false,1),true);al.pendingHit.effect();
+  runPools(0.2);assert.ok(pack.every(s=>s.hp===s.maxHp),'o frasco ainda está no ar');
+  runPools(0.4);for(const s of pack)assert.ok(s.hp<s.maxHp,'a explosão fere o grupo');
+  assert.ok(context.flames.some(f=>f.dmg&&f.every===0.5),'deixa uma poça de veneno');
+  context.flames.length=0;
+  // ultimate: comuns viram ovelhas (não atacam), chefe só fica lento, e tudo volta ao normal
+  clear();al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);const tank=new t.Hero(cfg('guardian'));tank.pos.set(0,0,1);
+  const herd=[newFoe(0,2,'Minion'),newFoe(1.5,2,'Minion'),newFoe(-1.5,2.5,'Minion')],boss=new t.Skeleton('Warrior',1,true);
+  boss.spawning=false;boss.busy=99;boss.pos.set(0,0,-3);
+  assert.equal(al.useSkill(null,false,false,2),true);al.pendingHit.effect();
+  for(const s of herd)assert.ok(s.sheepT>0,'inimigo comum vira ovelha');
+  assert.equal(boss.sheepT,0,'chefe não vira ovelha');assert.ok(boss.slowT>0,'chefe fica lento');
+  const hp=tank.hp;for(const s of herd){s.busy=0;s.attackTimer=0;}
+  for(let i=0;i<20;i++)for(const s of herd)s.update(.1);
+  assert.equal(tank.hp,hp,'ovelhas não atacam');assert.ok(herd.every(s=>!s.pendingHit));
+  for(let i=0;i<60;i++)for(const s of herd)s.update(.1);
+  assert.ok(herd.every(s=>s.sheepT===0),'a transmutação acaba');
   clear();
 });
 test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
@@ -677,7 +775,7 @@ function begin(id,picks){
 test('13 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,13);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,21);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,24);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

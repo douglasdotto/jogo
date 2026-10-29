@@ -1012,6 +1012,73 @@ const ACCESSORIES = {
     g.add(new THREE.Mesh(merged(metal), lambert(buckle, { emissive: 0x6a4a00, emissiveIntensity: 0.3 })));
     return g;
   },
+  // arco longo de madeira com pontas claras e corda esticada (mão esquerda da arqueira; o eixo Y do osso aponta para cima)
+  bow({ wood = 0x7a4a26, tip = 0xe8f6ee, string = 0xf4ecd8 } = {}) {
+    const g = new THREE.Group();
+    // arco no plano YZ: a empunhadura fica na mão (origem), as pontas curvam para trás (-z) onde passa a corda
+    const limb = piece(new THREE.TorusGeometry(0.62, 0.035, 5, 18, Math.PI * 0.8).rotateZ(Math.PI * 0.6).rotateY(Math.PI / 2).translate(0, 0, -0.62));
+    g.add(new THREE.Mesh(merged([limb, piece(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 6))]), lambert(wood)));
+    const ends = [-1, 1].map((s) => piece(new THREE.ConeGeometry(0.04, 0.14, 4), [0, s * 0.62, -0.31], [s > 0 ? 0 : Math.PI, 0, 0]));
+    g.add(new THREE.Mesh(merged(ends), lambert(tip, { emissive: 0x1f6a5a, emissiveIntensity: 0.3 })));
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.18, 3).translate(0, 0, -0.31), lambert(string)));
+    return g;
+  },
+  // aljava de couro nas costas com flechas de penas coloridas (osso do peito)
+  quiver({ color = 0x6a3a22, band = 0xe8c060, fletch = 0x3fe0b0 } = {}) {
+    const g = new THREE.Group(), tilt = [0.25, 0, -0.45];
+    g.add(new THREE.Mesh(merged([piece(new THREE.CylinderGeometry(0.13, 0.1, 0.62, 8), [0.12, 0.25, -0.45], tilt)]), lambert(color)));
+    g.add(new THREE.Mesh(merged([0.5, 0.05].map((y) => piece(new THREE.TorusGeometry(0.125, 0.02, 4, 10), [0.12 - y * 0.2, y, -0.45 + y * 0.12], [Math.PI / 2 + 0.25, 0, -0.45]))), lambert(band)));
+    const shafts = [], feathers = [];
+    for (let i = 0; i < 4; i++) {
+      const x = 0.27 + (i % 2) * 0.05 - i * 0.03, z = -0.49 + (i % 2) * 0.05;
+      shafts.push(piece(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 3), [x, 0.65, z], tilt));
+      feathers.push(piece(new THREE.ConeGeometry(0.045, 0.14, 3), [x + 0.06, 0.8, z + 0.03], tilt));
+    }
+    g.add(new THREE.Mesh(merged(shafts), lambert(0xd8c0a0)));
+    g.add(new THREE.Mesh(merged(feathers), lambert(fletch)));
+    return g;
+  },
+  // colar de contas grandes de madeira com uma conta vermelha no meio (monge)
+  beads({ color = 0x7a3a1a, gem = 0xd8343a } = {}) {
+    const wood = [], red = [];
+    for (let i = 0; i < 13; i++) {
+      const a = Math.PI * 0.1 + (i / 12) * Math.PI * 0.8, at = [Math.cos(a) * 0.36, -0.08 - Math.sin(a) * 0.06, Math.sin(a) * 0.34];
+      (i === 6 ? red : wood).push(piece(new THREE.IcosahedronGeometry(i === 6 ? 0.07 : 0.05, 0), at));
+    }
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged(wood), lambert(color)), new THREE.Mesh(merged(red), lambert(gem, { emissive: 0x4a0a0a, emissiveIntensity: 0.4 })));
+    return g;
+  },
+  // faixa de pano cruzando o peito em diagonal e nó com pontas no quadril (monge)
+  sash({ color = 0xc8401a } = {}) {
+    const parts = [piece(new THREE.TorusGeometry(0.42, 0.06, 4, 18), [0, 0.12, 0], [Math.PI / 2, 0.75, 0], [1.05, 0.85, 1])];
+    for (const s of [-1, 1]) parts.push(piece(new THREE.BoxGeometry(0.1, 0.34, 0.035), [0.24 + s * 0.05, -0.32, 0.3], [0.1, 0, s * 0.18]));
+    return new THREE.Mesh(merged(parts), lambert(color, { side: THREE.DoubleSide }));
+  },
+  // óculos de proteção de latão erguidos na testa, lentes verdes e tira de couro (alquimista)
+  goggles({ color = 0xc89a3a, lens = 0x9cff3a, strap = 0x4a2e18, y = 0.62 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.08, 16, 1, true).translate(0, y, 0), lambert(strap, { side: THREE.DoubleSide })));
+    g.add(new THREE.Mesh(merged([-1, 1].map((s) => piece(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10), [s * 0.17, y + 0.03, 0.52], [Math.PI / 2 - 0.3, 0, 0]))), lambert(color, { emissive: 0x4a3000, emissiveIntensity: 0.3 })));
+    const glass = merged([-1, 1].map((s) => piece(new THREE.CircleGeometry(0.09, 10), [s * 0.17, y + 0.045, 0.575], [-0.3, 0, 0])));
+    g.add(new THREE.Mesh(glass, new THREE.MeshLambertMaterial({ color: lens, emissive: lens, emissiveIntensity: 0.5 })));
+    return g;
+  },
+  // frasco redondo com gargalo, rolha e líquido que brilha (na mão ou no cinto)
+  flask({ liquid = 0x9cff3a, size = 1, pos = [0, 0.12, 0.08] } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), lambert(liquid, { emissive: liquid, emissiveIntensity: 0.45 })));
+    g.add(new THREE.Mesh(merged([piece(new THREE.CylinderGeometry(0.035, 0.045, 0.12, 6), [0, 0.13, 0]), piece(new THREE.CylinderGeometry(0.045, 0.04, 0.05, 6), [0, 0.2, 0])]), lambert(0xd8f0e8)));
+    g.scale.setScalar(size);
+    g.position.fromArray(pos);
+    return g;
+  },
+  // cinto com três frascos coloridos pendurados na frente (alquimista)
+  flaskBelt({ color = 0x4a2e18, buckle = 0xc89a3a } = {}) {
+    const g = ACCESSORIES.wideBelt({ color, buckle, y: 0.12 });
+    [[-0.3, 0x9cff3a], [0.3, 0xff8ad8], [0.05, 0x5fd0ff]].forEach(([x, liquid], i) => g.add(ACCESSORIES.flask({ liquid, size: 0.85, pos: [x + (i === 2 ? 0.2 : 0), -0.02, 0.42 - Math.abs(x) * 0.2] })));
+    return g;
+  },
   // cristal de gelo flutuando na mão
   iceShard() {
     const g = new THREE.Group();

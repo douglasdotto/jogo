@@ -29,6 +29,9 @@ const VARIANT_INFO = {
   bard: ['Apoio e ritmo', 'Toca um acorde que aumenta a velocidade de ataque do grupo por alguns segundos.', 'Acelere os aliados antes de uma onda ou chefe. O efeito também ajuda personagens de ataque lento.'],
   angel: ['Dano e amparo', 'Desce em uma explosão de luz, fere inimigos ao redor e cura aliados próximos.', 'Aproxime-se de um grupo cercando os heróis para aproveitar o impacto e o auxílio.'],
   chronist: ['Controle temporal', 'Cria um campo que prende inimigos próximos e interrompe o avanço deles.', 'Use quando vários inimigos se aproximarem; a ultimate amplia o controle para uma grande área.'],
+  archer: ['Tiro longo', 'Dispara uma flecha longa que atravessa todos os inimigos da linha, bem além do alcance comum.', 'Fique atrás da linha de frente. Marque o chefe com a ultimate para o grupo inteiro bater mais forte.'],
+  monk: ['Combos e cura', 'Desfere quatro socos rápidos no inimigo à frente e termina com um chute que atordoa.', 'Fique colado nos inimigos. A palma abre espaço e a meditação salva o grupo quando a vida aperta.'],
+  alchemist: ['Poções e controle', 'Arremessa um frasco: o tônico cura quem pisa na poça; sem feridos, o veneno fere os inimigos aos poucos.', 'Deixe as poças onde a briga acontece. A transmutação desarma hordas de inimigos comuns.'],
 };
 
 const TEAM_ROLE_RULES = {
@@ -39,6 +42,7 @@ const TEAM_ROLE_RULES = {
   assassin: ['Dano a chefe'], crossbow: ['À distância', 'Dano a chefe'], ninja: ['À distância', 'Área'], duelist: ['Área', 'Dano a chefe'], necro: ['À distância'],
   druid: ['À distância', 'Controle', 'Cura'], cleric: ['À distância', 'Cura'], bard: ['À distância', 'Dano a chefe'],
   angel: ['À distância', 'Cura', 'Área'], chronist: ['À distância', 'Controle'],
+  archer: ['À distância', 'Área', 'Dano a chefe'], monk: ['Defesa', 'Controle', 'Cura'], alchemist: ['À distância', 'Cura', 'Controle'],
 };
 const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];
 const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe');

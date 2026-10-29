@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createWorld, biomeForSeed } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './characters.js';
 import { LOOKS } from './looks.js';
@@ -88,6 +89,13 @@ const VARIANTS = [
     recipe: CHARACTERS[6], classId: 4, hp: 180, dmg: 20, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.6, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
   { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
     recipe: CHARACTERS[7], classId: 2, splash: 0, hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 5 } },
+  { id: 'archer', names: ['Arqueira', 'Olho de Falcão', 'Caçadora Lendária'], desc: 'Flechas longas que atravessam a fila.', ability: 'Flecha longa', color: ['#a8e6d6', '#3f9e8a'],
+    use: [], stats: { Vida: 3, Força: 4, Rapidez: 4, Alcance: 5 }, model: 'Rogue_Hooded', hp: 170, dmg: 18, range: 7.5, cooldown: 1, ranged: true, attacks: ['2H_Ranged_Shoot'], classId: 3 },
+  { id: 'monk', names: ['Monge', 'Punho Sereno', 'Mestre do Vento'], desc: 'Punhos velozes e uma calma que cura.', ability: 'Cem punhos', color: ['#ffd9a0', '#d8902e'],
+    use: [], stats: { Vida: 4, Força: 3, Rapidez: 5, Alcance: 1 }, hp: 235, dmg: 20, range: 1.4, speed: 3.4, cooldown: 0.5, cleave: 0, idle: 'Unarmed_Idle',
+    attacks: ['Unarmed_Melee_Attack_Punch_A', 'Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], classId: 1 },
+  { id: 'alchemist', names: ['Alquimista', 'Mestre dos Frascos', 'Grão-Transmutador'], desc: 'Frascos de veneno e de tônico.', ability: 'Frasco', color: ['#d8f59a', '#8cb83f'],
+    use: [], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 200, dmg: 17, range: 6, speed: 3, cooldown: 1.15, ranged: true, splash: 0.6, attacks: ['Spellcast_Shoot'], classId: 4 },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -1332,6 +1340,7 @@ const SKILL_GLYPHS = {
   king: ['♛', '✦', '☀'], iceviking: ['❄', '➶', '❆'], necro: ['☠', '♟', '☥'],
   druid: ['❀', '❧', '☘'], cleric: ['✚', '⛨', '☼'], bard: ['♫', '♪', '♬'],
   angel: ['✧', '⛨', '☼'], chronist: ['⌛', '⚡', '◷'],
+  archer: ['➹', '⇊', '◎'], monk: ['✊', '≋', '❂'], alchemist: ['⚗', '✸', '♈'],
 };
 
 function buildSkillBar(party) {
@@ -1420,7 +1429,7 @@ function updateSkillBar() {
 
 // dica rica das habilidades (escolha de herói e barra de batalha): nível atual, próximo nível e alvo
 const SKILL_KIND = [['basic', 'Básica'], ['technique', 'Técnica'], ['ultimate', 'Ultimate']];
-const CONTROL_TEXT = { stun: 'Atordoa', slow: 'Desacelera', root: 'Prende no lugar', push: 'Empurra', burn: 'Queima' };
+const CONTROL_TEXT = { stun: 'Atordoa', slow: 'Desacelera', root: 'Prende no lugar', push: 'Empurra', burn: 'Queima', mark: 'Marca o alvo', sheep: 'Vira ovelha' };
 const num = (n) => (Math.round(n * 10) / 10).toLocaleString('pt-BR');
 function skillTooltip(el) {
   const cfg = VARIANTS.find((v) => v.id === el.getAttribute('data-hero'));
@@ -1723,6 +1732,7 @@ class Unit {
     if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
       if (this.oathUntil > game.runTime) return;   // Juramento final: invulnerável por instantes
+      if (this.immuneT > 0) return;   // Meditação do Monge: imune enquanto medita
       if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
         this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
@@ -1751,7 +1761,7 @@ class Unit {
       }
       n = relicGuard(this, n);
       if (n <= 0) return;
-    }
+    } else if (this.markT > 0) n *= 1 + this.markBonus;   // Flecha do caçador: o alvo marcado sofre mais de todos
     const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
     if (this.stats) this.stats.recebido += real;
     if (owner?.stats) { owner.stats.dano += real; if (critical) owner.stats.criticos++; }
@@ -1871,7 +1881,7 @@ class Unit {
 }
 
 // som do golpe comum de cada herói (e dos esqueletinhos do necromante)
-const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', pyro: 'fire', cryo: 'ice' }[u.cfg.id] || 'zap') : u.cfg.classId === 1 ? 'axe' : 'sword';
+const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', archer: 'arrow', pyro: 'fire', cryo: 'ice', alchemist: 'ice' }[u.cfg.id] || 'zap') : u.cfg.id === 'monk' ? 'hit' : u.cfg.classId === 1 ? 'axe' : 'sword';
 
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
@@ -1935,7 +1945,7 @@ function applySynergy(attack, owner, target, damage) {
       return damage * multiplier;
     }
   }
-  if (attack === 'piercing' && ['crossbow', 'ninja'].includes(owner.cfg.id)
+  if (attack === 'piercing' && ['crossbow', 'ninja', 'archer'].includes(owner.cfg.id)
     && members.some((h) => h.cfg.id === 'druid')) {
     const multiplier = synergyDamageMultiplier('piercing', target);
     if (multiplier > 1) {
@@ -1960,7 +1970,26 @@ function lineTargets(from, to, candidates, length, halfWidth = 0.7) {
     return along >= -0.3 && along <= length + 0.3 * s.size && Math.abs(ox * uz - oz * ux) <= halfWidth + 0.3 * (s.size - 1);
   });
 }
+// inimigos num cone de "from" na direção de "to" (Palma do vento do Monge); minDot = cosseno da meia abertura
+function coneTargets(from, to, candidates, length, minDot = 0.6) {
+  const dx = to.x - from.x, dz = to.z - from.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+  return candidates.filter((s) => {
+    const ox = s.pos.x - from.x, oz = s.pos.z - from.z, r = Math.hypot(ox, oz);
+    return r <= length + 0.4 * (s.size - 1) && (r < 0.6 || (ox * ux + oz * uz) / r >= minDot);
+  });
+}
+// o inimigo com mais vizinhos num raio (centro da Chuva de flechas e do Frasco volátil); prefer desempata
+function densest(candidates, radius, prefer = null) {
+  let center = null, most = 0;
+  for (const s of candidates) {
+    let n = 0;
+    for (const o of candidates) if (o.pos.distanceTo(s.pos) <= radius) n++;
+    if (n > most || (n === most && s === prefer)) { most = n; center = s; }
+  }
+  return { center, count: most };
+}
 const BLADE_DANCE_TICK = 0.3;   // intervalo entre as voltas da Dança de lâminas
+const MEDITATE_TICK = 0.5;      // intervalo entre as curas da Meditação
 
 function damageCleave(owner, primary) {
   for (const s of skeletonsAlive()) {
@@ -1980,7 +2009,7 @@ function damageArea(center, radius, dmg, owner = null) {
 }
 
 function heroHit(owner, target, dmg, center = owner.pos) {
-  const attack = ['crossbow', 'ninja'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
+  const attack = ['crossbow', 'ninja', 'archer'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
   if (attack) dmg = applySynergy(attack, owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
   const bossBonus = target.boss ? 1 + (owner.bossBonus || 0) : 1;
@@ -2254,7 +2283,7 @@ const groundGeo = new THREE.CircleGeometry(1, 24);
 const ringGeo = new THREE.RingGeometry(0.75, 1, 32);
 const haloGeo = new THREE.TorusGeometry(0.35, 0.06, 6, 24);
 const beamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
-const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff };
+const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
@@ -2279,7 +2308,8 @@ function beam(start, end, color) {
 
 function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   const axe = kind === 'viking' || kind === 'iceviking';
-  const mesh = new THREE.Mesh(axe ? axeGeo : kind === 'crossbow' || kind === 'ninja' ? bladeGeo : boltGeo, boltMats[kind] || boltMats[from.cfg.id] || boltMats.arcane);
+  const arrow = kind === 'crossbow' || kind === 'ninja' || from.cfg.id === 'archer';   // a flecha comum da Arqueira também é ponta fina
+  const mesh = new THREE.Mesh(axe ? axeGeo : arrow ? bladeGeo : boltGeo, boltMats[kind] || boltMats[from.cfg.id] || boltMats.arcane);
   if (axe) {
     const handle = new THREE.Mesh(handleGeo, boltMats.viking);
     handle.position.y = -0.25;
@@ -2291,7 +2321,7 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   scene.add(mesh);
   const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
-  if (skill && kind === 'pyro') {   // a bola grande faz um arco no ar até o alvo
+  if (skill && (kind === 'pyro' || kind === 'flask' || kind === 'tonic')) {   // a bola grande e os frascos fazem um arco no ar até o alvo
     bolt.base = mesh.position.clone();
     bolt.dist0 = Math.max(0.1, bolt.base.distanceTo(target.pos));
     bolt.arc = 1.2 + bolt.dist0 * 0.18;
@@ -2310,7 +2340,7 @@ function updateBolts(dt) {
     const b = bolts[i];
     b.life -= dt;
     FX.trail(b, dt);   // rastro leve em todo projétil; habilidades deixam um rastro mais denso
-    const piercing = b.kind === 'crossbow' || b.kind === 'ninja';
+    const piercing = b.kind === 'crossbow' || b.kind === 'ninja' || b.kind === 'archer';
     if (piercing) {
       const step = 18 * dt, start = piercingStartScratch.copy(b.mesh.position);
       b.mesh.position.addScaledVector(b.dir, step);
@@ -2320,7 +2350,7 @@ function updateBolts(dt) {
         const offset = piercingOffsetScratch.copy(s.pos).add(piercingHeightOffset).sub(start);
         const along = THREE.MathUtils.clamp(offset.dot(b.dir), 0, step);
         if (offset.addScaledVector(b.dir, -along).length() > 0.45 * s.size) continue;
-        heroHit(b.owner, s, b.dmg * (b.kind === 'ninja' ? 0.8 : 1) * b.power);
+        heroHit(b.owner, s, b.dmg * (b.kind === 'ninja' ? 0.8 : b.kind === 'archer' ? ARCHER_SHOT : 1) * b.power);
         if (b.skill || b.look) FX.impact(b.skill ? b.kind : 'basic', s.pos, 0.5, b.look);
         b.hit.add(s);
         if (b.kind === 'ninja') { b.life = 0; break; }
@@ -2331,7 +2361,8 @@ function updateBolts(dt) {
       const d = goal.distanceTo(at);
       at.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
       if (b.base) b.mesh.position.copy(at).setY(at.y + Math.sin(Math.PI * THREE.MathUtils.clamp(1 - d / b.dist0, 0, 1)) * b.arc);
-      if (d <= 14 * dt + 0.25) {
+      if (d <= 14 * dt + 0.25 && (b.kind === 'flask' || b.kind === 'tonic')) { alchemyPool(b.owner, b.target.pos, b.kind === 'tonic'); b.life = 0; }
+      else if (d <= 14 * dt + 0.25) {
         const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0 : b.kind === 'viking' ? 0 : (b.kind === 'pyro' ? 1.1 + (b.level - 1) * 0.2 : 1.3 + (b.level - 1) * 0.25) * b.power;
         if (radius) damageArea(b.target.pos, radius, b.dmg, b.owner);
         else if (!b.target.dead) heroHit(b.owner, b.target, b.dmg * (b.kind === 'viking' ? 1.8 * b.power : 1));
@@ -2360,11 +2391,13 @@ function updateBolts(dt) {
   }
   for (let i = flames.length - 1; i >= 0; i--) {
     const f = flames[i];
+    if (f.wait > 0) { f.wait -= dt; continue; }   // aviso no chão antes do golpe (chuva de flechas, frasco no ar)
     f.t -= dt; f.tick -= dt;
     f.mesh.material.opacity = Math.min(0.45, f.t * 0.45);   // o fogo de FX.fireField segue esta opacidade
     if (f.tick <= 0 && dt > 0) {
-      damageArea(f.mesh.position, f.radius, f.dmg * 0.5, f.owner);
-      f.tick += 0.5;
+      if (f.every) poolTick(f);   // áreas novas: dano/cura por pulso já no valor do pulso
+      else damageArea(f.mesh.position, f.radius, f.dmg * 0.5, f.owner);
+      f.tick += f.every || 0.5;
     }
     if (f.t <= 0) { scene.remove(f.mesh); f.mesh.material.dispose(); flames.splice(i, 1); }
   }
@@ -2375,6 +2408,61 @@ function updateBolts(dt) {
     bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
     if (bl.t <= 0) { scene.remove(bl.mesh); bl.mesh.material.dispose(); blasts.splice(i, 1); }
   }
+}
+
+// ---------- áreas no chão da Arqueira e da Alquimista (mesma lista das chamas do Piromante) ----------
+const ARCHER_SHOT = 1.3;   // Flecha longa: dano de cada inimigo atravessado (× dano do herói)
+
+function groundMark(at, radius, color, opacity = 0.45) {
+  const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.copy(at).setY(at.y + 0.06);
+  mesh.scale.setScalar(radius);
+  scene.add(mesh);
+  return mesh;
+}
+
+// um pulso da área: fere os inimigos, cura os heróis e chama o efeito do pulso (flechas caindo, explosão)
+function poolTick(f) {
+  const at = f.mesh.position;
+  if (f.dmg) damageArea(at, f.radius, f.dmg, f.owner);
+  if (f.heal) for (const h of heroes()) if (!h.dead && h.pos.distanceTo(at) <= f.radius + 0.3) {
+    const heal = Math.min(h.maxHp - h.hp, f.heal);
+    if (heal < 1) continue;
+    h.hp += heal;
+    f.owner.stats.cura += heal;
+    popText(h.pos, '+' + Math.round(heal), 'heal');
+  }
+  f.onTick?.(f);
+}
+
+// Alquimista: o frasco quebra e deixa uma poça; veneno fere quem pisa, tônico cura os heróis
+function alchemyPool(owner, at, tonic, scale = 1) {
+  const radius = (1.6 + (owner.level - 1) * 0.2) * owner.skillPower * scale;
+  const mesh = groundMark(at, radius, tonic ? 0x7a2a5a : 0x1f3a0e);
+  flames.push({ mesh, radius, owner, t: (3.5 + owner.level * 0.5) * owner.skillPower, tick: 0, every: 0.5,
+    dmg: tonic ? 0 : owner.dmg * 0.14,
+    heal: tonic ? scaleBranchEffect(owner, 'support', 5 + owner.level * 2) * owner.skillPower : 0 });
+  FX.pool(mesh, radius, tonic);
+}
+
+// Arqueira: marca a área no chão e, depois do aviso, cinco salvas de flechas caem sobre ela
+function arrowRain(owner, at, radius, total) {
+  const mesh = groundMark(at, radius, 0xe8f6ee, 0.25);
+  flames.push({ mesh, radius, owner, wait: 0.55, t: 1.4, tick: 0, every: 0.3, dmg: total / 5, onTick: (f) => FX.arrowVolley(f.mesh.position, f.radius) });
+  FX.rainMark(mesh, radius);
+}
+
+// Alquimista: o frasco voa, explode empurrando o grupo e deixa uma poça de veneno menor
+function volatileFlask(owner, at, radius, dmg) {
+  const mesh = groundMark(at, radius, 0x9cff3a, 0.2);
+  flames.push({ mesh, radius, owner, wait: 0.4, t: 0.05, tick: 0, every: 1, dmg, onTick: (f) => {
+    for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1))
+      s.vel.add(new THREE.Vector3().subVectors(s.pos, f.mesh.position).setY(0).normalize().multiplyScalar(s.boss ? 1.5 : 4.5));
+    FX.flaskBlast(f.mesh.position, f.radius);
+    alchemyPool(owner, f.mesh.position, false, 0.6);
+  } });
+  FX.flaskToss(owner, at, 0.4);
 }
 
 // Tiros inimigos independentes dos poderes dos heróis.
@@ -2494,6 +2582,15 @@ const branchGeos = [0.09, 0.07, 0.05].map((r) => new THREE.CylinderGeometry(r * 
 const shellGeo = new THREE.IcosahedronGeometry(0.2, 0);
 const iceGeo = new THREE.OctahedronGeometry(0.15, 0).scale(0.7, 0.7, 2.4);   // cristal comprido apontando em +z
 const thornGeo = new THREE.OctahedronGeometry(0.16, 0).scale(0.55, 0.18, 1.6);   // folha/espinho do druida
+// Alquimista: frasco (bojo e gargalo numa geometria só) e ovelha da transmutação, compartilhados
+const flaskGeo = mergeGeometries([new THREE.SphereGeometry(0.17, 8, 6), new THREE.CylinderGeometry(0.06, 0.07, 0.18, 6).translate(0, 0.2, 0)].map((g) => g.toNonIndexed()));
+const flaskGlassMat = new THREE.MeshLambertMaterial({ color: 0xe8fff4, transparent: true, opacity: 0.55, emissive: 0x2a4a3a });
+const woolGeo = mergeGeometries([[0, 0.55, 0, 0.42], [0.22, 0.62, 0.12, 0.3], [-0.22, 0.62, 0.1, 0.3], [0, 0.7, -0.25, 0.3], [0, 0.6, 0.28, 0.28]]
+  .map(([x, y, z, r]) => new THREE.IcosahedronGeometry(r, 1).translate(x, y, z).toNonIndexed()));
+const sheepFaceGeo = mergeGeometries([new THREE.BoxGeometry(0.26, 0.28, 0.3).translate(0, 0.72, 0.5), new THREE.BoxGeometry(0.46, 0.07, 0.1).translate(0, 0.8, 0.46),
+  ...[[-0.18, -0.16], [0.18, -0.16], [-0.18, 0.18], [0.18, 0.18]].map(([x, z]) => new THREE.CylinderGeometry(0.05, 0.05, 0.3, 5).translate(x, 0.15, z))].map((g) => g.toNonIndexed()));
+const woolMat = new THREE.MeshLambertMaterial({ color: 0xfaf6ee, flatShading: true });
+const sheepFaceMat = new THREE.MeshLambertMaterial({ color: 0x3a3236, flatShading: true });
 const basic = (color) => new THREE.MeshBasicMaterial({ color });
 const hiddenCore = new THREE.MeshBasicMaterial({ visible: false });
 // projétil de cada atirador: núcleo, cascas brilhantes, tamanho (comum, habilidade) e jeito de voar
@@ -2505,12 +2602,14 @@ const BOLT_LOOKS = {
   necro: { geo: boltGeo, core: hiddenCore, shells: [[glow(0x0f8a30, 0.4), 2.1]], orb: ['necro', 0.44], size: [1.7, 1.7], spin: true },
   druid: { geo: thornGeo, core: basic(0x9be05a), shells: [[glow(0x5fbf2a, 0.5), 1.3]], size: [1.9, 1.9], aim: true, roll: true },
   crossbow: { size: [1.4, 2] },
+  archer: { size: [1.3, 2.2] },
+  alchemist: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.4], size: [1.3, 1.3], spin: true },
 };
 for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells || []).map((x) => x[0])]) if (m) m.userData.keep = true;
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
 const starGlowMat = glow(0x6f8cff, 0.55);
-for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
-const TRAIL = { arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff] };
+for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat, flaskGlassMat, woolMat, sheepFaceMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
+const TRAIL = { arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb] };
 // Símbolo e paleta próprios aparecem enquanto cada habilidade é preparada.
 const SKILL_ART = {
   paladin:   { color: 0xffe27a, accent: 0x8af5a8, glyph: crystalGeo, scale: 1.2 },
@@ -2534,8 +2633,11 @@ const SKILL_ART = {
   bard:      { color: 0xe9a7ff, accent: 0xffe27a, glyph: arcGeo, scale: 0.8 },
   angel:     { color: 0xffe27a, accent: 0xffc6ed, glyph: crystalGeo, scale: 1.55 },
   chronist:  { color: 0x8feaff, accent: 0xb6a4ff, glyph: boltGeo, scale: 1.8 },
+  archer:    { color: 0x3fe0b0, accent: 0xe8f6ee, glyph: shardGeo, scale: 1.8 },
+  monk:      { color: 0xffc85a, accent: 0xfff2c8, glyph: thinRingGeo, scale: 0.45 },
+  alchemist: { color: 0x9cff3a, accent: 0xff8ad8, glyph: shellGeo, scale: 2.2 },
 };
-const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
+const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
 let shakeK = 0, stopT = 0;
 const jolt = new THREE.Vector3();
 
@@ -2775,7 +2877,7 @@ function column(at, color, radius, height, life, o = {}) {
 }
 
 // conjuradores ganham um círculo de runas em shader sob o selo enquanto preparam a habilidade
-const SIGIL_RUNES = { pyro: 'fire', arcane: 'arcane', chronist: 'chrono', necro: 'necro', druid: 'nature', paladin: 'holy', cleric: 'holy', angel: 'holy', cryo: 'frost' };
+const SIGIL_RUNES = { pyro: 'fire', arcane: 'arcane', chronist: 'chrono', necro: 'necro', druid: 'nature', paladin: 'holy', cleric: 'holy', angel: 'holy', cryo: 'frost', alchemist: 'venom' };
 
 // Um selo flutuante mostra qual energia está sendo reunida para cada herói.
 function skillSigil(h, life, art, active, ultimate = false) {
@@ -3331,6 +3433,161 @@ function bladeSpin(h, radius) {
   }
 }
 
+// Arqueira (Chuva de flechas): círculo marcado no chão e runas de caça girando até a chuva acabar
+function rainMark(base, radius) {
+  shaderDisc('rune', 'hunt', base.position, radius, 2, { seed: 2, active: () => !!base.parent });
+  wave(base.position, 0x3fe0b0, radius * 1.4, radius, 0.45, { geo: ringGeo, opacity: 0.7 });
+}
+
+// Arqueira: uma salva de flechas cai do céu na área; cada uma levanta poeira ao cravar
+function arrowVolley(at, radius) {
+  for (let i = 0; i < fewer(7); i++) {
+    const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * radius;
+    const land = V(at.x + Math.cos(a) * r, at.y, at.z + Math.sin(a) * r), from = V(land.x - 1.2, land.y + 7, land.z - 0.6);
+    const m = new THREE.Mesh(shardGeo, particleMats.add.take(i % 2 ? 0xffffff : 0x9ff5dc, 0.95));
+    m.lookAt(V(1.2, -7, 0.6));
+    m.scale.set(1.3, 1.3, 2.2);
+    addFx(m, 0.32, (e, dt, k) => {
+      m.position.lerpVectors(from, land, Math.min(1, k * 1.25));
+      if (k >= 0.8 && !e.hit) { e.hit = true; puffs(land, 1, 'dust', { size: 0.5, rise: 0.5, life: 0.5, speed: 0.4 }); }
+      m.material.opacity = k < 0.8 ? 0.95 : 0.95 * (1 - (k - 0.8) / 0.2);
+    }, i * 0.035);
+  }
+}
+
+// Arqueira (Flecha do caçador): rastro verde-água do disparo e raios de luz no alvo
+function hunterShot(h, prey) {
+  const from = h.pos.clone().setY(h.pos.y + 1.3), to = prey.pos.clone().setY(prey.pos.y + 1);
+  for (let i = 0; i <= 10; i++) particle(sparkGeo, i % 2 ? 0xffffff : 0x3fe0b0, from.clone().lerp(to, i / 10), V(rnd(0.4), 0.5, rnd(0.4)), 0.4, { size: 1.3, delay: i * 0.012 });
+  rays(prey.pos, 'hunt', 0.6, 5, 0.7);
+  burst(to, [0x3fe0b0, 0xffffff], 14, 5);
+  shake(0.2);
+}
+
+// Arqueira: mira de caça girando sobre o alvo marcado enquanto a marca durar
+function huntMark(prey) {
+  const g = new THREE.Group(), mat = glow(0x3fe0b0, 0.9);
+  const rim = new THREE.Mesh(thinRingGeo, mat);
+  rim.rotation.x = -Math.PI / 2;
+  g.add(rim);
+  for (let i = 0; i < 4; i++) {
+    const tip = new THREE.Mesh(shardGeo, mat), a = i * Math.PI / 2;
+    tip.position.set(Math.cos(a) * 1.25, 0, Math.sin(a) * 1.25);
+    tip.lookAt(0, 0, 0);
+    g.add(tip);
+  }
+  addFx(g, 99, (e, dt) => {
+    if (prey.dead || prey.markT <= 0 || !units.includes(prey)) e.done = true;
+    g.position.copy(prey.pos).setY(prey.pos.y + 2.3 * prey.size + Math.sin(e.t * 4) * 0.08);
+    g.rotation.y += dt * 1.6;
+    g.scale.setScalar(0.42 * prey.size * Math.min(1, e.t / 0.2) * (1 + 0.08 * Math.sin(e.t * 9)));
+  });
+}
+
+// Monge: soco com estalo de ar quente; o chute final levanta poeira
+function palmHit(target, h, kick = false) {
+  const p = target.pos.clone().setY(target.pos.y + 1);
+  burst(p, [0xffd27a, 0xffffff], kick ? 12 : 5, kick ? 5 : 3);
+  const m = new THREE.Mesh(thinRingGeo, glow(0xfff2c8, 0.9));
+  m.position.copy(p);
+  m.rotation.y = h.root.rotation.y;
+  addFx(m, 0.22, (e, dt, k) => { m.scale.setScalar(0.3 + k * (kick ? 1.6 : 0.9)); m.material.opacity = e.base * (1 - k); });
+  if (kick) { puffs(target.pos, 3, 'dust', { size: 0.7, rise: 0.6, life: 0.7 }); shake(0.15); }
+}
+
+// Monge (Palma do vento): arcos de vento que voam no cone e poeira arrastada
+function windPalm(h, dir, reach) {
+  const yaw = Math.atan2(dir.x, dir.z);
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(arcGeo, glow(i % 2 ? 0xffffff : 0xfff2c8, 0.85));
+    addFx(m, 0.45, (e, dt, k) => {
+      m.position.copy(h.pos).addScaledVector(dir, 0.6 + reach * k).setY(h.pos.y + 0.6 + i * 0.35);
+      m.rotation.set(-Math.PI / 2, 0, -yaw - Math.PI * 0.35);
+      m.scale.setScalar(0.8 + k * reach * 0.45);
+      m.material.opacity = e.base * (1 - k);
+    }, i * 0.06);
+  }
+  for (let i = 0; i < fewer(8); i++) {
+    const side = rnd(0.55), d = V(dir.x * Math.cos(side) + dir.z * Math.sin(side), 0, dir.z * Math.cos(side) - dir.x * Math.sin(side));
+    sprite('puff', 'dust', h.pos.clone().addScaledVector(d, 0.8).setY(h.pos.y + 0.3), d.multiplyScalar(6 + Math.random() * 3), 0.6, { size: 0.8, grow: 1.2, drag: 2.5, opacity: 0.85 });
+  }
+  shake(0.18);
+}
+
+// Monge (Meditação): círculo dourado sob o corpo, raios suaves e brilho que sobe enquanto medita
+function meditate(h, radius) {
+  const active = () => h.meditateT > 0 && !h.dead && units.includes(h);
+  shaderDisc('rune', 'holy', h.pos, radius * 0.45, 30, { follow: h, active, seed: 5 });
+  rays(h.pos, 'holy', 0.7, 4, 1.2, { follow: h });
+  wave(h.pos, 0xffd27a, 0.3, radius, 0.8);
+}
+function calmPulse(h, radius, healed) {
+  wave(h.pos, 0xffe6a8, 0.4, radius, 0.6, { opacity: 0.5 });
+  for (const ally of healed) particle(sparkGeo, 0xbfffa8, ally.pos.clone().setY(ally.pos.y + 0.6), V(rnd(0.3), 1.8, rnd(0.3)), 0.7, { size: 1.2 });
+}
+
+// Alquimista: poça com o líquido em shader (brasas verdes no veneno, runas rosadas no tônico) e bolhas
+// subindo; base = disco de updateBolts e o efeito apaga quando ele sai da cena
+function puddle(base, radius, tonic) {
+  const pal = tonic ? 'tonic' : 'venom';
+  const liquid = vfxMesh(tonic ? 'rune' : 'embers', pal, groundGeo, { seed: Math.random() * 9 });
+  liquid.rotation.x = -Math.PI / 2;
+  addFx(liquid, 99, (e, dt) => {
+    if (!base.parent) { e.done = true; return; }
+    liquid.position.copy(base.position).setY(base.position.y + 0.01);
+    liquid.scale.setScalar(radius * (1 - (1 - Math.min(1, e.t / 0.25)) ** 3));
+    liquid.userData.fx.opacity = Math.min(1, base.material.opacity / 0.45);
+    e.bub = (e.bub ?? 0) - dt;
+    if (e.bub > 0) return;
+    e.bub = lowQuality ? 0.5 : 0.25;
+    const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * radius * 0.8;
+    sprite('puff', pal, V(base.position.x + Math.cos(a) * r, base.position.y + 0.1, base.position.z + Math.sin(a) * r), V(0, 0.9, 0), 0.8, { size: 0.35, grow: 0.8, opacity: 0.8 });
+  });
+  burst(base.position.clone().setY(base.position.y + 0.4), tonic ? [0xff8ad8, 0xffffff] : [0x9cff3a, 0xe8ffb0], 10, 3);
+}
+
+// Alquimista (Frasco volátil): frasco girando em arco até o ponto da explosão
+function flaskToss(h, to, life) {
+  const m = new THREE.Mesh(flaskGeo, flaskGlassMat), from = h.pos.clone().setY(h.pos.y + 1.4), end = to.clone().setY(to.y + 0.2);
+  m.add(vfxMesh('orb', 'venom', SPRITE, { size: 0.42 }));
+  m.scale.setScalar(1.6);
+  addFx(m, life, (e, dt, k) => {
+    m.position.lerpVectors(from, end, k).setY(from.y + (end.y - from.y) * k + Math.sin(Math.PI * k) * 2.2);
+    m.rotation.x += dt * 12;
+  });
+}
+function flaskBlast(at, radius) {
+  const p = at.clone().setY(at.y + 0.8);
+  blast(p, radius * 1.6, 0.5, 'venom');
+  puffs(at.clone().setY(at.y + 0.3), 6, 'venom', { spread: radius * 0.5, size: 1.1, rise: 1.2, life: 1.1 });
+  burst(p, [0x9cff3a, 0xe8ffb0, 0xffffff], fewer(16), 7, { size: 1.4 });
+  wave(at, 0x9cff3a, 0.4, radius * 1.3, 0.5);
+  shake(0.3);
+}
+
+// Alquimista (Grande transmutação): onda e runas rosadas; cada inimigo comum vira uma ovelha até a magia acabar
+function transmuteWave(at, radius) {
+  shaderDisc('rune', 'tonic', at, radius, 1.2, { seed: 7 });
+  wave(at, 0xff8ad8, 0.3, radius, 0.8, { geo: ringGeo, opacity: 0.8, spin: 2 });
+  puffs(at.clone().setY(at.y + 0.4), 6, 'tonic', { spread: radius * 0.6, size: 1, life: 1 });
+}
+function sheep(enemy) {
+  const hidden = [];
+  enemy.root.traverse((o) => { if (o.isMesh && o.visible) { o.visible = false; hidden.push(o); } });
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(woolGeo, woolMat), new THREE.Mesh(sheepFaceGeo, sheepFaceMat));
+  enemy.root.add(g);
+  puffs(enemy.pos.clone().setY(enemy.pos.y + 0.6), 4, 'tonic', { size: 0.9, spread: 0.4, life: 0.7 });
+  addFx(new THREE.Group(), 99, (e) => {
+    g.position.y = Math.abs(Math.sin(e.t * 9)) * 0.06 * (enemy.vel.lengthSq() > 0.05 ? 1 : 0);   // saltitando quando anda
+    if (!(enemy.sheepT <= 0 || enemy.dead || !units.includes(enemy))) return;
+    e.done = true;
+    enemy.root.remove(g);
+    for (const o of hidden) o.visible = true;
+    if (!enemy.dead) puffs(enemy.pos.clone().setY(enemy.pos.y + 0.6), 4, 'smoke', { size: 0.9, spread: 0.4, life: 0.7 });
+  });
+}
+
 // Rei: coroa dourada girando acima dele e ondas douradas pelo grupo
 function royal(h, party) {
   const crown = new THREE.Group();
@@ -3440,6 +3697,12 @@ function look(b, skill) {
 // tiros de habilidade ficam maiores; o do ninja vira estrela girando
 function dress(b) {
   b.mesh.scale.setScalar({ pyro: 2.2, cryo: 1.6, viking: 1.5, iceviking: 1.5, crossbow: 1.8, ninja: 1.8 }[b.kind] || 1.4);
+  if (b.kind === 'flask' || b.kind === 'tonic') {   // frasco de vidro com o líquido borbulhando em shader
+    b.mesh.geometry = flaskGeo;
+    b.mesh.material = flaskGlassMat;
+    b.mesh.add(vfxMesh('orb', b.kind === 'tonic' ? 'tonic' : 'venom', SPRITE, { size: 0.42 }));
+    b.style = { spin: true };
+  }
   if (b.kind === 'ninja') {   // estrela de 8 pontas: duas lâminas cruzadas e um brilho azul
     b.mesh.geometry = shurikenGeo;
     b.mesh.material = steelMat;
@@ -3524,6 +3787,13 @@ function element(h, skill, target) {
     for (let i = 0; i < fewer(n / 2); i++) sprite('puff', id === 'necro' ? 'gloom' : id === 'assassin' ? 'shadow' : 'smoke', spot(0.4), V(rnd(0.6), 0.8, rnd(0.6)), 0.9, { size: 0.95, grow: 1, opacity: 0.9 });
     for (let i = 0; i < n / 2; i++) particle(sparkGeo, tint, spot(0.6), V(rnd(1), 1.6, rnd(1)), 0.6, { size: 1.1 });  } else if (id === 'duelist') {   // aço: faíscas prateadas e rubras cortando o ar
     for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xdfe6ee : 0xff5a7a, spot(0.9), V(rnd(2.5), 1 + Math.random(), rnd(2.5)), 0.5, { size: 1.1, delay: Math.random() * 0.2 });
+  } else if (id === 'archer') {   // penas verde-água rodopiando no ar
+    for (let i = 0; i < fewer(n); i++) particle(shardGeo, i % 2 ? 0xe8f6ee : 0x3fe0b0, spot(1.2), V(rnd(1.5), 1.5 + Math.random(), rnd(1.5)), 0.7, { size: 0.8, gravity: 2, delay: Math.random() * 0.2 });
+  } else if (id === 'monk') {   // poeira levantada e fagulhas douradas de energia interior
+    puffs(at.clone().setY(at.y + 0.2), ult ? 6 : 3, 'dust', { spread: reach * 0.4, size: 0.9, rise: 0.8, life: 0.9 });
+    for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xffd27a : 0xffffff, spot(0.6), V(rnd(0.8), 2 + Math.random() * 1.5, rnd(0.8)), 0.8, { size: 1.1, delay: Math.random() * 0.25 });
+  } else if (id === 'alchemist') {   // bolhas de veneno (e rosadas na transmutação) subindo e estourando
+    for (let i = 0; i < fewer(n / 2); i++) sprite('puff', ult ? 'tonic' : 'venom', spot(0.3), V(rnd(0.4), 1 + Math.random(), rnd(0.4)), 0.9, { size: 0.5, grow: 0.8, opacity: 0.9, delay: Math.random() * 0.3 });
   } else if (id === 'chronist') {   // mostrador de relógio no chão, com os ponteiros voltando
     clockFace(at, reach + 0.6, ult ? 1.4 : 0.9);
   } else if (id === 'bard') {   // ondas sonoras em pé saindo do bardo e notinhas
@@ -3587,6 +3857,7 @@ function stasis(enemy) {
 
 const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
+Object.assign(FX, { rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep });   // Arqueira, Monge e Alquimista
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -3626,6 +3897,8 @@ class Hero extends Unit {
     this.guardT = 0;
     this.dodgeTimer = 2;
     this.bladeDanceT = 0;
+    this.meditateT = 0;   // Monge: meditação em curso (cura o grupo)
+    this.immuneT = 0;     // Monge: imune a dano
     this.age = 0;
     this.hover = cfg.id === 'angel' ? 0.52 : 0;
     for (const relic of game.relics || []) applyRelicToHero(this, relic);
@@ -3864,6 +4137,57 @@ class Hero extends Unit {
         };
         cut(0);
       };
+    } else if (id === 'monk') {
+      // cem punhos: quatro socos rápidos alternando as mãos e um chute que atordoa e empurra
+      const reach = (s) => this.range + 0.9 + 0.4 * (s.size - 1);
+      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+        && s.pos.distanceTo(this.pos) <= reach(s) && Math.abs(s.pos.y - this.pos.y) < 0.85));
+      if (!target || target.pos.distanceTo(this.pos) > reach(target)) return false;
+      effect = () => {
+        const blow = (i) => {
+          if (target.dead) return;
+          this.face(target.pos, 1);
+          const kick = i >= 4;
+          heroHit(this, target, this.dmg * (kick ? 1.3 : 0.6) * power);
+          FX.palmHit(target, this, kick);
+          if (i > 0) audio.play('hit');
+          if (kick) {
+            target.stunT = Math.max(target.stunT || 0, scaleBranchEffect(this, 'control', 0.8) * power);
+            target.pendingHit = null;
+            target.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(target.boss ? 1 : 4));
+            return;
+          }
+          this.busy = this.once(i === 3 ? 'Unarmed_Melee_Attack_Kick' : i % 2 ? 'Unarmed_Melee_Attack_Punch_A' : 'Unarmed_Melee_Attack_Punch_B', i === 3 ? 2 : 3.2);
+          this.pendingHit = { target, t: this.busy * 0.4, effect: () => blow(i + 1) };
+        };
+        blow(0);
+      };
+    } else if (id === 'archer') {
+      // flecha longa: mira a linha com mais inimigos e atravessa todos, bem além do alcance comum
+      const reach = 11;
+      if (!manual) {
+        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach);
+        let most = 0;
+        target = null;
+        for (const s of pool) {
+          const n = lineTargets(this.pos, s.pos, pool, reach + 4, 0.55).length + (s.boss ? 0.5 : 0);
+          if (n > most) { most = n; target = s; }
+        }
+      }
+      if (!target || target.pos.distanceTo(this.pos) > reach) return false;
+      effect = () => fireBolt(this, target, 'archer', 0, true);
+    } else if (id === 'alchemist') {
+      // frasco: tônico na poça de quem está ferido; sem ferido, veneno no grupo de inimigos
+      const reach = this.range + 1;
+      let kind = 'flask';
+      if (!manual) {
+        const hurt = heroes().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach && h.hp / h.maxHp <= 0.7)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+        if (hurt.length) { target = hurt[0]; kind = 'tonic'; }
+        else target = bestSkillTarget(this, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach));
+      }
+      if (!target || target.pos.distanceTo(this.pos) > reach) return false;
+      effect = () => fireBolt(this, target, kind, 0, true);
     } else if (id === 'viking' || id === 'iceviking') {
       if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
         && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
@@ -3955,7 +4279,7 @@ class Hero extends Unit {
     const level = this.level, power = this.skillPower;
     const color = skill.color || this.cfg.color[0];
     const radius = (skill.radius || (slot === 2 ? 6 : 4.5)) * (0.9 + 0.1 * power);
-    const enemies = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= radius + 0.4 * (s.size - 1));
+    const enemies = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= Math.max(radius, skill.range || 0) + 0.4 * (s.size - 1));
     const party = heroes().filter((h) => !h.dead);
     const friends = party.filter((h) => h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5));
     const wounded = friends.filter((h) => h.hp < h.maxHp);
@@ -3967,7 +4291,7 @@ class Hero extends Unit {
     target ||= highestPriorityHeroTarget(this, targetPool);
     if (target?.dead || !skeletonsAlive().includes(target)) target = null;
 
-    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm'].includes(skill.effect);
+    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
     if (!force && slot === 1 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
@@ -4139,6 +4463,89 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'arrow-storm': case 'volatile': {
+        // Arqueira e Alquimista: área no grupo mais denso ao alcance; a IA espera juntar dois inimigos
+        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
+        const { center, count } = densest(pool, skill.radius || 3, force ? target : null);
+        if (!center || (!force && count < 2 && !urgentEnemy)) return false;
+        target = center;
+        const at = center.pos.clone(), area = (skill.radius || 3) * (0.9 + 0.1 * power), total = this.dmg * power * (skill.power || 1);
+        effect = () => (skill.effect === 'arrow-storm' ? arrowRain(this, at, area, total) : volatileFlask(this, at, area, total));
+        break;
+      }
+      case 'hunter-mark': {
+        // Flecha do caçador: fere e marca o inimigo mais forte (chefe primeiro); todos batem mais nele
+        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 11));
+        const worth = (s) => (s.boss || s.totem ? 1e6 : 0) + s.hp;
+        const prey = force && pool.includes(target) ? target : pool.reduce((best, s) => (!best || worth(s) > worth(best) ? s : best), null);
+        if (!prey) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          damageOne(prey);
+          prey.markT = Math.max(prey.markT || 0, scaleBranchEffect(this, 'control', skill.duration || 8) * power);
+          prey.markBonus = Math.max(prey.markBonus || 0, skill.bonus || 0.3);
+          popText(prey.pos, 'Marcado!', 'crit');
+          FX.hunterShot(this, prey);
+          FX.huntMark(prey);
+        };
+        break;
+      }
+      case 'wind-palm': {
+        // Palma do vento: rajada em cone que fere, interrompe e empurra para longe
+        const reach = skill.range || 5;
+        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        let aim = force && pool.includes(target) ? target : null, hits = aim ? coneTargets(this.pos, aim.pos, pool, reach) : [];
+        if (!aim) for (const s of pool) {
+          const cone = coneTargets(this.pos, s.pos, pool, reach);
+          if (cone.length > hits.length || (cone.length === hits.length && s === target)) { hits = cone; aim = s; }
+        }
+        if (!aim || (!force && hits.length < 2 && !urgentEnemy)) return false;
+        target = aim;
+        effect = () => {
+          const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize();
+          const end = from.clone().addScaledVector(dir, reach);
+          for (const enemy of coneTargets(from, end, skeletonsAlive().filter((s) => !s.spawning && Math.abs(s.pos.y - from.y) < 0.85), reach)) {
+            damageOne(enemy);
+            enemy.pendingHit = null;
+            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, from).setY(0).normalize().multiplyScalar(enemy.boss ? 2 : 9));
+          }
+          FX.windPalm(this, dir, reach);
+        };
+        break;
+      }
+      case 'meditate': {
+        // Meditação: só quando o grupo precisa de cura ou o Monge está acuado
+        if (!force && !criticalAlly && missingHp < this.maxHp * 0.3 && this.hp > this.maxHp * 0.45) return false;
+        effect = () => {
+          this.meditateT = this.immuneT = (skill.duration || 4) * (0.9 + 0.1 * power);
+          this.meditateTick = 0;
+          this.meditation = { radius, heal: scaleBranchEffect(this, 'support', 7 + level * 2) * power };
+          this.busy = this.meditateT;
+          this.pendingHit = null;
+          this.loop('Sit_Floor_Idle');
+          FX.meditate(this, radius);
+        };
+        break;
+      }
+      case 'transmute': {
+        // Grande transmutação: inimigos comuns viram ovelhas (não atacam, andam à toa); chefes e totens só ficam lentos
+        const common = enemies.filter((s) => !s.boss && !s.totem);
+        if (!force && common.length < 3 && !urgentEnemy) return false;
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
+          for (const enemy of enemies) {
+            if (enemy.dead) continue;
+            if (enemy.boss || enemy.totem) { enemy.slowT = Math.max(enemy.slowT || 0, duration); continue; }
+            if (!(enemy.sheepT > 0)) FX.sheep(enemy);
+            enemy.sheepT = Math.max(enemy.sheepT || 0, duration);
+            enemy.pendingHit = null;
+            enemy.vel.set(0, 0, 0);
+          }
+          FX.transmuteWave(this.pos, radius);
+        };
+        break;
+      }
       case 'summon':
         effect = () => {
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
@@ -4263,6 +4670,26 @@ class Hero extends Unit {
     audio.play('sword');
   }
 
+  // Meditação: sentado e imune, cura a cada pulso os heróis ao redor
+  updateMeditation(dt) {
+    this.meditateT -= dt;
+    if (this.dead || game.over) { this.meditateT = this.immuneT = 0; return; }
+    this.vel.set(0, 0, 0);
+    this.meditateTick -= dt;
+    if (this.meditateTick > 0) return;
+    this.meditateTick += MEDITATE_TICK;
+    const { radius, heal } = this.meditation, healed = [];
+    for (const h of heroes()) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
+      const amount = Math.min(h.maxHp - h.hp, heal);
+      if (amount < 1) continue;
+      h.hp += amount;
+      this.stats.cura += amount;
+      healed.push(h);
+      popText(h.pos, '+' + Math.round(amount), 'heal');
+    }
+    FX.calmPulse(this, radius, healed);
+  }
+
   requestSkill(target = null, slot = 0) {
     if (this.dead || game.over || game.paused) return 'off';
     if (this.skillTimers[slot] > 0) return 'wait';
@@ -4295,6 +4722,7 @@ class Hero extends Unit {
     this.songHaste = 1;
     this.furyT = 0;
     this.bladeDanceT = 0;
+    this.meditateT = this.immuneT = 0;
     this.hp = this.maxHp * difficulty.revive;
     this.bar.style.display = '';
     this.current = null;
@@ -4333,6 +4761,8 @@ class Hero extends Unit {
     this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     if (this.bladeDanceT > 0) this.updateBladeDance(dt);
+    this.immuneT -= dt;
+    if (this.meditateT > 0) this.updateMeditation(dt);
     this.updateCommon(dt);
     this.tickSkillBody(dt);
     if (this.dead || this.busy > 0 || game.over) return;
@@ -4409,6 +4839,9 @@ const SKILL_MOVES = {
   bard: ['Cheer', 1.6, 0.3, 'shout'],
   angel: ['Spellcast_Raise', 1.8, 0.42, 'heal'],
   chronist: ['Spellcast_Raise', 1.6, 0.42, 'zap'],
+  archer: ['2H_Ranged_Shoot', 1.2, 0.4, 'arrow'],
+  monk: ['Unarmed_Melee_Attack_Punch_A', 1.6, 0.4, 'hit'],
+  alchemist: ['Throw', 1.4, 0.45, 'ice'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -4522,6 +4955,21 @@ const SKILL_ANIMS = {
     { clip: '1H_Ranged_Shoot', f: 0.3, lean: 0.1, kick: -0.8 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.35 },
   ],
+  archer: [
+    { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, lean: -0.1, kick: -0.8 },
+    { clip: '1H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.3, lean: -0.35 },   // mira para o alto: a chuva cai lá na frente
+    { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, lean: 0.15, hop: 0.25, kick: -1.4 },
+  ],
+  monk: [
+    { clip: 'Unarmed_Melee_Attack_Punch_A', f: 0.45, arc: 'thrust', kick: 0.8 },
+    { clip: 'Unarmed_Melee_Attack_Punch_B', hold: 'Unarmed_Idle', f: 0.45, arc: 'thrust', lean: 0.2, kick: 1.2 },
+    { clip: 'Sit_Floor_Down', hold: 'Unarmed_Idle', f: 0.6, float: 0.2 },
+  ],
+  alchemist: [
+    { clip: 'Throw', f: 0.45, lean: 0.12 },
+    { clip: 'Throw', hold: 'Use_Item', f: 0.45, hop: 0.2, lean: 0.2 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
+  ],
 };
 
 class Minion extends Unit {
@@ -4583,6 +5031,9 @@ class Skeleton extends Unit {
     this.burnDmg = 0;
     this.burnOwner = null;
     this.tauntT = 0;
+    this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
+    this.markBonus = 0;
+    this.sheepT = 0;      // Grande transmutação: ovelha que não ataca
     this.stars = new THREE.Group();
     for (let i = 0; i < 3; i++) {
       const star = new THREE.Mesh(starGeo, goldMat);
@@ -4613,6 +5064,20 @@ class Skeleton extends Unit {
     slot.add(item);
   }
 
+  graze(dt) {
+    this.spawning = false;
+    this.grazeT = (this.grazeT || 0) - dt;
+    if (this.grazeT <= 0) {   // troca de rumo de vez em quando; às vezes para e pasta
+      this.grazeT = 0.8 + Math.random();
+      const a = Math.random() * Math.PI * 2, v = Math.random() < 0.35 ? 0 : 0.8;
+      this.grazeDir = [Math.cos(a) * v, Math.sin(a) * v];
+    }
+    if (this.rootT > 0) return;
+    this.vel.set(this.grazeDir[0], 0, this.grazeDir[1]);
+    this.moving = true;
+    if (this.grazeDir[0] || this.grazeDir[1]) this.face(tmp.copy(this.pos).add(this.vel), dt);
+  }
+
   rally() {
     if (this.rallied || this.dead || this.spawning || this.hp > this.maxHp * BOSS_RALLY_AT) return;
     this.rallied = true;
@@ -4637,7 +5102,10 @@ class Skeleton extends Unit {
     }
     this.root.rotation.z = this.rootT > 0 && !this.dead ? Math.sin(this.rootT * 45) * 0.05 : 0;   // preso pelos galhos: treme tentando se soltar
     this.tauntT -= dt;
-    if (this.stunT > 0) { this.pendingHit = null; this.vel.set(0, 0, 0); }
+    this.markT = Math.max(0, this.markT - dt);
+    if (this.markT <= 0) this.markBonus = 0;
+    this.sheepT = Math.max(0, this.sheepT - dt);
+    if (this.stunT > 0 || this.sheepT > 0) { this.pendingHit = null; if (this.stunT > 0) this.vel.set(0, 0, 0); }
     if (this.ranged && !this.mobile) this.vel.set(0, 0, 0);
     this.updateCommon(dt);
     this.stars.visible = !this.dead && this.stunT > 0;
@@ -4650,6 +5118,7 @@ class Skeleton extends Unit {
       return;
     }
     if (game.over) return;
+    if (this.sheepT > 0) { this.graze(dt); return; }   // ovelha: só pasta e anda à toa até a magia acabar
     this.kind?.tick?.(this, dt);   // recargas, flutuar e investida dos tipos novos
     if (this.phaseBoss) this.rally();   // depois do tick: o chefe entra na fase 2 e então se recupera
     if (this.stunT > 0 || this.busy > 0) return;

@@ -134,6 +134,7 @@ const profiles = {
   equilibrado: ['paladin', 'guardian', 'pyro', 'cleric'],
   sustentacao: ['guardian', 'cleric', 'druid', 'pyro'],
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
+  novos: ['archer', 'monk', 'alchemist', 'paladin'],
 };
 const profileName = process.argv[4] || 'aleatorio';
 const profile = profiles[profileName];
