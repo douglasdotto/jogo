@@ -3,17 +3,17 @@
 // recruta heróis e ondas crescentes de esqueletos saem do Portal de Ossos. Derrubar o portal vence; perder o castelo, não.
 // O main.js entrega as peças do jogo em linkKingdom (unidades, cena, efeitos) e chama game.realm.tick/camera/stop.
 import * as THREE from 'three';
-import { ARENA, createArena, buildArenaScene } from './kingdom-world.js';
+import { ARENA, TERRAIN, createArena, buildArenaScene } from './kingdom-world.js';
 import * as models from './kingdom-models.js';
 
 const G = {};
 export function linkKingdom(api) { Object.defineProperties(G, Object.getOwnPropertyDescriptors(api)); }
 
 // ---------- regras ----------
-export const RES = ['wood', 'stone', 'gold'];
-export const RES_NAME = { wood: 'Madeira', stone: 'Pedra', gold: 'Ouro' };
-export const START = { wood: 200, stone: 60, gold: 100, workers: 4 };
-export const GATHER = { wood: 0.8, stone: 0.6, gold: 0.6, carry: 10 };
+export const RES = ['wood', 'stone', 'gold', 'food'];
+export const RES_NAME = { wood: 'Madeira', stone: 'Pedra', gold: 'Ouro', food: 'Comida' };
+export const START = { wood: 200, stone: 60, gold: 100, food: 200, workers: 4 };
+export const GATHER = { wood: 0.8, stone: 0.6, gold: 0.6, food: 0.8, carry: 10 };
 export const POP_MAX = 60;
 export const HERO_LIMIT = 4;
 export const HERO_REVIVE = 30;     // segundos até o herói caído voltar no castelo
@@ -24,23 +24,31 @@ export const BUILDINGS = {
   castle: { name: 'Castelo', glyph: '♜', size: 4, hp: 2400, cost: {}, time: 0, pop: 5, drop: true, height: 8.2, trains: ['worker', 'hero'],
     attack: { range: 10, dmg: 9, cooldown: 1.6 }, tip: 'Recruta aldeões e heróis · recebe recursos · atira flechas' },
   house: { name: 'Casa', glyph: '⌂', size: 2, hp: 450, cost: { wood: 50 }, time: 16, pop: 5, height: 4.4, tip: '+5 de população' },
+  farm: { name: 'Fazenda', glyph: '❀', size: 2, hp: 300, cost: { wood: 60 }, time: 14, height: 1.6, farm: true, tip: 'Comida sem fim · 1 aldeão' },
   storehouse: { name: 'Depósito', glyph: '▥', size: 2, hp: 550, cost: { wood: 80 }, time: 18, drop: true, height: 3.6, tip: 'Recebe recursos perto da coleta' },
   barracks: { name: 'Quartel', glyph: '⚔', size: 3, hp: 1100, cost: { wood: 150, stone: 40 }, time: 32, height: 4.6, trains: ['soldier', 'archer'], tip: 'Treina soldados e besteiros' },
   tower: { name: 'Torre', glyph: '♖', size: 2, hp: 750, cost: { wood: 50, stone: 120 }, time: 30, height: 8.6, attack: { range: 11, dmg: 15, cooldown: 1.3 }, tip: 'Atira nos esqueletos por perto' },
   wall: { name: 'Muralha', glyph: '▦', size: 1, hp: 400, cost: { stone: 10 }, time: 6, height: 2.8, tip: 'Bloqueia a passagem · Shift para várias' },
 };
-export const BUILD_MENU = ['house', 'storehouse', 'barracks', 'tower', 'wall'];
+export const BUILD_MENU = ['house', 'farm', 'storehouse', 'barracks', 'tower', 'wall'];
 export const UNITS = {
-  worker: { name: 'Aldeão', glyph: '⚒', cost: { wood: 50 }, time: 10, pop: 1, hp: 60, dmg: 3, range: 1.2, speed: 3.2, cooldown: 1.4, tip: 'Coleta, entrega e constrói' },
-  soldier: { name: 'Soldado', glyph: '⚔', cost: { wood: 25, gold: 35 }, time: 13, pop: 1, hp: 120, dmg: 11, range: 1.6, speed: 3, cooldown: 1.2, tip: 'Luta corpo a corpo' },
-  archer: { name: 'Besteiro', glyph: '➶', cost: { wood: 45, gold: 30 }, time: 15, pop: 1, hp: 70, dmg: 9, range: 8, speed: 3, cooldown: 1.7, ranged: true, tip: 'Atira de longe' },
-  hero: { name: 'Herói', glyph: '♛', cost: { gold: 200, wood: 100 }, time: 22, pop: 2, tip: `Herói com habilidades · até ${HERO_LIMIT}` },
+  worker: { name: 'Aldeão', glyph: '⚒', cost: { food: 50 }, time: 10, pop: 1, hp: 60, dmg: 3, range: 1.2, speed: 3.2, cooldown: 1.4, tip: 'Coleta, entrega e constrói' },
+  soldier: { name: 'Soldado', glyph: '⚔', cost: { food: 60, gold: 20 }, time: 13, pop: 1, hp: 120, dmg: 11, range: 1.6, speed: 3, cooldown: 1.2, tip: 'Luta corpo a corpo' },
+  archer: { name: 'Besteiro', glyph: '➶', cost: { wood: 40, food: 45 }, time: 15, pop: 1, hp: 70, dmg: 9, range: 8, speed: 3, cooldown: 1.7, ranged: true, tip: 'Atira de longe' },
+  hero: { name: 'Herói', glyph: '♛', cost: { gold: 200, food: 100 }, time: 22, pop: 2, tip: `Herói com habilidades · até ${HERO_LIMIT}` },
 };
 export const PORTAL = { hp: 3500, guardEvery: 20, guardRadius: 15 };
 
-// ondas: a primeira em 2 min, depois cada vez maiores e mais frequentes (partida de ~15–20 min)
-export const FIRST_WAVE = 120;
-export const waveInterval = (n) => Math.max(40, 65 - n * 1.5);
+// ondas: a primeira em 3 min, depois cada vez maiores e um pouco mais frequentes
+export const FIRST_WAVE = 180;
+export const waveInterval = (n) => Math.max(75, 110 - n * 2);
+// de onde vem cada onda: -1 = Portal de Ossos; 0.. = covas da borda, alternando (uma, depois duas a partir da 6ª nas pares)
+export function waveSources(n, entries = 0) {
+  if (n <= 1 || !entries) return [-1];
+  const a = (n - 2) % entries, out = [-1, a];
+  if (n >= 6 && n % 2 === 0 && entries > 1) out.push((a + 1) % entries);
+  return out;
+}
 export const waveSize = (n, D = null) => Math.max(2, Math.round((3 + (n - 1) * 1.6) * (D?.count ?? 1.1) / 1.1));
 export const wavePhase = (n) => Math.min(12, 1 + Math.floor((n - 1) * 0.7));
 export const waveLeaderFor = (n) => n % 6 === 0 ? (n >= 18 ? 'Lich' : n >= 12 ? 'Executioner' : 'King') : n % 4 === 0 ? 'Golem' : null;
@@ -48,9 +56,11 @@ export const waveLeaderFor = (n) => n % 6 === 0 ? (n >= 18 ? 'Lich' : n >= 12 ? 
 const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export function createKingdomState(arena, D = null) {
-  return { arena, D, res: { wood: START.wood, stone: START.stone, gold: START.gold }, buildings: [], units: [],
-    waveN: 0, waveT: FIRST_WAVE, pending: 0, spawnT: 0, leader: null, time: 0, castle: null, portal: null,
-    stats: { gathered: { wood: 0, stone: 0, gold: 0 }, built: 0, trained: 0, lost: 0 } };
+  const entries = arena.entries?.length || 0;
+  return { arena, D, res: { wood: START.wood, stone: START.stone, gold: START.gold, food: START.food }, buildings: [], units: [],
+    waveN: 0, waveT: FIRST_WAVE, pending: 0, spawnT: 0, spawnK: 0, leader: null, time: 0, castle: null, portal: null,
+    sources: [-1], nextSources: waveSources(1, entries),
+    stats: { gathered: { wood: 0, stone: 0, gold: 0, food: 0 }, built: 0, trained: 0, lost: 0 } };
 }
 export const canAfford = (K, cost) => RES.every((r) => (K.res[r] || 0) >= (cost[r] || 0));
 export function spend(K, cost) {
@@ -77,6 +87,7 @@ export function addBuilding(K, type, i0, j0, make, done = false) {
   arena.occupy(def.size, i0, j0, b);
   b.solid = arena.addSolid({ x: c.x, z: c.z, r: b.reach });
   K.buildings.push(b);
+  if (done) farmReady(K, b);
   return b;
 }
 export function canPlaceBuilding(K, type, i0, j0) { return K.arena.canPlace(BUILDINGS[type].size, i0, j0); }
@@ -85,10 +96,13 @@ export function placeBuilding(K, type, i0, j0, make) {
   if (!spend(K, BUILDINGS[type].cost)) return 'cost';
   return addBuilding(K, type, i0, j0, make, false);
 }
+// fazenda pronta vira fonte de comida (nó sem célula própria, não esgota)
+function farmReady(K, b) { if (b.def.farm && !b.kNode) b.kNode = K.arena.addFarmNode(b); }
 export function removeBuilding(K, b) {
   const k = K.buildings.indexOf(b);
   if (k < 0) return;
   K.buildings.splice(k, 1);
+  if (b.kNode) { K.arena.removeNode(b.kNode); b.kNode = null; }
   K.arena.release(b.def.size, b.i0, b.j0);
   K.arena.removeSolid(b.solid);
 }
@@ -103,7 +117,7 @@ export function tickConstruction(K, dt, onDone) {
     const dp = Math.min(1 - b.progress, dt / b.def.time * constructionRate(n));
     b.progress += dp;
     b.hp = Math.min(b.maxHp, b.hp + dp * b.maxHp * 0.9);
-    if (b.progress >= 1 - 1e-9) { b.progress = 1; b.done = true; K.stats.built++; onDone?.(b); }
+    if (b.progress >= 1 - 1e-9) { b.progress = 1; b.done = true; K.stats.built++; farmReady(K, b); onDone?.(b); }
   }
 }
 
@@ -163,7 +177,7 @@ export function workerStep(K, w, dt) {
   if (node && (node.amount <= 0 || !K.arena.nodes.includes(node))) node = t.node = null;
   const full = w.carry >= GATHER.carry - 1e-6;
   const wrongLoad = w.carry > 0 && w.carryRes !== t.res;
-  if (!node && !full && !wrongLoad) node = t.node = K.arena.nearestNode(t.res, w.pos.x, w.pos.z, 16);
+  if (!node && !full && !wrongLoad) node = t.node = K.arena.nearestNode(t.res, w.pos.x, w.pos.z, 16, w);
   if (full || wrongLoad || t.drop || (!node && w.carry > 0)) {
     const drop = nearestDrop(K, w.pos);
     if (!drop) { w.task = null; return 'idle'; }
@@ -175,7 +189,8 @@ export function workerStep(K, w, dt) {
   }
   if (!node) { w.task = null; return 'idle'; }
   if (flat(w.pos, node) - node.r > REACH) { w.goTo(node.x, node.z, dt); return 'move'; }
-  const take = Math.min(GATHER[node.res] * dt * (w.rate || 1), node.amount, GATHER.carry - w.carry);
+  if (node.farm) node.user = w;
+  const take = Math.min(GATHER[node.res] * dt * (w.rate || 1) * (node.rate || 1), node.amount, GATHER.carry - w.carry);
   node.amount -= take;
   w.carry += take;
   w.carryRes = node.res;
@@ -184,6 +199,7 @@ export function workerStep(K, w, dt) {
 }
 // depois de erguer um depósito ou o castelo, o aldeão já começa a coletar o recurso mais perto
 function afterBuild(K, w, b) {
+  if (b?.kNode && !b.dead && !K.arena.farmTaken(b.kNode, w)) return { type: 'gather', node: b.kNode, res: 'food' };
   if (!b || b.dead || !b.def?.drop) return null;
   let best = null, bd = 14;
   for (const n of K.arena.nodes) { const d = flat(n, w.pos); if (d < bd) { bd = d; best = n; } }
@@ -197,6 +213,10 @@ export function tickWaves(K, dt, spawn) {
     K.pending += waveSize(K.waveN, K.D);
     K.leader = waveLeaderFor(K.waveN);
     K.waveT += waveInterval(K.waveN);
+    const entries = K.arena.entries?.length || 0;
+    K.sources = waveSources(K.waveN, entries);
+    K.nextSources = waveSources(K.waveN + 1, entries);
+    K.spawnK = 0;
     K.onWave?.(K.waveN);
   }
   if (K.pending > 0) {
@@ -205,7 +225,7 @@ export function tickWaves(K, dt, spawn) {
       const leader = K.pending === 1 ? K.leader : null;
       K.pending--;
       K.spawnT = 0.55;
-      spawn(K.waveN, leader);
+      spawn(K.waveN, leader, leader ? -1 : K.sources[K.spawnK++ % K.sources.length]);
     }
   }
 }
@@ -221,6 +241,7 @@ export const ICONS = {
   wood: svg('<rect x="2.5" y="11" width="16" height="6" rx="3" fill="#b06d32" stroke="#3b2414" stroke-width="1.6"/><rect x="5.5" y="5.5" width="16" height="6" rx="3" fill="#c7843f" stroke="#3b2414" stroke-width="1.6"/><circle cx="18.5" cy="8.5" r="2.4" fill="#f0cf96" stroke="#3b2414" stroke-width="1.3"/>'),
   stone: svg('<path d="M3 17l3-8 6-4 6 3 3 9-6 3H8z" fill="#aeb4bd" stroke="#2e3440" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 11l4-2 3 2" fill="none" stroke="#e7ebf0" stroke-width="1.4" stroke-linecap="round"/>'),
   gold: svg('<circle cx="12" cy="12" r="8.5" fill="#ffd23a" stroke="#6a4300" stroke-width="1.7"/><circle cx="12" cy="12" r="5" fill="none" stroke="#c98a12" stroke-width="1.5"/><path d="M9 8.5a5 5 0 0 1 3-1.2" stroke="#fff6c4" stroke-width="1.5" fill="none" stroke-linecap="round"/>'),
+  food: svg('<path d="M12 7.5c-1-3 1-5 3.5-5.2-.3 2.4-1.5 4-3.5 5.2z" fill="#6fc24a" stroke="#1f3d14" stroke-width="1.3" stroke-linejoin="round"/><path d="M12 8.2c-4.5-2.6-9 .6-8 6 .8 4.6 4.6 7.6 8 6.2 3.4 1.4 7.2-1.6 8-6.2 1-5.4-3.5-8.6-8-6z" fill="#e0453a" stroke="#4a1210" stroke-width="1.6" stroke-linejoin="round"/><path d="M7.5 11.5c.6-1 1.6-1.6 2.6-1.7" stroke="#ffc2b8" stroke-width="1.5" fill="none" stroke-linecap="round"/>'),
   pop: svg('<circle cx="12" cy="7.5" r="4" fill="#9fd0ff" stroke="#14284a" stroke-width="1.6"/><path d="M4.5 21c0-5 3.4-8 7.5-8s7.5 3 7.5 8z" fill="#5b9bf0" stroke="#14284a" stroke-width="1.6" stroke-linejoin="round"/>'),
   time: svg('<circle cx="12" cy="13" r="8" fill="#e8f2ff" stroke="#14284a" stroke-width="1.7"/><path d="M12 8.5V13l3 2" fill="none" stroke="#14284a" stroke-width="1.8" stroke-linecap="round"/>'),
 };
@@ -380,12 +401,12 @@ function defineClasses() {
       this.state = state;
       const load = this.carry > 0.5;
       if (this.load.visible !== load) this.load.visible = load;
-      if (load) this.load.material.color.setHex(this.carryRes === 'gold' ? 0xffd23a : this.carryRes === 'stone' ? 0xaeb4bd : 0xb06d32);
+      if (load) this.load.material.color.setHex(this.carryRes === 'gold' ? 0xffd23a : this.carryRes === 'stone' ? 0xaeb4bd : this.carryRes === 'food' ? 0xe0453a : 0xb06d32);
       if (state === 'gather' || state === 'build') {
         const target = state === 'build' ? this.task?.site?.pos : this.task?.node;
         if (target) this.face(target, dt);
         if (this.chopT <= 0) {
-          const name = state === 'build' ? 'Interact' : this.task?.res === 'wood' ? '1H_Melee_Attack_Chop' : '2H_Melee_Attack_Chop';
+          const name = state === 'build' || this.task?.res === 'food' ? 'Interact' : this.task?.res === 'wood' ? '1H_Melee_Attack_Chop' : '2H_Melee_Attack_Chop';
           if (has(this, name)) this.once(name, 1.1);
           this.chopT = 1.05;
         }
@@ -581,8 +602,13 @@ function stopKingdom() {
   if (!R) return;
   cancelPlacing();
   R.root.removeFromParent();
-  R.root.traverse((o) => { if (o.geometry && !o.geometry.userData?.shared && o.parent === R.root && o.isMesh) o.geometry.dispose(); });
+  R.root.traverse((o) => {   // só o que o cenário do mapa criou (as peças dos modelos são compartilhadas)
+    if (!o.isMesh) return;
+    if (o.geometry.userData?.kOwn) o.geometry.dispose();
+    if (o.material.userData?.kOwn) o.material.dispose();
+  });
   for (const r of R.rings) r.removeFromParent();
+  for (const a of R.alerts || []) a.remove();
   R.flag?.removeFromParent();
   R.ui?.remove();
   R.waveChip?.remove();
@@ -612,7 +638,7 @@ function endKingdom(won) {
   const chip = (icon, text, tip) => `<span class="end-chip" tabindex="0" data-tip="${esc(tip)}" aria-label="${esc(tip)}"><i aria-hidden="true">${icon}</i>${text}</span>`;
   $('overlayStars').innerHTML = '';
   $('overlayStats').innerHTML = `<div class="k-end">${chip('⏱', clock(K.time), 'Tempo de partida')}${chip('☠', K.waveN, 'Ondas enfrentadas')}${chip('⚔', game.kills, 'Esqueletos derrotados')}`
-    + `${chip(ICONS.wood, Math.round(g.wood), 'Madeira coletada')}${chip(ICONS.stone, Math.round(g.stone), 'Pedra coletada')}${chip(ICONS.gold, Math.round(g.gold), 'Ouro coletado')}`
+    + `${chip(ICONS.wood, Math.round(g.wood), 'Madeira coletada')}${chip(ICONS.stone, Math.round(g.stone), 'Pedra coletada')}${chip(ICONS.gold, Math.round(g.gold), 'Ouro coletado')}${chip(ICONS.food, Math.round(g.food), 'Comida coletada')}`
     + `${chip('⌂', K.stats.built, 'Construções erguidas')}${chip('⚒', K.stats.trained, 'Unidades treinadas')}</div>`;
   $('overlayNext').innerHTML = '<button type="button" class="k-menu-btn">Menu</button>';
   $('overlayNext').querySelector('button').onclick = () => G.startGame('menu');
@@ -706,17 +732,30 @@ function waveType(n, leader) {
   return type === 'Crossbow' || type === 'Mage' ? 'Warrior' : type;   // atiradores parados ficam na guarda do portal
 }
 
-function spawnSkeletonAt(type, p, boss = false) {
+function spawnSkeletonAt(type, p, boss = false, src = -1) {
   const s = new G.Skeleton(type, p, boss);
+  const entry = src >= 0 ? K.arena.entries[src] : null;
+  if (entry) {
+    // sai da cova da borda: um pouco espalhado, sempre em chão andável
+    for (let k = 0; k < 8; k++) {
+      const a = Math.random() * Math.PI * 2, d = Math.random() * 2.4;
+      s.pos.set(entry.x + Math.cos(a) * d, 0, entry.z + Math.sin(a) * d);
+      if (K.arena.walkable(s.pos.x, s.pos.z)) break;
+      s.pos.set(entry.x, 0, entry.z);
+    }
+    s.root.rotation.y = Math.atan2(K.castle.pos.x - entry.x, K.castle.pos.z - entry.z);
+    G.poof?.(s.pos, 0.8);
+    return s;
+  }
   const a = Math.PI * (0.5 + Math.random()), at = K.portal.home;   // nasce do lado do castelo
   s.pos.set(at.x + Math.cos(a) * 3.6, 0, at.z + Math.sin(a) * 3.6);
   s.root.rotation.y = -Math.PI / 2;
   return s;
 }
-function spawnWave(n, leader) {
+function spawnWave(n, leader, src = -1) {
   if (!K.portal || K.portal.dead) return;
   const type = waveType(n, leader);
-  spawnSkeletonAt(type, wavePhase(n), !!leader && n % 6 === 0);
+  spawnSkeletonAt(type, wavePhase(n), !!leader && n % 6 === 0, src);
 }
 
 // guarda do portal: alguns esqueletos ficam perto dele e só saem atrás de quem chega
@@ -775,10 +814,11 @@ function cameraFrame(real) {
   placeCamera();
   updateRings(real);
   updateGhost();
+  updateAlerts();
   R.uiT -= real;
   if (R.uiT <= 0) { R.uiT = 0.12; updateUI(); }
   R.mapT -= real;
-  if (R.mapT <= 0) { R.mapT = 0.2; drawMinimap(); }
+  if (R.mapT <= 0) { R.mapT = K.waveT < WARN_T ? 0.1 : 0.2; drawMinimap(); }
 }
 
 // ---------- seleção ----------
@@ -966,6 +1006,16 @@ function buildUI() {
   R.panel.innerHTML = '<canvas class="k-map" width="224" height="160" aria-label="Mapa"></canvas><div class="k-sel"></div><div class="k-cmds"></div>';
   document.body.appendChild(R.panel);
   R.map = R.panel.querySelector('.k-map');
+  R.mapBg = mapBackground();
+  // aviso de onda: um ícone por origem (portal e covas) na borda da tela, apontando para ela
+  R.alerts = [-1, ...K.arena.entries.map((_, i) => i)].map((src) => {
+    const a = el('div', 'k-alert', '<i></i><span>☠</span>');
+    a.hidden = true;
+    a.dataset.src = src;
+    a.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(a);
+    return a;
+  });
   R.selBox = R.panel.querySelector('.k-sel');
   R.cmds = R.panel.querySelector('.k-cmds');
   R.box = el('div', 'k-box');
@@ -1182,21 +1232,79 @@ function selectIdleWorker() {
   R.cam.x = w.pos.x; R.cam.z = w.pos.z + 2;
 }
 
+// ---------- aviso de onda: ícone na borda da tela apontando para a origem; cova brilha ----------
+function updateAlerts() {
+  const warn = warnedSources(), t = performance.now() / 1000;
+  const glows = R.root.userData.entryGlows || [];
+  glows.forEach((g, i) => g.scale.setScalar(warn.includes(i) ? 1 + 0.25 * Math.sin(t * 7) : 1));
+  const m = 46, top = 96, bottom = innerHeight - 200;
+  for (const a of R.alerts || []) {
+    const src = Number(a.dataset.src);
+    if (!warn.includes(src)) { if (!a.hidden) a.hidden = true; continue; }
+    const p = sourceAt(src), sp = screenOf({ x: p.x, y: 0, z: p.z }, 2);
+    let x = sp.x, y = sp.y;
+    if (!sp.front) { x = innerWidth - x; y = bottom; }
+    const inside = sp.front && x > m && x < innerWidth - m && y > top && y < bottom;
+    const cx = innerWidth / 2, cy = (top + bottom) / 2;
+    const ang = Math.atan2(y - cy, x - cx);
+    if (!inside) {   // empurra para a borda na direção da origem
+      const k = Math.min((innerWidth / 2 - m) / Math.abs(Math.cos(ang) || 1e-6), ((bottom - top) / 2) / Math.abs(Math.sin(ang) || 1e-6));
+      x = cx + Math.cos(ang) * k; y = cy + Math.sin(ang) * k;
+    }
+    a.hidden = false;
+    a.classList.toggle('edge', !inside);
+    a.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px)`;
+    a.firstChild.style.transform = `rotate(${inside ? 90 : (ang * 180 / Math.PI).toFixed(0)}deg)`;
+  }
+}
+
 // ---------- minimapa ----------
+const WARN_T = 25;   // segundos de aviso antes da onda: setas na borda da tela, covas e minimapa pulsando
+const warnedSources = () => (K && !G.game.over && K.waveT < WARN_T ? K.nextSources : []);
+const sourceAt = (src) => (src < 0 ? K.portal?.home || K.arena.portalAt : K.arena.entries[src]);
+// fundo do minimapa desenhado uma vez: grama → ermo, estrada, água, pontes, mata e rochedos
+function mapBackground() {
+  const a = K.arena, cv = document.createElement('canvas');
+  cv.width = R.map.width; cv.height = R.map.height;
+  const ctx = cv.getContext('2d'), cw = cv.width / a.cols, ch = cv.height / a.rows;
+  const mix = (p, q, t) => `rgb(${p.map((v, k) => Math.round(v + (q[k] - v) * t)).join()})`;
+  const COL = { grass: [90, 165, 47], dead: [110, 97, 82], road: [201, 164, 102], water: [63, 143, 208], murky: [59, 79, 90], bridge: [160, 112, 58],
+    ford: [127, 196, 224], forest: [46, 95, 34], cliff: [138, 133, 126], darkCliff: [76, 69, 82] };
+  for (let j = 0; j < a.rows; j++) for (let i = 0; i < a.cols; i++) {
+    const k = a.idx(i, j), x = a.cellX(i), z = a.cellZ(j), g = a.gloom(x, z), t = a.ground[k];
+    ctx.fillStyle = t === TERRAIN.WATER ? mix(COL.water, COL.murky, g * 0.7) : t === TERRAIN.BRIDGE ? mix(COL.bridge, COL.bridge, 0)
+      : t === TERRAIN.FORD ? mix(COL.ford, COL.ford, 0) : t === TERRAIN.FOREST ? mix(COL.forest, COL.darkCliff, g * 0.6)
+      : t === TERRAIN.CLIFF ? mix(COL.cliff, COL.darkCliff, g) : a.road[k] ? mix(COL.road, COL.dead, g * 0.6) : mix(COL.grass, COL.dead, g);
+    ctx.fillRect(Math.floor(i * cw), Math.floor(j * ch), Math.ceil(cw), Math.ceil(ch));
+  }
+  return cv;
+}
 function drawMinimap() {
   const cv = R.map, ctx = cv.getContext('2d');
   const sx = cv.width / ARENA.W, sz = cv.height / ARENA.H;
   const X = (x) => (x + ARENA.W / 2) * sx, Z = (z) => (z + ARENA.H / 2) * sz;
-  ctx.fillStyle = '#5aa52f';
-  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(R.mapBg, 0, 0);
   for (const n of K.arena.nodes) {
-    ctx.fillStyle = n.res === 'wood' ? '#2f6f22' : n.res === 'stone' ? '#c4c9d0' : '#ffd23a';
+    if (n.farm) continue;
+    ctx.fillStyle = n.res === 'wood' ? '#1f5a17' : n.res === 'stone' ? '#c4c9d0' : n.res === 'food' ? '#ff5a6a' : '#ffd23a';
     const s = n.res === 'wood' ? 2.4 : 3.6;
     ctx.fillRect(X(n.x) - s / 2, Z(n.z) - s / 2, s, s);
   }
+  // covas de ossos; a origem da próxima onda pulsa em vermelho
+  const warn = warnedSources(), pulse = 0.5 + 0.5 * Math.sin(performance.now() / 160);
+  K.arena.entries.forEach((e, i) => {
+    ctx.fillStyle = '#7a3fd1';
+    ctx.beginPath(); ctx.arc(X(e.x), Z(e.z), 3, 0, 7); ctx.fill();
+  });
+  for (const src of warn) {
+    const p = sourceAt(src);
+    ctx.strokeStyle = `rgba(255, 80, 60, ${0.5 + 0.5 * pulse})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(X(p.x), Z(p.z), 6 + pulse * 4, 0, 7); ctx.stroke();
+  }
   for (const b of K.buildings) {
     const w = b.def.size * ARENA.CELL * sx;
-    ctx.fillStyle = b.done ? '#3d7be0' : '#9cc2ff';
+    ctx.fillStyle = b.def.farm ? (b.done ? '#d9b44a' : '#efd98f') : b.done ? '#3d7be0' : '#9cc2ff';
     ctx.fillRect(X(b.pos.x) - w / 2, Z(b.pos.z) - w / 2, w, w);
   }
   for (const u of G.units) {
@@ -1356,6 +1464,6 @@ function onKey(e) {
 // main.js chama estes três enquanto o modo está ativo (game.realm)
 const realm = { tick, camera: cameraFrame, stop: stopKingdom, get state() { return K; } };
 // atalhos para inspeção no console e nas capturas automáticas (não fazem parte da interface)
-export const kingdomDebug = { get K() { return K; }, get R() { return R; }, get game() { return G.game; },
+export const kingdomDebug = { get K() { return K; }, get R() { return R; }, get game() { return G.game; }, get controls() { return G.controls; }, get renderer() { return G.renderer; },
   build(type, x, z, done = true) { const { i0, j0 } = K.arena.snap(BUILDINGS[type].size, x, z); const b = addBuilding(K, type, i0, j0, (t) => new Building(t), done); if (!done) b.startSite(); return b; },
   unit(kind, x, z) { const u = kind === 'worker' ? new Worker() : new Soldier(kind); u.pos.set(x, 0, z); if (u.anchor) u.anchor.copy(u.pos); u.kKind = kind; K.units.push(u); return u; } };
