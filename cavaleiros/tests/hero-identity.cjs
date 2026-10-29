@@ -57,4 +57,25 @@ for (const a of palettes) for (const b of palettes) {
   assert.ok(gap > 150, `${a.id} e ${b.id} têm paletas parecidas demais (${gap.toFixed(0)})`);
 }
 
+// Ladinos (7 heróis no mesmo boneco): a roupa principal sozinha precisa se afastar, e o conjunto
+// (túnica + gola + mangas + calça) também; antes todos ficavam no verde-escuro/preto do atlas
+const rogues = palettes.filter((h) => h.model === 'Rogue');
+assert.equal(rogues.length, 7, 'sete heróis no modelo do ladino');
+const outfitOf = (h) => {
+  const body = h.paint.Rogue_Body, arm = h.paint.Rogue_ArmLeft, leg = h.paint.Rogue_LegLeft;
+  assert.ok(body.amount >= 0.85 && body.cells?.['1,1'], `${h.id}: roupa com tinta forte e gola/acabamento próprio`);
+  return [body.tint, body.cells['1,1'], arm.tint, leg.tint];
+};
+for (const a of rogues) for (const b of rogues) {
+  if (a.id >= b.id) continue;
+  const [oa, ob] = [outfitOf(a), outfitOf(b)];
+  const main = dist(oa[0], ob[0]), whole = oa.reduce((s, c, i) => s + dist(c, ob[i]), 0);
+  assert.ok(main > 70, `${a.id} e ${b.id}: roupa principal parecida demais (${main.toFixed(0)})`);
+  assert.ok(whole > 260, `${a.id} e ${b.id}: conjunto da roupa parecido demais (${whole.toFixed(0)})`);
+}
+// nenhum ladino com a túnica quase preta: a roupa base do atlas não pode dominar
+const lum = (c) => { const [r, g, b] = hex(c); return 0.3 * r + 0.59 * g + 0.11 * b; };
+const darkest = rogues.filter((h) => lum(h.paint.Rogue_Body.tint) < 60).map((h) => h.id);
+assert.deepEqual(darkest, ['assassin'], 'só o Assassino veste couro escuro');
+
 console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; 20 paletas distintas');

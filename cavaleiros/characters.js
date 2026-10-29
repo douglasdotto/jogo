@@ -14,14 +14,13 @@ export const CHARACTERS = [
     shape: silhouette('Rogue', { torso: 0.96, arms: 0.94, legs: 0.97, height: 1.03, depth: 0.94 }),
     hide: ['Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable', 'Rogue_Cape'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }, { from: 'Mage', part: '2H_Staff' }],
-    paint: {
-      Rogue_Body: { tint: '#9b7a4a', amount: 0.55 }, Rogue_ArmLeft: { tint: '#9b7a4a', amount: 0.55 }, Rogue_ArmRight: { tint: '#9b7a4a', amount: 0.55 },
-      Rogue_LegLeft: { hue: -40 }, Rogue_LegRight: { hue: -40 },
-      Mage_Cape: { tint: '#5fae3e', amount: 0.85 }, '2H_Staff': { tint: '#8a5a2e', amount: 0.6 },
+    paint: {   // túnica de musgo com gola de folha nova, mangas, cinto e botas de casca
+      ...rogueOutfit({ cloth: '#5a9a34', trim: '#d8f070', sleeves: '#7a5230', leather: '#7a5230', pants: '#46702a', boots: '#5a3a1e', gloves: '#7a5230' }),
+      Mage_Cape: { tint: '#4a9a40', amount: 0.85, base: 0.6 }, '2H_Staff': { tint: '#8a5a2e', amount: 0.6 },
       Rogue_Head: { face: { skin: '#c8946a', hair: '#6a9a2a', eyes: '#8ff060' } },   // cabelo de musgo e olhos de folha
     },
     extras: [
-      { type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }, { type: 'leafMantle', bone: 'chest' },
+      { type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }, { type: 'leafMantle', bone: 'chest' }, { type: 'leafSkirt', bone: 'hips' },
       { type: 'facePaint', bone: 'head', style: 'dots', color: 0x7fd040 }, { type: 'motes', bone: 'root', color: 0xd8ff6a, n: 5, size: 0.045 },
     ],
   },
@@ -99,13 +98,13 @@ export const CHARACTERS = [
     shape: silhouette('Rogue', { torso: 0.92, arms: 0.93, legs: 0.98, height: 1.05, depth: 0.91 }),
     hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
     add: [{ from: 'Barbarian', part: 'Barbarian_Cape' }],
-    paint: {
-      Rogue_Body: { tint: '#59477c', amount: 0.82 }, Rogue_ArmLeft: { tint: '#59477c', amount: 0.7 }, Rogue_ArmRight: { tint: '#59477c', amount: 0.7 },
-      Rogue_LegLeft: { tint: '#33284e', amount: 0.78 }, Rogue_LegRight: { tint: '#33284e', amount: 0.78 }, Barbarian_Cape: { tint: '#bd5cbb', amount: 0.78 },
+    paint: {   // roupa de trovador em blocos: gibão amarelo, mangas vermelhas, gola e calça roxas
+      ...rogueOutfit({ cloth: '#f0c028', trim: '#8a3ac8', sleeves: '#e0303c', leather: '#7a4a24', pants: '#7a34b0', boots: '#b02a2a', gloves: '#f0c028', metal: '#ffd84a' }),
+      Barbarian_Cape: { tint: '#d8283a', amount: 0.85 },
       Rogue_Head: { face: { skin: '#f0c8a8', hair: '#f0b040', eyes: '#b070e0' } },   // cachos loiros e olhos violeta
     },
     extras: [
-      { type: 'lute', bone: 'handslotr' }, { type: 'travelHat', bone: 'head' }, { type: 'feather', bone: 'head', color: 0xffd676, y: 1.2 }, { type: 'luteStrap', bone: 'chest' },
+      { type: 'lute', bone: 'chest', back: true }, { type: 'travelHat', bone: 'head', color: 0x7a34b0, band: 0xf0c028 }, { type: 'feather', bone: 'head', color: 0xff3a3a, y: 1.2 }, { type: 'luteStrap', bone: 'chest', color: 0x8a3ac8 },
       { type: 'mustache', bone: 'head', color: 0xc8902a, curl: 0.65 }, { type: 'brows', bone: 'head', color: 0xc8902a, angle: -0.1 },
     ],
   },
@@ -128,15 +127,16 @@ export const CHARACTERS = [
     shape: silhouette('Rogue', { torso: 0.93, arms: 0.93, legs: 0.97, height: 1.06, depth: 0.93 }),
     hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }, { from: 'Mage', part: '2H_Staff', bone: 'handslotr', rot: [0, Math.PI, 0] }],
-    paint: {
-      Rogue_Body: { tint: '#394b83', amount: 0.82 }, Rogue_ArmLeft: { tint: '#394b83', amount: 0.76 }, Rogue_ArmRight: { tint: '#394b83', amount: 0.76 },
-      Rogue_LegLeft: { tint: '#232a50', amount: 0.82 }, Rogue_LegRight: { tint: '#232a50', amount: 0.82 }, Mage_Cape: { tint: '#526ed4', amount: 0.85 },
+    paint: {   // robe azul-celeste com acabamento dourado
+      ...rogueOutfit({ cloth: '#90d0ff', trim: '#f0c040', leather: '#f0c040', pants: '#4a80c8', boots: '#24407a', gloves: '#f0c040', metal: '#fff0a0' }),
+      Mage_Cape: { tint: '#6ab0f0', amount: 0.9, base: 0.85 },
       '2H_Staff': { tint: '#9ddcff', amount: 0.6 },
       Rogue_Head: { face: { skin: '#e8c8b0', hair: '#9cb8ff', eyes: '#5ad8ff' } },   // cabelo prateado-azul
     },
     extras: [
       { type: 'stars', bone: 'head', color: 0xa8d9ff }, { type: 'orb', bone: 'handslotl', color: 0xb9e8ff, glow: 0x5075ff },
       { type: 'monocle', bone: 'head' }, { type: 'runeRing', bone: 'root', color: 0x75b8ff },
+      { type: 'robeSkirt', bone: 'hips', color: 0x78c0f8, trim: 0xf0c040, height: 0.44, flare: 0.42 }, { type: 'gearPauldrons', bone: 'chest' },
     ],
   },
 ];
@@ -147,6 +147,17 @@ function silhouette(model, { torso = 1, arms = 1, legs = 1, height = 1, depth = 
     [`${model}_Body`]: [torso, height, depth],
     [`${model}_ArmLeft`]: [arms, height, depth], [`${model}_ArmRight`]: [arms, height, depth],
     [`${model}_LegLeft`]: [legs, height, depth], [`${model}_LegRight`]: [legs, height, depth],
+  };
+}
+
+// Ladino: o atlas separa pano (0,1), gola e acabamento (1,1), couro (5,0 e 6,0; luvas 5,2), fivela (3,0), calça (7,1)
+// e botas (3,2); pintar cada casa dá roupa de várias cores em vez de um tom só por cima do verde original
+function rogueOutfit({ cloth, trim = cloth, leather, metal, pants = leather, boots = leather, sleeves = cloth, gloves = leather }, amount = 0.92) {
+  const p = (tint, cells) => ({ tint, amount, base: 0.5, cells });
+  const arm = p(sleeves, { '1,1': trim, '5,0': leather, '5,2': gloves }), leg = p(pants, { '3,2': boots });
+  return {
+    Rogue_Body: p(cloth, { '1,1': trim, '5,0': leather, '6,0': leather, '7,1': pants, ...(metal && { '3,0': metal }) }),
+    Rogue_ArmLeft: arm, Rogue_ArmRight: arm, Rogue_LegLeft: leg, Rogue_LegRight: leg,
   };
 }
 
@@ -246,13 +257,17 @@ export function recolor(tex, op) {
   const tint = op.tint ? new THREE.Color(op.tint) : null;
   // face: { skin, hair, eyes, hood } troca só as casas do rosto, sem tingir o resto da cabeça
   const cells = Object.entries(op.face || {}).map(([part, color]) => [FACE_CELLS[part], new THREE.Color(color), FACE_MIX[part]]);
+  // cells: { 'x,y': cor } pinta casas inteiras do atlas (gola, couro, botas) com cor própria no lugar do tint geral;
+  // base (padrão 0.35) clareia o resultado: pano escuro do atlas tingido de cor clara não fica apagado
+  for (const [cell, color] of Object.entries(op.cells || {})) cells.push([cell.split(',').map(Number), new THREE.Color(color), [op.base ?? 0.35, op.amount ?? 0.9]]);
   const cw = w / 8, ch = h / 4;
   for (let i = 0; i < px.length; i += 4) {
     let r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
+    const p = i / 4, cx = Math.floor((p % w) / cw), cy = Math.floor(Math.floor(p / w) / ch);
+    const own = op.cells?.[`${cx},${cy}`];
     if (op.hue) [r, g, b] = rotateHue(r, g, b, op.hue);
-    if (tint) [r, g, b] = tintPixel(r, g, b, tint, op.amount ?? 0.7);
+    if (tint && !own) [r, g, b] = tintPixel(r, g, b, tint, op.amount ?? 0.7, op.base);
     if (cells.length) {
-      const p = i / 4, cx = Math.floor((p % w) / cw), cy = Math.floor(Math.floor(p / w) / ch);
       for (const [[x, y], color, [base, a]] of cells) if (cx === x && cy === y) [r, g, b] = tintPixel(r, g, b, color, a, base);
     }
     px[i] = r * 255; px[i + 1] = g * 255; px[i + 2] = b * 255;
@@ -296,6 +311,9 @@ const merged = (pieces) => mergeGeometries(pieces.map((g) => {
   for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(name)) g.deleteAttribute(name);
   return g;
 }));
+
+// aro (torus) que acompanha a borda de um cilindro aberto com thetaStart = start e thetaLength = span
+const rim = (radius, tube, start, span) => new THREE.TorusGeometry(radius, tube, 4, 14, span).rotateX(Math.PI / 2).rotateY(start + span - Math.PI / 2);
 
 const ACCESSORIES = {
   crown() {
@@ -587,7 +605,7 @@ const ACCESSORIES = {
     return g;
   },
   // pequena lira feita de formas simples, presa à mão do bardo
-  lute() {
+  lute({ back = false } = {}) {
     const g = new THREE.Group(), wood = lambert(0x9a5738), goldMat = lambert(0xffd676), string = lambert(0xfff0c2);
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), wood);
     body.scale.set(0.95, 1.05, 0.46); body.position.y = -0.02; g.add(body);
@@ -603,6 +621,7 @@ const ACCESSORIES = {
       g.add(peg);
     }
     g.position.set(0.05, 0.05, 0.06); g.rotation.z = -0.15;
+    if (back) { g.scale.setScalar(1.35); g.position.set(0.06, 0.02, -0.4); g.rotation.set(0, Math.PI, 0.65); }   // nas costas, cordas para fora
     return g;
   },
   // asas em três camadas de penas (rêmiges longas atrás, secundárias e coberteiras na frente),
@@ -925,6 +944,82 @@ const ACCESSORIES = {
     const g = new THREE.Group();
     g.add(new THREE.Mesh(merged([piece(new THREE.TorusGeometry(0.37, 0.045, 4, 16), [0, 0.12, 0.02], [Math.PI / 2, 0, 0], [1.05, 1, 1])]), lambert(color)));
     for (const [x, z, ry] of [[-0.24, 0.3, -0.6], [0, 0.39, 0], [0.24, 0.3, 0.6]]) g.add(ACCESSORIES.shuriken({ pos: [x, 0.12, z], rot: [0, ry, 0.3], size: 0.75 }));
+    return g;
+  },
+  // saia de folhas pendendo do quadril, abrindo para fora na ponta (druida)
+  leafSkirt({ colors = [0x3d8738, 0x71b64a, 0x9cc85c], n = 12, radius = 0.33, length = 0.36, tilt = 0.32, y = 0.1 } = {}) {
+    const groups = colors.map(() => []);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const geo = new THREE.SphereGeometry(0.1, 6, 4).scale(0.95, length / 0.2, 0.3).translate(0, -length / 2, 0).rotateX(-tilt).rotateY(a);
+      groups[i % colors.length].push(piece(geo, [Math.sin(a) * radius * 1.4, y, Math.cos(a) * radius * 1.1]));   // quadril oval
+    }
+    const g = new THREE.Group();
+    groups.forEach((parts, i) => g.add(new THREE.Mesh(merged(parts), lambert(colors[i]))));
+    return g;
+  },
+  // ombreiras douradas com engrenagens de lado e um mostrador de relógio no ombro esquerdo (cronomante)
+  gearPauldrons({ color = 0xf0c040, trim = 0x78c0f8, gear = 0xd8a830, face = 0xfdf6e0 } = {}) {
+    const g = ACCESSORIES.pauldrons({ color, trim, size: 0.95 });
+    const cogs = [];
+    for (const s of [-1, 1]) {
+      const at = [s * 0.56, 0.24, 0], spin = [0, 0, Math.PI / 2 - s * 0.35];   // de pé, virada para fora
+      cogs.push(piece(new THREE.CylinderGeometry(0.12, 0.12, 0.05, 12), at, spin));
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        cogs.push(piece(new THREE.BoxGeometry(0.06, 0.05, 0.06).translate(Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14).rotateY(a), at, spin));
+      }
+    }
+    g.add(new THREE.Mesh(merged(cogs), lambert(gear, { emissive: 0x5a3a00, emissiveIntensity: 0.3 })));
+    // mostrador: disco claro com dois ponteiros, preso à frente da engrenagem esquerda
+    const dial = new THREE.Group();
+    dial.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 14).rotateZ(Math.PI / 2), lambert(face)));
+    const hands = [piece(new THREE.BoxGeometry(0.012, 0.016, 0.075), [0.014, 0.012, 0.03]), piece(new THREE.BoxGeometry(0.012, 0.055, 0.014), [0.014, 0.03, 0])];
+    dial.add(new THREE.Mesh(merged(hands), lambert(0x1e2a50)));
+    dial.position.set(-0.6, 0.24, 0);
+    dial.rotation.y = Math.PI;
+    dial.rotation.z = 0.35;
+    g.add(dial);
+    return g;
+  },
+  // capuz baixo caído nas costas, abaixo do cabelo, com borda carmim (assassino)
+  cowl({ color = 0x2a1c22, lining = 0xc8102e } = {}) {
+    const g = new THREE.Group();
+    const hood = new THREE.SphereGeometry(0.27, 10, 6).scale(1.05, 0.62, 0.42);
+    g.add(new THREE.Mesh(merged([piece(hood, [0, -0.06, -0.4], [-0.2, 0, 0])]), lambert(color)));
+    g.add(new THREE.Mesh(merged([piece(new THREE.TorusGeometry(0.27, 0.035, 4, 14, Math.PI), [0, -0.05, -0.41], [-0.2, 0, 0], [1.05, 0.62, 1])]), lambert(lining)));
+    return g;
+  },
+  // faixas enroladas no antebraço (osso do antebraço: o eixo Y corre ao longo do braço)
+  armWraps({ color = 0xc8102e, radius = 0.13, n = 3 } = {}) {
+    const parts = [];
+    for (let i = 0; i < n; i++) parts.push(piece(new THREE.CylinderGeometry(radius, radius, 0.035, 8, 1, true), [0, 0.05 + i * 0.06, 0], [0.18 * (i % 2 ? 1 : -1), 0, 0]));
+    return new THREE.Mesh(merged(parts), lambert(color, { side: THREE.DoubleSide }));
+  },
+  // manto curto só nas costas e ombros: deixa a frente livre para os braços (besteiro)
+  capelet({ color = 0x4f9a44, trim = 0x6a4a2a, height = 0.42, y = 0.15 } = {}) {
+    const g = new THREE.Group();
+    const span = Math.PI * 0.95, start = Math.PI - span / 2;
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.5, height, 12, 1, true, start, span), lambert(color, { side: THREE.DoubleSide })));
+    g.add(new THREE.Mesh(rim(0.5, 0.035, start, span).translate(0, -height / 2, 0), lambert(trim)));
+    g.position.y = y;
+    return g;
+  },
+  // gola alta em pé, abrindo para fora atrás da cabeça, borda dourada e botões na frente (duelista)
+  highCollar({ color = 0x8a1830, trim = 0xf0c040 } = {}) {
+    const g = new THREE.Group(), span = Math.PI * 1.4, start = Math.PI - span / 2;
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.2, 14, 1, true, start, span).translate(0, 0.09, 0), lambert(color, { side: THREE.DoubleSide })));
+    const gold = [piece(rim(0.4, 0.025, start, span), [0, 0.19, 0])];
+    for (const [y, z] of [[0.03, 0.335], [-0.07, 0.35], [-0.17, 0.36], [-0.27, 0.385]]) gold.push(piece(new THREE.OctahedronGeometry(0.035), [0, y, z], [0, 0, 0], [1, 1, 0.6]));
+    g.add(new THREE.Mesh(merged(gold), lambert(trim, { emissive: 0x6a4a00, emissiveIntensity: 0.3 })));
+    return g;
+  },
+  // cinto largo de couro com fivela grande (osso do quadril: a barriga é oval, mais larga que funda)
+  wideBelt({ color = 0x2a1a14, buckle = 0xf0c040, y = 0.15 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.13, 16, 1, true).scale(1.32, 1, 1.02).translate(0, y, 0), lambert(color, { side: THREE.DoubleSide })));
+    const metal = [piece(new THREE.BoxGeometry(0.16, 0.14, 0.03), [0, y, 0.395]), piece(new THREE.BoxGeometry(0.035, 0.09, 0.03), [0, y, 0.41])];
+    g.add(new THREE.Mesh(merged(metal), lambert(buckle, { emissive: 0x6a4a00, emissiveIntensity: 0.3 })));
     return g;
   },
   // cristal de gelo flutuando na mão
