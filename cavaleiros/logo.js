@@ -1,9 +1,9 @@
 // Logo do jogo no estilo dos jogos de celular: letras gordas douradas com contorno grosso,
-// faixa azul com "AGE OF" e o mascote — um pêssego de coroa (o "popozito"), piscando.
+// faixa azul com "AGE OF" e o mascote — uma caveira gargalhando, vesga, com dente de ouro e coroa escorregando.
 // SVG embutido (não <img>) para usar a fonte Lilita One que a página já carrega.
 export function logoSVG() {
   const outline = '#2a1606';
-  return `<svg class="game-logo" viewBox="-30 0 740 270" role="img" aria-label="Age of Popozitos" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="game-logo" viewBox="-30 -26 740 296" role="img" aria-label="Age of Popozitos" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="lg-gold" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#fff6b0"/><stop offset=".45" stop-color="#ffd23f"/><stop offset="1" stop-color="#f08a1a"/>
@@ -11,8 +11,8 @@ export function logoSVG() {
     <linearGradient id="lg-ribbon" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#7fd0ff"/><stop offset="1" stop-color="#2a6fd6"/>
     </linearGradient>
-    <radialGradient id="lg-peach" cx=".38" cy=".32" r=".8">
-      <stop offset="0" stop-color="#ffd2b0"/><stop offset=".55" stop-color="#ff9a6a"/><stop offset="1" stop-color="#e5584a"/>
+    <radialGradient id="lg-bone" cx=".4" cy=".3" r=".85">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#f3ead6"/><stop offset="1" stop-color="#cdbf9e"/>
     </radialGradient>
   </defs>
 
@@ -39,22 +39,46 @@ export function logoSVG() {
     <rect x="-250" y="-74" width="500" height="16" rx="8" fill="#ffffff" opacity=".22"/>
   </g>
 
-  <!-- mascote: pêssego de coroa, piscando -->
-  <g transform="translate(56 178) rotate(-10)">
-    <ellipse cx="0" cy="40" rx="58" ry="12" fill="#000" opacity=".22"/>
-    <path d="M0 -40 C-36 -48 -64 -14 -58 16 C-52 44 -22 50 0 34 C22 50 52 44 58 16 C64 -14 36 -48 0 -40 Z"
-      fill="url(#lg-peach)" stroke="${outline}" stroke-width="7" stroke-linejoin="round"/>
-    <path d="M0 -36 C-6 -10 -6 14 0 32" fill="none" stroke="#c94a3e" stroke-width="5" stroke-linecap="round"/>
-    <path d="M6 -42 C14 -60 34 -62 42 -52 C30 -46 18 -44 6 -42 Z" fill="#6fcf5a" stroke="${outline}" stroke-width="5" stroke-linejoin="round"/>
-    <!-- carinha -->
-    <circle cx="-22" cy="2" r="7" fill="${outline}"/><circle cx="-24" cy="-1" r="2.4" fill="#fff"/>
-    <path d="M14 2 Q22 -6 30 2" fill="none" stroke="${outline}" stroke-width="5" stroke-linecap="round"/>
-    <ellipse cx="-34" cy="16" rx="8" ry="5" fill="#ff5d7a" opacity=".55"/><ellipse cx="34" cy="16" rx="8" ry="5" fill="#ff5d7a" opacity=".55"/>
-    <path d="M-10 16 Q0 26 12 16" fill="#7a1f2a" stroke="${outline}" stroke-width="4" stroke-linejoin="round"/>
-    <!-- coroinha torta -->
-    <g transform="translate(-14 -52) rotate(-18)">
-      <path d="M-18 8 L-22 -10 L-9 0 L0 -14 L9 0 L22 -10 L18 8 Z" fill="url(#lg-gold)" stroke="${outline}" stroke-width="5" stroke-linejoin="round"/>
+  <!-- mascote: caveira gargalhando, vesga, com dente de ouro e coroa escorregando -->
+  <g transform="translate(58 170) rotate(-12)">
+    <ellipse cx="4" cy="66" rx="54" ry="11" fill="#000" opacity=".22"/>
+    <!-- crânio -->
+    <path d="M2 -52 C-38 -52 -58 -24 -56 4 C-55 18 -48 26 -40 30 L-34 34 L36 34 L42 30 C50 26 58 16 58 2 C60 -26 40 -52 2 -52 Z"
+      fill="url(#lg-bone)" stroke="${outline}" stroke-width="7" stroke-linejoin="round"/>
+    <rect x="-34" y="-42" width="36" height="9" rx="4.5" fill="#ffffff" opacity=".7" transform="rotate(-14)"/>
+    <!-- sobrancelha de osso arqueada (cara de deboche) -->
+    <path d="M-40 -18 Q-26 -32 -8 -22" fill="none" stroke="${outline}" stroke-width="6" stroke-linecap="round"/>
+    <!-- órbitas desiguais, pupilas vesgas -->
+    <ellipse cx="-22" cy="0" rx="15" ry="16" fill="${outline}"/>
+    <ellipse cx="22" cy="4" rx="10" ry="11" fill="${outline}"/>
+    <circle cx="-17" cy="-3" r="5.5" fill="#ffe27a"/><circle cx="18" cy="8" r="3.5" fill="#ffe27a"/>
+    <!-- nariz -->
+    <path d="M0 14 L-6 24 L6 24 Z" fill="${outline}" stroke="${outline}" stroke-width="2" stroke-linejoin="round"/>
+    <!-- maxilar de cima com dentes (um de ouro, um faltando) -->
+    <path d="M-30 30 L30 30" stroke="${outline}" stroke-width="5" stroke-linecap="round"/>
+    <g stroke="${outline}" stroke-width="3" stroke-linejoin="round">
+      <rect x="-26" y="30" width="10" height="11" rx="2" fill="#fff8e6"/>
+      <rect x="-15" y="30" width="10" height="12" rx="2" fill="#fff8e6"/>
+      <rect x="6" y="30" width="10" height="11" rx="2" fill="url(#lg-gold)"/>
+      <rect x="17" y="30" width="9" height="9" rx="2" fill="#fff8e6"/>
     </g>
+    <!-- queixo caído: boca aberta na gargalhada -->
+    <path d="M-30 42 C-28 62 28 64 32 42 L22 46 C12 50 -12 50 -22 46 Z" fill="${outline}"/>
+    <path d="M-36 40 C-34 72 34 74 38 40 C34 46 30 48 26 48 C14 54 -14 54 -26 48 C-30 48 -34 46 -36 40 Z"
+      fill="url(#lg-bone)" stroke="${outline}" stroke-width="6" stroke-linejoin="round"/>
+    <g stroke="${outline}" stroke-width="3" stroke-linejoin="round" fill="#fff8e6">
+      <rect x="-20" y="45" width="9" height="8" rx="2"/><rect x="-6" y="47" width="9" height="8" rx="2"/><rect x="9" y="45" width="9" height="8" rx="2"/>
+    </g>
+    <!-- rachadura -->
+    <path d="M24 -48 L16 -36 L24 -30 L18 -22" fill="none" stroke="${outline}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- coroa escorregando -->
+    <g transform="translate(-20 -56) rotate(-28)">
+      <path d="M-22 9 L-26 -10 L-11 0 L0 -16 L11 0 L26 -10 L22 9 Z" fill="url(#lg-gold)" stroke="${outline}" stroke-width="5" stroke-linejoin="round"/>
+      <circle cx="0" cy="-16" r="3.8" fill="#ff5d7a" stroke="${outline}" stroke-width="2"/>
+    </g>
+    <!-- "HA!" saindo da gargalhada -->
+    <text x="62" y="-34" transform="rotate(14 62 -34)" font-family="'Lilita One', sans-serif" font-size="26" fill="#ffffff"
+      stroke="${outline}" stroke-width="6" paint-order="stroke" stroke-linejoin="round">HA!</text>
   </g>
 
   <!-- brilhos -->
