@@ -272,38 +272,44 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
   const draw = (current) => {
     const achievements = progress.achievements();
     const done = achievements.filter((a) => a.unlocked).length;
-    const tabs = [['oficina', 'Oficina'], ['maestria', 'Maestria'], ['conquistas', `Conquistas ${done}/${achievements.length}`]];
+    const tabs = [['oficina', 'Oficina', ''], ['maestria', 'Maestria', 'Cada herói ganha XP de maestria ao jogar. Bônus pequenos: no máximo +4% de vida e +4% de dano.'],
+      ['conquistas', `Conquistas ${done}/${achievements.length}`, '']];
     let body = '';
+    // Cartões curtos: ícone, nome, nível e custo; o efeito de cada melhoria aparece na dica.
     if (current === 'oficina') {
       body = `<div class="camp-shop">${UPGRADES.map((u) => {
         const lvl = progress.upgradeLevel(u.id), cost = progress.upgradeCost(u.id), max = u.costs.length;
         const pips = Array.from({ length: max }, (_, k) => `<i class="${k < lvl ? 'on' : ''}"></i>`).join('');
-        const label = cost == null ? 'No máximo' : `${GOLD.icon} ${cost}`;
-        return `<article class="shop-item${cost == null ? ' maxed' : ''}"><span class="shop-icon" aria-hidden="true">${u.icon}</span>
-          <div class="shop-copy"><b>${u.name}</b><p>${u.desc(Math.max(1, lvl))}</p>${cost != null && lvl ? `<small>Próximo nível: ${u.desc(lvl + 1)}</small>` : ''}<span class="shop-pips" aria-label="Nível ${lvl} de ${max}">${pips}</span></div>
-          <button type="button" class="shop-buy" data-buy="${u.id}"${cost == null || progress.gold < cost ? ' disabled' : ''} aria-label="${cost == null ? `${u.name}: no máximo` : `Comprar ${u.name} por ${cost} de ouro`}">${label}</button></article>`;
+        const label = cost == null ? 'Máx' : `${GOLD.icon} ${cost}`;
+        const effect = cost != null && lvl ? `Agora: ${u.desc(lvl)} Próximo nível: ${u.desc(lvl + 1)}` : u.desc(Math.max(1, lvl));
+        return `<article class="shop-item${cost == null ? ' maxed' : ''}" data-tip="${escapeProgressText(effect)}"><span class="shop-icon" aria-hidden="true">${u.icon}</span>
+          <div class="shop-copy"><b>${u.name}</b><span class="shop-pips" role="img" aria-label="Nível ${lvl} de ${max}">${pips}</span></div>
+          <button type="button" class="shop-buy" data-buy="${u.id}"${cost == null || progress.gold < cost ? ' disabled' : ''} aria-label="${escapeProgressText(`${cost == null ? `${u.name}: no máximo` : `Comprar ${u.name} por ${cost} de ouro`}. ${effect}`)}">${label}</button></article>`;
       }).join('')}</div>`;
     } else if (current === 'maestria') {
-      body = `<p class="camp-note">Cada herói ganha XP de maestria ao jogar. Os bônus são pequenos: no máximo +4% de vida e +4% de dano.</p>
-        <div class="camp-mastery">${variants.map((cfg) => {
+      body = `<div class="camp-mastery">${variants.map((cfg) => {
         const m = progress.mastery(cfg.id), pct = m.next ? Math.round((m.xp - m.from) / (m.next - m.from) * 100) : 100;
         const perks = MASTERY_PERKS.slice(1, m.level).map((p) => p.text).join(' · ') || 'Sem bônus ainda';
-        return `<div class="mastery-row mastery-${m.level}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="${escapeProgressText(perks)}" tabindex="0">
-          <img src="${cfg.portrait}" alt=""><span><b>${escapeProgressText(cfg.name)}</b><small>Maestria ${m.level}${m.next ? ` · ${m.xp}/${m.next} XP` : ' · máxima'}</small>
+        const tip = `Maestria ${m.level}${m.next ? ` · ${m.xp}/${m.next} XP` : ' · máxima'} · ${perks}`;
+        return `<div class="mastery-row mastery-${m.level}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="${escapeProgressText(tip)}" tabindex="0" aria-label="${escapeProgressText(`${cfg.name}: ${tip}`)}">
+          <img src="${cfg.portrait}" alt=""><span><b>${escapeProgressText(cfg.name)}</b><small>Nv ${m.level}</small>
           <span class="mastery-track" aria-hidden="true"><i style="width:${pct}%"></i></span></span></div>`;
       }).join('')}</div>`;
     } else {
-      body = `<div class="camp-achievements">${achievements.map((a) => `<div class="ach-item${a.unlocked ? ' done' : ''}">
-        <span class="ach-medal" aria-hidden="true">${a.icon}</span><span><b>${escapeProgressText(a.name)}</b><small>${escapeProgressText(a.desc)}</small>
-        ${a.goal && !a.unlocked ? `<span class="mastery-track" aria-hidden="true"><i style="width:${Math.round(a.progress / a.goal * 100)}%"></i></span><em>${a.progress}/${a.goal}</em>` : ''}</span>
-        <i class="ach-state">${a.unlocked ? '✓' : '🔒︎'}</i></div>`).join('')}</div>`;
+      // grade de medalhas: nome, requisito e progresso só na dica
+      body = `<div class="camp-achievements">${achievements.map((a) => {
+        const progressText = a.goal && !a.unlocked ? ` (${a.progress}/${a.goal})` : '';
+        const tip = `${a.name}: ${a.desc}${progressText}`;
+        return `<div class="ach-item${a.unlocked ? ' done' : ''}" data-tip="${escapeProgressText(tip)}" tabindex="0" role="img" aria-label="${escapeProgressText(`${tip}. ${a.unlocked ? 'Desbloqueada' : 'Bloqueada'}`)}">
+        <span class="ach-medal" aria-hidden="true">${a.icon}</span>${a.goal && !a.unlocked ? `<span class="mastery-track" aria-hidden="true"><i style="width:${Math.round(a.progress / a.goal * 100)}%"></i></span>` : ''}</div>`;
+      }).join('')}</div>`;
     }
     root.innerHTML = `<div class="camp-head">
         <button type="button" class="camp-back">← Menu</button>
-        <span class="camp-title"><span class="camp-crown" aria-hidden="true">⚒</span><span class="camp-title-copy"><small>ENTRE AS BATALHAS</small>Acampamento</span></span>
-        <span class="camp-gold" aria-label="${progress.gold} de ouro"><i aria-hidden="true">${GOLD.icon}</i><b>${progress.gold}</b><small>${GOLD.name}</small></span>
+        <span class="camp-title"><span class="camp-crown" aria-hidden="true">⚒</span>Acampamento</span>
+        <span class="camp-gold" aria-label="${progress.gold} de ouro"><i aria-hidden="true">${GOLD.icon}</i><b>${progress.gold}</b></span>
       </div>
-      <div class="camp-tabs" role="tablist">${tabs.map(([id, label]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="${id === current}">${label}</button>`).join('')}</div>
+      <div class="camp-tabs" role="tablist">${tabs.map(([id, label, tip]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="${id === current}"${tip ? ` data-tip="${tip}"` : ''}>${label}</button>`).join('')}</div>
       <section class="camp-panel" role="tabpanel">${body}</section>`;
     root.querySelector('.camp-back').onclick = onBack;
     for (const b of root.querySelectorAll('[data-tab]')) b.onclick = () => draw(b.dataset.tab);
