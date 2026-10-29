@@ -477,9 +477,10 @@ function saveAuto(id, on, slot = null) {
 // menu inicial: Campanha (missões com estrelas) ou Jornada completa (as 12 fases seguidas)
 const MODES = [
   { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
-  { name: 'Jornada completa', icon: '♛', desc: 'As 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
+  { name: 'Jornada', icon: '♛', desc: 'Jornada completa: as 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
   { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
 ];
+// Cartões do menu: nome e um número; a explicação de cada modo fica na dica e no aria-label.
 function showMenu() {
   pick.mode = 'mode';
   $('banner').style.opacity = 0;
@@ -487,25 +488,31 @@ function showMenu() {
   $('camp').classList.add('hidden');
   pick.options = MODES;
   $('pickTitle').textContent = 'Cavaleiros vs Esqueletos';
-  $('pickSub').textContent = 'Escolha o modo de jogo';
-  $('pickHint').textContent = 'Clique para escolher · ← → movem · Enter confirma';
+  $('pickSub').textContent = '';
+  $('pickHint').textContent = '← → · Enter';
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
   const records = Object.values(loadRecords());
-  const lines = [`★ ${totalStars()} / ${MISSIONS.length * 3} estrelas`,
-    records.some((r) => r.won) ? '♛ Jornada vencida!' : records.length ? `Recorde: fase ${Math.max(...records.map((r) => r.phase))}` : 'Sem recorde ainda',
-    `${GOLD.icon} ${progress.gold} · ${progress.achievements().filter((a) => a.unlocked).length} conquistas`];
+  const achievements = progress.achievements(), achieved = achievements.filter((a) => a.unlocked).length;
+  const best = records.length ? Math.max(...records.map((r) => r.phase)) : 0;
+  const lines = [`★ ${totalStars()}/${MISSIONS.length * 3}`,
+    records.some((r) => r.won) ? '♛ Vencida' : best ? `Fase ${best}` : '',
+    `${GOLD.icon} ${progress.gold} · ✦ ${achieved}/${achievements.length}`];
+  const spoken = [`${totalStars()} de ${MISSIONS.length * 3} estrelas`,
+    records.some((r) => r.won) ? 'Jornada vencida' : best ? `Recorde: fase ${best}` : 'Sem recorde ainda',
+    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas`];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = 'card diff mode';
     b.tabIndex = 0;
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', `${m.name}: ${m.desc}`);
+    b.setAttribute('aria-label', `${m.name}: ${m.desc} ${spoken[i]}.`);
+    b.setAttribute('data-tip', m.desc);
     b.style.setProperty('--c', m.color[0]);
     b.style.setProperty('--cd', m.color[1]);
     b.style.setProperty('--d', `${i * 90}ms`);
-    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${m.icon}</div><div class="ribbon">${m.name}</div><p>${m.desc}</p><div class="record">${lines[i]}</div>`;
+    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${m.icon}</div><div class="ribbon">${m.name}</div>${lines[i] ? `<div class="record">${lines[i]}</div>` : ''}`;
     b.onclick = () => confirmPick(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i);
@@ -568,25 +575,28 @@ function showDifficulty() {
   $('banner').style.opacity = 0;
   pick.options = DIFFICULTIES;
   const records = loadRecords(), m = game.mission;
-  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada completa';
-  $('pickSub').textContent = m ? `Objetivo: ${goalText(m.goal)} · escolha a dificuldade` : 'Escolha a dificuldade da aventura';
-  $('pickHint').textContent = 'Clique para escolher · ← → movem · Enter confirma · Esc volta';
+  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada';
+  $('pickSub').textContent = m ? `⚑ ${goalText(m.goal)}` : '';
+  $('pickHint').textContent = '← → · Enter · Esc';
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
+  // cartão: ícone, nome e o recorde da jornada; a descrição da dificuldade vai para a dica
   pick.cards = DIFFICULTIES.map((d, i) => {
     const r = m ? null : records[d.id];
-    const record = m ? `Fases ${m.from}–${m.to}` : r ? `${r.won ? '♛ Vitória!' : `Recorde: fase ${r.phase}`} · ${r.kills} abates` : 'Sem recorde ainda';
+    const record = m ? '' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
+    const spoken = m ? `Fases ${m.from}–${m.to}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
     const b = document.createElement('div');
     b.className = 'card diff';
     b.tabIndex = 0;
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', `${d.name}: ${d.desc} ${record}`);
+    b.setAttribute('aria-label', `${d.name}: ${d.desc} ${spoken}`);
+    b.setAttribute('data-tip', d.desc);
     b.style.setProperty('--c', d.color[0]);
     b.style.setProperty('--cd', d.color[1]);
     b.style.setProperty('--d', `${i * 90}ms`);
     b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${d.icon}</div><div class="ribbon">${d.name}</div>
-      <p>${d.desc}</p><div class="record${r?.won ? ' won' : ''}">${record}</div>`;
+      ${record ? `<div class="record${r?.won ? ' won' : ''}">${record}</div>` : ''}`;
     b.onclick = () => confirmPick(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i);

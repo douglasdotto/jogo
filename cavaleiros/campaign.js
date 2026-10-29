@@ -230,11 +230,14 @@ export function starTargetsFor(goal) {
   return ['1★ Concluir a missão', '2★ Sem quedas', '3★ Sem quedas e 50%+ de vida'];
 }
 
-const starRow = (n, size = '') => `<span class="stars ${size}">${[1, 2, 3].map((k) => `<i class="${k <= n ? 'on' : ''}">★</i>`).join('')}</span>`;
+const attr = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// `tips`: critério de cada estrela, mostrado como dica sob demanda
+const starRow = (n, size = '', tips = null) => `<span class="stars ${size}"${tips ? ` role="img" aria-label="${n} de 3 estrelas. ${attr(tips.join('. '))}"` : ''}>${[1, 2, 3].map((k) => `<i class="${k <= n ? 'on' : ''}"${tips ? ` data-tip="${attr(tips[k - 1])}"` : ''}>★</i>`).join('')}</span>`;
 // selo da melhor dificuldade vencida (inicial da dificuldade); brilha com algum desafio cumprido
-const medalSeal = (medal) => medal.best
-  ? `<span class="camp-seal seal-${medal.best.difficultyId}${medal.challenges.some((c) => c.done) ? ' challenge' : ''}" aria-hidden="true">${medal.best.difficultyName[0]}</span>`
+const medalSeal = (medal, tip = '') => medal.best
+  ? `<span class="camp-seal seal-${medal.best.difficultyId}${medal.challenges.some((c) => c.done) ? ' challenge' : ''}"${tip ? ` data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}"` : ' aria-hidden="true"'}>${medal.best.difficultyName[0]}</span>`
   : '';
+const BOSSES = ['King', 'Executioner', 'Lich', 'Golem'];
 
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
 export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null) {
@@ -248,16 +251,10 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
   const remainingLabel = `${remainingText} ${remainingStars === 1 ? 'restante' : 'restantes'}`;
   root.innerHTML = `
     <div class="camp-head">
-      <span class="camp-title"><span class="camp-crown" aria-hidden="true">♛</span><span class="camp-title-copy"><small>TRILHA DE ARENAS</small>Campanha</span></span>
-      <div class="camp-progress" role="progressbar" aria-label="Estrelas da campanha" aria-valuemin="0" aria-valuemax="${MISSIONS.length * 3}" aria-valuenow="${total}">
-        <span class="camp-progress-label">ESTRELAS</span>
-        <span class="camp-progress-track" aria-hidden="true"><i style="width:${Math.round(total / (MISSIONS.length * 3) * 100)}%"></i></span>
-        <span class="camp-progress-score"><b>${total}</b><span>/${MISSIONS.length * 3}</span><i aria-hidden="true">★</i></span>
-      </div>
-      <div class="camp-reward" aria-label="Todos os heróis estão disponíveis desde o início">
-        <span class="camp-reward-chest" aria-hidden="true">♜</span>
-        <span class="camp-reward-copy"><small>ELENCO LIVRE</small><b>Todos os heróis</b><em>Disponíveis desde o início</em></span>
-      </div>
+      <span class="camp-title"><span class="camp-crown" aria-hidden="true">♛</span>Campanha</span>
+      <span class="camp-progress" role="progressbar" aria-label="Estrelas da campanha" aria-valuemin="0" aria-valuemax="${MISSIONS.length * 3}" aria-valuenow="${total}">
+        <i aria-hidden="true">★</i><b>${total}</b><span>/${MISSIONS.length * 3}</span>
+      </span>
     </div>
     <div class="camp-body">
       <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 50 91 C 43 89, 40 86, 44 82 C 48 78, 54 75, 56 72 C 53 68, 45 65, 36 65 C 42 64, 50 59, 55 56 C 61 53, 67 45, 72 40 C 68 43, 62 45, 58 44 C 50 42, 39 39, 30 39 C 36 35, 48 29, 62 31 C 72 33, 81 44, 86 57 C 82 45, 70 36, 60 31 C 55 27, 50 22, 47 20 C 54 15, 62 10, 67 9" /></svg></div>
@@ -287,6 +284,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
     map.appendChild(b);
     return b;
   });
+  // Painel enxuto: nome, objetivo, estrelas e ameaças à vista; história, plano, trecho, medalha e recordes ficam nas dicas.
   function select(i, moveFocus = false, focusPlay = false) {
     sel = i;
     nodes.forEach((n, k) => {
@@ -301,27 +299,32 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
     const medal = missionMedal(m.id);
     const mapLabel = typeof biome === 'string' && biome.trim() ? biome.trim().toUpperCase() : 'MAPA ALEATÓRIO';
     announcement.textContent = `${i + 1}. ${m.name}. Objetivo: ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`;
-    const starTargets = starTargetsFor(m.goal);
     const showReplayButton = remainingStars && replayTargetIndex >= 0 && i !== replayTargetIndex;
+    const squad = `Fases ${m.from}–${m.to} · ${m.heroes} herói${m.heroes > 1 ? 's' : ''} no nível ${m.level}`;
+    const medalTip = medal.best ? `Vencida no ${medal.best.difficultyName}. Desafios opcionais: ${medal.challenges.map((c) => `${c.done ? '✓' : '○'} ${c.label}`).join(', ')}` : '';
+    const best = records.reduce((a, r) => (!a || r.seconds < a.seconds ? r : a), null);
+    const recordTip = `Seus melhores tempos: ${records.map((r) => `${r.difficultyName} ${r.time}`).join(' · ')}`;
+    const threatPhase = (t) => t.optional ? 'Possível · dificuldade alta' : t.possible ? `Pode surgir · fase ${t.phase}` : `Fase ${t.phase}`;
+    const completeTip = remainingStars
+      ? `Todas as arenas foram vencidas. ${replayTargetIndex >= 0 ? `${MISSIONS[replayTargetIndex].name} ainda pode render estrelas. ` : ''}${remainingLabel} para buscar.`
+      : `Todas as ${MISSIONS.length * 3} estrelas foram conquistadas.`;
     info.innerHTML = `
       <div class="camp-info-head">
-        <div class="camp-info-title">
-          <div class="medal big">${open ? m.icon : '\u{1F512}︎'}</div>
-          <div class="camp-ident"><div class="camp-arena-tag">ARENA ${String(i + 1).padStart(2, '0')} · ${mapLabel}</div><div class="camp-name">${m.name}</div></div>
+        <div class="medal big" aria-hidden="true">${open ? m.icon : '\u{1F512}︎'}</div>
+        <div class="camp-ident">
+          <div class="camp-arena-tag" data-tip="${attr(squad)}" tabindex="0" aria-label="Arena ${i + 1}, ${attr(mapLabel.toLowerCase())}. ${attr(squad)}">ARENA ${String(i + 1).padStart(2, '0')} · ${mapLabel}</div>
+          <div class="camp-name">${m.name}</div>
+          <p class="camp-desc" data-tip="${attr(`${m.chapter}. ${m.story}`)}" tabindex="0">${m.desc}</p>
         </div>
-        ${starRow(starsOf(m.id), 'big')}
       </div>
-      <p>${m.desc}</p>
-      <div class="camp-story"><span>${m.chapter}</span><p>${m.story}</p></div>
-      ${cleared ? `<div class="camp-complete"><b>${remainingStars ? 'Campanha concluída' : 'Campanha perfeita'}</b><span>${remainingStars ? 'Todas as arenas foram vencidas. Ainda há estrelas para buscar.' : `Todas as ${MISSIONS.length * 3} estrelas foram conquistadas. Todo o elenco estava disponível desde o início.`}</span>${remainingStars && replayTargetIndex >= 0 ? `<span class="camp-replay-target">${MISSIONS[replayTargetIndex].name} ainda pode render estrelas. ${remainingLabel} para buscar.</span>${showReplayButton ? '<button class="camp-replay-button" type="button">Ver missão recomendada</button>' : ''}` : ''}</div>` : ''}
-      <div class="camp-goal"><b>Objetivo</b>${goalText(m.goal)}</div>
-      ${records.length ? `<div class="camp-records" aria-label="Melhores tempos desta missão"><b>Seus melhores tempos</b><div class="camp-record-list">${records.map((record) => `<span>${record.difficultyName}<strong>${record.time}</strong></span>`).join('')}</div></div>` : ''}
-      ${threats.length ? `<div class="camp-threats" aria-label="Ameaças previstas"><b>Inimigos especiais</b><div class="camp-threat-grid">${threats.map((threat) => `<div class="camp-threat${threat.optional ? ' optional' : ''}${['King', 'Executioner', 'Lich', 'Golem'].includes(threat.id) ? ' boss' : ''}" title="${threat.detail}"><i aria-hidden="true">${threat.icon}</i><span><strong>${threat.name}</strong><small>${threat.optional ? 'Possível · dificuldade alta' : threat.possible ? `Pode surgir · fase ${threat.phase}` : `Fase ${threat.phase}`} · ${threat.detail}</small></span></div>`).join('')}</div></div>` : ''}
-      <div class="camp-tip"><b>Plano de batalha</b><span>${m.tip}</span></div>
-      ${open ? '' : `<div class="camp-unlock"><b>Como desbloquear</b><span>Conclua “${MISSIONS[i - 1].name}” com pelo menos uma estrela.</span></div>`}
-      <ul><li>Fases ${m.from}–${m.to}</li><li>Começa com ${m.heroes} herói${m.heroes > 1 ? 's' : ''} no nível ${m.level}</li></ul>
-      <div class="camp-goals"><b>Estrelas acumulativas</b>${starTargets.map((target) => `<span>${target}</span>`).join('')}</div>
-      <div class="camp-medals" aria-label="Medalha e desafios opcionais"><b>Medalha</b><span class="camp-medal-best">${medal.best ? `${medalSeal(medal)}Vencida no ${medal.best.difficultyName}` : 'Vença para ganhar a medalha da dificuldade'}</span><b>Desafios opcionais</b>${medal.challenges.map((c) => `<span class="${c.done ? 'done' : ''}">${c.done ? '✓' : '○'} ${c.label}</span>`).join('')}</div>
+      <div class="camp-score">${starRow(stars, 'big', starTargetsFor(m.goal))}${medalSeal(medal, medalTip)}${best ? `<span class="camp-record" data-tip="${attr(recordTip)}" tabindex="0" aria-label="${attr(recordTip)}"><i aria-hidden="true">⏱</i>${best.time}</span>` : ''}</div>
+      <div class="camp-goal" data-tip="${attr(m.tip)}" tabindex="0" aria-label="Objetivo: ${attr(goalText(m.goal))}. Plano de batalha: ${attr(m.tip)}"><i aria-hidden="true">⚑</i>${goalText(m.goal)}</div>
+      ${threats.length ? `<div class="camp-threats" role="list" aria-label="Inimigos especiais">${threats.map((threat) => {
+        const tip = `${threat.name} · ${threatPhase(threat)} · ${threat.detail}`;
+        return `<span role="listitem" class="camp-threat${threat.optional ? ' optional' : ''}${BOSSES.includes(threat.id) ? ' boss' : ''}" data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}">${threat.icon}</span>`;
+      }).join('')}</div>` : ''}
+      ${cleared ? `<div class="camp-complete" data-tip="${attr(completeTip)}" tabindex="0" aria-label="${attr(`${remainingStars ? 'Campanha concluída' : 'Campanha perfeita'}. ${completeTip}`)}"><b>${remainingStars ? 'Campanha concluída' : '♛ Campanha perfeita'}</b>${remainingStars ? `<span>★ ${remainingStars}</span>` : ''}</div>${showReplayButton ? `<button class="camp-replay-button" type="button" aria-label="Ver missão recomendada: ${attr(MISSIONS[replayTargetIndex].name)}">★ ${MISSIONS[replayTargetIndex].name}</button>` : ''}` : ''}
+      ${open ? '' : `<div class="camp-unlock" aria-label="Como desbloquear: conclua ${attr(MISSIONS[i - 1].name)} com pelo menos uma estrela"><i aria-hidden="true">\u{1F512}︎</i>${MISSIONS[i - 1].name}</div>`}
       <button class="camp-play" ${open ? '' : 'disabled'}>${open ? 'Batalhar' : 'Bloqueada'}</button>`;
     info.querySelector('.camp-play').onclick = play;
     const replayButton = info.querySelector('.camp-replay-button');

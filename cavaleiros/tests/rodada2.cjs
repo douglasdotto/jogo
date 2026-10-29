@@ -733,6 +733,11 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   assert.ok(info.innerHTML.includes('Fase 3 · '));   // ponte 2–4: o bombardeiro estreia dentro do trecho
   assert.ok(info.innerHTML.includes('Bombardeiro'));
   assert.ok(info.innerHTML.includes('Seus melhores tempos')&&info.innerHTML.includes('1:12'));
+  // painel enxuto: história, plano e descrições dos inimigos só em dicas; Batalhar continua no painel
+  const visible=info.innerHTML.replace(/\s(?:data-tip|aria-label)="[^"]*"/g,'');
+  for(const gone of ['Plano de batalha','Estrelas acumulativas','Inimigos especiais','Desafios opcionais','Capítulo','Bombardeiro'])assert.ok(!visible.includes(gone),`${gone} não fica à vista`);
+  assert.ok(info.innerHTML.includes('data-tip="1★ Concluir a missão"'),'critério de cada estrela na dica');
+  assert.ok(visible.includes('class="camp-play"'));
   context.document.activeElement=focusedNode;
   let prevented=false;keyHandler({key:'Enter',preventDefault(){prevented=true}});
   assert.equal(started[0].id,'ponte');assert.equal(prevented,true);
@@ -1182,7 +1187,8 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
   clear();t.showMenu();assert.equal(t.pick.cards.length,3);
-  assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/conquistas/);
+  assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/✦ \d+\/\d+/);   // menu enxuto: conquistas viram ícone + contagem
+  assert.ok(t.pick.cards.every(card=>!card.innerHTML.includes('<p>')),'menu sem frases nos cartões: a descrição fica na dica');
   let next;context.setTimeout=(fn,ms)=>{if(ms===450)next=fn};
   t.confirmPick(2);next();context.setTimeout=noop;
   const camp=elements.get('camp');assert.equal(camp.classList.contains('hidden'),false);assert.equal(t.pick.open,false);

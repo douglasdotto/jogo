@@ -10,27 +10,8 @@
   border: 4px solid #ffe6a0; border-radius: 16px; color: #fff; font-size: 27px; letter-spacing: .2px;
   -webkit-text-stroke: 2px #17304e; paint-order: stroke fill; text-shadow: 0 2px 0 #17304e;
   background: linear-gradient(180deg, #62c5ff, #2480d4 58%, #1556a7); box-shadow: inset 0 3px 0 rgba(255,255,255,.55), inset 0 -5px 0 rgba(8,43,87,.3), 0 5px 0 var(--camp-edge), 0 9px 14px rgba(0,0,0,.28); }
-.camp-title-copy { display: flex; flex-direction: column; align-items: flex-start; line-height: .98; }
-.camp-title-copy small { margin-bottom: 3px; color: #d8f1ff; font: 700 9px/1 'Fredoka', sans-serif; letter-spacing: 1.5px; -webkit-text-stroke: 0; text-shadow: 0 1px 1px #174370; }
 .camp-crown { width: 40px; height: 40px; display: grid; place-items: center; flex: none; border: 3px solid #85511d; border-radius: 50%; color: #fff7cc; font-size: 25px;
   background: linear-gradient(#fff19a, #f4b82d 62%, #d18019); box-shadow: inset 0 2px 0 rgba(255,255,255,.75), 0 2px 0 #5b3619; }
-.camp-progress { width: 220px; min-width: 205px; padding: 8px 12px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 5px 10px;
-  border: 3px solid #f6d47b; border-radius: 14px; background: linear-gradient(180deg, #345f91, #1c3964); box-shadow: inset 0 2px 0 rgba(255,255,255,.25), 0 4px 0 #56351f, 0 8px 14px rgba(0,0,0,.25); }
-.camp-progress-label { grid-column: 1 / 3; color: #d5edff; font: 700 10px/1 'Fredoka', sans-serif; letter-spacing: 1.5px; }
-.camp-progress-track { height: 9px; overflow: hidden; border: 2px solid #122b4b; border-radius: 10px; background: #101f36; box-shadow: inset 0 1px 2px rgba(0,0,0,.6); }
-.camp-progress-track i { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, #fff08c, #ffbd37 65%, #ef8524); box-shadow: 0 0 8px #ffd452; }
-.camp-progress-score { grid-column: 3; grid-row: 1 / 3; display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
-.camp-progress-score b { color: #ffe37b; font-size: 24px; line-height: 1; text-shadow: 0 2px 0 #734716; }
-.camp-progress-score span { color: #d9eaff; font: 700 11px 'Fredoka', sans-serif; }
-.camp-progress-score i { margin-left: 2px; color: #ffe37b; font-size: 16px; font-style: normal; text-shadow: 0 2px 0 #8a551d; }
-.camp-reward { min-width: 195px; min-height: 52px; padding: 5px 10px 5px 7px; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
-  border: 3px solid #f5d27b; border-radius: 14px; background: linear-gradient(180deg, #3f72a8, #1b416e); box-shadow: inset 0 2px 0 rgba(255,255,255,.28), 0 4px 0 #56351f, 0 8px 14px rgba(0,0,0,.25); }
-.camp-reward-chest { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border: 2px solid #85511d; border-radius: 10px; color: #fff4b7; font-size: 25px;
-  background: linear-gradient(145deg, #fff1a3, #f5bd3d 56%, #c8791d); box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -3px 0 rgba(97,51,18,.22), 0 2px 0 #633c1a; }
-.camp-reward-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.05; }
-.camp-reward-copy small { overflow: hidden; color: #d9edff; font: 700 8px/1 'Fredoka', sans-serif; letter-spacing: 1px; white-space: nowrap; }
-.camp-reward-copy b { overflow: hidden; color: #fff; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; -webkit-text-stroke: 1px #1d4168; paint-order: stroke fill; }
-.camp-reward-copy em { color: #ffe58a; font: 600 10px/1.1 'Fredoka', sans-serif; font-style: normal; }
 .camp-body { display: flex; align-items: stretch; gap: 16px; }
 .camp-map { position: relative; isolation: isolate; width: min(530px, calc(54vw - 20px)); height: auto; aspect-ratio: 4 / 5; align-self: center; flex: none; overflow: hidden; border: 5px solid #a8682b; border-radius: 22px;
   background: #426f47 url('./assets/campaign-map.png') center / 100% 100% no-repeat; box-shadow: inset 0 0 0 3px rgba(255, 226, 153, .85), 0 6px 0 #52351e, 0 15px 30px rgba(0,0,0,.45); }
@@ -68,16 +49,6 @@
 .camp-arena-tag { padding: 3px 10px 4px; border: 2px solid #835018; border-radius: 20px; color: #fff5c6; font: 700 9px/1 'Fredoka', sans-serif; letter-spacing: 1.3px;
   background: linear-gradient(#f5c959, #c87b20); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 2px 0 #56351f; text-shadow: 0 1px 1px #70421c; }
 .camp-info p { margin: 0; font: 500 13px/1.32 'Fredoka', sans-serif; color: #e4f4ff; text-shadow: 0 1px 2px rgba(10,28,50,.5); }
-.camp-info ul { width: 100%; margin: 0; padding: 0; display: flex; gap: 7px; list-style: none; color: #e3f3ff; font: 600 11px/1.25 'Fredoka', sans-serif; }
-.camp-info li { flex: 1; padding: 7px 5px; border: 1px solid rgba(215,235,255,.24); border-radius: 9px; background: rgba(9,30,58,.28); }
-.camp-goals { width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; box-sizing: border-box; border: 1px solid rgba(255,221,127,.45); border-radius: 11px; background: rgba(10,31,57,.4); font: 500 10px/1.2 'Fredoka', sans-serif; }
-.camp-goals b { color: #ffe078; font: 400 13px 'Lilita One', sans-serif; text-shadow: 0 1px 0 #744b1c; }
-.camp-goals span { padding: 2px 5px; border-radius: 5px; color: #edf7ff; text-align: left; background: rgba(255,255,255,.045); }
-.camp-tip, .camp-unlock { width: 100%; padding: 7px 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; border-radius: 10px; text-align: left; font: 500 11px/1.28 'Fredoka', sans-serif; }
-.camp-tip { color: #e8f5ff; background: rgba(8,30,56,.32); border: 1px solid rgba(137,208,255,.28); border-left: 4px solid #77d5ff; }
-.camp-tip b { color: #9be4ff; font: 400 13px 'Lilita One', sans-serif; }
-.camp-unlock { color: #fff2ce; background: rgba(74,49,20,.26); border: 1px solid rgba(255,212,74,.55); }
-.camp-unlock b { color: #ffdf73; font: 400 13px 'Lilita One', sans-serif; }
 .camp-play { margin-top: auto; width: 100%; padding: 8px 0 10px; border: 3px solid #70451d; border-radius: 13px; color: #fff; font: 400 22px 'Lilita One', sans-serif;
   -webkit-text-stroke: 1px #24531f; paint-order: stroke fill; text-shadow: 0 2px 0 #24531f; background: linear-gradient(180deg, #b9ff79, #67d044 58%, #3a9e37);
   box-shadow: inset 0 3px 0 rgba(255,255,255,.65), inset 0 -5px 0 rgba(28,104,34,.24), 0 4px 0 #54351f, 0 7px 12px rgba(0,0,0,.22); cursor: pointer; transition: filter .15s, translate .15s; }
@@ -102,15 +73,11 @@
 .camp-goal { width: 100%; padding: 9px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; border: 2px solid #8c4b24; border-radius: 11px; color: #fff;
   font: 400 16px/1.15 'Lilita One', sans-serif; text-shadow: 0 1px 0 #713817; background: linear-gradient(180deg, #ffb45e, #e97632 62%, #c94c2b);
   box-shadow: inset 0 2px 0 rgba(255,255,255,.45), inset 0 -4px 0 rgba(109,43,21,.18), 0 3px 0 #61351d; }
-.camp-goal b { color: #fff2b4; font: 700 10px 'Fredoka', sans-serif; letter-spacing: 1px; text-shadow: 0 1px 0 #783f20; }
 @media (max-width: 760px) {
   #campaign { justify-content: flex-start; overflow-y: auto; padding: 10px 0 20px; }
   .camp-head { width: min(94vw, 560px); flex-wrap: wrap; justify-content: center; gap: 8px; }
   .camp-title { min-height: 48px; padding: 4px 15px 6px 8px; font-size: 23px; }
-  .camp-title-copy small { font-size: 8px; }
   .camp-crown { width: 34px; height: 34px; font-size: 21px; }
-  .camp-progress { min-width: 195px; }
-  .camp-reward { min-width: 195px; }
   .camp-body { width: min(94vw, 560px); flex-direction: column; align-items: center; gap: 12px; }
   .camp-map { width: min(88vw, 420px); height: auto; aspect-ratio: 4 / 5; box-sizing: border-box; }
   .camp-node { width: 50px; height: 50px; }
@@ -161,6 +128,7 @@
 #campaign::-webkit-scrollbar-corner, #campaign .camp-info::-webkit-scrollbar-corner, .pick-info::-webkit-scrollbar-corner, #heroPanel::-webkit-scrollbar-corner, #overlay::-webkit-scrollbar-corner { background: transparent; }
 /* menu inicial: dois cartões grandes */
 .card.diff.mode { width: 230px; }
+#pickSub:empty { display: none; }   /* menu e jornada sem subtítulo */
 /* objetivo da missão no HUD */
 #goal.hidden { display: none; }
 #goal { background: linear-gradient(#ff9a5a, #d0502f); }
@@ -267,36 +235,24 @@
   padding: 10px 16px; border: 2px solid #73d4ff; border-radius: 12px; color: #fff; background: rgba(15, 30, 55, .94); text-align: center; font: 500 14px/1.5 'Fredoka', sans-serif; pointer-events: none; }
 .skill.aiming { outline: 3px solid #75ffad; outline-offset: 4px; }
 
-/* Campanha: composição mais limpa, mantendo as cores e a aventura do jogo. */
+/* Campanha: composição limpa e com pouco texto, mantendo as cores e a aventura do jogo. */
 #campaign { --camp-gold: #f4c96b; --camp-ink: #eaf3ff;
   justify-content: flex-start; gap: clamp(14px, 2.4vh, 22px); padding: clamp(16px, 3vh, 28px) 18px 22px; overflow-y: auto;
   background: radial-gradient(ellipse at 50% -15%, rgba(78, 151, 210, .24), transparent 58%), linear-gradient(160deg, #10283e 0%, #132f4b 48%, #0c1c30 100%); }
-.camp-head { width: min(960px, 94vw); display: grid; grid-template-columns: auto minmax(170px, 1fr) minmax(180px, 220px) minmax(180px, 210px); align-items: center; justify-content: initial; gap: 12px; }
-.camp-back { padding: 9px 13px; border: 1px solid rgba(219, 235, 255, .22); border-radius: 10px; color: #eaf3ff; font: 600 14px 'Fredoka', sans-serif;
+/* cabeçalho em uma linha: ← Menu | ♛ Campanha ........ ★ 3/39 */
+.camp-head { width: min(960px, 94vw); min-height: 48px; display: flex; align-items: center; justify-content: flex-start; gap: 14px; }
+.camp-back { height: 40px; padding: 0 14px; display: inline-flex; align-items: center; border: 1px solid rgba(219, 235, 255, .22); border-radius: 10px; color: #eaf3ff; font: 600 14px 'Fredoka', sans-serif;
   background: rgba(14, 34, 54, .62); box-shadow: none; cursor: pointer; transition: background .16s, border-color .16s; }
 .camp-back:hover { border-color: rgba(244, 201, 107, .65); background: rgba(34, 69, 100, .78); }
-.camp-title { min-height: 48px; padding: 0 0 0 13px; gap: 10px; border: 0; border-left: 2px solid var(--camp-gold); border-radius: 0; color: #f7faff; font: 600 23px/1 'Fredoka', sans-serif; letter-spacing: 0;
+.camp-title { min-height: 40px; padding: 0 0 0 14px; gap: 10px; border: 0; border-left: 2px solid var(--camp-gold); border-radius: 0; color: #f7faff; font: 600 24px/1 'Fredoka', sans-serif; letter-spacing: 0;
   -webkit-text-stroke: 0; text-shadow: none; background: transparent; box-shadow: none; }
-.camp-title-copy { gap: 4px; line-height: 1; }
-.camp-title-copy small { margin: 0; color: #9bb6cd; font: 700 9px/1 'Fredoka', sans-serif; letter-spacing: 1.5px; text-shadow: none; }
 .camp-crown { width: 38px; height: 38px; border: 1px solid rgba(255, 218, 138, .65); color: #fff2c9; font-size: 21px; background: linear-gradient(145deg, #d69d39, #8b5d20); box-shadow: none; }
-.camp-progress, .camp-reward { width: 100%; min-width: 0; min-height: 54px; padding: 8px 11px; border: 1px solid rgba(214, 232, 249, .14); border-radius: 12px;
-  background: rgba(8, 25, 43, .52); box-shadow: 0 8px 24px rgba(0, 0, 0, .14); backdrop-filter: blur(10px); }
-.camp-progress { grid-template-columns: auto minmax(28px, 1fr) auto; gap: 5px 8px; }
-.camp-progress-label { color: #a9bed1; font: 700 9px/1 'Fredoka', sans-serif; letter-spacing: 1.4px; }
-.camp-progress-track { height: 6px; border: 0; background: rgba(255, 255, 255, .12); box-shadow: none; }
-.camp-progress-track i { background: linear-gradient(90deg, #ffe08a, #e9ad45); box-shadow: none; }
-.camp-progress-score b { color: #ffe08a; font-size: 20px; text-shadow: none; }
-.camp-progress-score span { color: #b7c8d8; font-size: 10px; }
-.camp-progress-score i { color: #ffe08a; font-size: 14px; text-shadow: none; }
-.camp-reward { display: flex; align-items: center; gap: 9px; }
-.camp-reward-chest { width: 34px; height: 34px; border: 1px solid rgba(255, 218, 138, .55); border-radius: 9px; color: #fff1bd; font-size: 21px;
-  background: rgba(201, 143, 53, .24); box-shadow: none; }
-.camp-reward-copy { gap: 3px; }
-.camp-reward-copy small { color: #a9bed1; font-size: 8px; letter-spacing: 1.15px; }
-.camp-reward-copy b { color: #f5f8fc; font: 600 14px/1.05 'Fredoka', sans-serif; -webkit-text-stroke: 0; }
-.camp-reward-copy em { color: #f2d287; font-size: 9px; }
-.camp-body { width: min(960px, 94vw); height: min(72vh, 680px); min-height: 0; display: flex; align-items: stretch; justify-content: center; gap: 18px; }
+.camp-progress { width: auto; min-width: 0; height: 40px; margin-left: auto; padding: 0 14px; display: inline-flex; align-items: baseline; align-self: center; gap: 4px; box-sizing: border-box;
+  border: 1px solid rgba(255, 224, 138, .3); border-radius: 999px; background: rgba(8, 25, 43, .52); box-shadow: none; line-height: 40px; white-space: nowrap; }
+.camp-progress i { color: #ffe08a; font: normal 18px 'Fredoka', sans-serif; }
+.camp-progress b { color: #ffe08a; font: 600 20px 'Fredoka', sans-serif; }
+.camp-progress span { color: #b7c8d8; font: 500 14px 'Fredoka', sans-serif; }
+.camp-body { width: min(960px, 94vw); height: min(72vh, 680px); min-height: 0; display: flex; align-items: stretch; justify-content: center; gap: 22px; }
 .camp-map { width: min(530px, calc(54vw - 20px)); height: auto; aspect-ratio: 4 / 5; align-self: center; border: 1px solid rgba(231, 239, 248, .22); border-radius: 18px; background-color: #2f543d;
   box-shadow: 0 18px 42px rgba(0, 0, 0, .3), inset 0 0 0 1px rgba(255, 255, 255, .15); }
 .camp-map::after { background: linear-gradient(180deg, rgba(10, 24, 38, .015), transparent 24% 74%, rgba(10, 24, 38, .06)), radial-gradient(ellipse at center, transparent 64%, rgba(10, 24, 38, .08)); }
@@ -311,94 +267,63 @@
 .camp-node.done { background: linear-gradient(145deg, #a8da7c, #558e53); }
 .camp-node.locked { filter: saturate(.35) brightness(.78); }
 .camp-node.sel { scale: 1.12; box-shadow: 0 0 0 3px rgba(255, 236, 174, .9), 0 0 17px 3px rgba(255, 207, 98, .42), 0 4px 10px rgba(7, 20, 31, .42); }
-.camp-info { width: min(410px, 40vw); height: 100%; max-height: 100%; padding: 20px; gap: 13px; align-items: stretch; text-align: left; border: 1px solid rgba(229, 240, 251, .14); border-radius: 18px;
+/* painel da missão: poucas linhas, muito respiro e o Batalhar sempre no rodapé */
+.camp-info { width: min(380px, 38vw); height: 100%; max-height: 100%; padding: 26px 24px 22px; gap: 20px; align-items: stretch; text-align: left; border: 1px solid rgba(229, 240, 251, .14); border-radius: 18px;
   background: linear-gradient(155deg, rgba(34, 71, 103, .94), rgba(16, 40, 64, .96)); box-shadow: 0 18px 42px rgba(0, 0, 0, .28); backdrop-filter: blur(14px); }
 .camp-info::before { display: none; }
-.camp-info-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.camp-info-title { min-width: 0; display: flex; align-items: center; gap: 11px; }
-.camp-info .medal.big { width: 48px; height: 48px; font-size: 25px; border: 1px solid rgba(255, 235, 183, .85); color: #fff; -webkit-text-stroke: 1px rgba(83, 52, 26, .75);
+.camp-info [data-tip] { cursor: help; }
+.camp-info [data-tip]:focus-visible { outline: 2px solid #fff4b2; outline-offset: 3px; border-radius: 6px; }
+.camp-info-head { display: flex; align-items: center; gap: 14px; }
+.camp-info .medal.big { width: 56px; height: 56px; font-size: 28px; border: 1px solid rgba(255, 235, 183, .85); color: #fff; -webkit-text-stroke: 1px rgba(83, 52, 26, .75);
   background: linear-gradient(145deg, #f4cb70, #b97e2b); box-shadow: 0 5px 12px rgba(0, 0, 0, .25); }
-.camp-ident { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.camp-arena-tag { padding: 0; border: 0; border-radius: 0; color: #f1d28f; font: 700 9px/1 'Fredoka', sans-serif; letter-spacing: 1.35px; background: none; box-shadow: none; text-shadow: none; }
-.camp-name { overflow: hidden; color: #f8fbff; font: 600 22px/1.1 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; -webkit-text-stroke: 0; text-shadow: none; }
-.stars.big { flex: none; gap: 0; }
-.stars.big i { color: rgba(255, 255, 255, .2); font-size: 22px; -webkit-text-stroke: 0; }
+.camp-ident { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.camp-arena-tag { align-self: flex-start; padding: 0; border: 0; border-radius: 0; color: #f1d28f; font: 700 10px/1 'Fredoka', sans-serif; letter-spacing: 1.35px; background: none; box-shadow: none; text-shadow: none; }
+.camp-name { overflow: hidden; color: #f8fbff; font: 600 24px/1.1 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; -webkit-text-stroke: 0; text-shadow: none; }
+.camp-info .camp-desc { margin: 0; overflow: hidden; color: #b9cadb; font: 400 13px/1.3 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; text-shadow: none; }
+.camp-score { display: flex; align-items: center; gap: 12px; }
+.stars.big { flex: none; gap: 2px; }
+.stars.big i { color: rgba(255, 255, 255, .2); font-size: 30px; -webkit-text-stroke: 0; }
 .stars.big i.on { color: #ffd46e; filter: none; }
-.camp-info p { margin: 0; color: #c8d8e6; font: 500 13px/1.4 'Fredoka', sans-serif; text-shadow: none; }
-.camp-story { width: 100%; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px; border: 1px solid rgba(173, 204, 229, .12); border-left: 3px solid #7db4d5; border-radius: 10px; background: rgba(7, 23, 40, .24); }
-.camp-story > span { color: #9fc8e2; font: 700 9px/1.2 'Fredoka', sans-serif; letter-spacing: 1px; text-transform: uppercase; }
-.camp-story p { color: #d5e3ef; font: 400 11px/1.4 'Fredoka', sans-serif; }
-.camp-goal { padding: 11px 13px; gap: 4px; border: 1px solid rgba(246, 185, 106, .32); border-left: 3px solid #e8a35d; border-radius: 11px; color: #fff5e8;
-  font: 600 16px/1.2 'Fredoka', sans-serif; text-shadow: none; background: rgba(204, 120, 59, .14); box-shadow: none; }
-.camp-goal b { color: #e9b977; font: 700 9px 'Fredoka', sans-serif; letter-spacing: 1.2px; text-shadow: none; text-transform: uppercase; }
-.camp-records { width: 100%; padding: 8px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; border: 1px solid rgba(255, 212, 112, .16); border-radius: 10px; background: rgba(92, 68, 29, .14); }
-.camp-records > b { color: #ecd18c; font: 600 10px 'Fredoka', sans-serif; letter-spacing: .35px; }
-.camp-record-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
-.camp-record-list > span { min-width: 0; padding: 5px 7px; display: flex; align-items: center; justify-content: space-between; gap: 5px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 7px; color: #bdcbd8; background: rgba(7, 23, 40, .25); font: 500 9px/1.1 'Fredoka', sans-serif; }
-.camp-record-list strong { color: #ffe18b; font: 600 10px 'Fredoka', sans-serif; white-space: nowrap; }
-.camp-threats { width: 100%; padding: 9px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 7px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 11px; background: rgba(7, 23, 40, .28); }
-.camp-threats > b { color: #e8c878; font: 600 11px 'Fredoka', sans-serif; letter-spacing: .3px; }
-.camp-threat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
-.camp-threat { min-width: 0; display: grid; grid-template-columns: 23px minmax(0, 1fr); align-items: start; gap: 6px; padding: 6px 7px; border: 1px solid rgba(211, 229, 245, .08); border-radius: 8px; background: rgba(255, 255, 255, .035); }
-.camp-threat > i { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 7px; color: #f2d98e; background: rgba(226, 178, 84, .13); font: normal 13px/1 'Fredoka', sans-serif; }
-.camp-threat > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.camp-threat strong { color: #edf5fb; font: 600 10px/1.1 'Fredoka', sans-serif; }
-.camp-threat small { color: #aebfd0; font: 400 9px/1.25 'Fredoka', sans-serif; }
-.camp-threat.boss { border-color: rgba(238, 156, 112, .2); background: rgba(138, 61, 46, .13); }
-.camp-threat.boss > i { color: #ffb99b; background: rgba(211, 99, 71, .16); }
-.camp-threat.optional { opacity: .78; border-style: dashed; }
-.camp-complete { width: 100%; padding: 10px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(150, 208, 159, .18); border-left: 3px solid #87c891; border-radius: 10px;
-  color: #cfe2d2; background: rgba(38, 89, 57, .2); font: 500 12px/1.4 'Fredoka', sans-serif; }
-.camp-complete b { color: #a8dbae; font: 600 12px 'Fredoka', sans-serif; }
-.camp-replay-target { padding: 5px 7px; border: 1px solid rgba(168, 219, 174, .16); border-radius: 7px; color: #e1f2df; background: rgba(126, 185, 131, .1); font-weight: 600; }
-.camp-replay-button { align-self: flex-start; padding: 6px 9px; border: 1px solid rgba(168, 219, 174, .3); border-radius: 7px; color: #e1f2df; font: 600 10px 'Fredoka', sans-serif; background: rgba(126, 185, 131, .16); cursor: pointer; transition: background .15s, border-color .15s; }
+.camp-score .camp-seal { width: 24px; height: 24px; font-size: 12px; }
+.camp-record { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: #ffe18b; font: 600 15px 'Fredoka', sans-serif; }
+.camp-record i { color: #b7c8d8; font-style: normal; font-size: 14px; }
+.camp-goal { width: 100%; padding: 13px 15px; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; gap: 10px; border: 1px solid rgba(246, 185, 106, .32); border-left: 3px solid #e8a35d; border-radius: 11px;
+  color: #fff5e8; font: 600 17px/1.25 'Fredoka', sans-serif; text-shadow: none; background: rgba(204, 120, 59, .14); box-shadow: none; }
+.camp-goal i { color: #f0b46a; font-style: normal; font-size: 18px; }
+.camp-threats { display: flex; flex-wrap: wrap; gap: 8px; }
+.camp-threat { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(226, 178, 84, .3); border-radius: 10px; color: #f2d98e; background: rgba(226, 178, 84, .12); font: normal 19px/1 'Fredoka', sans-serif; }
+.camp-threat.boss { border-color: rgba(238, 156, 112, .45); color: #ffb99b; background: rgba(211, 99, 71, .18); }
+.camp-threat.optional { opacity: .7; border-style: dashed; }
+.camp-complete { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #a8dbae; font: 600 14px 'Fredoka', sans-serif; }
+.camp-complete b { font-weight: 600; }
+.camp-complete span { color: #ffe08a; }
+.camp-replay-button { align-self: flex-start; margin-top: -10px; padding: 7px 12px; border: 1px solid rgba(168, 219, 174, .3); border-radius: 8px; color: #e1f2df; font: 600 13px 'Fredoka', sans-serif; background: rgba(126, 185, 131, .16); cursor: pointer; transition: background .15s, border-color .15s; }
 .camp-replay-button:hover { border-color: rgba(168, 219, 174, .58); background: rgba(126, 185, 131, .26); }
 .camp-replay-button:focus-visible { outline: 2px solid #b7edaa; outline-offset: 2px; }
-.camp-tip, .camp-unlock { padding: 10px 12px; gap: 4px; border: 1px solid rgba(146, 205, 238, .12); border-left: 3px solid #66bce3; border-radius: 10px; color: #c8d8e6; background: rgba(8, 25, 43, .32); font: 500 12px/1.4 'Fredoka', sans-serif; }
-.camp-tip b { color: #8bd2f1; font: 600 12px 'Fredoka', sans-serif; }
-.camp-unlock { border-left-color: #e1b55f; color: #f5e8c8; background: rgba(90, 67, 29, .18); }
-.camp-unlock b { color: #f0ce82; font: 600 12px 'Fredoka', sans-serif; }
-.camp-info ul { gap: 8px; color: #c8d8e6; font: 500 11px/1.35 'Fredoka', sans-serif; }
-.camp-info li { padding: 9px 10px; border: 1px solid rgba(211, 229, 245, .1); border-radius: 9px; background: rgba(7, 23, 40, .26); }
-.camp-goals { gap: 4px; padding: 10px 12px; border: 1px solid rgba(211, 229, 245, .1); border-radius: 10px; background: rgba(7, 23, 40, .24); font: 500 11px/1.35 'Fredoka', sans-serif; }
-.camp-goals b { color: #e8c878; font: 600 11px 'Fredoka', sans-serif; text-shadow: none; }
-.camp-goals span { padding: 4px 6px; border-radius: 5px; color: #d7e3ed; background: rgba(255, 255, 255, .04); }
-.camp-play { min-height: 48px; margin-top: auto; padding: 9px 14px; border: 1px solid rgba(191, 246, 155, .48); border-radius: 10px; color: #f6fff1; font: 600 17px 'Fredoka', sans-serif;
+.camp-unlock { width: auto; padding: 0; display: flex; flex-direction: row; align-items: center; gap: 8px; border: 0; color: #f0ce82; background: none; font: 600 14px 'Fredoka', sans-serif; }
+.camp-unlock i { font-style: normal; }
+.camp-play { position: sticky; bottom: 0; min-height: 52px; margin-top: auto; padding: 9px 14px; border: 1px solid rgba(191, 246, 155, .48); border-radius: 12px; color: #f6fff1; font: 600 19px 'Fredoka', sans-serif;
   -webkit-text-stroke: 0; text-shadow: none; background: linear-gradient(180deg, #55b96d, #31834d); box-shadow: 0 5px 14px rgba(14, 51, 34, .35); }
 .camp-play:hover { filter: brightness(1.08); }
 .camp-play:active { translate: 0 1px; box-shadow: 0 2px 7px rgba(14, 51, 34, .3); }
 .camp-play:disabled { filter: grayscale(.6); }
 @media (max-width: 760px) {
   #campaign { gap: 12px; padding: 12px 0 18px; }
-  .camp-head { width: min(94vw, 560px); flex: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
-  .camp-back { grid-column: 1; grid-row: 1; justify-self: start; }
-  .camp-title { grid-column: 2; grid-row: 1; justify-self: end; min-height: 44px; padding-left: 9px; gap: 7px; font-size: 20px; }
+  .camp-head { width: min(94vw, 560px); flex: none; gap: 9px; }
+  .camp-title { padding-left: 9px; gap: 7px; font-size: 20px; }
   .camp-crown { width: 32px; height: 32px; font-size: 18px; }
-  .camp-title-copy small { font-size: 7px; letter-spacing: 1px; }
-  .camp-progress { grid-column: 1; grid-row: 2; min-width: 0; padding: 7px 8px; }
-  .camp-reward { grid-column: 2; grid-row: 2; min-width: 0; padding: 6px 7px; }
-  .camp-reward-chest { width: 30px; height: 30px; font-size: 18px; }
-  .camp-reward-copy small { font-size: 7px; letter-spacing: .6px; }
-  .camp-reward-copy b { font-size: 12px; }
-  .camp-reward-copy em { font-size: 8px; }
   .camp-body { width: min(94vw, 560px); height: auto; flex: none; flex-direction: column; align-items: center; gap: 14px; }
   .camp-map { width: min(88vw, 420px); height: auto; aspect-ratio: 4 / 5; box-sizing: border-box; }
   .camp-node { width: 46px; height: 46px; }
   .camp-node.sel { scale: 1.06; }
   .camp-node:focus-visible { outline-width: 3px; outline-offset: 2px; }
-  .camp-info { width: 100%; height: auto; max-height: none; min-height: 0; flex: none; overflow: visible; padding: 16px; gap: 11px; }
-  .camp-threat-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 370px) {
-  .camp-back { padding-inline: 9px; font-size: 12px; }
-  .camp-title { font-size: 18px; }
-  .camp-progress-score b { font-size: 18px; }
-  .camp-reward { gap: 5px; }
+  .camp-info { width: 100%; height: auto; max-height: none; min-height: 0; flex: none; overflow: visible; padding: 16px; gap: 14px; }
 }
 @media (max-height: 650px) and (min-width: 761px) {
   #campaign { gap: 12px; padding-block: 10px; }
   .camp-body { height: min(65vh, 500px); }
   .camp-map { width: min(396px, 51.5vh); }
+  .camp-info { padding: 18px 20px 16px; gap: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .camp-node.sel { animation: none; }
@@ -1106,12 +1031,6 @@
 .camp-seal.seal-dificil { --seal: #d17a2a; }
 .camp-seal.seal-pesadelo { --seal: #a3324a; }
 .camp-seal.challenge { border-color: #ffe27a; box-shadow: 0 0 0 2px rgba(255, 212, 74, .55), 0 0 8px 2px rgba(255, 212, 74, .6); }
-.camp-medals { width: 100%; padding: 8px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; border: 1px solid rgba(211, 229, 245, .1); border-radius: 10px;
-  background: rgba(7, 23, 40, .24); font: 500 11px/1.35 'Fredoka', sans-serif; }
-.camp-medals b { color: #e8c878; font: 600 11px 'Fredoka', sans-serif; }
-.camp-medals span { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 5px; color: #aebbc8; background: rgba(255, 255, 255, .04); }
-.camp-medals .camp-medal-best { color: #d7e3ed; }
-.camp-medals span.done { color: #a7e3a7; }
 
 /* Fim da missão: recompensa e próximo passo. */
 #overlayStars .mission-reward { width: min(520px, calc(100vw - 36px)); padding: 10px 12px; box-sizing: border-box; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;
@@ -1131,43 +1050,48 @@
   background: radial-gradient(ellipse at 50% 4%, rgba(255, 190, 106, .32), transparent 44%), radial-gradient(ellipse at 50% 100%, #102447, transparent 58%), linear-gradient(180deg, #2869a2, #173c68 48%, #0b1b35); }
 #camp.hidden { display: none; }
 #camp .camp-head { justify-content: flex-start; }
-.camp-gold { margin-left: auto; min-height: 50px; padding: 6px 16px; display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; border: 3px solid #85511d; border-radius: 14px;
-  background: linear-gradient(180deg, #ffe58a, #f2b33c 60%, #c97a1c); box-shadow: inset 0 3px 0 rgba(255,255,255,.55), 0 4px 0 #56351f; color: #fff; text-shadow: 0 2px 0 #7a4512; }
-.camp-gold i { font-style: normal; font-size: 22px; } .camp-gold b { font-size: 26px; line-height: 1; } .camp-gold small { font: 700 12px 'Fredoka', sans-serif; }
+.camp-gold { margin-left: auto; height: 40px; padding: 0 16px; display: inline-flex; align-items: center; gap: 7px; box-sizing: border-box; border: 1px solid rgba(255, 224, 138, .45); border-radius: 999px;
+  background: rgba(8, 25, 43, .52); color: #ffe08a; font: 600 20px 'Fredoka', sans-serif; }
+.camp-gold i { font-style: normal; font-size: 17px; } .camp-gold b { font-weight: 600; line-height: 1; }
 .camp-tabs { width: min(920px, 94vw); display: flex; gap: 8px; }
 .camp-tabs button { padding: 7px 16px 9px; font-size: 16px; }
 .camp-tabs button[aria-selected="false"] { filter: saturate(.35) brightness(.85); }
-.camp-panel { width: min(920px, 94vw); padding: 14px; box-sizing: border-box; border: 3px solid #0f1a33; border-radius: 16px;
-  background: linear-gradient(rgba(44, 66, 114, .92), rgba(24, 38, 68, .94)); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), 0 6px 0 #0f1a33, 0 14px 30px rgba(0,0,0,.35); }
-.camp-note { margin: 0 0 10px; color: #d6e3ee; font: 500 14px/1.35 'Fredoka', sans-serif; }
-.camp-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
-.shop-item { display: grid; grid-template-columns: 52px 1fr; grid-template-rows: 1fr auto; gap: 8px 12px; padding: 12px; border: 2px solid rgba(255, 212, 74, .35); border-radius: 12px; background: rgba(8, 18, 32, .45); }
-.shop-item.maxed { border-color: rgba(167, 227, 167, .5); }
-.shop-icon { grid-row: 1 / 3; width: 52px; height: 52px; display: grid; place-items: center; border: 3px solid #ffd44a; border-radius: 50%; color: #ffe07b; font-size: 28px;
+/* sem caixa em volta: os cartões ficam direto sobre o fundo */
+.camp-panel { width: min(920px, 94vw); padding: 6px 0 0; box-sizing: border-box; }
+.camp-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+.shop-item { padding: 20px 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; cursor: help;
+  border: 1px solid rgba(255, 212, 74, .28); border-radius: 16px; background: rgba(8, 18, 32, .42); }
+.shop-item.maxed { border-color: rgba(167, 227, 167, .45); }
+.shop-icon { width: 56px; height: 56px; display: grid; place-items: center; border: 3px solid #ffd44a; border-radius: 50%; color: #ffe07b; font-size: 28px;
   background: radial-gradient(circle at 35% 28%, #557bbb, #1c3158 74%); text-shadow: 0 2px 0 #0d1426; }
-.shop-copy b { font-size: 18px; color: #ffe37b; } .shop-copy p { margin: 3px 0; color: #e3ecf5; font: 500 13px/1.3 'Fredoka', sans-serif; }
-.shop-copy small { display: block; color: #a9bfd4; font: 500 12px/1.3 'Fredoka', sans-serif; }
-.shop-pips { display: flex; gap: 5px; margin-top: 6px; } .shop-pips i { width: 14px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); }
+.shop-copy { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.shop-copy b { font-size: 17px; color: #ffe37b; font-weight: 400; }
+.shop-pips { display: flex; gap: 5px; } .shop-pips i { width: 16px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.15); }
 .shop-pips i.on { background: linear-gradient(#ffe37b, #e99c26); box-shadow: 0 0 6px rgba(255, 212, 74, .7); }
-.shop-buy { justify-self: end; min-width: 120px; }
+.shop-buy { margin-top: auto; min-width: 110px; }
 .shop-buy:disabled { cursor: not-allowed; filter: grayscale(.7) brightness(.8); transform: none; }
-.camp-mastery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-.mastery-row { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border: 2px solid rgba(255,255,255,.12); border-radius: 10px; background: rgba(8, 18, 32, .4); }
+.camp-mastery { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.mastery-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; background: rgba(8, 18, 32, .4); cursor: help; }
+.mastery-row:focus-visible, .ach-item:focus-visible { outline: 2px solid #fff4b2; outline-offset: 2px; }
 .mastery-row img { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: contain; background: radial-gradient(circle at 50% 35%, #fff9e9, var(--c)); border: 2px solid var(--cd); }
-.mastery-row > span { min-width: 0; flex: 1; display: grid; gap: 3px; } .mastery-row b { font-size: 15px; }
-.mastery-row small { color: #c6d4e6; font: 600 12px 'Fredoka', sans-serif; }
+.mastery-row > span { min-width: 0; flex: 1; display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 4px 6px; }
+.mastery-row b { overflow: hidden; font-size: 15px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.mastery-row small { color: #ffe08a; font: 600 12px 'Fredoka', sans-serif; }
+.mastery-row .mastery-track { grid-column: 1 / -1; }
 .mastery-row.mastery-3, .mastery-row.mastery-4 { border-color: #cfd8e3; } .mastery-row.mastery-5 { border-color: #ffd44a; box-shadow: 0 0 10px rgba(255, 212, 74, .45); }
 .mastery-track { height: 6px; overflow: hidden; border-radius: 6px; background: rgba(0,0,0,.35); }
 .mastery-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #fff08c, #ffbd37 65%, #ef8524); }
-.camp-achievements { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 8px; }
-.ach-item { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border: 2px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(8, 18, 32, .45); opacity: .72; }
-.ach-item.done { opacity: 1; border-color: rgba(255, 212, 74, .55); background: rgba(92, 68, 29, .35); }
-.ach-item > span:nth-child(2) { display: grid; gap: 2px; } .ach-item b { font-size: 15px; } .ach-item small { color: #c6d4e6; font: 500 12px/1.3 'Fredoka', sans-serif; }
-.ach-item em { color: #a9bfd4; font: 600 11px 'Fredoka', sans-serif; font-style: normal; }
+/* conquistas: grade de medalhas; nome e requisito só na dica */
+.camp-achievements { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 14px; }
+.ach-item { padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 8px; border-radius: 14px; cursor: help; opacity: .6; }
+.ach-item.done { opacity: 1; }
+.ach-item:hover { background: rgba(255, 255, 255, .06); }
+.ach-item .mastery-track { width: 44px; height: 4px; }
+.ach-item .ach-medal { width: 54px; height: 54px; font-size: 26px; }
 .ach-medal { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; font-size: 21px; color: #fff4b7; border: 2px solid #85511d;
   background: radial-gradient(circle at 35% 30%, #ffe58a, #c98a12); text-shadow: 0 2px 0 #7a4512; }
 .ach-item:not(.done) .ach-medal { filter: grayscale(1) brightness(.7); }
-.ach-state { font-style: normal; color: #a7e3a7; font-size: 18px; } .ach-item:not(.done) .ach-state { color: #91a4b7; font-size: 14px; }
+.ach-item.done .ach-medal { box-shadow: 0 0 0 3px rgba(255, 212, 74, .25), 0 0 14px rgba(255, 212, 74, .35); }
 /* aviso de conquista: entra pelo topo e some sozinho */
 #achToasts { position: fixed; top: 84px; right: 18px; z-index: 30; display: grid; gap: 8px; pointer-events: none; }
 .ach-toast { display: flex; align-items: center; gap: 10px; min-width: 300px; padding: 9px 16px 9px 10px; border: 3px solid #ffd44a; border-radius: 14px; color: #fff;
