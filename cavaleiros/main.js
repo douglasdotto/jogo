@@ -14,7 +14,7 @@ import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
 import { initTooltips, registerTooltip } from './tooltip.js';
-import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
+import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
 
@@ -444,27 +444,29 @@ function confirmMode(i) {
 }
 
 // mapa da campanha; escolher uma missão leva à dificuldade
-function showCampaign() {
+function showCampaign(autoPlay = null) {
   game.mission = null;
   pick.open = false;
   game.paused = true;   // sem grupo ainda: a partida não pode correr por trás do mapa
   $('pick').classList.add('hidden');
   const root = $('campaign');
   const mapSeeds = campaignMapSession.get();
-  renderCampaign(root, (m) => {
+  const play = (m) => {
     game.mission = m;
     // Cada missão da campanha recebe seu próprio cenário; a jornada completa mantém o mapa-base.
     world.dispose?.();
     world = createWorld(scene, ROAD, PHASES, mapSeeds.get(m.id));
     root.classList.add('hidden');
     showDifficulty();
-  }, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to));
+  };
+  renderCampaign(root, play, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to));
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
   back.onclick = () => { campaignMapSession.reset(); showMenu(); };
   root.querySelector('.camp-head')?.prepend(back);
   root.classList.remove('hidden');
+  if (autoPlay) play(autoPlay);
 }
 
 // dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão
@@ -717,8 +719,14 @@ function applyRelicToHero(hero, id) {
   else if (id === 'wind-chime') hero.haste *= 1.1;
 }
 
+// chefe (fases 6 e 12) ou golem ainda à frente no trecho: só então o Ferrão de gigante tem uso
+function bigFoeAhead() {
+  for (let p = game.phase; p <= game.last; p++) if (waveLeader(p, p % 6 === 0)) return true;
+  return false;
+}
+
 function showRelicPick() {
-  const pool = [...RELICS];
+  const pool = RELICS.filter((relic) => relic.id !== 'giant-bane' || bigFoeAhead());
   pick.mode = 'relic';
   pick.options = [];
   while (pick.options.length < 3 && pool.length) pick.options.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
@@ -3876,6 +3884,7 @@ function startGame(view = 'menu') {
   $('overlay').classList.remove('results');
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
+  else if (view?.goal) showCampaign(view);   // "Próxima missão" / "Tentar de novo" vão direto à dificuldade
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
 }
 
@@ -3928,8 +3937,14 @@ function startPhase() {
     s.pos.set(captive.pos.x + off, 0, captive.pos.z + 1.2);
     s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
   }
-  if (goal?.type === 'survive' && game.phase === goal.phase) return showBanner(`Aguente ${goal.time} s!`);
-  showBanner(game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`);
+  const text = goal?.type === 'survive' && game.phase === goal.phase ? `Aguente ${goal.time} s!` : game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`;
+  if (!game.mission || game.phase !== game.start) return showBanner(text);
+  // primeira fase da missão: a faixa leva o capítulo e a história (a faixa do bioma sai logo em seguida)
+  showBanner(`${game.mission.name} · ${text}`, 5);
+  const story = document.createElement('small');
+  story.className = 'banner-story';
+  story.textContent = `${game.mission.chapter} — ${game.mission.story}`;
+  $('banner').appendChild(story);
 }
 
 // ---------- campanha: aldeão, totens e objetivos ----------
@@ -4172,6 +4187,26 @@ function campaignTick(dt, skeletons) {
   return false;
 }
 
+// recompensa da vitória: estrelas novas na campanha, medalha da dificuldade e desafio opcional
+function missionRewardHTML(stars, gained, medal) {
+  const max = MISSIONS.length * 3;
+  const items = [gained > 0 ? `+${gained} ★ na campanha · ${totalStars()}/${max}` : `Seu melhor nesta missão segue em ${starsOf(game.mission.id)} ★ · ${totalStars()}/${max}`,
+    medal.newBest ? `Medalha ${difficulty.name} conquistada!` : `Medalha mantida: ${missionMedal(game.mission.id).best?.difficultyName || difficulty.name}`];
+  if (medal.newChallenge) items.push(`Desafio cumprido: ${medal.newChallenge.label}!`);
+  else {
+    const open = missionMedal(game.mission.id).challenges.find((c) => c.difficultyId === difficulty.id && !c.done);
+    if (open && stars < 3) items.push(`Desafio opcional: ${open.label}`);
+  }
+  return `<div class="mission-reward" aria-label="Recompensa da missão"><b>Recompensa</b>${items.map((item) => `<span>${item}</span>`).join('')}</div>`;
+}
+
+// próximo passo no fim da missão: seguir para a próxima arena ou tentar de novo
+function missionNextHTML(won, next, unlockedNow) {
+  if (won && next) return `<div class="mission-next"><span>${unlockedNow ? `Nova missão liberada: <b>${next.name}</b>` : `Próximo passo: <b>${next.name}</b>`}</span><button class="mission-next-btn" type="button" aria-label="Próxima missão: ${next.name}">Próxima missão ▸</button></div>`;
+  if (won) return '<div class="mission-next"><span>Campanha concluída! No mapa, busque as estrelas e os desafios que faltam.</span></div>';
+  return '<div class="mission-next"><span>Ajuste o grupo e tente de novo.</span><button class="mission-next-btn" type="button">Tentar de novo</button></div>';
+}
+
 // fim da missão: estrelas animadas, gravação e aviso de variante nova
 function missionEnd(won) {
   const party = heroes();
@@ -4181,6 +4216,8 @@ function missionEnd(won) {
   const conditions = starConditions(result);
   const before = totalStars();
   const best = !game.test && saveStars(game.mission.id, stars);
+  // a medalha compara com os recordes anteriores, então grava antes do tempo
+  const medal = game.test ? null : saveMissionMedal(game.mission.id, { won, stars, difficultyId: difficulty.id });
   const bestTime = !game.test && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
   const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
   const row = `<span class="stars big">${[1, 2, 3].map((k) => `<i class="${k <= stars ? 'on' : ''}">★</i>`).join('')}</span>`;
@@ -4188,6 +4225,7 @@ function missionEnd(won) {
   $('overlayStars').innerHTML = row + criteria + (best && stars ? '<div class="star-best">Novo melhor resultado!</div>' : '')
     + (bestTime ? `<div class="star-best">Novo recorde · ${difficulty.name} · ${clockText(game.missionT)}</div>` : '')
     + (game.test ? '<div class="star-best">Modo de teste: estrelas e recordes não contam</div>' : '')
+    + (won && medal ? missionRewardHTML(stars, totalStars() - before, medal) : '')
     + fresh.map((cfg) => `<div class="unlock" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"><img src="${cfg.portrait}" alt=""><span><b>Nova variante liberada!</b>${cfg.name}</span></div>`).join('');
   return stars;
 }
@@ -4300,10 +4338,20 @@ function endGame(text, won = false) {
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
   $('overlayText').textContent = text + (saveRecord(won) ? ` · Novo recorde no ${difficulty.name}!` : '');
+  const missionIndex = MISSIONS.indexOf(game.mission);
+  const followingWasOpen = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1);
   const missionStars = game.mission ? missionEnd(won) : null;
   const nextMission = game.mission && won && !game.test
     ? MISSIONS.find((mission, index) => unlocked(index) && starsOf(mission.id) === 0)?.name || null
     : null;
+  if (game.mission) {   // próximo passo: a missão recém-liberada (ou a seguinte) ou repetir a atual
+    const following = missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1) ? MISSIONS[missionIndex + 1] : null;
+    const next = !won ? null : MISSIONS.find((mission) => mission.name === nextMission) || following;
+    const target = won ? next : game.mission;
+    $('overlayStars').innerHTML += missionNextHTML(won, next, next === following && following && !followingWasOpen);
+    const nextBtn = $('overlayStars').querySelector('.mission-next-btn');
+    if (nextBtn && target) nextBtn.onclick = () => startGame(target);
+  }
   const party = game.roster;
   const report = buildBattleReport({
     won,

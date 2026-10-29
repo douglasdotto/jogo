@@ -648,7 +648,7 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   const focusedNode=map.children[1];focusedNode.classList.add('camp-node');focusedNode.onfocus();
   assert.ok(info.innerHTML.includes('ARENA 02 · OUTONO'));
   assert.ok(info.innerHTML.includes('Inimigos especiais'));
-  assert.ok(info.innerHTML.includes('Pode surgir · fase 3'));
+  assert.ok(info.innerHTML.includes('Fase 3 · '));   // ponte 2–4: o bombardeiro estreia dentro do trecho
   assert.ok(info.innerHTML.includes('Bombardeiro'));
   assert.ok(info.innerHTML.includes('Seus melhores tempos')&&info.innerHTML.includes('1:12'));
   context.document.activeElement=focusedNode;
@@ -712,7 +712,7 @@ test('campanha: escolhe N heróis em sequência, já no nível da missão e sem 
   begin('fazendas',['paladin','pyro']);
   assert.equal(t.heroes().length,2);assert.ok(t.heroes().every(h=>h.level===2));assert.equal(t.evolutions.length,0);
   assert.equal(t.game.phase,4);assert.equal(t.game.last,6);assert.equal(t.game.paused,false);assert.equal(t.pick.open,false);
-  begin('ponte',['berserker','assassin']);assert.ok(t.game.villager instanceof t.Villager);assert.equal(t.game.phase,3);
+  begin('ponte',['berserker','assassin']);assert.ok(t.game.villager instanceof t.Villager);assert.equal(t.game.phase,2);
   assert.deepEqual(JSON.parse(context.localStorage.getItem('cavaleiros-equipe-campanha')),['berserker','assassin']);
   clear();t.setMission(mission('lago'));t.showDifficulty();
   let next;context.setTimeout=(fn,ms)=>{if(ms===550)next=fn};t.confirmPick(1);next();
@@ -740,7 +740,7 @@ test('cronômetro para enquanto a vitória da última fase é exibida',()=>{
 });
 test('objetivos: sobreviver com ondas contínuas, totens e chefe',()=>{
   context.location={search:''};
-  begin('lago',['paladin','pyro','berserker']);Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);
+  begin('lago',['paladin','pyro','berserker']);assert.equal(t.game.phase,4);Object.assign(t.game,{phase:5,state:'fight',toSpawn:0});t.updateGame(.1);
   assert.equal(t.game.toSpawn,3);assert.equal(t.game.state,'fight');   // 4 novos, um já surgiu
   for(const u of [...t.units])if(u.team==='skeleton')u.remove();
   Object.assign(t.game,{surviveT:.05,toSpawn:0});t.updateGame(.1);t.updateGame(.1);assert.equal(t.game.state,'cleared');
@@ -811,6 +811,73 @@ test('terceira estrela mede a vida antes da cura da última fase',()=>{
   assert.ok(h.hp/h.maxHp>.5);assert.equal(t.game.missionHpRatio,.4);
   t.game.timer=0;t.updateGame(.1);
   assert.equal(t.starsOf('vila'),2);
+});
+test('trechos da campanha variam, crescem e só missões de chefe passam pelas fases 6 e 12',()=>{
+  const ranges=new Set(),icons=new Set();let from=1;
+  for(const m of t.MISSIONS){
+    assert.ok(m.from>=1&&m.to<=12&&m.from<=m.to,m.id);
+    assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;
+    assert.ok(!ranges.has(m.from+'-'+m.to),`${m.id} repete trecho`);ranges.add(m.from+'-'+m.to);
+    assert.ok(!icons.has(m.icon),`${m.id} repete ícone`);icons.add(m.icon);
+    const bossPhase=[6,12].some(p=>p>=m.from&&p<=m.to);assert.equal(bossPhase,m.goal.type==='boss',m.id);
+    if(m.goal.type==='survive')assert.ok(m.goal.phase>=m.from&&m.goal.phase<=m.to);
+    assert.ok(m.chapter&&m.story,m.id);
+  }
+  assert.equal(t.MISSIONS.at(-1).to,12);
+});
+test('medalha guarda a melhor dificuldade vencida e desafios de 3★ nas dificuldades altas',()=>{
+  context.localStorage.data={};
+  assert.equal(context.missionMedal('vila').best,null);
+  assert.equal(context.saveMissionMedal('vila',{won:false,stars:0,difficultyId:'pesadelo'}).newBest,false);
+  let r=context.saveMissionMedal('vila',{won:true,stars:3,difficultyId:'facil'});
+  assert.equal(r.newBest,true);assert.equal(r.newChallenge,null);   // 3★ no Fácil não cumpre desafio
+  r=context.saveMissionMedal('vila',{won:true,stars:2,difficultyId:'dificil'});assert.equal(r.newBest,true);assert.equal(r.newChallenge,null);
+  r=context.saveMissionMedal('vila',{won:true,stars:3,difficultyId:'normal'});assert.equal(r.newBest,false);
+  assert.equal(context.missionMedal('vila').best.difficultyName,'Difícil');
+  r=context.saveMissionMedal('vila',{won:true,stars:3,difficultyId:'dificil'});assert.equal(r.newChallenge.label,'3★ no Difícil');
+  assert.deepEqual(Array.from(context.missionMedal('vila').challenges,c=>c.done),[true,false]);
+  t.saveMissionRecord('ponte',{won:true,seconds:90,difficultyId:'pesadelo'});   // recordes antigos contam como medalha
+  assert.equal(context.missionMedal('ponte').best.difficultyId,'pesadelo');
+  const map=el(),info=el(),root=el();map.children=[];root.isConnected=true;root.closest=()=>null;
+  root.querySelector=selector=>selector==='.camp-map'?map:info;
+  context.location={search:'?tudo=1'};context.renderCampaign(root,noop);context.location={search:''};
+  assert.ok(map.children[0].innerHTML.includes('camp-seal seal-dificil challenge'));
+  assert.ok(map.children[1].innerHTML.includes('seal-pesadelo'));assert.ok(!map.children[2].innerHTML.includes('camp-seal'));
+  assert.ok(info.innerHTML.includes('Desafios opcionais')&&info.innerHTML.includes('Vencida no Difícil'));
+});
+test('fim da missão mostra recompensa, medalha e o botão da próxima missão',()=>{
+  context.location={search:''};context.localStorage.data={};
+  try{
+    begin('vila',['paladin']);t.setDifficulty(2);Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});t.updateGame(.1);
+    const html=elements.get('overlayStars').innerHTML;
+    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/30'));
+    assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
+    assert.ok(html.includes('Nova missão liberada: <b>A Ponte do Rio</b>')&&html.includes('Próxima missão'));
+    context.createWorld=()=>t.world;   // a próxima missão recria o cenário; aqui o duplo basta
+    t.startGame(mission('ponte'));assert.equal(t.game.mission.id,'ponte');assert.equal(t.pick.mode,'difficulty');
+    begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
+    assert.ok(elements.get('overlayStars').innerHTML.includes('Tentar de novo'));
+    assert.ok(!elements.get('overlayStars').innerHTML.includes('Recompensa'));
+  }finally{t.setDifficulty(1);}
+});
+test('primeira fase da missão abre com capítulo e história na faixa',()=>{
+  context.location={search:''};
+  begin('ponte',['paladin','pyro']);const banner=elements.get('banner');banner.children.length=0;t.startPhase();
+  assert.equal(banner.textContent,'A Ponte do Rio · Fase 2');
+  assert.ok(banner.children.at(-1).textContent.includes(mission('ponte').chapter)&&banner.children.at(-1).textContent.includes(mission('ponte').story));
+  banner.children.length=0;t.game.phase=3;t.startPhase();assert.equal(banner.textContent,'Fase 3');assert.equal(banner.children.length,0);
+});
+test('Ferrão de gigante só aparece com chefe ou golem pela frente',()=>{
+  const offered=(id,phase,last)=>{
+    clear();t.game.mission=mission(id);Object.assign(t.game,{phase,last});const seen=new Set();
+    for(let i=0;i<120;i++){context.showRelicPick();for(const r of t.pick.options)seen.add(r.id);}
+    clear();return seen.has('giant-bane');
+  };
+  assert.equal(offered('lago-sombrio',10,11),false);
+  assert.equal(offered('cemiterio',11,11),false);
+  assert.equal(offered('resgate',8,8),true);   // golem fecha a fase 8
+  assert.equal(offered('fazendas',5,6),true);  // Rei na fase 6
+  t.game.paused=false;context.document.getElementById('pick').classList.add('hidden');
 });
 const cMath=vm.runInContext('Math',context);   // o sorteio do jogo é o Math do contexto
 const foe=(type,x,z,boss=false)=>{const u=new t.Skeleton(type,6,boss);u.spawning=false;u.busy=0;u.pos.set(x,0,z);return u};
