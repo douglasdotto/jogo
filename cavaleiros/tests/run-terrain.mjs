@@ -154,7 +154,7 @@ const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.
   clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},setUserPause:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
   closeHeroPanel:()=>{},clearMonsterFx:()=>{},document:{body:{classList:{add:()=>{}}}},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
   enemyBolts,bolts:[],blasts:[],flames:[],fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
-  follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;},progress:{rerolls:()=>0},renderRelicTray:()=>{}
+  follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;},progress:{rerolls:()=>0},cam:{},renderRelicTray:()=>{}
 });
 reset();if(enemyBolts.length||removed[0]?.id!=='tiro'||resetGame.phase!==1||!chose)throw Error('Reinício deixou projétil ou não abriu escolha');
 console.log('Fases: surgimento no topo/água, chefe, último inimigo e reinício OK');

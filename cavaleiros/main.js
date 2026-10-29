@@ -1985,6 +1985,32 @@ function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+// Heróis à distância recuam alguns passos quando um inimigo corpo a corpo encosta, puxando para o
+// posto (atrás da linha de frente), e voltam a atirar; a recarga evita que passem a luta fugindo.
+const KITE_TRIGGER = 2.2, KITE_STEP = 2.6, KITE_TIME = 0.7, KITE_COOLDOWN = 3;
+const kiteAway = new THREE.Vector3(), kiteHome = new THREE.Vector3();
+function kiteFrom(h, dt) {
+  h.kiteCd = Math.max(0, (h.kiteCd || 0) - dt);
+  if (h.kiteT > 0) { h.kiteT -= dt; return h.kiteTo; }
+  if (h.kiteCd > 0) return null;
+  let threat = null, best = KITE_TRIGGER;
+  for (const s of activeTargetContext?.attackableSkeletons ?? skeletonsAlive()) {
+    if (s.dead || s.spawning || s.ranged || s.totem) continue;
+    const d = tacticalDistance(s.pos, h.pos);
+    if (d < best) { best = d; threat = s; }
+  }
+  if (!threat) return null;
+  kiteAway.subVectors(h.pos, threat.pos).setY(0).normalize();
+  kiteHome.subVectors(h.post, h.pos).setY(0);
+  if (Math.hypot(kiteHome.x, kiteHome.z) > 0.1) kiteAway.add(kiteHome.normalize().multiplyScalar(0.6)).normalize();
+  h.kiteTo ||= new THREE.Vector3();
+  h.kiteTo.copy(h.pos).addScaledVector(kiteAway, KITE_STEP);
+  if (tacticalDistance(h.kiteTo, h.post) > LEASH) h.kiteTo.copy(h.post);   // nunca sai da corda tática
+  h.kiteT = KITE_TIME;
+  h.kiteCd = KITE_COOLDOWN;
+  return h.kiteTo;
+}
+
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
 
 function canHeroReachTarget(hero, target, context = targetContext()) {
@@ -4294,6 +4320,8 @@ class Hero extends Unit {
     const move = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Running_A';
     const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Walking_A';
     if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
+    const kite = game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
+    if (kite) { this.moveTo(kite, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const target = game.state === 'fight'
       ? chooseHeroTarget(this, activeTargetContext?.skeletons ?? skeletonsAlive(), dt) : null;
     // no manual a habilidade fica carregada esperando o jogador pedir
@@ -4828,7 +4856,8 @@ function placeParty(first) {
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
-  camera.position.set(follow.x, 23, follow.z + 21);
+  camera.position.set(follow.x, 27.6, follow.z + 25.2);   // mesmo ângulo, 20% mais longe: mais campo de visão
+  cam.userDist = 0;   // a distância do jogador recomeça desta posição
   $('goal').classList.toggle('hidden', !m);
   if (m) {
     $('goal').setAttribute('data-icon', GOAL_ICONS[m.goal.type] || '⚑');
@@ -5687,7 +5716,7 @@ const clock = new THREE.Clock();
 // Buffers reutilizáveis do quadro: evita alocar arrays de unidades/alvos a 60 Hz.
 const frameUnits = [], frameHeroes = [], frameFoes = [], frameNearFoes = [];
 const frameFoeCenter = new THREE.Vector3();
-const CAM_MIN_FIT = 14;   // mais perto que isso a briga sai da tela
+const CAM_MIN_FIT = 17;   // mais perto que isso a briga sai da tela
 let frameSpread = 0;
 function frame() {
   requestAnimationFrame(frame);   // agenda antes: um erro no quadro não congela o jogo

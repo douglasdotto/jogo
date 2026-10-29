@@ -1487,5 +1487,13 @@ test('guarda: quem cai não volta e não pesa em derrota, quedas ou estrelas',()
   h.die();t.game.state='fight';t.game.toSpawn=0;t.updateGame(.05);assert.equal(t.game.over,true,'sem heróis é derrota, mesmo com guarda de pé');
   clear();
 });
+test('herói à distância recua de quem encosta, sem sair da corda; corpo a corpo não recua',()=>{
+  clear();t.game.state='fight';const mage=hero('cryo',0,0),e=foe('Minion',0,-1.5);e.busy=99;e.hp=e.maxHp=1e4;
+  tick(.05,14);const d=Math.hypot(mage.pos.x-e.pos.x,mage.pos.z-e.pos.z);
+  assert.ok(d>2.5,'abre distância: '+d.toFixed(2));assert.ok(Math.hypot(mage.pos.x,mage.pos.z)<=5.01,'fica perto do posto');
+  assert.ok(mage.kiteCd>0,'recarga evita fugir sem parar');
+  clear();t.game.state='fight';const knight=hero('paladin',0,0),e2=foe('Minion',0,-1.5);e2.busy=99;e2.hp=e2.maxHp=1e4;
+  tick(.05,14);assert.ok(!(knight.kiteCd>0),'corpo a corpo segura a posição');clear();
+});
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}
