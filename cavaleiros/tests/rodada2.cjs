@@ -94,7 +94,7 @@ vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 const t=context.t;
@@ -1094,6 +1094,15 @@ test('pausa do jogador, reinício com confirmação e cartões de menu focáveis
   t.showMenu();assert.ok(t.pick.cards.every(card=>card.tabIndex===0));
   t.showDifficulty();assert.ok(t.pick.cards.every(card=>card.tabIndex===0));
   clear();
+});
+test('com a onda longe, o grupo avança ao encontro dela até o limite da fase',()=>{
+  clear();Object.assign(t.game,{phase:6,guideS:60});const h=hero('paladin',0,-60);
+  const far=foe('Warrior',0,-80);
+  for(let i=0;i<100;i++)t.pressForward(.1,[far]);
+  assert.ok(t.game.guideS>60&&t.game.guideS<=67+1e-9,'avança no máximo 7 m além do ponto da fase');assert.ok(h.post.z<-60);
+  t.game.guideS=60;const back=foe('Minion',0,-50);t.pressForward(1,[far,back]);assert.equal(t.game.guideS,60,'inimigo atrás segura o grupo');
+  t.game.guideS=60;back.dead=true;const near=foe('Minion',0,-64);t.pressForward(1,[near]);assert.equal(t.game.guideS,60,'inimigo perto: luta no posto');
+  t.game.guideS=0;clear();
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

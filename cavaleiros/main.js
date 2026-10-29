@@ -58,7 +58,7 @@ const VARIANTS = [
   { id: 'viking', names: ['Viking', 'Jarl Valente', 'Rei do Norte'], desc: 'Arremessa um machado à distância.', ability: 'Machado voador', color: ['#b8dfe5', '#5b9dab'],
     use: ['1H_Axe', 'Barbarian_Round_Shield'], stats: { Vida: 5, Força: 4, Rapidez: 3, Alcance: 3 }, cleave: 0, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop'], classId: 1 },
   { id: 'pyro', names: ['Piromante', 'Chama Viva', 'Fênix Solar'], desc: 'Bolas de fogo deixam chamas no chão.', ability: 'Chão em chamas', color: ['#ffc6a4', '#dc8757'],
-    use: ['2H_Staff'], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, dmg: 24, splash: 1.1, classId: 2 },
+    use: [], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, dmg: 24, splash: 1.1, classId: 2 },
   { id: 'arcane', names: ['Arcano', 'Sábio Astral', 'Mestre Estelar'], desc: 'Um raio salta entre os inimigos.', ability: 'Raio em cadeia', color: ['#d4b3ff', '#9a6be0'],
     use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, dmg: 24, splash: 0, cooldown: 1.05, classId: 2 },
   { id: 'cryo', names: ['Criomante', 'Sábio Glacial', 'Coração Polar'], desc: 'Gelo deixa os esqueletos lentinhos.', ability: 'Onda de gelo', color: ['#b9efff', '#58aaca'],
@@ -4792,6 +4792,24 @@ function spawnSkeleton() {
 linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, world, ring, beam, poof, popText, showBanner,
   get game() { return game; }, get difficulty() { return difficulty; } });
 
+// Com a onda ainda longe, a formação anda ao encontro dela em vez de esperar parada no posto;
+// o avanço tem teto para o grupo não atravessar o terreno da fase seguinte.
+const PRESS_LIMIT = 7;
+function pressForward(dt, skeletons) {
+  const anchor = world.pointAt(game.guideS), fwd = world.tangentAt(game.guideS);
+  let nearest = Infinity;
+  for (const s of skeletons) {
+    if (s.spawning || s.totem || s.dead) continue;
+    const ahead = (s.pos.x - anchor.x) * fwd.x + (s.pos.z - anchor.z) * fwd.z;
+    if (ahead < 0) return;   // inimigo atrás: o grupo segura a posição
+    nearest = Math.min(nearest, ahead);
+  }
+  const room = Math.min(world.anchorS(game.phase) + PRESS_LIMIT, game.guideS + nearest - (LEASH + 1)) - game.guideS;
+  if (nearest === Infinity || room <= 0) return;
+  game.guideS += Math.min(room, MARCH * dt);
+  for (const h of heroes()) h.setAnchor(game.guideS);
+}
+
 function updateGame(dt) {
   if (game.over || game.paused) return;
   const alive = heroes().filter((h) => !h.dead);
@@ -4801,6 +4819,7 @@ function updateGame(dt) {
   if (game.mission && campaignTick(dt, skeletons)) return;
 
   if (game.state === 'fight') {
+    pressForward(dt, skeletons);
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
       const bossWaits = game.bossPending && game.toSpawn === 1 && skeletons.length > 4;   // o chefe só entra quando a onda diminui, sem chegar junto com ela

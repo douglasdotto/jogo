@@ -122,7 +122,6 @@ export const LOOKS = {
     paint: {
       ...outfit('Mage', '#e8642e', '#8a3a1e'), ...face('Mage', { skin: '#f0b088', hair: '#ff6a1a', eyes: '#ffb01a' }),
       Mage_Hat: { tint: '#d13b2b', amount: 0.85 }, Mage_Cape: { tint: '#ffb03a', amount: 0.8 },
-      '2H_Staff': { tint: '#5a2a1a', amount: 0.6 },
     },
     // chamas na ponta do chapéu (inclinado para trás) e as duas mãos pegando fogo
     extras: [
@@ -239,7 +238,7 @@ export const LOOK_PREVIEW = [
   { id: 'berserker', name: 'Berserker', model: 'Barbarian', use: ['1H_Axe', '1H_Axe_Offhand'] },
   { id: 'crusher', name: 'Esmagador', model: 'Barbarian', use: ['2H_Axe'] },
   { id: 'viking', name: 'Viking', model: 'Barbarian', use: ['1H_Axe', 'Barbarian_Round_Shield'] },
-  { id: 'pyro', name: 'Piromante', model: 'Mage', use: ['2H_Staff'] },
+  { id: 'pyro', name: 'Piromante', model: 'Mage', use: [] },   // conjura com as mãos em chamas, sem cajado
   { id: 'arcane', name: 'Arcano', model: 'Mage', use: ['Spellbook_open', '1H_Wand'] },
   { id: 'cryo', name: 'Criomante', model: 'Mage', use: ['1H_Wand'] },
   { id: 'assassin', name: 'Assassino', model: 'Rogue', use: ['Knife', 'Knife_Offhand'] },
