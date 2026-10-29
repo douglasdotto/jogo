@@ -65,6 +65,55 @@ async function run() {
   assert.equal(loaded.length, count, 'assets já carregados não são pedidos de novo');
   for (const file of required) assert.ok(context.assets[file.replace(/\.(glb|gltf)$/, '')], file);
   console.log('OK: assets de combate carregam sob demanda, pausam o início, recuperam falha e ficam em cache');
+  await portraits();
+}
+
+// retratos: o menu não espera por eles; quem a tela pede fura a fila e o marcador é trocado no lugar
+async function portraits() {
+  assert.ok(!main.includes('await renderPortraits'), 'o menu não espera os retratos');
+  assert.match(main, /preparePortraits\(\);\s*startGame\(\);/);
+  const source = main.slice(main.indexOf('// retrato de cada'), main.indexOf('// ---------- barra de habilidades'));
+  const renders = [];
+  const node = () => ({ position: { set() {}, y: 0 }, rotation: {}, scale: { setScalar() {} }, add() {}, traverse() {}, lookAt() {} });
+  const images = [];
+  let blobs = 0, disposed = 0;
+  const VARIANTS = ['a', 'b', 'c'].map((id) => ({ id, name: id, hide: [], idle: 'Idle', built: { scene: { id }, animations: [] } }));
+  const ctx = vm.createContext({
+    VARIANTS, haloGeo: {}, goldMat: {}, setTimeout, console: { warn() {} },
+    document: { images },
+    URL: { createObjectURL: () => `blob:${++blobs}` },
+    SkeletonUtils: { clone: (scene) => ({ ...node(), id: scene.id }) },
+    THREE: {
+      WebGLRenderer: class {
+        constructor() { this.domElement = { toBlob: (done) => setTimeout(() => done({}), 0) }; }
+        setSize() {} dispose() { disposed++; }
+        render(sc) { renders.push(sc.model.id); }
+      },
+      Scene: class { add(o) { if (o.id) this.model = o; } remove() { this.model = null; } },
+      HemisphereLight: class {}, DirectionalLight: class { constructor() { Object.assign(this, node()); } },
+      PerspectiveCamera: class { constructor() { Object.assign(this, node()); } },
+      AnimationMixer: class { clipAction() { return { play() {} }; } update() {} },
+      AnimationClip: { findByName: () => ({}) },
+      Mesh: class { constructor() { Object.assign(this, node()); } },
+    },
+  });
+  vm.runInContext(source, ctx);
+  vm.runInContext('preparePortraits()', ctx);
+  const [a, , c] = VARIANTS;
+  const marker = c.portrait;
+  assert.match(marker, /^data:image\/svg\+xml/, 'sem retrato ainda, devolve um marcador');
+  assert.notEqual(marker, a.portrait, 'cada herói tem seu marcador');
+  images.push({ getAttribute: () => marker, set src(url) { this.url = url; } });
+  const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
+  for (let k = 0; k < 40 && blobs < 9; k++) await wait();
+  assert.equal(renders[0], 'c', 'o retrato pedido pela tela vem antes da fila');
+  assert.deepEqual([...renders].sort(), ['a', 'a', 'a', 'b', 'b', 'b', 'c', 'c', 'c']);
+  assert.match(images[0].url, /^blob:/, 'o marcador na tela vira o retrato');
+  assert.equal(c.portrait, images[0].url);
+  assert.deepEqual(Array.from(a.portraits, (url) => url.startsWith('blob:')), [true, true, true]);
+  await wait();
+  assert.equal(disposed, 1, 'o renderizador dos retratos sai quando todos ficam prontos');
+  console.log('OK: retratos sob demanda não seguram o menu e ficam em cache');
 }
 
 run().catch((error) => { console.error(error); process.exitCode = 1; });

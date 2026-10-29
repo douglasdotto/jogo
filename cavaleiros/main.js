@@ -151,6 +151,26 @@ sun.shadow.bias = -0.0005;
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 80 });
 scene.add(sun, sun.target);
 
+// qualidade gráfica (botão do HUD, salva no navegador): Baixa desliga as sombras e desenha em 1x
+const QUALITY_KEY = 'cavaleiros-graficos';
+let lowQuality = false;
+try { lowQuality = localStorage.getItem(QUALITY_KEY) === 'baixa'; } catch {}
+function applyQuality() {
+  renderer.setPixelRatio(lowQuality ? 1 : Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  sun.castShadow = !lowQuality;
+  const button = document.getElementById('quality');
+  button.textContent = `Gráficos: ${lowQuality ? 'baixa' : 'alta'}`;
+  button.setAttribute('aria-pressed', String(lowQuality));
+  button.title = lowQuality ? 'Gráficos leves: sem sombras e resolução 1x. Clique para a qualidade alta.' : 'Clique para gráficos leves (sem sombras, resolução 1x) se o jogo estiver lento.';
+}
+document.getElementById('quality').onclick = () => {
+  lowQuality = !lowQuality;
+  try { localStorage.setItem(QUALITY_KEY, lowQuality ? 'baixa' : 'alta'); } catch {}
+  applyQuality();
+};
+applyQuality();
+
 let world = createWorld(scene, ROAD, PHASES);
 
 // ---------- interface ----------
@@ -676,6 +696,7 @@ function confirmPick(i) {
     }
     const begin = () => {
       if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
+      document.body.classList.remove('no-battle');
       game.paused = false;
       audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
     };
@@ -914,7 +935,34 @@ function canvasImageURL(canvas) {
   });
 }
 
-async function renderPortraits() {
+// Os retratos saem sob demanda: o menu abre na hora, quem aparece na tela fura a fila
+// e o resto é desenhado em segundo plano. Ficam em memória (blob URLs) pela sessão.
+const portraitQueue = [], portraitUrgent = [];
+let portraitStudio = null, portraitPumping = false;
+
+// imagem transparente própria de cada herói/nível; trocada pelo retrato quando ele fica pronto
+const portraitPlaceholder = (cfg, level) => `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1' data-p='${cfg.id}-${level}'/%3E`;
+
+function portraitURL(cfg, level) {
+  const url = cfg.portraitURLs[level - 1];
+  if (url) return url;
+  if (!cfg.portraitFailed && !portraitUrgent.includes(cfg)) { portraitUrgent.push(cfg); setTimeout(pumpPortraits, 0); }
+  return portraitPlaceholder(cfg, level);
+}
+
+// cfg.portrait e cfg.portraits seguem valendo nos templates; sem retrato ainda, devolvem o marcador
+function preparePortraits() {
+  for (const cfg of VARIANTS) {
+    cfg.portraitURLs = [];
+    Object.defineProperty(cfg, 'portrait', { configurable: true, get: () => portraitURL(cfg, 1) });
+    Object.defineProperty(cfg, 'portraits', { configurable: true, get: () => [1, 2, 3].map((level) => portraitURL(cfg, level)) });
+    portraitQueue.push(cfg);
+  }
+  setTimeout(pumpPortraits, 0);   // o resto começa depois que o menu aparece
+}
+
+function portraitStudioFor() {
+  if (portraitStudio) return portraitStudio;
   const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
   r.setSize(336, 336);
   const sc = new THREE.Scene();
@@ -925,35 +973,56 @@ async function renderPortraits() {
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   cam.position.set(1.4, 1.9, 4.2);
   cam.lookAt(0, 1.15, 0);
-  const portraitCount = VARIANTS.length * 3;
-  $('overlayText').textContent = `Preparando heróis... 0/${portraitCount}`;
-  let rendered = 0;
-  for (const cfg of VARIANTS) {
-    const built = cfg.built;
-    const model = SkeletonUtils.clone(built.scene);
-    model.traverse((o) => { if (cfg.hide.includes(o.name)) o.visible = false; });
-    const mixer = new THREE.AnimationMixer(model);
-    mixer.clipAction(THREE.AnimationClip.findByName(built.animations, cfg.idle)).play();
-    mixer.update(0.4);
-    sc.add(model);
-    cfg.portraits = [];
-    const halo = new THREE.Mesh(haloGeo, goldMat);
-    halo.rotation.x = Math.PI / 2;
-    halo.position.y = 2.5;
-    model.add(halo);
+  return (portraitStudio = { r, sc, cam });
+}
+
+async function renderPortrait(cfg) {
+  const { r, sc, cam } = portraitStudioFor();
+  const built = cfg.built;
+  const model = SkeletonUtils.clone(built.scene);
+  model.traverse((o) => { if (cfg.hide.includes(o.name)) o.visible = false; });
+  const mixer = new THREE.AnimationMixer(model);
+  mixer.clipAction(THREE.AnimationClip.findByName(built.animations, cfg.idle)).play();
+  mixer.update(0.4);
+  sc.add(model);
+  const halo = new THREE.Mesh(haloGeo, goldMat);
+  halo.rotation.x = Math.PI / 2;
+  halo.position.y = 2.5;
+  model.add(halo);
+  try {
     for (let level = 1; level <= 3; level++) {
       model.scale.setScalar(1 + (level - 1) * 0.08);
       halo.visible = level === 3;
       r.render(sc, cam);
-      cfg.portraits.push(await canvasImageURL(r.domElement));
-      rendered++;
-      $('overlayText').textContent = `Preparando heróis... ${rendered}/${portraitCount}`;
-      if (rendered % 6 === 0 && rendered < portraitCount) await new Promise((resolve) => setTimeout(resolve, 0));
+      const url = await canvasImageURL(r.domElement);
+      cfg.portraitURLs[level - 1] = url;
+      // troca o marcador nas imagens que já estão na tela
+      const placeholder = portraitPlaceholder(cfg, level);
+      for (const img of document.images) if (img.getAttribute('src') === placeholder) img.src = url;
     }
-    cfg.portrait = cfg.portraits[0];
+  } finally {
     sc.remove(model);
   }
-  r.dispose();
+}
+
+async function pumpPortraits() {
+  if (portraitPumping) return;
+  portraitPumping = true;
+  try {
+    for (let cfg; (cfg = portraitUrgent.shift() || portraitQueue.shift());) {
+      if (cfg.portraitURLs.length === 3 || cfg.portraitFailed) continue;
+      try { await renderPortrait(cfg); } catch (error) {
+        cfg.portraitFailed = true;
+        console.warn(`Não foi possível preparar o retrato de ${cfg.name}:`, error);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));   // um herói por vez, sem travar o menu
+    }
+  } finally { portraitPumping = false; }
+  // todos prontos: o renderizador dos retratos pode sair
+  if (portraitStudio && VARIANTS.every((cfg) => cfg.portraitURLs.length === 3 || cfg.portraitFailed)) {
+    portraitStudio.r.dispose();
+    portraitStudio = null;
+  }
 }
 
 // ---------- barra de habilidades: três botões por herói, incluindo ultimate ----------
@@ -1203,18 +1272,38 @@ async function loadAssets() {
 // ---------- unidades ----------
 const units = [];
 const tmp = new THREE.Vector3();
+const moveDir = new THREE.Vector3(), stepNext = new THREE.Vector3();   // reaproveitados a cada quadro
+
+// culling das malhas com esqueleto: a esfera de repouso de cada peça não acompanha a animação (a cabeça
+// cai longe na morte), então todas usam uma esfera única da unidade, com folga para golpes e quedas
+const cullBox = new THREE.Box3(), cullPart = new THREE.Box3(), cullSphere = new THREE.Sphere(), cullInverse = new THREE.Matrix4();
+function fitCullingSphere(meshes) {
+  if (!meshes.length) return;
+  cullBox.makeEmpty();
+  for (const o of meshes) {
+    o.updateWorldMatrix(true, false);
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    cullBox.union(cullSphere.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld).getBoundingBox(cullPart));
+  }
+  cullBox.getBoundingSphere(cullSphere);
+  cullSphere.radius = cullSphere.radius * 1.5 + 0.5;
+  for (const o of meshes) o.boundingSphere = cullSphere.clone().applyMatrix4(cullInverse.copy(o.matrixWorld).invert());
+}
 
 class Unit {
   constructor(gltf, stats, team) {
     this.root = SkeletonUtils.clone(gltf.scene);
     this.mats = [];   // materiais próprios para piscar ao levar golpe sem afetar os outros
+    const skinned = [];
     this.root.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = true;
-      o.frustumCulled = false;
+      o.frustumCulled = true;
+      if (o.isSkinnedMesh) skinned.push(o);
       o.material = o.material.clone();
       this.mats.push(o.material);
     });
+    fitCullingSphere(skinned);
     this.vel = new THREE.Vector3();   // velocidade atual: acelera e freia aos poucos
     this.moving = false;
     this.flash = 0;
@@ -1279,7 +1368,7 @@ class Unit {
   // anda até o alvo desviando dos obstáculos que estão na frente
   moveTo(target, dt) {
     target = world.nextWaypoint(this.pos, target);
-    const dir = new THREE.Vector3().subVectors(target, this.pos).setY(0);
+    const dir = moveDir.subVectors(target, this.pos).setY(0);
     const d = dir.length();
     if (d < 0.05) return;
     dir.divideScalar(d);
@@ -1337,7 +1426,7 @@ class Unit {
       }
       n *= this.damageTaken;
       if (this.guardT > 0) n *= 0.6;
-      const protection = synergyDamageTakenMultiplier(this, heroes());
+      const protection = synergyDamageTakenMultiplier(this, partyNow());
       if (protection < 1) {
         n *= protection;
         if (this.synergyNoticeT <= 0) { popText(this.pos, SYNERGIES[2].name, 'heal'); this.synergyNoticeT = 1.2; }
@@ -1413,7 +1502,7 @@ class Unit {
     if (!this.moving) this.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
     this.moving = false;
     if (!this.dead && !game.over) {
-      const next = this.pos.clone().addScaledVector(this.vel, dt);
+      const next = stepNext.copy(this.pos).addScaledVector(this.vel, dt);
       if (this.phasing || world.canStep(this.pos, next)) this.pos.copy(next);   // fantasmas atravessam obstáculos
       else this.vel.set(0, 0, 0);
       this.pos.y = world.groundHeight(this.pos.x, this.pos.z) + (this.hover || 0);
@@ -1508,9 +1597,10 @@ function makeTargetContext(reuse = null) {
 }
 
 const targetContext = () => activeTargetContext || makeTargetContext();
+const partyNow = () => activeTargetContext?.party || heroes();   // grupo do quadro, sem refiltrar as unidades a cada golpe
 
 function applySynergy(attack, owner, target, damage) {
-  const members = heroes();
+  const members = partyNow();
   if (attack === 'fire' && owner.cfg.id === 'pyro'
     && members.some((h) => ['cryo', 'druid'].includes(h.cfg.id))) {
     const multiplier = synergyDamageMultiplier('fire', target);
@@ -1931,18 +2021,21 @@ const enemyBolts = [];
 const enemyOrbMat = new THREE.MeshBasicMaterial({ color: 0xc591ee });
 function fireEnemyBolt(from, target) {
   const mesh = from.enemyKind === 'Crossbow' ? assets.Skeleton_Arrow.scene.clone() : new THREE.Mesh(boltGeo, from.boltMat || enemyOrbMat);
-  mesh.position.copy(from.pos).add(new THREE.Vector3(0, 1.3, 0));
+  mesh.position.copy(from.pos);
+  mesh.position.y += 1.3;
   scene.add(mesh);
   enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
 }
+const enemyBoltGoal = new THREE.Vector3(), enemyBoltDir = new THREE.Vector3(), enemyBoltUp = new THREE.Vector3(0, 1, 0);
 function updateEnemyBolts(dt) {
   if (dt <= 0) return;
   for (let i = enemyBolts.length - 1; i >= 0; i--) {
-    const b = enemyBolts[i], goal = b.target.pos.clone().add(new THREE.Vector3(0, 1.1, 0));
+    const b = enemyBolts[i], goal = enemyBoltGoal.copy(b.target.pos);
+    goal.y += 1.1;
     b.life -= dt;
     const d = b.mesh.position.distanceTo(goal);
     if (!b.target.dead) {
-      b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), goal.clone().sub(b.mesh.position).normalize());
+      b.mesh.quaternion.setFromUnitVectors(enemyBoltUp, enemyBoltDir.subVectors(goal, b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
       if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos, b.from); b.life = 0; }
     }
@@ -3839,6 +3932,7 @@ const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false
 function startGame(view = 'menu') {
   battleGateId++;
   battleLoadingVisible = false;
+  document.body.classList.add('no-battle');   // menu e mapa sem o HUD da batalha por trás
   if (aiming) cancelAim();
   clearTimeout(pick.timer);
   clearTimeout(showBanner.t);
@@ -3898,6 +3992,7 @@ function startMission() {
     if (m.goal.type === 'escort') game.villager = new Villager();
     if (m.goal.type === 'rescue') game.villager = new Villager(true);
     showBanner(`${m.name} · ${world.biome}`, 3);
+    document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
   };
   if (typeof withBattleAssets === 'function') return withBattleAssets(begin);
@@ -4697,7 +4792,7 @@ addEventListener('resize', () => {
 
 try {
   await loadAssets();
-  await renderPortraits();
+  preparePortraits();
   startGame();
   frame();
 } catch (error) {

@@ -94,11 +94,16 @@ export function cooldownForSkill(cfg, slot = 0, level = 1, rate = 1) {
   return Math.max(ultimate ? 35 : 9, skill.cooldown - (level - 1) * reduction) * rate;
 }
 
+// a lista é a mesma durante todo o jogo: monta uma vez por herói (é lida a cada quadro)
+const skillSets = new WeakMap();
 export function skillSetFor(cfg) {
+  if (skillSets.has(cfg)) return skillSets.get(cfg);
   const info = heroInfo(cfg);
   const extras = EXTRA_SKILLS[cfg.id] || [];
-  return [
+  const skills = [
     { slot: 0, name: cfg.ability, description: info.skill, effect: 'primary', ultimate: false },
     ...extras.map((skill, index) => ({ ...skill, slot: index + 1, ultimate: index === 1 })),
   ];
+  skillSets.set(cfg, skills);
+  return skills;
 }
