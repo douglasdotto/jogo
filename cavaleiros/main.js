@@ -644,7 +644,7 @@ function bindCard(b, i, hoverSelects = true) {
 }
 
 // ficha do herói em foco: retrato, nome, papel, maestria, habilidades (detalhes na dica) e atributos em ícones
-const attr = (text) => String(text).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+const attrText = (text) => String(text).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 function renderInfo(cfg) {
   const info = heroInfo(cfg);
   const skills = skillSetFor(cfg);
@@ -660,35 +660,35 @@ function renderInfo(cfg) {
   // papéis que faltam só aparecem enquanto há vaga; na missão valem os prioritários do objetivo
   const slotsLeft = projectedTeam.length < teamLimit;
   const wanted = slotsLeft ? (objective ? uncoveredPriorities : team.missing) : [];
-  const roleIcon = (name, cls, tip) => `<span class="${cls}" data-role="${name}" tabindex="0" data-tip="${attr(tip)}" aria-label="${attr(tip)}">${ROLE_GLYPHS[name] || '✦'}</span>`;
+  const roleIcon = (name, cls, tip) => `<span class="${cls}" data-role="${name}" tabindex="0" data-tip="${attrText(tip)}" aria-label="${attrText(tip)}">${ROLE_GLYPHS[name] || '✦'}</span>`;
   const coveredIcons = team.roles.filter((role) => role.count)
     .map((role) => roleIcon(role.name, `covered${priorityRoles.includes(role.name) ? ' priority' : ''}`, role.name)).join('');
   const wantedIcons = wanted.map((name) => roleIcon(name, `wanted${objective ? ' priority' : ''}`, objective ? `Missão pede: ${name}` : `Falta: ${name}`)).join('');
   const teamMembers = projectedTeam.map((member) => {
     const candidate = canAddCandidate && member.id === cfg.id;
-    return `<span class="${candidate ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}" data-tip="${attr(member.name)}" aria-label="${attr(member.name + (candidate ? ' (novo)' : ''))}"><img src="${member.portrait}" alt=""></span>`;
+    return `<span class="${candidate ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}" data-tip="${attrText(member.name)}" aria-label="${attrText(member.name + (candidate ? ' (novo)' : ''))}"><img src="${member.portrait}" alt=""></span>`;
   }).join('')
     + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty" aria-label="Vaga livre"><i aria-hidden="true">+</i></span>').join('');
   const numbers = { Vida: `${cfg.hp} de vida`, Força: `${cfg.dmg} de dano por golpe`, Rapidez: `golpe a cada ${cfg.cooldown.toLocaleString('pt-BR')} s`, Alcance: `${cfg.range.toLocaleString('pt-BR')} m` };
   const stats = Object.entries(cfg.stats).map(([label, n]) => {
     const tip = `${label} ${n}/5 · ${numbers[label] || ''}`;
-    return `<span class="hero-stat" tabindex="0" data-tip="${attr(tip)}" aria-label="${attr(tip)}"><i aria-hidden="true">${STAT_GLYPHS[label] || '✦'}</i><span class="pips${label === 'Vida' ? ' hearts' : ''}" aria-hidden="true">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span></span>`;
+    return `<span class="hero-stat" tabindex="0" data-tip="${attrText(tip)}" aria-label="${attrText(tip)}"><i aria-hidden="true">${STAT_GLYPHS[label] || '✦'}</i><span class="pips${label === 'Vida' ? ' hearts' : ''}" aria-hidden="true">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</span></span>`;
   }).join('');
   const mastery = progress.mastery(cfg.id);
   const masteryPerks = MASTERY_PERKS.slice(1, mastery.level).map((perk) => perk.text).join(' · ') || 'Jogue com este herói para ganhar maestria.';
   const masteryXp = mastery.next ? `${mastery.xp}/${mastery.next} XP` : 'máxima';
-  const masteryLine = `<div class="hero-mastery mastery-${mastery.level}" tabindex="0" data-tip="${attr(`Maestria ${mastery.level} · ${masteryXp} · ${masteryPerks}`)}" aria-label="${attr(`Maestria ${mastery.level}, ${masteryXp}`)}"><b aria-hidden="true">✦${mastery.level}</b><span class="mastery-track" aria-hidden="true"><i style="width:${mastery.next ? Math.round((mastery.xp - mastery.from) / (mastery.next - mastery.from) * 100) : 100}%"></i></span></div>`;
+  const masteryLine = `<div class="hero-mastery mastery-${mastery.level}" tabindex="0" data-tip="${attrText(`Maestria ${mastery.level} · ${masteryXp} · ${masteryPerks}`)}" aria-label="${attrText(`Maestria ${mastery.level}, ${masteryXp}`)}"><b aria-hidden="true">✦${mastery.level}</b><span class="mastery-track" aria-hidden="true"><i style="width:${mastery.next ? Math.round((mastery.xp - mastery.from) / (mastery.next - mastery.from) * 100) : 100}%"></i></span></div>`;
   const kindName = (skill) => skill.ultimate ? 'Ultimate' : skill.slot === 1 ? 'Técnica' : 'Básica';
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="hero-profile"><div class="crest"><img src="${cfg.portrait}" alt=""></div>
       <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? '➶' : '⚔'}</small><div class="ribbon">${cfg.name}</div>
-        <span class="hero-role-pill" tabindex="0" data-tip="${attr(`${CLASSES[cfg.classId].summary} ${info.tip}`)}">${info.role}</span>${masteryLine}</div></div>
-    <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attr(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
+        <span class="hero-role-pill" tabindex="0" data-tip="${attrText(`${CLASSES[cfg.classId].summary} ${info.tip}`)}">${info.role}</span>${masteryLine}</div></div>
+    <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attrText(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
     <div class="stats hero-stats" aria-label="Atributos">${stats}</div>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info" aria-label="Ganhe ${starsToUnlock(cfg.id)} estrelas na campanha para liberar">\u{1F512}︎ ★ ${starsToUnlock(cfg.id)}</div>`}`;
   // equipe fixa ao lado dos cartões: mini-retratos, contagem, papéis cobertos e os que faltam
-  pick.team.innerHTML = `<section class="party-composition" aria-label="${attr(canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe')}">
+  pick.team.innerHTML = `<section class="party-composition" aria-label="${attrText(canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe')}">
       <span class="pick-team-count" aria-label="${Math.min(projectedTeam.length, teamLimit)} de ${teamLimit} heróis">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>
       <div class="party-members">${teamMembers}</div>
       <div class="party-roles" aria-label="Papéis cobertos">${coveredIcons}</div>
