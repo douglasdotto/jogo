@@ -8,7 +8,7 @@ import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './chara
 import { LOOKS } from './looks.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
-import { aimSpec, validAim } from './skill-targeting.js';
+import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
 import { synergyDamageMultiplier, synergyDamageTakenMultiplier, SYNERGIES } from './synergies.js';
 import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './upgrade-branches.js';
 import { buildBattleReport } from './battle-report.js';
@@ -17,11 +17,13 @@ import * as audio from './audio.js';
 import { initTooltips, registerTooltip, hideTooltip } from './tooltip.js';
 import { logoSVG } from './logo.js';
 import { tutorial } from './tutorial.js';
-import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
+import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen, campaignCosmetics, equippedCampaignCosmetic, equipCampaignCosmetic, campaignStorageIsVolatile, campaignStorageWasCorrupted, campaignCorruptBackupFailed } from './campaign.js';
 import { materialPool } from './fx-pool.js';
-import { disposeSkeletons } from './scene-perf.js';
+import { createPopTextPool } from './pop-text-pool.js';
+import { createCampaignAura } from './campaign-aura.js';
+import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
-import { vfxMesh, spriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
+import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
 import { startKingdom, linkKingdom } from './kingdom.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
 
@@ -121,12 +123,20 @@ const DIFFICULTIES = [
   { id: 'facil', name: 'Fácil', icon: '❀', desc: 'Um passeio pelo reino.', color: ['#cdf0b4', '#6aa84f'],
     hp: 0.85, dmg: 0.8, count: 0.9, interval: 1.15, boss: 0.8, heal: 0.5, revive: 0.5, reviveDelay: 0, behind: 0.15, behindFrom: 5, shooters: 0 },
   { id: 'normal', name: 'Normal', icon: '⚔︎', desc: 'Os esqueletos vêm com tudo.', color: ['#bfe0ff', '#5a8fd0'],
-    hp: 1.3, dmg: 1.22, count: 1.28, interval: 0.88, boss: 1.1, heal: 0.3, revive: 0.35, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.06 },
+    hp: 1, dmg: 1, count: 1, interval: 1, boss: 1, heal: 0.4, revive: 0.4, reviveDelay: 0, behind: 0.25, behindFrom: 4, shooters: 0.03 },
   { id: 'dificil', name: 'Difícil', icon: '♜', desc: 'Escolha bem cada herói.', color: ['#ffd29e', '#d17a2a'],
-    hp: 1.4, dmg: 1.3, count: 1.35, interval: 0.85, boss: 1.15, heal: 0.22, revive: 0.3, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.1 },
+    hp: 1.18, dmg: 1.12, count: 1.12, interval: 0.92, boss: 1.1, heal: 0.28, revive: 0.32, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.08 },
   { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
-    hp: 1.4, dmg: 1.3, count: 1.4, interval: 0.75, boss: 1.15, heal: 0.2, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
+    hp: 1.28, dmg: 1.18, count: 1.18, interval: 0.86, boss: 1.15, heal: 0.2, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
+const DIFFICULTY_PICK_HINT = '← → · Enter · Esc';
+const difficultyTeamRecommendation = (option, mission) => {
+  if (option.id !== 'pesadelo') return '';
+  if (mission?.heroes === 1) return 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.';
+  if (mission?.heroes === 2) return 'Equipe para 2 heróis: Paladino (cura) e Piromante (dano em área).';
+  if (mission?.heroes === 3) return 'Equipe para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área).';
+  return 'Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).';
+};
 let difficulty = DIFFICULTIES[1];
 
 // ---------- cena ----------
@@ -159,12 +169,12 @@ const HEMI = [new THREE.Color(0xfff4dc), new THREE.Color(0xb8a8d8)], HEMI_GROUND
 const SUN = [new THREE.Color(0xffe2b8), new THREE.Color(0xc6a8ff)];
 const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024);
 sun.shadow.bias = -0.0005;
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 80 });
 scene.add(sun, sun.target);
 
-// qualidade gráfica (botão do HUD, salva no navegador): Baixa desliga as sombras e desenha em 1x
+// qualidade gráfica (botão do HUD, salva no navegador): Baixa desliga as sombras; Alta usa mapa 1024².
 const QUALITY_KEY = 'cavaleiros-graficos';
 let lowQuality = false;
 try { lowQuality = localStorage.getItem(QUALITY_KEY) === 'baixa'; } catch {}
@@ -176,7 +186,7 @@ function applyQuality() {
   const button = document.getElementById('quality');
   button.textContent = `Gráficos: ${lowQuality ? 'baixa' : 'alta'}`;
   button.setAttribute('aria-pressed', String(lowQuality));
-  button.setAttribute('data-tip', lowQuality ? 'Leves: sem sombras, resolução 1x' : 'Altos · troque para leves se o jogo travar');
+  button.setAttribute('data-tip', lowQuality ? 'Leves: sem sombras, resolução 1x' : 'Altos · sombras 1024 px; troque para leves se o jogo travar');
 }
 document.getElementById('quality').onclick = () => {
   lowQuality = !lowQuality;
@@ -291,6 +301,14 @@ function paintDifficulty() {
 const GOAL_ICONS = { escort: '⛨', rescue: '⚿', boss: '♛', survive: '⌛', totems: '♜', tower: '♜', nofall: '♥', timer: '⏱', defend: '✧', hunt: '◎', endless: '☾', win: '⚑', breach: '♨', duel: '⚔', elite: '✠', twin: '♛' };
 function goalShort(text, percent) {
   if (/!$/.test(text) && !/\d/.test(text)) return '✓';
+  const nofall = text.match(/^De pé\s+(\d+)\/(\d+)\s+·\s+quedas\s+(\d+)$/i);
+  if (nofall) return `${nofall[1]}/${nofall[2]} · ${nofall[3]} ${nofall[3] === '1' ? 'queda' : 'quedas'}`;
+  const standing = text.match(/(\d+)\s+de pé/);
+  if (standing) return `${standing[1]} de pé`;
+  const shrine = text.match(/^Santuário\s+(\d+%)\s+·\s+(.+)$/);
+  if (shrine) return `${shrine[1]} · ${/^\d+:\d{2}$/.test(shrine[2]) ? shrine[2] : 'final'}`;
+  const breach = text.match(/^Passaram\s+(\d+\/\d+)\s+·\s+(\d+:\d{2})$/);
+  if (breach) return `${breach[1]} · ${breach[2]}`;
   return text.match(/\d+\s?%|\d+\/\d+|\d+:\d{2}|\d+ s/g)?.at(-1) || `${percent}%`;
 }
 let goalUiRoot = null, goalUiLabel = null, goalUiFill = null, goalUiPercent = -1, goalUiText = '';
@@ -663,6 +681,18 @@ function confirmMode(i) {
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
+function progressStorageWarning() {
+  const messages = [];
+  if (campaignStorageWasCorrupted()) messages.push(campaignCorruptBackupFailed()
+    ? 'Um save da campanha estava corrompido e não foi possível preservar uma cópia; o progresso anterior pode ter sido perdido.'
+    : 'Um save da campanha estava corrompido. Uma cópia foi preservada no navegador e a campanha continuará com os dados restantes.');
+  if (progress.corrupted) messages.push(progress.corruptBackupFailed
+    ? 'O save da meta-progressão (ouro, melhorias e maestria) estava corrompido e não foi possível preservar uma cópia; esses dados foram reiniciados.'
+    : 'O save da meta-progressão (ouro, melhorias e maestria) estava corrompido. Uma cópia foi preservada no navegador e esses dados foram reiniciados.');
+  if (progress.persistenceUnavailable || campaignStorageIsVolatile()) messages.push('Não foi possível salvar o progresso desta sessão. Ele pode se perder ao recarregar a página.');
+  return messages.join(' ');
+}
+
 function showCamp() {
   pick.open = false;
   game.paused = true;
@@ -670,7 +700,8 @@ function showCamp() {
   toastAchievements(progress.refresh(totalStars()));   // estrelas de antes da progressão também contam
   // as conquistas foram vistas: o selo de novidade do menu some
   try { localStorage.setItem(SEEN_ACHIEVEMENTS_KEY, String(progress.achievements().filter((a) => a.unlocked).length)); } catch {}
-  renderCamp($('camp'), progress, { variants: VARIANTS, onBack: showMenu });
+  renderCamp($('camp'), progress, { variants: VARIANTS, onBack: showMenu, cosmetics: campaignCosmetics(), equippedCosmetic: equippedCampaignCosmetic(), onEquipCosmetic: equipCampaignCosmetic,
+    storageWarning: progressStorageWarning });
   $('camp').classList.remove('hidden');
   $('camp').querySelector('.camp-back')?.focus?.();
 }
@@ -692,7 +723,7 @@ function showCampaign(autoPlay = null) {
     root.classList.add('hidden');
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal));
+  renderCampaign(root, play, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning());
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
@@ -711,7 +742,7 @@ function showDifficulty() {
   const records = loadRecords(), m = game.mission;
   $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada';
   $('pickSub').textContent = m ? `⚑ ${goalText(m.goal)}` : '';
-  $('pickHint').textContent = '← → · Enter · Esc';
+  $('pickHint').textContent = DIFFICULTY_PICK_HINT;
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
@@ -720,12 +751,14 @@ function showDifficulty() {
     const r = m ? null : records[d.id];
     const record = m ? '' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
     const spoken = m ? `Fases ${m.from}–${m.to}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
+    const recommendation = difficultyTeamRecommendation(d, m);
+    const tip = [d.desc, recommendation].filter(Boolean).join(' ');
     const b = document.createElement('div');
     b.className = 'card diff';
     b.tabIndex = 0;
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', `${d.name}: ${d.desc} ${spoken}`);
-    b.setAttribute('data-tip', d.desc);
+    b.setAttribute('aria-label', `${d.name}: ${tip} ${spoken}`);
+    b.setAttribute('data-tip', tip);
     b.style.setProperty('--c', d.color[0]);
     b.style.setProperty('--cd', d.color[1]);
     b.style.setProperty('--d', `${i * 90}ms`);
@@ -874,6 +907,10 @@ function selectCard(i) {
     setPickClass(pick.options[pick.sel].classId);
     $('pickHint').textContent = PICK_HERO_HINT;
     renderInfo(pick.options[pick.sel]);
+  } else if (pick.mode === 'difficulty') {
+    const selected = pick.options[pick.sel];
+    const recommendation = difficultyTeamRecommendation(selected, game.mission);
+    $('pickHint').textContent = recommendation ? `${DIFFICULTY_PICK_HINT} · ${recommendation}` : DIFFICULTY_PICK_HINT;
   }
 }
 
@@ -1413,7 +1450,8 @@ async function pumpPortraits() {
 }
 
 // ---------- barra de habilidades: três botões por herói, incluindo ultimate ----------
-let skillKey = '', skillItems = [];
+let skillItems = [];
+const skillParty = [], skillRoster = [];
 const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F']];
 const SKILL_GLYPHS = {
   paladin: ['✚', '⬟', '☼'], guardian: ['⛨', '⚑', '♜'], champion: ['⚔', '➶', '✦'],
@@ -1455,7 +1493,7 @@ function buildSkillBar(party) {
       // dois botões irmãos (usar e auto): botão dentro de botão não é acessível; nome e tipo ficam na dica
       b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" data-tip="Uso automático: liga e desliga" aria-label="Uso automático de ${skill.name}" aria-pressed="true">↻</button>
         <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : slot === 0 ? 'assinatura' : 'técnica'}. Tecla ${key}."><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span></button>`;
-      const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0 };
+      const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0, classStates: {} };
       b.querySelector('.use').onclick = () => pressSkill(it);
       it.auto.onclick = (e) => {
         e.stopPropagation();
@@ -1473,6 +1511,12 @@ function buildSkillBar(party) {
   });
 }
 
+function syncSkillClass(it, name, active) {
+  if (it.classStates[name] === active) return;
+  it.b.classList.toggle(name, active);
+  it.classStates[name] = active;
+}
+
 function pressSkill(it) {
   const { h, slot } = it;
   if (!h.autoSkills[slot] && slot === 0 && aimSpec(h) && !h.dead && !game.over && !game.paused && h.skillTimers[slot] <= 0 && game.state === 'fight') {
@@ -1488,8 +1532,17 @@ function pressSkill(it) {
 }
 
 function updateSkillBar() {
-  const party = heroes(), key = party.map((h) => h.cfg.id).join();
-  if (key !== skillKey) { skillKey = key; buildSkillBar(party); }
+  skillParty.length = 0;
+  for (const unit of units) if (unit.team === 'hero') skillParty.push(unit);
+  let rosterChanged = skillParty.length !== skillRoster.length;
+  if (!rosterChanged) for (let i = 0; i < skillParty.length; i++) {
+    if (skillParty[i] !== skillRoster[i]) { rosterChanged = true; break; }
+  }
+  if (rosterChanged) {
+    buildSkillBar(skillParty);
+    skillRoster.length = skillParty.length;
+    for (let i = 0; i < skillParty.length; i++) skillRoster[i] = skillParty[i];
+  }
   const now = performance.now();
   for (const it of skillItems) {
     const { h, slot } = it;
@@ -1503,12 +1556,12 @@ function updateSkillBar() {
     if (it.secs.textContent !== secs) it.secs.textContent = secs;
     const auto = h.autoSkills[slot] ? '↻' : '☝\uFE0E';
     if (it.auto.textContent !== auto) { it.auto.textContent = auto; it.auto.setAttribute('aria-pressed', String(!!h.autoSkills[slot])); }
-    it.b.classList.toggle('ready', ready);
-    it.b.classList.toggle('cooling', !ready && !h.dead);
-    it.b.classList.toggle('down', h.dead);
-    it.b.classList.toggle('manual', !h.autoSkills[slot]);
-    it.b.classList.toggle('aiming', aiming?.hero === h && slot === 0);
-    it.b.classList.toggle('nope', h.noTarget > 0 || now < it.nopeT);
+    syncSkillClass(it, 'ready', ready);
+    syncSkillClass(it, 'cooling', !ready && !h.dead);
+    syncSkillClass(it, 'down', h.dead);
+    syncSkillClass(it, 'manual', !h.autoSkills[slot]);
+    syncSkillClass(it, 'aiming', aiming?.hero === h && slot === 0);
+    syncSkillClass(it, 'nope', h.noTarget > 0 || now < it.nopeT);
   }
 }
 
@@ -1766,7 +1819,7 @@ class Unit {
 
   // anda até o alvo desviando dos obstáculos que estão na frente
   moveTo(target, dt) {
-    target = world.nextWaypoint(this.pos, target);
+    target = world.nextWaypoint(this.pos, target, this);
     const dir = moveDir.subVectors(target, this.pos).setY(0);
     const d = dir.length();
     if (d < 0.05) return;
@@ -1897,6 +1950,7 @@ class Unit {
     }
     if (this.aura) this.aura.visible = false;
     if (this.halo) this.halo.visible = false;
+    if (this.campaignAura) this.campaignAura.visible = false;
   }
 
   remove() {
@@ -1904,6 +1958,7 @@ class Unit {
     this.bar.remove();
     for (const m of this.mats) m.dispose();
     if (this.aura) this.aura.material.dispose();
+    this.campaignAuraMaterial?.dispose();
     this.masteryAura?.material.dispose();
     disposeSkeletons(this.root);   // texturas de ossos da GPU (uma por malha animada)
     units.splice(units.indexOf(this), 1);
@@ -1972,14 +2027,37 @@ const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dea
 const heroes = () => units.filter((u) => u.team === 'hero');
 const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued));   // o prisioneiro preso não é alvo
 let activeTargetContext = null;
-const frameTargetContext = { party: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [] };
+const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [] };
 
 function makeTargetContext(reuse = null) {
   const goal = game.mission?.goal;
-  const party = reuse ? reuse.party : heroes();
+  let party, rangedHeroes, skeletons, attackableSkeletons, alliedUnits, livingAllies;
   if (reuse) {
+    party = reuse.party;
+    rangedHeroes = reuse.rangedHeroes;
+    skeletons = reuse.skeletons;
+    attackableSkeletons = reuse.attackableSkeletons;
+    alliedUnits = reuse.alliedUnits;
+    livingAllies = reuse.livingAllies;
     party.length = 0;
-    for (const unit of units) if (unit.team === 'hero') party.push(unit);
+    rangedHeroes.length = 0;
+    skeletons.length = attackableSkeletons.length = alliedUnits.length = livingAllies.length = 0;
+    for (const unit of units) {
+      if (unit.team === 'hero') { party.push(unit); if (unit.ranged) rangedHeroes.push(unit); }
+      if (unit.team === 'skeleton') {
+        if (!unit.dead) { skeletons.push(unit); if (!unit.spawning) attackableSkeletons.push(unit); }
+      } else if (!(unit.captive && !unit.rescued)) {
+        alliedUnits.push(unit);
+        if (!unit.dead) livingAllies.push(unit);
+      }
+    }
+  } else {
+    party = heroes();
+    rangedHeroes = party.filter((hero) => hero.ranged);
+    skeletons = skeletonsAlive();
+    attackableSkeletons = skeletons.filter((unit) => !unit.spawning);
+    alliedUnits = allies();
+    livingAllies = alliedUnits.filter((unit) => !unit.dead);
   }
   // o santuário entra como "aldeão": os heróis interceptam quem chega perto dele
   const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager
@@ -1991,30 +2069,17 @@ function makeTargetContext(reuse = null) {
     for (const hero of party) friends.push(hero);
     if (villager) friends.push(villager);
   }
-  const skeletons = reuse ? reuse.skeletons : skeletonsAlive();
-  if (reuse) {
-    skeletons.length = 0;
-    for (const unit of units) if (unit.team === 'skeleton' && !unit.dead) skeletons.push(unit);
-  }
-  const attackableSkeletons = reuse ? reuse.attackableSkeletons : skeletons.filter((unit) => !unit.spawning);
-  if (reuse) {
-    attackableSkeletons.length = 0;
-    for (const unit of skeletons) if (!unit.spawning) attackableSkeletons.push(unit);
-  }
-  const alliedUnits = reuse ? reuse.alliedUnits : allies();
-  if (reuse) {
-    alliedUnits.length = 0;
-    for (const unit of units) if (unit.team !== 'skeleton' && !(unit.captive && !unit.rescued)) alliedUnits.push(unit);
-  }
   const context = reuse || {};
   context.goal = goal;
   context.party = party;
+  context.rangedHeroes = rangedHeroes;
   context.friends = friends;
   context.villager = villager;
   context.plateauBonus = world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0;
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
   context.alliedUnits = alliedUnits;
+  context.livingAllies = livingAllies;
   return context;
 }
 
@@ -2153,12 +2218,22 @@ const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goa
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
-  if (fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5) return true;
+  const normalReach = fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
+  const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
+  if (huntTarget && !normalReach) {
+    if (fromPost > HUNT_PURSUIT_LIMIT) return false;
+    let interceptors = 0;
+    for (const ally of party) if (ally !== hero && !ally.dead && ally.targetFocus === target) interceptors++;
+    return interceptors < HUNT_INTERCEPTORS;
+  }
+  if (normalReach) return true;
 
   // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
   // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.
+  // Em defesas fixas, só saímos do posto por uma ameaça ligada ao objetivo abaixo.
   // O raio segue limitado, e totens têm uma regra própria abaixo.
-  if (target.team === 'skeleton' && target.ranged && !target.mobile && !target.totem
+  const fixedDefense = goal?.type === 'defend' || goal?.type === 'breach';
+  if (!fixedDefense && target.team === 'skeleton' && target.ranged && !target.mobile && !target.totem
     && fromPost <= RANGED_INTERCEPT) {
     let otherInterceptors = 0;
     for (const ally of party) if (ally !== hero && !ally.dead && ally.targetFocus === target) otherInterceptors++;
@@ -2192,6 +2267,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   let distanceToVulnerable = Infinity;
 
   if (target.boss) score -= bossGoal(goal) ? 12 : 3.5;
+  if (goal?.type === 'hunt' && target === game.huntMark && target.hunted) score -= 32;
   if (target.totem) score -= hasDestructionGoal(goal) ? 12 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
   if (target.kind?.priority) score -= target.kind.priority; // xamã: derrubá-lo desfaz o escudo de ossos
@@ -2227,7 +2303,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   // está finalizando. Chefes, sacerdotes, bombardeiros e ameaças objetivas
   // continuam concentrando o grupo.
   const healthRatio = target.maxHp > 0 ? Math.max(0, target.hp / target.maxHp) : 1;
-  const urgentTarget = target.boss || target.totem || target.ranged
+  const urgentTarget = (goal?.type === 'hunt' && target === game.huntMark && target.hunted) || target.boss || target.totem || target.ranged
     || target.enemyKind === 'Priest' || target.enemyKind === 'Bomber' || target.kind?.priority || target.pendingHit
     || (villager && distanceToVillager < 12)
     || (goal?.type === 'nofall' && distanceToVulnerable < 6);
@@ -2303,15 +2379,58 @@ function bestSkillTarget(hero, candidates, context = targetContext()) {
   return best;
 }
 
+// No trono, todo o grupo concentra o mesmo chefe. Só troca quando o foco morre
+// ou nenhum herói vivo consegue mais alcançá-lo; ameaças imediatas ainda furam a fila.
+function twinBossFocus(context) {
+  if (context.goal?.type !== 'twin') { game.twinFocus = null; return null; }
+  const attackable = context.skeletons.filter((boss) => boss.phaseBoss && !boss.dead && !boss.spawning
+    && context.party.some((member) => !member.dead
+      && (canHeroReachTarget(member, boss, context) || stillEngaged(member, boss))));
+  if (game.twinFocus && attackable.includes(game.twinFocus)) return game.twinFocus;
+  // Lich e Carrasco usam animações de surgimento com durações diferentes; não fixe
+  // o foco no primeiro que fica atacável antes de o outro chefe terminar de surgir.
+  if (context.skeletons.some((boss) => boss.phaseBoss && !boss.dead && boss.spawning)) return null;
+  attackable.sort((a, b) => {
+    const aHp = a.maxHp > 0 ? Math.max(0, a.hp) / a.maxHp : 1;
+    const bHp = b.maxHp > 0 ? Math.max(0, b.hp) / b.maxHp : 1;
+    if (aHp !== bHp) return aHp - bHp;
+    const aKey = String(a.enemyKind || a.kind?.name || '');
+    const bKey = String(b.enemyKind || b.kind?.name || '');
+    return aKey < bKey ? -1 : aKey > bKey ? 1 : context.skeletons.indexOf(a) - context.skeletons.indexOf(b);
+  });
+  game.twinFocus = attackable[0] || null;
+  return game.twinFocus;
+}
+
+function isUrgentTwinThreat(target, context) {
+  return target.pendingHit?.target?.team === 'hero' || target.pendingHit?.target?.team === 'villager'
+    || target.enemyKind === 'Priest' || !!target.kind?.priority
+    || (target.enemyKind === 'Bomber' && context.friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, target.pos) < 7));
+}
+
 function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
   let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
+  let urgentTwinTarget = null, urgentTwinScore = Infinity;
   for (const target of candidates) {
     if (target.dead || target.spawning || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target))) continue;
     const score = heroTargetScore(hero, target, hero.pos, context);
     if (target === hero.targetFocus) { focused = target; focusedScore = score; }
     if (score < bestScore) { best = target; bestScore = score; }
+    if (context.goal?.type === 'twin' && isUrgentTwinThreat(target, context) && score < urgentTwinScore) {
+      urgentTwinTarget = target;
+      urgentTwinScore = score;
+    }
   }
+  const { goal, villager, party, friends } = context;
+  if (goal?.type === 'twin') {
+    const focus = twinBossFocus(context);
+    if (urgentTwinTarget) { best = urgentTwinTarget; bestScore = urgentTwinScore; }
+    else if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus))) {
+      best = focus;
+      bestScore = heroTargetScore(hero, focus, hero.pos, context);
+    } else if (focus) { best = null; bestScore = Infinity; }
+  } else if (game.twinFocus) game.twinFocus = null;
   if (!best) {
     hero.targetFocus = null;
     hero.targetFocusT = 0;
@@ -2319,7 +2438,6 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   }
 
   // Mantém o foco por um instante, exceto quando surge uma ameaça claramente mais urgente.
-  const { goal, villager, party, friends } = context;
   const urgentEscortTarget = villager
     && (best.pendingHit?.target === villager || tacticalDistance(villager.pos, best.pos) <= 4.5);
   let urgentNoFallTarget = goal?.type === 'nofall' && best.pendingHit?.target?.team === 'hero';
@@ -2332,6 +2450,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
     && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
   const urgentObjectiveTarget = (bossGoal(goal) && best.boss)
     || (hasDestructionGoal(goal) && best.totem)
+    || (goal?.type === 'hunt' && best === game.huntMark && best.hunted)
     || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
   let criticalAllyNearFocus = false;
   if (focused && goal?.type === 'nofall') for (const ally of party) {
@@ -2417,6 +2536,7 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   bolts.push(bolt);
 }
 
+const boltGoalScratch = new THREE.Vector3();
 const piercingStartScratch = new THREE.Vector3();
 const piercingOffsetScratch = new THREE.Vector3();
 const piercingHeightOffset = new THREE.Vector3(0, 1.3, 0);
@@ -2444,7 +2564,8 @@ function updateBolts(dt) {
         if (b.kind === 'ninja') { b.life = 0; break; }
       }
     } else {
-      const goal = b.target.pos.clone().setY(b.target.pos.y + 1.1);
+      const goal = boltGoalScratch.copy(b.target.pos);
+      goal.y += 1.1;
       const at = b.base || b.mesh.position;   // com arco, anda pela linha reta e sobe por cima dela
       const d = goal.distanceTo(at);
       at.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
@@ -2596,22 +2717,38 @@ function waterSplash(at, spawn = false) {
 const fx = [];
 const puffGeo = new THREE.IcosahedronGeometry(0.35, 1);
 const starGeo = new THREE.OctahedronGeometry(0.17, 0);
+const poofPuffMaterials = materialPool(() => new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true }), 512);
+const poofStarMaterials = materialPool(() => new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true }), 256);
 
 function poof(at, size = 1) {
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    const m = new THREE.Mesh(puffGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true }));
+    const m = new THREE.Mesh(puffGeo, poofPuffMaterials.take(0xffffff));
     m.position.set(at.x + Math.cos(a) * 0.3, at.y + 0.4 + Math.random() * 0.5, at.z + Math.sin(a) * 0.3);
     m.userData = { v: new THREE.Vector3(Math.cos(a) * 1.8, 0.8 + Math.random(), Math.sin(a) * 1.8), t: 0, life: 0.6, grow: size };
     scene.add(m);
     fx.push(m);
   }
   for (let i = 0; i < 4; i++) {
-    const m = new THREE.Mesh(starGeo, new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true }));
+    const m = new THREE.Mesh(starGeo, poofStarMaterials.take(0xffe066));
     m.position.set(at.x, at.y + 1, at.z);
     m.userData = { v: new THREE.Vector3((Math.random() - 0.5) * 3, 3.5 + Math.random() * 1.5, (Math.random() - 0.5) * 3), t: 0, life: 0.85, star: true };
     scene.add(m);
     fx.push(m);
+  }
+}
+
+function releaseFxMaterial(material) {
+  const pool = material?.userData?.pool;
+  if (pool) pool.give(material);
+  else material?.dispose();
+}
+
+function clearFx() {
+  while (fx.length) {
+    const m = fx.pop();
+    scene.remove(m);
+    releaseFxMaterial(m.material);
   }
 }
 
@@ -2620,7 +2757,12 @@ function updateFx(dt) {
     const m = fx[i], u = m.userData;
     u.t += dt;
     const k = u.t / u.life;
-    if (k >= 1) { scene.remove(m); m.material.dispose(); fx.splice(i, 1); continue; }
+    if (k >= 1) {
+      scene.remove(m);
+      releaseFxMaterial(m.material);
+      fx.splice(i, 1);
+      continue;
+    }
     if (u.star) { u.v.y -= 9 * dt; m.rotation.y += dt * 12; }
     else { u.v.multiplyScalar(Math.max(0, 1 - dt * 4)); m.scale.setScalar((0.6 + k * 1.3) * u.grow); }
     m.position.addScaledVector(u.v, dt);
@@ -2629,16 +2771,13 @@ function updateFx(dt) {
 }
 
 // texto que salta acima de uma unidade (dano, cura)
+const popTextPool = createPopTextPool(bars);
 function popText(at, text, cls) {
   tmp.copy(at).setY(at.y + 2.5).project(camera);
   if (tmp.z > 1) return;
-  const el = document.createElement('div');
-  el.className = `pop ${cls}`;
-  el.textContent = text;
-  el.style.left = `${(tmp.x * 0.5 + 0.5) * innerWidth + (Math.random() * 24 - 12)}px`;
-  el.style.top = `${(-tmp.y * 0.5 + 0.5) * innerHeight}px`;
-  bars.appendChild(el);
-  setTimeout(() => el.remove(), 900);
+  const x = (tmp.x * 0.5 + 0.5) * innerWidth + (Math.random() * 24 - 12);
+  const y = (-tmp.y * 0.5 + 0.5) * innerHeight;
+  popTextPool.show(text, cls, x, y, performance.now());
 }
 
 // ---------- visuais das habilidades: malhas brilhantes (aditivas), sem luzes extras ----------
@@ -2826,17 +2965,17 @@ function puffs(at, n, palette = 'smoke', o = {}) {
 // anel de chamas correndo pelo chão a partir do centro
 function flameRing(at, radius, n = 12, life = 0.75, palette = 'fire', size = 1.1) {
   n = fewer(n);
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * TAU + rnd(0.12), m = vfxMesh('flame', palette, SPRITE, { size: size * (0.8 + Math.random() * 0.45) });
-    const p = m.userData.fx, s0 = p.size;
-    addFx(m, life, (e, dt, k) => {
-      const r = radius * (1 - (1 - k) ** 2);
-      m.position.set(at.x + Math.cos(a) * r, at.y + 0.05, at.z + Math.sin(a) * r);
-      p.size = s0 * (0.45 + 0.75 * Math.sin(Math.PI * Math.min(1, 0.2 + k * 1.2)));
-      p.progress = k * k * 0.7;
-      p.opacity = 1 - k ** 4;
-    });
-  }
+  const m = vfxMesh('flame', palette, radialSpriteGeometry(n), { size });
+  const p = m.userData.fx;
+  m.position.copy(at).setY(at.y + 0.05);
+  m.rotation.y = Math.random() * TAU;
+  addFx(m, life, (e, dt, k) => {
+    const r = radius * (1 - (1 - k) ** 2);
+    m.scale.set(r, 1, r);   // o eixo Y preserva o tamanho do billboard enquanto o anel se expande
+    p.size = size * (0.45 + 0.75 * Math.sin(Math.PI * Math.min(1, 0.2 + k * 1.2)));
+    p.progress = k * k * 0.7;
+    p.opacity = 1 - k ** 4;
+  });
 }
 
 // bola de fogo que incha e se rasga (explosões)
@@ -4000,6 +4139,14 @@ class Hero extends Unit {
     this.halo.position.y = 2.5;
     this.halo.visible = false;
     this.root.add(this.aura, this.halo);
+    const chapterCosmetic = equippedCampaignCosmetic();
+    if (chapterCosmetic) {
+      const aura = createCampaignAura(THREE, chapterCosmetic);
+      this.campaignAura = aura.group;
+      this.campaignAuraMaterial = aura.material;
+      this.campaignAuraSpin = aura.spin;
+      this.root.add(this.campaignAura);
+    }
     this.stats = newStats();
     game.roster ||= [];
     game.roster.push(this);
@@ -4064,11 +4211,12 @@ class Hero extends Unit {
     const id = this.cfg.id, level = this.level;
     const power = this.skillPower;
     const radius = (3 + (level - 1) * 0.5) * power;
-    const nearby = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= radius);
+    const attackables = activeTargetContext?.skeletons ?? skeletonsAlive();
+    const nearby = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= radius);
     let effect;
     if (id === 'paladin') {
       const reach = (5 + level) * power;
-      const friends = heroes().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= reach);
+      const friends = partyNow().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= reach);
       const healAmount = scaleBranchEffect(this, 'support', 32 + level * 10) * power;
       const missing = friends.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
       const urgent = friends.some((h) => h.hp / h.maxHp <= 0.55);
@@ -4087,7 +4235,7 @@ class Hero extends Unit {
       };
     } else if (id === 'cleric') {
       const reach = (5.5 + level * 0.35) * power;
-      const friends = heroes().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach);
+      const friends = partyNow().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach);
       const wounded = friends.filter((h) => h.hp < h.maxHp);
       const healAmount = scaleBranchEffect(this, 'support', 24 + level * 8) * power;
       const missing = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
@@ -4106,7 +4254,7 @@ class Hero extends Unit {
         FX.dome(this, reach * 0.72);
       };
     } else if (id === 'bard') {
-      const party = heroes().filter((h) => !h.dead);
+      const party = partyNow().filter((h) => !h.dead);
       if (!party.length || (!force && !target)) return false;
       effect = () => {
         const duration = (6 + level * 0.5) * power;
@@ -4125,7 +4273,7 @@ class Hero extends Unit {
       effect = () => {
         const center = target.pos.clone();
         const healed = [];
-        for (const h of heroes()) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
+        for (const h of partyNow()) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
           const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', 18 + level * 5) * power);
           if (heal > 0) { h.hp += heal; this.stats.cura += heal; healed.push(h); popText(h.pos, '+' + Math.round(heal), 'heal'); }
         }
@@ -4187,7 +4335,7 @@ class Hero extends Unit {
       };
     } else if (id === 'assassin') {
       // salta pelas sombras até as costas do alvo e crava as adagas
-      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+      if (!manual) target = highestPriorityHeroTarget(this, attackables.filter((s) => !s.dead && !s.spawning
         && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));
       if (!target) return false;
       effect = () => {
@@ -4209,7 +4357,7 @@ class Hero extends Unit {
     } else if (id === 'duelist') {
       // rajada: quatro cortes seguidos no alvo à frente, alternando a lâmina de cada mão
       const reach = (s) => this.range + 0.9 + 0.4 * (s.size - 1);
-      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+      if (!manual) target = highestPriorityHeroTarget(this, attackables.filter((s) => !s.dead && !s.spawning
         && s.pos.distanceTo(this.pos) <= reach(s) && Math.abs(s.pos.y - this.pos.y) < 0.85));
       if (!target || target.pos.distanceTo(this.pos) > reach(target)) return false;
       effect = () => {
@@ -4228,7 +4376,7 @@ class Hero extends Unit {
     } else if (id === 'monk') {
       // cem punhos: quatro socos rápidos alternando as mãos e um chute que atordoa e empurra
       const reach = (s) => this.range + 0.9 + 0.4 * (s.size - 1);
-      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+      if (!manual) target = highestPriorityHeroTarget(this, attackables.filter((s) => !s.dead && !s.spawning
         && s.pos.distanceTo(this.pos) <= reach(s) && Math.abs(s.pos.y - this.pos.y) < 0.85));
       if (!target || target.pos.distanceTo(this.pos) > reach(target)) return false;
       effect = () => {
@@ -4254,7 +4402,7 @@ class Hero extends Unit {
       // flecha longa: mira a linha com mais inimigos e atravessa todos, bem além do alcance comum
       const reach = 11;
       if (!manual) {
-        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach);
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= reach);
         let most = 0;
         target = null;
         for (const s of pool) {
@@ -4269,15 +4417,15 @@ class Hero extends Unit {
       const reach = this.range + 1;
       let kind = 'flask';
       if (!manual) {
-        const hurt = heroes().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach && h.hp / h.maxHp <= 0.7)
+        const hurt = partyNow().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach && h.hp / h.maxHp <= 0.7)
           .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
         if (hurt.length) { target = hurt[0]; kind = 'tonic'; }
-        else target = bestSkillTarget(this, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach));
+        else target = bestSkillTarget(this, attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= reach));
       }
       if (!target || target.pos.distanceTo(this.pos) > reach) return false;
       effect = () => fireBolt(this, target, kind, 0, true);
     } else if (id === 'viking' || id === 'iceviking') {
-      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+      if (!manual) target = highestPriorityHeroTarget(this, attackables.filter((s) => !s.dead && !s.spawning
         && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
       if (!target) return false;
       effect = () => fireBolt(this, target, id, 0, true);
@@ -4310,7 +4458,7 @@ class Hero extends Unit {
     } else if (id === 'king') {
       if (!target) return false;
       effect = () => {
-        const party = heroes().filter((h) => !h.dead);
+        const party = partyNow().filter((h) => !h.dead);
         for (const h of party) {
           h.royalT = Math.max(h.royalT, 5 * power);   // não encurta nem enfraquece um hino mais forte
           h.royalBonus = Math.max(h.royalBonus, 0.2);
@@ -4325,7 +4473,7 @@ class Hero extends Unit {
         FX.summon(this, [-1, 1].map((side) => new Minion(this, side)));
       };
     } else if (id === 'druid') {
-      const friends = heroes().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= radius);
+      const friends = partyNow().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= radius);
       const missing = friends.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
       const healAmount = scaleBranchEffect(this, 'support', 20) * power;
       const urgentHeal = friends.some((h) => h.hp / h.maxHp <= 0.6) || missing >= healAmount * 0.75;
@@ -4339,7 +4487,7 @@ class Hero extends Unit {
           enemy.vel.set(0, 0, 0);
           FX.roots(enemy);
         }
-        for (const h of heroes()) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
+        for (const h of partyNow()) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
           const heal = Math.min(h.maxHp - h.hp, healAmount);
           h.hp += heal;
           this.stats.cura += heal;
@@ -4367,17 +4515,25 @@ class Hero extends Unit {
     const level = this.level, power = this.skillPower;
     const color = skill.color || this.cfg.color[0];
     const radius = (skill.radius || (slot === 2 ? 6 : 4.5)) * (0.9 + 0.1 * power);
-    const enemies = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= Math.max(radius, skill.range || 0) + 0.4 * (s.size - 1));
-    const party = heroes().filter((h) => !h.dead);
+    const attackables = activeTargetContext?.skeletons ?? skeletonsAlive();
+    const partySource = partyNow();
+    const enemies = [], targetPool = [];
+    const enemyReach = Math.max(radius, skill.range || 0), targetReach = Math.max(9, this.range);
+    for (const enemy of attackables) {
+      if (enemy.dead || enemy.spawning) continue;
+      const distance = enemy.pos.distanceTo(this.pos);
+      if (distance <= enemyReach + 0.4 * (enemy.size - 1)) enemies.push(enemy);
+      if (distance <= targetReach) targetPool.push(enemy);
+    }
+    const party = partySource.filter((h) => !h.dead);
     const friends = party.filter((h) => h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5));
     const wounded = friends.filter((h) => h.hp < h.maxHp);
     const missingHp = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
     const criticalAlly = friends.some((h) => h.hp / h.maxHp <= 0.42);
     const urgentEnemy = enemies.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
       || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
-    const targetPool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= Math.max(9, this.range));
     target ||= highestPriorityHeroTarget(this, targetPool);
-    if (target?.dead || !skeletonsAlive().includes(target)) target = null;
+    if (target && (target.dead || !units.includes(target))) target = null;
 
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
@@ -4553,7 +4709,7 @@ class Hero extends Unit {
       }
       case 'arrow-storm': case 'volatile': {
         // Arqueira e Alquimista: área no grupo mais denso ao alcance; a IA espera juntar dois inimigos
-        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
         const { center, count } = densest(pool, skill.radius || 3, force ? target : null);
         if (!center || (!force && count < 2 && !urgentEnemy)) return false;
         target = center;
@@ -4563,7 +4719,7 @@ class Hero extends Unit {
       }
       case 'hunter-mark': {
         // Flecha do caçador: fere e marca o inimigo mais forte (chefe primeiro); todos batem mais nele
-        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 11));
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 11));
         const worth = (s) => (s.boss || s.totem ? 1e6 : 0) + s.hp;
         const prey = force && pool.includes(target) ? target : pool.reduce((best, s) => (!best || worth(s) > worth(best) ? s : best), null);
         if (!prey) return false;
@@ -4802,6 +4958,7 @@ class Hero extends Unit {
 
   revive() {
     this.dead = false;
+    this.fell = false;   // uma próxima queda após o revival deve entrar na contagem da missão
     this.aura.visible = this.level > 1;
     this.halo.visible = this.level === 3;
     this.guardT = 0;
@@ -4847,6 +5004,12 @@ class Hero extends Unit {
     this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0 || this.songT > 0);
     this.aura.material.color.set(rage ? 0xff4242 : this.cfg.color[1]);
     this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
+    if (this.campaignAura) {
+      this.campaignAura.visible = !this.dead;
+      this.campaignAuraMaterial.opacity = 0.44 + Math.sin(this.age * 2.2) * 0.08;
+      this.campaignAura.rotation.y += dt * this.campaignAuraSpin;
+      this.campaignAura.scale.setScalar(0.985 + Math.sin(this.age * 2.2) * 0.025);
+    }
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     if (this.bladeDanceT > 0) this.updateBladeDance(dt);
     this.immuneT -= dt;
@@ -5231,14 +5394,17 @@ class Skeleton extends Unit {
 
 // move units apart in a few small solver passes so blocked moves do not put
 // them back at their original, overlapping positions.
+const collisionFrom = { x: 0, z: 0 }, collisionTo = { x: 0, z: 0 };
+const separationSideA = { x: 0, z: 0 }, separationSideB = { x: 0, z: 0 };
 function collisionMove(unit, dx, dz) {
   const pos = unit.pos, fromX = pos.x, fromZ = pos.z;
   let fraction = 1;
   for (let attempt = 0; attempt < 5; attempt++, fraction *= 0.5) {
     const toX = fromX + dx * fraction, toZ = fromZ + dz * fraction;
-    const from = { x: fromX, z: fromZ }, to = { x: toX, z: toZ };
+    collisionFrom.x = fromX; collisionFrom.z = fromZ;
+    collisionTo.x = toX; collisionTo.z = toZ;
     const wasOnPlateau = unit.team === 'skeleton' && unit.ranged && world.groundHeight(fromX, fromZ) >= 2.95;
-    if (!world.canStep(from, to) || (wasOnPlateau && world.groundHeight(toX, toZ) < 2.95)) continue;
+    if (!world.canStep(collisionFrom, collisionTo) || (wasOnPlateau && world.groundHeight(toX, toZ) < 2.95)) continue;
     pos.x = toX;
     pos.z = toZ;
     return Math.hypot(dx, dz) * fraction;
@@ -5275,14 +5441,15 @@ function separatePair(a, b, ia, ib) {
   if (slideDistance < min) {
     if (slideDistance > 0.001) { slideX /= slideDistance; slideZ /= slideDistance; }
     else { slideX = dx; slideZ = dz; }
-    const beforeSideA = { x: a.pos.x, z: a.pos.z }, beforeSideB = { x: b.pos.x, z: b.pos.z };
+    separationSideA.x = a.pos.x; separationSideA.z = a.pos.z;
+    separationSideB.x = b.pos.x; separationSideB.z = b.pos.z;
     const sideDistance = Math.sqrt(Math.max(0, min * min - slideDistance * slideDistance)) * 0.5;
     const sideDx = -slideZ, sideDz = slideX;
     collisionMove(a, -sideDx * sideDistance, -sideDz * sideDistance);
     collisionMove(b, sideDx * sideDistance, sideDz * sideDistance);
     if (Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) <= slideDistance + 0.002) {
-      a.pos.x = beforeSideA.x; a.pos.z = beforeSideA.z;
-      b.pos.x = beforeSideB.x; b.pos.z = beforeSideB.z;
+      a.pos.x = separationSideA.x; a.pos.z = separationSideA.z;
+      b.pos.x = separationSideB.x; b.pos.z = separationSideB.z;
     }
   }
 
@@ -5306,10 +5473,8 @@ function recycleGrid(grid, pool) {
   grid.clear();
 }
 
-function cellKey(x, z) { return `${x},${z}`; }
-
 function addToGrid(grid, pool, x, z, value) {
-  const key = cellKey(x, z);
+  const key = gridCellKey(x, z);
   let bucket = grid.get(key);
   if (!bucket) { bucket = pool.pop() || []; grid.set(key, bucket); }
   bucket.push(value);
@@ -5359,7 +5524,7 @@ function separate() {
       separationCandidates.length = 0;
       const x = separationCellX[i], z = separationCellZ[i];
       for (let dx = -pairCellRange; dx <= pairCellRange; dx++) for (let dz = -pairCellRange; dz <= pairCellRange; dz++) {
-        const bucket = separationGrid.get(cellKey(x + dx, z + dz));
+        const bucket = separationGrid.get(gridCellKey(x + dx, z + dz));
         if (bucket) for (const j of bucket) if (j > i) separationCandidates.push(j);
       }
       separationCandidates.sort((a, b) => a - b);
@@ -5367,7 +5532,7 @@ function separate() {
     }
     for (let i = 0; i < separationAlive.length; i++) {
       const u = separationAlive[i];
-      const candidates = obstacleGrid.get(cellKey(
+      const candidates = obstacleGrid.get(gridCellKey(
         Math.floor(u.pos.x / SEPARATION_CELL_SIZE),
         Math.floor(u.pos.z / SEPARATION_CELL_SIZE),
       ));
@@ -5413,10 +5578,10 @@ function startGame(view = 'menu') {
     scene.remove(effect.mesh);
     if (list !== bolts) effect.mesh.material.dispose();
   }
-  while (fx.length) { const m = fx.pop(); scene.remove(m); m.material.dispose(); }
+  clearFx();
   FX.clear();
   audio.stopMusic();
-  bars.querySelectorAll('.pop').forEach((el) => el.remove());
+  popTextPool.clear();
   closeHeroPanel();
   $('overlayStats').innerHTML = '';
   $('overlayStars').innerHTML = '';
@@ -5448,7 +5613,7 @@ function placeParty(first) {
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
     shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
-    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0 });
+    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0, twinFocus: null });
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
@@ -5491,7 +5656,7 @@ function startPhase() {
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
-  const waveScale = goal?.type === 'duel' ? goal.waves : goal?.type === 'elite' ? goal.scale : 0;   // duelo e cripta: ondas menores
+  const waveScale = goal?.type === 'duel' ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin') ? goal.scale : 0;   // duelo, cripta e trono: menos inimigos comuns; chefes continuam garantidos
   if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
   if (goal?.type === 'elite') { game.eliteWave = 1; game.eliteSize = game.toSpawn; }
   if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
@@ -5935,14 +6100,14 @@ function spawnTwinBoss(lich) {
 }
 
 // alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
-const HUNT_FLEE = 4.5, HUNT_EDGE = 20;
+const HUNT_FLEE = 4.5, HUNT_EDGE = 20, HUNT_PURSUIT_LIMIT = 25, HUNT_INTERCEPTORS = 2;
 const huntDest = new THREE.Vector3();
 function huntThink(u, dt) {
   if (u.rootT > 0 || u.tauntT > 0) return false;   // preso ou provocado: luta onde está
   const s0 = world.anchorS(game.phase), fwd = world.tangentAt(s0), anchor = world.pointAt(s0), side = world.sideOf(fwd);
   const dx = u.pos.x - anchor.x, dz = u.pos.z - anchor.z;
   const ahead = dx * fwd.x + dz * fwd.z;
-  const chased = heroes().some((h) => !h.dead && h.pos.distanceTo(u.pos) < HUNT_FLEE);
+  const chased = (activeTargetContext?.party ?? heroes()).some((h) => !h.dead && h.pos.distanceTo(u.pos) < HUNT_FLEE);
   if (!chased || ahead >= HUNT_EDGE - 0.5) return false;   // sem perseguidor ou encurralado: volta a atacar
   const lateral = THREE.MathUtils.clamp(dx * side.x + dz * side.z, -(ROAD - 1), ROAD - 1);
   u.moveTo(huntDest.copy(world.along(s0 + Math.min(HUNT_EDGE, ahead + 4), lateral)), dt);
@@ -6014,7 +6179,7 @@ function newGoalTick(goal, dt, skeletons) {
     if (game.shrine?.dead) return 'O santuário caiu! Ele não pode ser destruído.';
     if (game.state === 'fight') {   // ondas sem parar até o tempo acabar
       game.surviveT = Math.max(0, game.surviveT - dt);
-      if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 7) game.toSpawn = 4;
+      if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 7) game.toSpawn = Math.min(4, 7 - skeletons.length);
     }
   } else if (goal.type === 'hunt' && game.state === 'fight' && !game.huntDown) {
     const mark = game.huntMark;
@@ -6031,16 +6196,21 @@ function newGoalTick(goal, dt, skeletons) {
     if (game.surviveT > 0) {
       if (gateTick()) return 'Os esqueletos cruzaram a ponte!';
       if ((game.surviveT = Math.max(0, game.surviveT - dt)) <= 0) { closeMission(); showBanner('Ponte salva!', 2.5); }
-      else if (game.toSpawn === 0 && skeletons.length < 7) { game.toSpawn = 4; game.refilling = true; }   // reforços sem novo golem
+      else if (game.toSpawn === 0 && skeletons.length < 7) { game.toSpawn = Math.min(4, 7 - skeletons.length); game.refilling = true; }   // reforços sem novo golem, limitados à pressão de 7 inimigos
     }
   } else if (goal.type === 'elite' && game.state === 'fight' && game.toSpawn === 0 && !skeletons.length && game.eliteWave < goal.waves) {
     game.eliteWave++;
     game.toSpawn = game.eliteSize;
-    game.spawnTimer = 1.5;
+    game.spawnTimer = 3;
+    for (const hero of heroes()) if (!hero.dead) {
+      hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.18);
+      popText(hero.pos, '♥', 'heal');
+    }
     showBanner(`Elite ${game.eliteWave}/${goal.waves}`, 2);
   } else if (goal.type === 'endless' && game.state === 'fight' && game.endlessT < goal.dawn) {
     game.endlessT = Math.min(goal.dawn, game.endlessT + dt);
-    const reached = goal.marks.filter((mark) => game.endlessT >= mark).length;
+    let reached = 0;
+    for (const mark of goal.marks) if (game.endlessT >= mark) reached++;
     if (reached > game.endlessStars) { game.endlessStars = reached; showBanner(`${'★'.repeat(reached)} ${goal.marks[reached - 1]} s`, 2.5); }
     if (game.endlessT >= goal.dawn) { closeMission(); showBanner('Amanheceu!', 3); }
     else {   // a horda engrossa com o tempo: mais esqueletos ao mesmo tempo e reforços maiores
@@ -6051,21 +6221,27 @@ function newGoalTick(goal, dt, skeletons) {
   return null;
 }
 
+function trackMissionFalls(party) {
+  let standingHeroes = 0;
+  for (const h of party) { if (h.dead && !h.fell) game.falls++; h.fell = h.dead; if (!h.dead) standingHeroes++; }
+  return standingHeroes;
+}
+
 // regras da missão a cada quadro; devolve true se a missão acabou em derrota
-function campaignTick(dt, skeletons) {
+function campaignTick(dt, skeletons, party = heroes()) {
   const goal = game.mission.goal;
-  for (const h of heroes()) { if (h.dead && !h.fell) game.falls++; h.fell = h.dead; }
+  const standingHeroes = trackMissionFalls(party);
   const finalPhaseCleared = game.state === 'cleared' && game.phase >= game.last;
   if (!finalPhaseCleared) game.missionT += dt;
   const fail = (text) => (endGame(text, false), true);
-  if (goal.type === 'nofall' && game.falls) return fail('Um herói caiu! A regra era ninguém cair.');
   if (goal.type === 'escort' && game.villager?.dead) return fail('O aldeão caiu! Proteja-o até o fim.');
   if (goal.type === 'rescue' && game.villager?.dead) return fail(game.rescueComplete
     ? 'A pessoa resgatada caiu antes de chegar em segurança.'
     : 'A pessoa presa caiu antes do resgate.');
   const captive = captivePrisoner();
   if (captive && game.state === 'fight') {   // libertar leva tempo; longe dele o progresso cai devagar
-    const near = heroes().some((hero) => !hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS);
+    let near = false;
+    for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS) { near = true; break; }
     game.rescueT = near ? game.rescueT + dt : Math.max(0, game.rescueT - dt * 0.5);
     captive.nameTag.textContent = game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';
   }
@@ -6078,7 +6254,12 @@ function campaignTick(dt, skeletons) {
   }
   if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
   if (bossGoal(goal)) {   // chefe derrotado: o exército dele se desfaz e a missão termina
-    const boss = units.find((u) => u.phaseBoss && !u.dead) || units.find((u) => u.phaseBoss);   // no trono há dois: só termina quando os dois caem
+    let liveBoss = null, anyBoss = null;
+    for (const unit of units) if (unit.phaseBoss) {
+      anyBoss ||= unit;
+      if (!unit.dead) { liveBoss = unit; break; }
+    }
+    const boss = liveBoss || anyBoss;   // no trono há dois: só termina quando os dois caem
     if (boss) game.bossSeen = true;
     if (game.bossSeen && (!boss || boss.dead) && game.state === 'fight' && !game.bossDown) {
       game.bossDown = true;
@@ -6090,7 +6271,7 @@ function campaignTick(dt, skeletons) {
   }
   if (goal.type === 'survive' && game.phase === goal.phase && game.state === 'fight') {   // ondas sem parar até o tempo acabar
     game.surviveT = Math.max(0, game.surviveT - dt);
-    if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = 4;
+    if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = Math.min(4, 6 - skeletons.length);
   }
   const lost = newGoalTick(goal, dt, skeletons);
   if (lost) return fail(lost);
@@ -6119,11 +6300,12 @@ function campaignTick(dt, skeletons) {
     case 'duel': text = game.bossDown ? 'Duelo vencido!' : `Duelo ${clockText(game.missionT)}`; break;
     case 'elite': text = `Elite ${game.eliteWave}/${goal.waves}`; break;
     case 'twin': {
-      const standing = units.filter((u) => u.phaseBoss && !u.dead).length;
+      let standing = 0;
+      for (const unit of units) if (unit.phaseBoss && !unit.dead) standing++;
       text = game.bossDown ? 'Trono derrubado!' : `Chefes ${game.bossSeen ? 2 - standing : 0}/2`;
       break;
     }
-    case 'nofall': text = `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`; break;
+    case 'nofall': text = `De pé ${standingHeroes}/${party.length} · quedas ${game.falls}`; break;
     case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
     case 'defend': {
       const shrine = game.shrine;
@@ -6181,12 +6363,18 @@ function missionEnd(won) {
   const stars = starsFor(result);
   const conditions = starConditions(result);
   const before = totalStars();
+  const cosmeticsBefore = !game.test && game.mission
+    ? new Set(campaignCosmetics().filter((cosmetic) => cosmetic.unlocked).map((cosmetic) => cosmetic.id))
+    : null;
   const best = !game.test && saveStars(game.mission.id, stars);
   // a medalha compara com os recordes anteriores, então grava antes do tempo
   const medal = game.test ? null : saveMissionMedal(game.mission.id, { won, stars, difficultyId: difficulty.id });
   // na horda, tempo maior é melhor: quem mede são as estrelas, não o recorde de tempo
   const bestTime = !game.test && game.mission.goal.type !== 'endless' && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
   const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
+  const cosmeticUnlocks = cosmeticsBefore
+    ? campaignCosmetics().filter((cosmetic) => cosmetic.unlocked && !cosmeticsBefore.has(cosmetic.id))
+    : [];
   // estrelas grandes; o critério de cada uma fica na dica (e no nome acessível da fileira)
   const criterion = (c) => c ? `${c.achieved ? '✓' : '○'} ${c.label}` : '';
   const row = `<span class="stars big" role="img" aria-label="${stars} de 3 estrelas. ${escAttr(conditions.map(criterion).join('; '))}">${[1, 2, 3].map((k) =>
@@ -6194,6 +6382,7 @@ function missionEnd(won) {
   const chips = [
     best && stars ? endChip('★', 'Melhor', 'Novo melhor resultado nesta missão!', 'star') : '',
     bestTime ? endChip('⏱', clockText(game.missionT), `Novo recorde · ${difficulty.name} · ${clockText(game.missionT)}`) : '',
+    ...cosmeticUnlocks.map((cosmetic) => endChip('✦', 'Cosmético novo', `${cosmetic.name} desbloqueado em ${cosmetic.chapter}. Equipe no Acampamento.`, 'cosmetic')),
     ...fresh.map((cfg) => `<span class="end-chip unlock" tabindex="0" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="Nova variante liberada: ${escAttr(cfg.name)}" aria-label="Nova variante liberada: ${escAttr(cfg.name)}"><img src="${cfg.portrait}" alt="">Nova!</span>`),
   ].join('');
   $('overlayStars').innerHTML = row + (chips ? `<div class="end-chips">${chips}</div>` : '')
@@ -6245,13 +6434,13 @@ function spawnSkeleton() {
 }
 
 // monsters.js usa estas peças do jogo (ele não importa o main.js)
-linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, get world() { return world; }, ring, beam, poof, popText, showBanner,
+linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, livingAllies: () => activeTargetContext?.livingAllies || allies().filter((unit) => !unit.dead), rangedHeroes: () => activeTargetContext?.rangedHeroes || heroes().filter((hero) => hero.ranged), scene, assets, get world() { return world; }, ring, beam, poof, popText, showBanner,
   get game() { return game; }, get difficulty() { return difficulty; } });
 
 // Com a onda ainda longe, a formação anda ao encontro dela em vez de esperar parada no posto;
 // o avanço tem teto para o grupo não atravessar o terreno da fase seguinte.
 const PRESS_LIMIT = 7;
-function pressForward(dt, skeletons) {
+function pressForward(dt, skeletons, party = heroes()) {
   if (game.mission?.goal.type === 'defend' || game.mission?.goal.type === 'breach') return;   // na defesa o grupo fica perto do santuário (ou da ponte)
   const anchor = world.pointAt(game.guideS), fwd = world.tangentAt(game.guideS);
   let nearest = Infinity;
@@ -6264,39 +6453,56 @@ function pressForward(dt, skeletons) {
   const room = Math.min(world.anchorS(game.phase) + PRESS_LIMIT, game.guideS + nearest - (LEASH + 1)) - game.guideS;
   if (nearest === Infinity || room <= 0) return;
   game.guideS += Math.min(room, MARCH * dt);
-  for (const h of heroes()) h.setAnchor(game.guideS);
+  for (const h of party) h.setAnchor(game.guideS);
 }
 
 function updateGame(dt) {
   if (game.over || game.paused) return;
-  const alive = heroes().filter((h) => !h.dead);
-  const skeletons = skeletonsAlive();
+  // Buffers anexados à função para reaproveitar listas sem depender do escopo externo.
+  const buffers = updateGame.buffers || (updateGame.buffers = { party: [], alive: [], skeletons: [] });
+  const { party, alive, skeletons } = buffers;
+  party.length = alive.length = skeletons.length = 0;
+  if (units.length) {
+    for (const unit of units) {
+      if (unit.team === 'hero') { party.push(unit); if (!unit.dead) alive.push(unit); }
+      else if (unit.team === 'skeleton' && !unit.dead) skeletons.push(unit);
+    }
+  } else {   // mantém os doubles enxutos usados pelos testes isolados de fase
+    for (const hero of heroes()) { party.push(hero); if (!hero.dead) alive.push(hero); }
+    for (const enemy of skeletonsAlive()) if (!enemy.dead) skeletons.push(enemy);
+  }
 
+  // Mesmo quando cair depois de uma marca conta como vitória, essas quedas
+  // ainda bloqueiam conquistas que exigem concluir uma missão sem baixas.
+  if (!alive.length && game.mission) trackMissionFalls(party);
   if (!alive.length && game.mission?.goal.type === 'endless') {   // na horda, cair faz parte: vale o tempo aguentado
     const held = game.endlessT >= game.mission.goal.marks[0];
     return endGame(`${held ? 'A horda foi contida' : 'A horda venceu'} por ${clockText(game.endlessT)}.`, held);
   }
-  if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}.`, false);
-  if (game.mission && campaignTick(dt, skeletons)) return;
+  if (!alive.length) return endGame(game.mission?.goal.type === 'nofall'
+    ? `Todo o grupo caiu na fase ${game.phase}. A missão terminou.`
+    : `Os esqueletos venceram na fase ${game.phase}.`, false);
+  if (game.mission && campaignTick(dt, skeletons, party)) return;
 
   if (game.state === 'fight') {
     if (tutorial.wants('enemyNear')) {
       const foe = skeletons.find(s => alive.some(h => h.pos.distanceTo(s.pos) < 10));
       if (foe) tutorial.on('enemyNear', { enemy: foe, camera, fighting: () => game.state === 'fight' });
     }
-    pressForward(dt, skeletons);
+    pressForward(dt, skeletons, party);
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
       const bossWaits = game.bossPending && game.toSpawn === 1 && skeletons.length > 4;   // o chefe só entra quando a onda diminui, sem chegar junto com ela
       if (game.spawnTimer <= 0 && !bossWaits) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
     } else if (!skeletons.length && !captivePrisoner()) {   // o prisioneiro preso segura a fase
       if (game.mission && game.phase >= game.last) {
-        const party = heroes();
-        game.missionHpRatio = party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
+        let hp = 0, maxHp = 0;
+        for (const h of party) { hp += Math.max(0, h.hp); maxHp += h.maxHp; }
+        game.missionHpRatio = hp / Math.max(1, maxHp);
       }
       showBanner(`✓ Fase ${game.phase}`, 2);
       tutorial.on('phaseCleared', { phase: game.phase });
-      for (const h of heroes()) {
+      for (const h of party) {
         if (h.dead) {
           if (difficulty.reviveDelay && game.phase - h.diedIn < difficulty.reviveDelay) continue;   // ainda espera a fase seguinte
           h.revive();
@@ -6324,7 +6530,7 @@ function updateGame(dt) {
     // o ponto da formação anda pela estrada e o grupo vai atrás
     const goal = world.anchorS(game.phase);
     game.guideS = Math.min(goal, game.guideS + MARCH * dt);
-    for (const h of heroes()) h.setAnchor(game.guideS);
+    for (const h of party) h.setAnchor(game.guideS);
     if (game.guideS >= goal && alive.every((h) => h.pos.distanceTo(h.post) < 0.6)) startPhase();
   }
 
@@ -6332,7 +6538,8 @@ function updateGame(dt) {
   setTip('wave', `Fase ${game.phase} de ${game.last}`);
   // totens, torre e prisioneiro seguram a fase: sem esqueletos comuns, o HUD diz o que falta
   const objective = game.state === 'fight' && !game.toSpawn && skeletons.every((s) => s.totem) ? objectiveHint(skeletons) : null;
-  const foes = skeletons.filter((s) => !s.totem).length + (game.state === 'fight' ? game.toSpawn : 0);
+  let foes = game.state === 'fight' ? game.toSpawn : 0;
+  for (const s of skeletons) if (!s.totem) foes++;
   setText('left', objective || String(foes));
   $('left').classList.toggle('objective', !!objective);
   setTip('left', objective ? `Objetivo: ${objective}` : `${foes} inimigos restantes · ${game.kills} abates`);
@@ -6354,7 +6561,7 @@ function matchSummary(won, stars) {
     mode: game.mission ? 'mission' : 'journey', missionId: game.mission?.id || null, won, difficultyId: difficulty.id,
     kills: game.kills, start: game.start, last: game.last, phase: game.phase,
     phasesCleared: won ? game.last - game.start + 1 : Math.max(0, game.phase - game.start),
-    stars: stars || 0, totalStars: totalStars(), falls: game.falls, partySize: heroes().length,
+    stars: stars || 0, totalStars: totalStars(), falls: game.fallLog?.length || 0, partySize: heroes().length,
     heroes: (game.roster || []).map((h) => ({ id: h.cfg.id, kills: h.stats.abates })), ultimates: game.ultimates || 0, relics: game.relics?.length || 0,
   };
 }
@@ -6420,6 +6627,8 @@ function endGame(text, won = false) {
     $('overlayStars').innerHTML += rewardHTML(reward, VARIANTS, mvp?.cfg.id);
     toastAchievements(reward.unlocked);
   }
+  const storageWarning = !game.test ? progressStorageWarning() : '';
+  if (storageWarning) $('overlayStars').innerHTML += `<div class="storage-warning" role="status">${storageWarning}</div>`;
   $('overlayBtn').textContent = game.mission ? 'Mapa' : 'Jogar de novo';
   $('overlayBtn').setAttribute('aria-label', game.mission ? 'Voltar ao mapa' : 'Jogar de novo');
   $('overlayBtn').hidden = false;
@@ -6433,10 +6642,11 @@ function updateBars() {
   // or writing layout styles while the player is choosing or reading results.
   if (game.paused || game.over) return;
   const w = innerWidth / 2, h = innerHeight / 2;
+  const marginX = 160 / innerWidth, marginY = 36 / innerHeight;
   for (const u of units) {
     if (u.dead) continue;
     tmp.copy(u.pos).setY(u.pos.y + (u.barHeight ?? 2.6 * u.size)).project(camera);
-    const visible = tmp.z < 1;
+    const visible = tmp.z < 1 && Math.abs(tmp.x) <= 1 + marginX && Math.abs(tmp.y) <= 1 + marginY;
     const wasVisible = u.barVisible;
     if (wasVisible !== visible) {
       u.bar.style.display = visible ? '' : 'none';
@@ -6476,10 +6686,12 @@ function frame() {
   else {
     activeTargetContext = null;
     frameTargetContext.party.length = 0;
+    frameTargetContext.rangedHeroes.length = 0;
     frameTargetContext.friends.length = 0;
     frameTargetContext.skeletons.length = 0;
     frameTargetContext.attackableSkeletons.length = 0;
     frameTargetContext.alliedUnits.length = 0;
+    frameTargetContext.livingAllies.length = 0;
   }
   for (let i = 0; i < updateCount; i++) frameUnits[i].update(dt);
   frameUnits.length = 0;
@@ -6488,6 +6700,7 @@ function frame() {
   updateBolts(dt);
   updateEnemyBolts(dt);
   updateFx(dt);
+  popTextPool.update(performance.now());
   FX.update(dt);
   if (dt > 0) game.realm ? game.realm.tick(dt) : updateGame(dt);
   showEvolution();
@@ -6497,9 +6710,10 @@ function frame() {
     followParty(real);
     if (pick.open && pick.mode === 'mode') orbitMenu(real);
   }
+  controls.update();
   sun.position.set(follow.x + 14, 30, follow.z + 12);
   sun.target.position.copy(follow);
-  world.update(real, follow.z);
+  world.update(real, follow.z, camera);
   const gloom = world.gloomAt(follow.z);
   scene.background.lerpColors(SKY[0], SKY[1], gloom);
   scene.fog.color.copy(scene.background);
@@ -6514,7 +6728,6 @@ function frame() {
   selectRing.visible = !!sel && !sel.dead && units.includes(sel);
   if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
   tickHeroPanel(real);
-  controls.update();
   if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; }   // o jogador mudou o zoom
   const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
   camera.position.add(kick);
@@ -6690,26 +6903,9 @@ function updateAim() {
       }
     } else {
       // Procura a primeira interseção com a altura lógica do terreno, inclusive platôs.
-      const ray = aimRay.ray;
-      const hit = aimGroundHit;
-      let previous = ray.origin.y - world.groundHeight(ray.origin.x, ray.origin.z);
-      for (let distance = 0.5; distance <= 250; distance += 0.5) {
-        ray.at(distance, hit);
-        const above = hit.y - world.groundHeight(hit.x, hit.z);
-        if (above <= 0 && previous > 0) {
-          let low = distance - 0.5, high = distance;
-          for (let i = 0; i < 8; i++) {
-            const mid = (low + high) / 2;
-            ray.at(mid, hit);
-            if (hit.y > world.groundHeight(hit.x, hit.z)) low = mid; else high = mid;
-          }
-          ray.at(high, hit);
-          hit.y = world.groundHeight(hit.x, hit.z);
-          aimGroundTarget.pos.copy(hit);
-          target = aimGroundTarget;
-          break;
-        }
-        previous = above;
+      if (findGroundAimHit(aimRay.ray, world.groundHeight, aimGroundHit)) {
+        aimGroundTarget.pos.copy(aimGroundHit);
+        target = aimGroundTarget;
       }
     }
   }
@@ -6817,6 +7013,11 @@ linkKingdom({ Unit, Hero, Skeleton, units, scene, camera, controls, renderer, su
 const benchApi = () => ({
   renderer, scene, game, units, heroes, world, VARIANTS, frame, spawnSkeleton, withBattleAssets,
   isLowQuality: () => lowQuality,
+  getShadowMapSize: () => sun.shadow.mapSize.x,
+  setShadowMapSize(size) {
+    sun.shadow.mapSize.set(size, size);
+    sun.shadow.needsUpdate = true;
+  },
   setupJourney(phase) {
     clearTimeout(pick.timer);
     pick.open = false;
@@ -6831,6 +7032,7 @@ const benchApi = () => ({
     h.gainXp(XP_LEVELS[2]);
     autoUpgrade();
     h.pos.copy(h.post);
+    return h;
   },
   beginBattle() {
     $('overlay').classList.add('hidden');

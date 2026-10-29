@@ -27,3 +27,26 @@ export function bandsByZ(zs, size) {
   }
   return [...bands.keys()].sort((a, b) => a - b).map((k) => bands.get(k));
 }
+
+// O mapa do jogo cabe muito dentro de ±32768 células: empacota x/z em uma chave
+// numérica exata, sem alocação de strings nem retorno polimórfico no loop físico.
+export function gridCellKey(x, z) {
+  return x * 65536 + (z & 0xffff);
+}
+
+// As faixas animadas têm uma esfera ampliada para cobrir todo o movimento das instâncias.
+// Sem frustum (por exemplo, em testes), mantém o comportamento seguro: atualizar a faixa.
+export function isInstancedBandVisible(frustum, mesh) {
+  if (!frustum || !mesh?.boundingSphere) return true;
+  return frustum.intersectsSphere(mesh.boundingSphere);
+}
+
+// InstancedMesh mantém buffers próprios além da geometria e do material compartilhados.
+export function disposeInstancedMeshes(roots) {
+  const meshes = new Set();
+  for (const root of roots) root?.traverse?.((obj) => {
+    if (obj.isInstancedMesh && typeof obj.dispose === 'function') meshes.add(obj);
+  });
+  for (const mesh of meshes) mesh.dispose();
+  return meshes.size;
+}

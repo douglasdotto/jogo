@@ -137,37 +137,142 @@ export function masteryXpFor(run, hero, mentorLevel = 0) {
 export function createProgression(storage = null) {
   let state = freshProgress();
   let corrupted = false;
-  try {
-    const raw = storage?.getItem(PROGRESS_KEY);
-    if (raw != null) {
-      try { state = migrateProgress(JSON.parse(raw)); } catch {
-        corrupted = true;
-        try { storage.setItem(`${PROGRESS_KEY}-corrompido`, String(raw).slice(0, 20000)); } catch {}
+  let corruptBackupFailed = false;
+  let persistenceUnavailable = !storage;
+  let baseKnown = !storage;
+  let corruptRaw = null;
+  const pendingOperations = [];
+  const copy = (value) => JSON.parse(JSON.stringify(value));
+  const preserveCorruptBackup = (raw) => {
+    const backup = String(raw).slice(0, 20000), base = `${PROGRESS_KEY}-corrompido`;
+    for (let suffix = 0; suffix <= 999; suffix++) {
+      const key = suffix ? `${base}-${suffix}` : base;
+      const existing = storage.getItem(key);
+      if (existing === backup) return true;
+      if (existing == null) { storage.setItem(key, backup); return true; }
+    }
+    throw new Error('muitos backups de meta-progressão');
+  };
+  const loadRaw = (raw) => {
+    if (raw == null) return freshProgress();
+    try { return migrateProgress(JSON.parse(raw)); }
+    catch {
+      corrupted = true;
+      corruptRaw = String(raw);
+      try { preserveCorruptBackup(corruptRaw); corruptBackupFailed = false; }
+      catch { corruptBackupFailed = true; }
+      return freshProgress();
+    }
+  };
+  if (storage) {
+    try {
+      state = loadRaw(storage.getItem(PROGRESS_KEY));
+      baseKnown = true;
+      persistenceUnavailable = false;
+    } catch {
+      baseKnown = false;
+      persistenceUnavailable = true; // não grave até confirmar o save que não conseguiu ler
+    }
+  }
+
+  const level = (id) => state.upgrades[id] || 0;
+  const unlockNewIn = (target, run) => {
+    const fresh = ACHIEVEMENTS.filter((a) => !target.achievements[a.id] && achievementReached(a, target, run));
+    for (const a of fresh) target.achievements[a.id] = Date.now();
+    return fresh.map(({ id, icon, name, desc }) => ({ id, icon, name, desc }));
+  };
+  const unlockNew = (run) => unlockNewIn(state, run);
+  const applyRecordMatch = (target, run) => {
+    const gold = goldFor(run, target.upgrades.bounty || 0);
+    target.gold += gold.total;
+    target.earned += gold.total;
+    const c = target.counters;
+    c.matches++;
+    c.kills += toCount(run.kills);
+    c.ultimates += toCount(run.ultimates);
+    c.relics += toCount(run.relics);
+    if (run.won) c.wins++;
+    c.bestStars = Math.max(c.bestStars, toCount(run.totalStars));
+    const seen = new Set();
+    const heroes = (run.heroes || []).filter((h) => h?.id && !seen.has(h.id) && seen.add(h.id)).map((h) => {
+      const entry = target.heroes[h.id] ||= { xp: 0, games: 0 };
+      const before = masteryLevel(entry.xp), gained = masteryXpFor(run, h, target.upgrades.mentor || 0);
+      entry.xp += gained;
+      entry.games++;
+      return { id: h.id, gained, before, after: masteryLevel(entry.xp), xp: entry.xp };
+    });
+    const unlocked = unlockNewIn(target, run);
+    return { gold, heroes, unlocked, total: target.gold };
+  };
+  const replayOperation = (target, operation) => {
+    if (operation.type === 'match') return applyRecordMatch(target, operation.run);
+    if (operation.type === 'buy') {
+      const upgrade = findUpgrade(operation.id), current = target.upgrades[operation.id] || 0;
+      if (!upgrade || current >= upgrade.costs.length) return false;
+      const cost = upgrade.costs[current];
+      if (target.gold < cost) return false;
+      target.gold -= cost;
+      target.upgrades[operation.id] = current + 1;
+      unlockNewIn(target, null);
+      return true;
+    }
+    if (operation.type === 'refresh') {
+      target.counters.bestStars = Math.max(target.counters.bestStars, toCount(operation.totalStars));
+      unlockNewIn(target, null);
+      return true;
+    }
+    return false;
+  };
+  const recoverUnreadBase = () => {
+    let raw;
+    try { raw = storage.getItem(PROGRESS_KEY); }
+    catch { persistenceUnavailable = true; return false; }
+    let recovered = loadRaw(raw);
+    for (const operation of pendingOperations) {
+      if (replayOperation(recovered, operation) === false) {
+        persistenceUnavailable = true;
+        return false; // não aplique um diário incompatível ao save original
       }
     }
-  } catch { /* storage bloqueado: segue na memória */ }
-
-  const save = () => { try { storage?.setItem(PROGRESS_KEY, JSON.stringify(state)); return true; } catch { return false; } };
-  const level = (id) => state.upgrades[id] || 0;
-  const unlockNew = (run) => {
-    const fresh = ACHIEVEMENTS.filter((a) => !state.achievements[a.id] && achievementReached(a, state, run));
-    for (const a of fresh) state.achievements[a.id] = Date.now();
-    return fresh.map(({ id, icon, name, desc }) => ({ id, icon, name, desc }));
+    state = recovered;
+    pendingOperations.length = 0;
+    baseKnown = true;
+    return true;
+  };
+  const prepareForMutation = () => baseKnown || recoverUnreadBase();
+  const save = () => {
+    if (!storage) { persistenceUnavailable = true; pendingOperations.length = 0; return false; }
+    if (!baseKnown) { persistenceUnavailable = true; return false; }
+    if (corruptBackupFailed) {
+      try { preserveCorruptBackup(corruptRaw); corruptBackupFailed = false; }
+      catch { persistenceUnavailable = true; return false; }
+    }
+    try {
+      storage.setItem(PROGRESS_KEY, JSON.stringify(state));
+      persistenceUnavailable = false;
+      pendingOperations.length = 0;
+      baseKnown = true;
+      return true;
+    } catch { persistenceUnavailable = true; return false; }
   };
 
   const api = {
     get corrupted() { return corrupted; },
+    get corruptBackupFailed() { return corruptBackupFailed; },
+    get persistenceUnavailable() { return persistenceUnavailable; },
     get gold() { return state.gold; },
     snapshot: () => JSON.parse(JSON.stringify(state)),
     upgradeLevel: level,
     upgradeCost(id) { const u = findUpgrade(id); return u && level(id) < u.costs.length ? u.costs[level(id)] : null; },
     buy(id) {
+      prepareForMutation();
       const cost = api.upgradeCost(id);
       if (cost == null) return { ok: false, reason: 'max' };
       if (state.gold < cost) return { ok: false, reason: 'gold' };
       state.gold -= cost;
       state.upgrades[id] = level(id) + 1;
       const unlocked = unlockNew(null);
+      pendingOperations.push({ type: 'buy', id });
       save();
       return { ok: true, level: state.upgrades[id], unlocked };
     },
@@ -192,33 +297,24 @@ export function createProgression(storage = null) {
       progress: a.count ? Math.min(a.goal, a.count(state)) : null, goal: a.goal ?? null })),
     // fim de partida: credita ouro, XP de maestria, contadores e devolve o que mudou
     recordMatch(run) {
-      const gold = goldFor(run, level('bounty'));
-      state.gold += gold.total;
-      state.earned += gold.total;
-      const c = state.counters;
-      c.matches++;
-      c.kills += toCount(run.kills);
-      c.ultimates += toCount(run.ultimates);
-      c.relics += toCount(run.relics);
-      if (run.won) c.wins++;
-      c.bestStars = Math.max(c.bestStars, toCount(run.totalStars));
-      const seen = new Set();
-      const heroes = (run.heroes || []).filter((h) => h?.id && !seen.has(h.id) && seen.add(h.id)).map((h) => {
-        const entry = state.heroes[h.id] ||= { xp: 0, games: 0 };
-        const before = masteryLevel(entry.xp), gained = masteryXpFor(run, h, level('mentor'));
-        entry.xp += gained;
-        entry.games++;
-        return { id: h.id, gained, before, after: masteryLevel(entry.xp), xp: entry.xp };
-      });
-      const unlocked = unlockNew(run);
+      prepareForMutation();
+      const savedRun = copy(run);
+      const result = applyRecordMatch(state, savedRun);
+      pendingOperations.push({ type: 'match', run: savedRun });
       save();
-      return { gold, heroes, unlocked, total: state.gold };
+      result.total = state.gold;
+      return result;
     },
     // conquistas que dependem só do estado (ex.: estrelas antigas) ao abrir o acampamento
     refresh(totalStars = 0) {
+      prepareForMutation();
+      const previousStars = state.counters.bestStars;
       state.counters.bestStars = Math.max(state.counters.bestStars, toCount(totalStars));
       const unlocked = unlockNew(null);
-      if (unlocked.length) save();
+      if (unlocked.length || state.counters.bestStars > previousStars) {
+        pendingOperations.push({ type: 'refresh', totalStars });
+        save();
+      }
       return unlocked;
     },
   };
@@ -267,13 +363,14 @@ export function rewardHTML(reward, variants = [], mvpId = null) {
 }
 
 // Tela do acampamento: oficina, maestria dos heróis e conquistas.
-export function renderCamp(root, progress, { variants = [], onBack = () => {}, tab = 'oficina' } = {}) {
+export function renderCamp(root, progress, { variants = [], onBack = () => {}, tab = 'oficina', cosmetics = [], equippedCosmetic = null, onEquipCosmetic = () => {}, storageWarning = () => false } = {}) {
   const doc = root.ownerDocument || globalThis.document;
   const draw = (current) => {
     const achievements = progress.achievements();
     const done = achievements.filter((a) => a.unlocked).length;
     const tabs = [['oficina', 'Oficina', ''], ['maestria', 'Maestria', 'Cada herói ganha XP de maestria ao jogar. Bônus pequenos: no máximo +4% de vida e +4% de dano.'],
-      ['conquistas', `Conquistas ${done}/${achievements.length}`, '']];
+      ['conquistas', `Conquistas ${done}/${achievements.length}`, ''],
+      ...(cosmetics.length ? [['cosmeticos', 'Cosméticos', 'Visuais de capítulo. Desbloqueios por estrelas, sem bônus de combate.']] : [])];
     let body = '';
     // Cartões curtos: ícone, nome, nível e custo; o efeito de cada melhoria aparece na dica.
     if (current === 'oficina') {
@@ -295,6 +392,29 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
           <img src="${cfg.portrait}" alt=""><span><b>${escapeProgressText(cfg.name)}</b><small>Nv ${m.level}</small>
           <span class="mastery-track" aria-hidden="true"><i style="width:${pct}%"></i></span></span></div>`;
       }).join('')}</div>`;
+    } else if (current === 'cosmeticos') {
+      const equipped = equippedCosmetic?.id || null;
+      body = `<div class="camp-cosmetics">${cosmetics.map((cosmetic) => {
+        const selected = equipped === cosmetic.id;
+        const requiredArenas = Math.max(1, Number(cosmetic.requiredArenas) || 1);
+        const completedArenas = Math.min(requiredArenas, Math.max(0, Number(cosmetic.completedArenas) || 0));
+        const stars = Math.max(0, Number(cosmetic.stars) || 0);
+        const maxStars = Math.max(requiredArenas, Number(cosmetic.maxStars) || requiredArenas * 3);
+        const pct = Math.round(completedArenas / requiredArenas * 100);
+        const arenaProgress = `${completedArenas} de ${requiredArenas} arenas concluídas`;
+        const starProgress = `${stars}/${maxStars} estrelas do capítulo`;
+        const requirement = cosmetic.unlocked ? starProgress : arenaProgress;
+        const tip = cosmetic.unlocked
+          ? `${cosmetic.chapter} · visual desbloqueado · ${starProgress} · ${arenaProgress}`
+          : `${cosmetic.chapter} · ${arenaProgress} · faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear`;
+        const progressLabel = cosmetic.unlocked
+          ? `${cosmetic.name}: visual desbloqueado. ${starProgress}; ${arenaProgress}.`
+          : `${cosmetic.name}: ${arenaProgress}; faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear.`;
+        return `<article class="cosmetic-item${cosmetic.unlocked ? ' unlocked' : ''}${selected ? ' equipped' : ''}" style="--cosmetic-color:#${cosmetic.color.toString(16).padStart(6, '0')}" data-tip="${escapeProgressText(tip)}">
+          <span class="cosmetic-icon" aria-hidden="true">${cosmetic.icon}</span><div class="cosmetic-copy"><small>${escapeProgressText(cosmetic.chapter)}</small><b>${escapeProgressText(cosmetic.name)}</b>
+          <span class="cosmetic-progress" role="progressbar" aria-label="${escapeProgressText(progressLabel)}" aria-valuemin="0" aria-valuemax="${requiredArenas}" aria-valuenow="${completedArenas}"><i style="width:${pct}%"></i></span><em>${escapeProgressText(requirement)}</em></div>
+          <button type="button" class="cosmetic-equip" data-cosmetic="${escapeProgressText(cosmetic.id)}"${!cosmetic.unlocked || selected ? ' disabled' : ''}>${selected ? 'Equipado' : cosmetic.unlocked ? 'Equipar' : 'Bloqueado'}</button></article>`;
+      }).join('')}${equipped ? '<button type="button" class="cosmetic-clear">Remover visual</button>' : ''}</div>`;
     } else {
       // grade de medalhas: nome, requisito e progresso só na dica
       body = `<div class="camp-achievements">${achievements.map((a) => {
@@ -304,11 +424,14 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
         <span class="ach-medal" aria-hidden="true">${a.icon}</span>${a.goal && !a.unlocked ? `<span class="mastery-track" aria-hidden="true"><i style="width:${Math.round(a.progress / a.goal * 100)}%"></i></span>` : ''}</div>`;
       }).join('')}</div>`;
     }
+    const warningText = storageWarning();
+    const warning = warningText ? `<div class="storage-warning" role="status">${escapeProgressText(warningText)}</div>` : '';
     root.innerHTML = `<div class="camp-head">
         <button type="button" class="camp-back">← Menu</button>
         <span class="camp-title"><span class="camp-crown" aria-hidden="true">⚒</span>Acampamento</span>
         <span class="camp-gold" aria-label="${progress.gold} de ouro"><i aria-hidden="true">${GOLD.icon}</i><b>${progress.gold}</b></span>
       </div>
+      ${warning}
       <div class="camp-tabs" role="tablist">${tabs.map(([id, label, tip]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="${id === current}"${tip ? ` data-tip="${tip}"` : ''}>${label}</button>`).join('')}</div>
       <section class="camp-panel" role="tabpanel">${body}</section>`;
     root.querySelector('.camp-back').onclick = onBack;
@@ -320,6 +443,14 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
       draw('oficina');
       root.querySelector(`[data-buy="${b.dataset.buy}"]`)?.focus();
     };
+    for (const b of root.querySelectorAll('[data-cosmetic]')) b.onclick = () => {
+      if (!onEquipCosmetic(b.dataset.cosmetic)) return;
+      equippedCosmetic = cosmetics.find((cosmetic) => cosmetic.id === b.dataset.cosmetic) || null;
+      draw('cosmeticos');
+      root.querySelector(`[data-cosmetic="${b.dataset.cosmetic}"]`)?.focus();
+    };
+    const clearCosmetic = root.querySelector('.cosmetic-clear');
+    if (clearCosmetic) clearCosmetic.onclick = () => { onEquipCosmetic(null); equippedCosmetic = null; draw('cosmeticos'); };
   };
   draw(tab);
 }

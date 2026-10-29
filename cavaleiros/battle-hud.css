@@ -106,6 +106,8 @@
 #overlayStars .end-chips, #overlayStars .mission-reward, #overlayStars .progress-reward { display: contents; }
 .end-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 99px; cursor: help;
   font: 400 17px 'Lilita One', sans-serif; color: #fff; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 212, 74, .35); }
+.end-chip.cosmetic { color: #f1ddff; border-color: rgba(199, 152, 255, .75); background: rgba(103, 58, 151, .38); }
+.end-chip.cosmetic i { color: #d7adff; }
 .end-chip i { font-style: normal; color: var(--gold); }
 .end-chip.gold { order: -1; font-size: 20px; color: var(--gold); }
 .end-chip.unlock img { width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #fff9e9, var(--c)); }
@@ -145,3 +147,39 @@
 #overlay .mission-next-btn { padding: 10px 26px 12px; font-size: 20px; background: linear-gradient(#ffe995, #f2b32a 55%, #c98a12); }
 /* esqueleto de elite (Cripta Sombria): contorno dourado na barra de vida */
 .hp.elite { outline: 2px solid #f2c94c; outline-offset: 1px; }
+
+/* No celular, o objetivo ocupa uma segunda linha para não disputar espaço com os controles. */
+@media (max-width: 600px) {
+  #hud {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "left right" "goal goal";
+    align-items: center;
+    row-gap: 5px;
+    padding: 5px 7px;
+  }
+  #hud .hud-left { grid-area: left; min-width: 0; overflow: hidden; }
+  #hud .hud-right { grid-area: right; grid-column: auto; justify-self: end; }
+  #hud #goal { grid-area: goal; width: 100%; min-width: 0; box-sizing: border-box; justify-self: stretch; }
+  #hud #goal .goal-meter { width: min(34vw, 120px); flex: 0 0 auto; }
+  #hud #goal .goal-label { min-width: 0; white-space: nowrap; }
+
+  /* Regras do arquivo externo vêm depois do CSS da página; repetir os tamanhos compactos aqui mantém os ícones legíveis. */
+  #skills { width: calc(100vw - 16px); max-width: calc(100vw - 16px); justify-content: safe center; gap: 6px; padding: 6px 6px 5px; bottom: 6px; border-radius: 16px; }
+  .skillGroup { gap: 4px; padding: 4px 5px; border-radius: 11px; }
+  .skillHero { min-height: 0; padding: 1px 4px; font-size: 11px; gap: 4px; }
+  .skillHeroMark { width: 16px; height: 16px; flex-basis: 16px; font-size: 11px; border-radius: 5px; }
+  .skillHeroName { max-width: 110px; }
+  .skillHeroCount, .skill .name, .skill .key { display: none; }
+  .skillSlots { grid-template-columns: repeat(3, 46px); gap: 4px; }
+  .skill { width: 46px; min-width: 46px; flex: 0 0 46px; }
+  .skill .face { width: 46px; height: 46px; border-radius: 12px; }
+  .skill .glyph { font-size: 24px; }
+  .skill .secs { bottom: 2px; height: 16px; min-width: 22px; font-size: 11px; }
+  .skill .auto { top: -4px; right: -4px; width: 17px; height: 17px; font-size: 9px; }
+
+  #bossBar { top: 82px; width: calc(100vw - 16px); }
+  #soundHint { top: 78px; left: 6px; font-size: 12px; }
+  body #aimHint { bottom: 112px; font-size: 12px; }
+  #aimCancel { bottom: 154px; }
+  #banner { max-width: calc(100vw - 20px); font-size: 24px; padding: 6px 24px 10px; -webkit-text-stroke-width: 4px; }
+}

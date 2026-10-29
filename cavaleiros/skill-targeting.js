@@ -25,3 +25,31 @@ export function validAim(h, target) {
   if (h.cfg.id.includes('viking') && distance >= 9) return false;
   return true;
 }
+
+// Marcha em passos de 2 m e refina o primeiro cruzamento; a faixa da rampa
+// do platô tem 3 m de largura, então pelo menos uma amostra cai dentro dela.
+export function findGroundAimHit(ray, groundHeight, target, maxDistance = 250, step = 2, refinementSteps = 8) {
+  const stride = Math.max(0.5, step);
+  let previousDistance = 0;
+  let previous = ray.origin.y - groundHeight(ray.origin.x, ray.origin.z);
+  for (let distance = Math.min(stride, maxDistance); distance <= maxDistance; distance = Math.min(maxDistance, distance + stride)) {
+    ray.at(distance, target);
+    const above = target.y - groundHeight(target.x, target.z);
+    if (above <= 0 && previous > 0) {
+      let low = previousDistance, high = distance;
+      for (let i = 0; i < refinementSteps; i++) {
+        const mid = (low + high) / 2;
+        ray.at(mid, target);
+        if (target.y > groundHeight(target.x, target.z)) low = mid;
+        else high = mid;
+      }
+      ray.at(high, target);
+      target.y = groundHeight(target.x, target.z);
+      return true;
+    }
+    previousDistance = distance;
+    previous = above;
+    if (distance === maxDistance) break;
+  }
+  return false;
+}

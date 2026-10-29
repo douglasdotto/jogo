@@ -285,19 +285,50 @@ export function createArena(seedValue = 7) {
   arena.nearestFree = nearestFree;
   const gScore = new Float32Array(cols * rows), came = new Int32Array(cols * rows), seen = new Uint32Array(cols * rows);
   let stamp = 0;
-  const heap = [];
+  // Heap binário em três buffers paralelos: reusados entre buscas sem criar um array por nó.
+  const heapF = [], heapK = [], heapG = [];
+  let heapSize = 0;
   function astar(s, g) {
     stamp++;
-    heap.length = 0;
+    heapSize = 0;
     const gi = g % cols, gj = (g / cols) | 0;
     const h = (k) => { const dx = Math.abs(k % cols - gi), dz = Math.abs(((k / cols) | 0) - gj); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
-    const push = (k, f) => { heap.push([f, k]); let c = heap.length - 1; while (c > 0) { const p = (c - 1) >> 1; if (heap[p][0] <= heap[c][0]) break; [heap[p], heap[c]] = [heap[c], heap[p]]; c = p; } };
-    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let c = 0; for (;;) { const l = c * 2 + 1, r = l + 1; let m = c; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === c) break; [heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return top; };
+    const push = (k, f, score) => {
+      let c = heapSize++;
+      while (c > 0) {
+        const p = (c - 1) >> 1;
+        if (heapF[p] <= f) break;
+        heapF[c] = heapF[p]; heapK[c] = heapK[p]; heapG[c] = heapG[p];
+        c = p;
+      }
+      heapF[c] = f; heapK[c] = k; heapG[c] = score;
+    };
+    let poppedG = 0;
+    const pop = () => {
+      const k = heapK[0];
+      poppedG = heapG[0];
+      const last = --heapSize;
+      if (last > 0) {
+        const lastF = heapF[last], lastK = heapK[last], lastG = heapG[last];
+        let c = 0;
+        for (;;) {
+          const l = c * 2 + 1, r = l + 1;
+          if (l >= heapSize) break;
+          const m = r < heapSize && heapF[r] < heapF[l] ? r : l;
+          if (heapF[m] >= lastF) break;
+          heapF[c] = heapF[m]; heapK[c] = heapK[m]; heapG[c] = heapG[m];
+          c = m;
+        }
+        heapF[c] = lastF; heapK[c] = lastK; heapG[c] = lastG;
+      }
+      return k;
+    };
     seen[s] = stamp; gScore[s] = 0; came[s] = -1;
-    push(s, h(s));
+    push(s, h(s), gScore[s]);
     let expanded = 0;
-    while (heap.length && expanded++ < 4000) {
-      const [, k] = pop();
+    while (heapSize && expanded++ < 4000) {
+      const k = pop();
+      if (poppedG !== gScore[k]) continue;   // descarta a entrada antiga quando outra rota já chegou com custo menor
       if (k === g) {
         const path = [];
         for (let c = g; c !== -1; c = came[c]) path.push(c);
@@ -314,7 +345,7 @@ export function createArena(seedValue = 7) {
         const cost = gScore[k] + (di && dj ? 1.414 : 1) * (ground[n] === T.FORD ? 1.6 : 1);   // o vau atrasa
         if (seen[n] === stamp && gScore[n] <= cost) continue;
         seen[n] = stamp; gScore[n] = cost; came[n] = k;
-        push(n, cost + h(n));
+        push(n, cost + h(n), gScore[n]);
       }
     }
     return null;

@@ -14,6 +14,8 @@ class Vector3 {
   clone() { return new Vector3(this.x, this.y, this.z); }
   add(v) { this.x += v.x; this.y += v.y; this.z += v.z; return this; }
   addScaledVector(v, k) { this.x += v.x * k; this.y += v.y * k; this.z += v.z * k; return this; }
+  length() { return Math.hypot(this.x, this.y, this.z); }
+  normalize() { const length = this.length() || 1; return this.set(this.x / length, this.y / length, this.z / length); }
 }
 
 class Group {
@@ -113,6 +115,7 @@ function freshContext() {
   vm.runInContext('MONSTER_TYPES.Shaman.think(shaman, 0, hero)', context);
   assert.equal(inScene.size, 1, 'aviso do escudo entra na cena');
   vm.runInContext('updateMonsterFx(1.2)', context);
+  assert.equal(vm.runInContext('mFxUnits.size', context), 2, 'efeitos ativos preservam o snapshot de unidades necessário à invalidação');
   assert.ok(ally.ward && ally.ward.hp > 0, 'aliado recebe o escudo depois do aviso');
   assert.equal(inScene.size, 0, 'aviso sai da cena');
   const pieces = ally.root.children.slice();
@@ -121,9 +124,19 @@ function freshContext() {
   shaman.dead = true;
   vm.runInContext('updateMonsterFx(0.05)', context);
   assert.equal(ally.ward, null, 'xamã morto desfaz o escudo');
+  assert.equal(vm.runInContext('mFxUnits.size', context), 0, 'o snapshot libera donos quando o último efeito com owner termina');
   assert.ok(pieces.every((p) => p.removed), 'bolha e anel saem do aliado');
   const { made, disposed } = counts();
   assert.equal(made, disposed, 'materiais dos avisos descartados');
+
+  const nextShaman = unit({ cd: { ward: 0 } });nextShaman.pos.set(0, 0, 6);
+  const nextAlly = unit({ maxHp: 200, hp: 200 });nextAlly.pos.set(1, 0, 6);
+  Object.assign(context, { nextShaman, nextAlly });
+  vm.runInContext('MONSTER_TYPES.Shaman.think(nextShaman, 0, hero); updateMonsterFx(0.1)', context);
+  assert.ok(vm.runInContext('mFxUnits.size', context) > 0, 'um novo efeito recompõe o snapshot depois da limpeza');
+  vm.runInContext('clearMonsterFx()', context);
+  assert.equal(vm.runInContext('mFxUnits.size', context), 0, 'clearMonsterFx também libera referências de unidades');
+  assert.equal(vm.runInContext('ownedFxCount', context), 0);
 }
 
 {
@@ -141,4 +154,82 @@ function freshContext() {
   assert.ok(made > 0);
   assert.equal(made, disposed, 'materiais das linhas descartados');
 }
+
+{
+  const { context, hero, unit, inScene } = freshContext();
+  hero.pos.set(0, 0, 2.5);
+  const boss = unit({ boss: true, size: 2.1, maxHp: 1000, hp: 300, enraged: true, cd: { cleave: 0, hook: 99, whirl: 99 } });
+  Object.assign(context, { boss, hero });
+  vm.runInContext('MONSTER_TYPES.Executioner.think(boss, 0, hero)', context);
+  assert.equal(inScene.size, 3, 'avisos do Carrasco entram na cena');
+  vm.runInContext('api.units.splice(api.units.indexOf(boss), 1)', context);
+  vm.runInContext('updateMonsterFx(2)', context);
+  assert.equal(inScene.size, 0, 'avisos são cancelados quando o dono sai de units');
+  assert.equal(hero.damage, 0, 'aviso de dono removido não acerta');
+}
+
+{
+  const { context, hero, unit } = freshContext();
+  hero.pos.set(0, 0, 8);
+  const boss = unit({ team: 'skeleton', boss: true, size: 2.1, maxHp: 1000, hp: 1000, dmg: 10,
+    enraged: false, cd: { cleave: 99, hook: 0, whirl: 99 } });
+  Object.assign(context, { boss, hero });
+  vm.runInContext('MONSTER_TYPES.Executioner.think(boss, 0, hero)', context);
+  vm.runInContext('updateMonsterFx(1.1)', context); // o aviso termina e cria o puxão
+  assert.equal(vm.runInContext('mFx.length', context), 1, 'a corrente segue como efeito ativo');
+  const originalVector3 = context.THREE.Vector3;
+  let allocations = 0;
+  context.THREE.Vector3 = class extends originalVector3 { constructor(...args) { super(...args); allocations++; } };
+  try {
+    vm.runInContext('updateMonsterFx(0.05)', context);
+    assert.equal(allocations, 0, 'o puxão não aloca vetores em cada quadro');
+  } finally {
+    context.THREE.Vector3 = originalVector3;
+    vm.runInContext('clearMonsterFx()', context);
+  }
+}
+
+{
+  const { context, hero, unit } = freshContext();
+  hero.pos.set(0, 0, 2.5);
+  const boss = unit({ team: 'skeleton', kind: { name: 'Carrasco', title: 'Chefe' }, boss: true, size: 2.1,
+    maxHp: 1000, hp: 1000, dmg: 10, enraged: true, cd: { cleave: 0, hook: 99, whirl: 99 } });
+  Object.assign(context, { boss, hero });
+  let domReads = 0, unitScans = 0, classToggles = 0;
+  const nodes = new Map();
+  let html = '';
+  const bar = { hidden: true, classList: { toggle() { classToggles++; } },
+    querySelector(selector) {
+      if (!nodes.has(selector)) nodes.set(selector, { hidden: selector === '.boss-telegraph', textContent: '', style: {} });
+      return nodes.get(selector);
+    } };
+  Object.defineProperty(bar, 'innerHTML', { get() { return html; }, set(value) { html = value; nodes.clear(); } });
+  context.document = { getElementById(id) { assert.equal(id, 'bossBar'); domReads++; return bar; } };
+  const units = context.api.units, nativeFind = units.find;
+  units.find = function (...args) { unitScans++; return nativeFind.apply(this, args); };
+  vm.runInContext('MONSTER_TYPES.Executioner.think(boss, 0, hero); updateMonsterFx(0.05)', context);
+  assert.equal(vm.runInContext('mBossWarnings.size', context), 3, 'avisos anunciados ficam no conjunto dedicado à barra');
+  assert.equal(nodes.get('.boss-telegraph').hidden, false, 'o aviso continua visível na barra');
+  vm.runInContext('updateMonsterFx(0.05)', context);
+  assert.equal(unitScans, 1, 'a unidade chefe válida não é redescoberta todo quadro');
+  assert.equal(domReads, 1, 'a referência estática do HUD é consultada uma vez');
+  assert.equal(classToggles, 1, 'o estado de fúria só é escrito quando muda');
+  const minion = unit({ team: 'skeleton', kind: { name: 'Lacaio' } });
+  vm.runInContext('updateMonsterFx(0.05)', context);
+  assert.equal(unitScans, 1, 'surgimento de lacaio não força varredura enquanto o chefe segue válido');
+  boss.dead = true;
+  vm.runInContext('updateMonsterFx(2)', context);
+  assert.equal(unitScans, 2, 'a morte invalida o chefe em cache');
+  assert.equal(vm.runInContext('mBossWarnings.size', context), 0, 'avisos expirados saem do conjunto dedicado');
+  assert.equal(bar.hidden, true, 'a barra esconde o aviso encerrado junto com o chefe');
+  units.splice(units.indexOf(minion), 1);
+  unit({ team: 'skeleton', kind: { name: 'Rei', title: 'Chefe' }, boss: true, maxHp: 100, hp: 100, dmg: 10 });
+  vm.runInContext('updateMonsterFx(0.05)', context);
+  assert.equal(unitScans, 3, 'a entrada de outro chefe invalida o cache vazio');
+  assert.ok(bar.innerHTML.includes('Rei'), 'o HUD acompanha o novo chefe');
+  assert.equal(domReads, 1, 'o HUD continua usando a mesma referência DOM');
+  vm.runInContext('clearMonsterFx()', context);
+  units.find = nativeFind;
+}
+
 console.log('OK: escudo de ossos e avisos do Carrasco saem da cena e descartam materiais');

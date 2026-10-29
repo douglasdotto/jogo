@@ -762,9 +762,10 @@ function spawnWave(n, leader, src = -1) {
 function guardPortal(dt) {
   if (!K.portal || K.portal.dead) return;
   K.portalGuardT -= dt;
+  if (K.portalGuardT > 0) return;
   const guards = G.skeletonsAlive().filter((s) => s.kGuard);
   const want = Math.min(10, 3 + Math.floor(K.time / 150));
-  if (K.portalGuardT > 0 || guards.length >= want) return;
+  if (guards.length >= want) return;
   K.portalGuardT = PORTAL.guardEvery;
   const p = Math.min(12, 1 + Math.floor(K.time / 100));
   const pool = p >= 3 ? ['Warrior', 'Crossbow', 'Minion', 'Mage', 'Warrior'] : ['Minion', 'Warrior', 'Minion'];

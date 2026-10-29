@@ -47,7 +47,7 @@ function objectiveTip(mission) {
     return 'O grupo caiu antes de concluir a escolta: reforce a linha de frente.';
   }
   if (goal.type === 'nofall') {
-    return 'A regra é que ninguém caia: guarde cura e escudo para o mais fraco.';
+    return 'Todo o grupo caiu: mantenha ao menos um herói de pé para seguir. Quedas individuais tiram as estrelas extras; cura e proteção ajudam a preservar o grupo.';
   }
   if (goal.type === 'rescue' && mission.villagerDown) {
     return mission.rescueComplete

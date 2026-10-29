@@ -23,6 +23,8 @@ const GEO = {
 };
 const greenBolt = glowMat(0x6dff8c), purpleBolt = glowMat(0xb35cff), tealBolt = glowMat(0x5ff2ff);
 const mV = new THREE.Vector3();
+const hookPullTo = new THREE.Vector3(), hookPullNext = new THREE.Vector3();
+const dangerRel = new THREE.Vector3(), dangerPerp = new THREE.Vector3(), dangerDestination = new THREE.Vector3();
 const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 function piece(geo, mat, at = [0, 0, 0], size = 1, rot = [0, 0, 0]) {
@@ -46,15 +48,37 @@ function nearestOf(from, list) {
   for (const u of list) { if (u.dead) continue; const d = flat(u.pos, from); if (d < bd) { bd = d; best = u; } }
   return best;
 }
-const liveAllies = () => G.allies().filter((u) => !u.dead);
+const liveAllies = () => G.livingAllies?.() ?? G.allies().filter((u) => !u.dead);
 const countOf = (kind) => G.skeletonsAlive().filter((s) => s.enemyKind === kind).length;
 
 // ---------- efeitos com tempo: avisos no chão, crânios caindo, derrubadas ----------
 const mFx = [];
 const mGraves = [];   // esqueletos caídos que o sacerdote pode reerguer
 const mSeen = new Set();   // tipos já apresentados nesta partida
+const mFxUnits = new Set();   // snapshot reutilizável para checar donos removidos sem varrer units por efeito
+const mBossWarnings = new Set();   // avisos anunciados, sem rever todos os efeitos ao atualizar a barra
+let ownedFxCount = 0;
 
-function track(item) { item.alive = true; mFx.push(item); return item; }
+function refreshFxUnits() {
+  mFxUnits.clear();
+  for (const unit of G.units || []) mFxUnits.add(unit);
+}
+function track(item) {
+  item.alive = true;
+  mFx.push(item);
+  if (item.owner) {
+    if (!ownedFxCount) refreshFxUnits();
+    ownedFxCount++;
+  }
+  if (item.owner && item.warning && item.announce) mBossWarnings.add(item);
+  return item;
+}
+function releaseFx(item) {
+  item.alive = false;
+  if (item.owner) ownedFxCount = Math.max(0, ownedFxCount - 1);
+  mBossWarnings.delete(item);
+  disposeFx(item);
+}
 function disposeFx(f) {
   f.cleanup?.(f);   // peças presas em unidades (escudo de ossos) saem junto com o efeito
   for (const m of f.meshes || []) G.scene.remove(m);
@@ -91,24 +115,24 @@ export function dangerAt(u) {
     if (!f.warning || f.harmless || f.t < 0.2) continue;
     if (!f.dodge.has(u)) f.dodge.set(u, Math.random() < f.notice);
     if (!f.dodge.get(u)) continue;
-    const rel = new THREE.Vector3().subVectors(u.pos, f.at).setY(0);
+    const rel = dangerRel.subVectors(u.pos, f.at).setY(0);
     if (f.line) {
       const along = rel.dot(f.line.dir), side = rel.x * f.line.dir.z - rel.z * f.line.dir.x;
       if (along < -0.5 || along > f.line.len + 0.5 || Math.abs(side) > f.radius + 0.4) continue;
-      const perp = new THREE.Vector3(f.line.dir.z, 0, -f.line.dir.x).multiplyScalar(side >= 0 ? 1 : -1);
-      return u.pos.clone().addScaledVector(perp, f.radius + 1.3 - Math.abs(side));
+      const perp = dangerPerp.set(f.line.dir.z, 0, -f.line.dir.x).multiplyScalar(side >= 0 ? 1 : -1);
+      return dangerDestination.copy(u.pos).addScaledVector(perp, f.radius + 1.3 - Math.abs(side));
     }
     const d = rel.length();
     if (d > f.radius + 0.4) continue;
     if (d < 0.05) rel.set(1, 0, 0);
-    return f.at.clone().addScaledVector(rel.normalize(), f.radius + 1.3);
+    return dangerDestination.copy(f.at).addScaledVector(rel.normalize(), f.radius + 1.3);
   }
   return null;
 }
 
 // explosão/pancada: dano em heróis e invocados (e meio dano em esqueletos comuns, se pedir)
 function blast(at, radius, dmg, color, { skeletons = false, skip = null, owner = null } = {}) {
-  for (const u of liveAllies()) if (flat(u.pos, at) <= radius + 0.3 * u.size) u.takeDamage(dmg, at, owner);
+  for (const u of liveAllies()) if (!u.dead && flat(u.pos, at) <= radius + 0.3 * u.size) u.takeDamage(dmg, at, owner);
   if (skeletons) for (const s of G.skeletonsAlive()) if (s !== skip && !s.boss && !s.spawning && flat(s.pos, at) <= radius) s.takeDamage(dmg * 0.5, at);
   G.ring(at, radius, color, 0.7);
   G.poof(at, Math.min(1.6, radius * 0.6));
@@ -156,7 +180,7 @@ function slam(s, target, radius, time, mult, { offset = 0.8, down = true } = {})
   s.pendingHit = null;
   warn(s, center, radius, time, () => {
     blast(center, radius, s.dmg * mult, 0xff6a3d, { owner: s });
-    for (const u of liveAllies()) if (flat(u.pos, center) <= radius + 0.3) {
+    for (const u of liveAllies()) if (!u.dead && flat(u.pos, center) <= radius + 0.3) {
       if (down) knockDown(u, center, 4);
       else u.vel.add(mV.subVectors(u.pos, center).setY(0).normalize().multiplyScalar(5));   // só empurra
     }
@@ -172,7 +196,7 @@ function dashStep(s, dt) {
   const next = s.pos.clone().addScaledVector(dash.dir, step);
   if (!G.world.canStep(s.pos, next)) dash.left = 0;
   else { s.pos.copy(next); s.pos.y = G.world.groundHeight(s.pos.x, s.pos.z); dash.left -= step; }
-  for (const u of liveAllies()) if (!dash.hit.has(u) && flat(u.pos, s.pos) < 1.6) {
+  for (const u of liveAllies()) if (!u.dead && !dash.hit.has(u) && flat(u.pos, s.pos) < 1.6) {
     dash.hit.add(u);
     u.takeDamage(s.dmg * dash.mult, s.pos, s);
     const side = new THREE.Vector3(dash.dir.z, 0, -dash.dir.x);
@@ -275,7 +299,7 @@ export const MONSTER_TYPES = {
     },
     death(s) {
       if (s.bomb) s.bomb.visible = false;
-      if (s.exploded || !liveAllies().some((u) => flat(u.pos, s.pos) < 3.2)) return;
+      if (s.exploded || !liveAllies().some((u) => !u.dead && flat(u.pos, s.pos) < 3.2)) return;
       s.exploded = true;
       const at = s.pos.clone();
       warn(null, at, 2.2, 0.45, () => blast(at, 2.2, s.dmg * 0.6, 0xff8a2a, { skeletons: true, owner: s }), { color: 0xff7a1a });
@@ -346,7 +370,7 @@ export const MONSTER_TYPES = {
     think(s, dt, target) {
       let prey = target;
       if (!(s.tauntT > 0)) {
-        const back = nearestOf(s.pos, G.heroes().filter((h) => h.ranged));
+        const back = nearestOf(s.pos, G.rangedHeroes?.() ?? G.heroes().filter((h) => h.ranged));
         if (back && flat(back.pos, s.pos) < 16) prey = back;
       }
       if (!prey) return true;
@@ -591,7 +615,7 @@ export const MONSTER_TYPES = {
     think(s, dt, target) {
       if (!target) return false;
       const d = flat(s.pos, target.pos), fury = s.enraged;
-      if (fury && s.cd.whirl <= 0 && liveAllies().some((u) => flat(u.pos, s.pos) < 3.8)) {   // giro sangrento em volta de si
+      if (fury && s.cd.whirl <= 0 && liveAllies().some((u) => !u.dead && flat(u.pos, s.pos) < 3.8)) {   // giro sangrento em volta de si
         s.vel.set(0, 0, 0);
         s.once('Taunt', 1.1);
         s.busy = 1.5 + 0.7;
@@ -600,12 +624,12 @@ export const MONSTER_TYPES = {
         warn(s, s.pos, 3.4, 1.5, () => {
           s.once('2H_Melee_Attack_Spin', 1.4);
           blast(s.pos, 3.4, s.dmg * 1.1, 0xff2020, { owner: s });
-          for (const u of liveAllies()) if (flat(u.pos, s.pos) <= 3.7) u.vel.add(mV.subVectors(u.pos, s.pos).setY(0).normalize().multiplyScalar(6));
+          for (const u of liveAllies()) if (!u.dead && flat(u.pos, s.pos) <= 3.7) u.vel.add(mV.subVectors(u.pos, s.pos).setY(0).normalize().multiplyScalar(6));
         }, { color: 0xff2020, announce: 'Giro sangrento — afaste-se do Carrasco' });
         return true;
       }
       if (s.cd.hook <= 0) {   // corrente: puxa o herói mais distante (quase sempre um atirador)
-        const far = liveAllies().filter((u) => { const k = flat(u.pos, s.pos); return k > 4.5 && k < 12; })
+        const far = liveAllies().filter((u) => { const k = flat(u.pos, s.pos); return !u.dead && k > 4.5 && k < 12; })
           .sort((a, b) => (!!b.ranged - !!a.ranged) || flat(b.pos, s.pos) - flat(a.pos, s.pos))[0];
         if (far) {
           const dir = new THREE.Vector3(far.pos.x - s.pos.x, 0, far.pos.z - s.pos.z).normalize(), len = flat(far.pos, s.pos) + 1;
@@ -618,16 +642,16 @@ export const MONSTER_TYPES = {
           const from = s.pos.clone();
           warn(s, from, 0.65, 1.1, () => {
             G.beam(from, from.clone().addScaledVector(dir, len), 0xb8c0d0);
-            for (const u of liveAllies()) if (inLine(u, from, dir, len, 0.65)) {
+            for (const u of liveAllies()) if (!u.dead && inLine(u, from, dir, len, 0.65)) {
               u.takeDamage(s.dmg * 0.5, s.pos, s);
               u.pendingHit = null;   // a corrente interrompe o golpe ou feitiço
               u.busy = Math.max(u.busy, 0.45);
               const stop = 1.1 + 0.6 * s.size;
               track({ t: 0.4, step(f, dt) {   // arrasta até a frente do Carrasco
                 if (u.dead) return;
-                const to = new THREE.Vector3(s.pos.x - u.pos.x, 0, s.pos.z - u.pos.z), left = to.length() - stop;
+                const to = hookPullTo.set(s.pos.x - u.pos.x, 0, s.pos.z - u.pos.z), left = to.length() - stop;
                 if (left <= 0) return;
-                const next = u.pos.clone().addScaledVector(to.normalize(), Math.min(left, 22 * dt));
+                const next = hookPullNext.copy(u.pos).addScaledVector(to.normalize(), Math.min(left, 22 * dt));
                 if (G.world.canStep(u.pos, next)) { u.pos.x = next.x; u.pos.z = next.z; }
               } });
               G.popText(u.pos, 'Puxado!', 'block');
@@ -649,7 +673,7 @@ export const MONSTER_TYPES = {
         for (const a of fury ? [-0.55, 0, 0.55] : [0]) {
           const lane = turned(dir, a);
           warn(s, from, 0.95, time, () => {
-            for (const u of liveAllies()) if (!hit.has(u) && inLine(u, from, lane, len, 0.95)) {
+            for (const u of liveAllies()) if (!u.dead && !hit.has(u) && inLine(u, from, lane, len, 0.95)) {
               hit.add(u);
               u.takeDamage(s.dmg * 1.4, from, s);
               knockDown(u, from, 3);
@@ -737,8 +761,17 @@ export const MONSTER_TYPES = {
         s.busy = s.once('Spellcast_Raise', 1.1);
         s.cd.rain = fury ? 6.5 : 9;
         const foes = liveAllies();
+        const nextLiving = (start) => {
+          for (let n = 0; n < foes.length; n++) { const index = (start + n) % foes.length; if (!foes[index].dead) return index; }
+          return -1;
+        };
+        if (!foes.length) return true;
+        let start = 0;
         for (let i = 0; i < (fury ? 4 : 2); i++) {
-          const f = foes[i % foes.length], at = f.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6));
+          const index = nextLiving(start);
+          if (index < 0) break;
+          const f = foes[index]; start = (index + 1) % foes.length;
+          const at = f.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6));
           at.y = G.world.groundHeight(at.x, at.z);
           warn(s, at, 1.5, 1.5 + i * 0.15, () => dropSkull(at, s.dmg * 0.8, s), { color: 0xb050ff, announce: 'Chuva de crânios — saia do círculo' });
         }
@@ -756,7 +789,7 @@ export const MONSTER_TYPES = {
             next.takeDamage(s.dmg * 0.75, at, s);
             hit.add(next);
             at = next.pos;
-            next = nearestOf(at, liveAllies().filter((u) => !hit.has(u) && flat(u.pos, at) < 5));
+            next = nearestOf(at, liveAllies().filter((u) => !u.dead && !hit.has(u) && flat(u.pos, at) < 5));
           }
         }, { color: 0xb36bff, follow: target, announce: 'Raio marcado — prepare-se para sair' });
         return true;
@@ -787,26 +820,36 @@ export function monsterDied(s) {
 }
 
 export function updateMonsterFx(dt) {
+  if (ownedFxCount) refreshFxUnits();
+  else mFxUnits.clear();
   for (let i = mFx.length - 1; i >= 0; i--) {
     const f = mFx[i];
     f.t -= dt;
-    const broken = f.owner && (f.owner.dead || f.owner.stunT > 0 || !G.units.includes(f.owner));
+    const broken = f.owner && (f.owner.dead || f.owner.stunT > 0 || !mFxUnits.has(f.owner));
     if (!broken) f.step?.(f, dt);
     if (broken || f.t <= 0) {
-      mFx.splice(mFx.indexOf(f), 1);
-      f.alive = false;
-      disposeFx(f);
+      mFx.splice(i, 1);
+      releaseFx(f);
       if (!broken) f.end?.(f);
     }
   }
+  if (!ownedFxCount) mFxUnits.clear();
   for (let i = mGraves.length - 1; i >= 0; i--) if ((mGraves[i].t -= dt) <= 0) mGraves.splice(i, 1);
   updateBossBar();
 }
 
 export function clearMonsterFx() {
-  while (mFx.length) { const f = mFx.pop(); f.alive = false; disposeFx(f); }
+  while (mFx.length) releaseFx(mFx.pop());
+  ownedFxCount = 0;
+  mFxUnits.clear();
+  mBossWarnings.clear();
   mGraves.length = 0;
   mSeen.clear();
+  bossCacheValid = false;
+  bossCacheUnit = null;
+  bossCacheUnits = null;
+  bossCacheLength = -1;
+  bossCacheFirstUnit = bossCacheLastUnit = null;
   updateBossBar();
 }
 
@@ -877,28 +920,53 @@ export function campaignThreats(from, to, goal = null) {
 }
 
 // barra grande do chefe no topo da tela
-let mBar = null;
+let mBar = null, mBarElement = null, mBarDocument = null;
+let bossCacheValid = false, bossCacheUnit = null, bossCacheUnits = null, bossCacheLength = -1;
+let bossCacheFirstUnit = null, bossCacheLastUnit = null;
 function updateBossBar() {
-  const el = typeof document !== 'undefined' && document.getElementById('bossBar');
+  if (typeof document === 'undefined') return;
+  if (document !== mBarDocument) {
+    mBarDocument = document;
+    mBarElement = document.getElementById('bossBar');
+  }
+  const el = mBarElement;
   if (!el) return;
-  const b = G.units?.find((u) => u.team === 'skeleton' && !u.dead && u.kind?.title);
+  const units = G.units;
+  const unitCount = units?.length ?? 0;
+  const firstUnit = unitCount ? units[0] : null, lastUnit = unitCount ? units[unitCount - 1] : null;
+  if (!bossCacheValid || units !== bossCacheUnits || bossCacheUnit?.dead || bossCacheUnit?.root?.parent === null
+    || !bossCacheUnit && (unitCount !== bossCacheLength || firstUnit !== bossCacheFirstUnit || lastUnit !== bossCacheLastUnit)) {
+    bossCacheUnit = units?.find((u) => u.team === 'skeleton' && !u.dead && u.kind?.title) || null;
+    bossCacheUnits = units;
+    bossCacheLength = unitCount;
+    bossCacheFirstUnit = firstUnit;
+    bossCacheLastUnit = lastUnit;
+    bossCacheValid = true;
+  }
+  const b = bossCacheUnit;
   if (!b) { if (!el.hidden) el.hidden = true; mBar = null; return; }
   if (mBar?.unit !== b) {
     el.innerHTML = `<span class="boss-name">${b.kind.name} <small>${b.kind.title}</small></span><div class="boss-track"><i class="boss-fill"></i><i class="boss-shield"></i></div><div class="boss-telegraph" role="status" aria-live="polite" hidden><span class="boss-warning-text"></span><span class="warning-countdown"></span><i class="warning-progress"></i></div>`;
     mBar = { unit: b, fill: el.querySelector('.boss-fill'), shield: el.querySelector('.boss-shield'), hp: -1, sh: -1,
-      telegraph: el.querySelector('.boss-telegraph'), warningText: el.querySelector('.boss-warning-text'), countdown: el.querySelector('.warning-countdown'), progress: el.querySelector('.warning-progress'), second: -1 };
+      telegraph: el.querySelector('.boss-telegraph'), warningText: el.querySelector('.boss-warning-text'), countdown: el.querySelector('.warning-countdown'), progress: el.querySelector('.warning-progress'), second: -1,
+      enraged: null, warningVisible: null };
     el.hidden = false;
   }
   const hp = Math.round((Math.max(0, b.hp) / b.maxHp) * 1000) / 10, sh = Math.round((((b.shieldHp || 0) + (b.ward?.hp || 0)) / b.maxHp) * 1000) / 10;
   if (hp !== mBar.hp) { mBar.fill.style.width = hp + '%'; mBar.hp = hp; }
   if (sh !== mBar.sh) { mBar.shield.style.width = sh + '%'; mBar.sh = sh; }
-  el.classList.toggle('enraged', !!b.enraged);
-  const warning = mFx.filter((f) => f.alive && f.warning && f.owner === b && f.announce && f.t > 0).sort((a, c) => a.t - c.t)[0];
-  mBar.telegraph.hidden = !warning;
+  const enraged = !!b.enraged;
+  if (mBar.enraged !== enraged) { el.classList.toggle('enraged', enraged); mBar.enraged = enraged; }
+  let warning = null;
+  for (const fx of mBossWarnings) {
+    if (fx.alive && fx.warning && fx.owner === b && fx.announce && fx.t > 0 && (!warning || fx.t < warning.t)) warning = fx;
+  }
+  const warningVisible = !!warning;
+  if (mBar.warningVisible !== warningVisible) { mBar.telegraph.hidden = !warningVisible; mBar.warningVisible = warningVisible; }
   if (warning) {
     if (mBar.warningText.textContent !== warning.announce) mBar.warningText.textContent = warning.announce;
     const second = Math.ceil(warning.t);
     if (mBar.second !== second) { mBar.countdown.textContent = `${second} s`; mBar.second = second; }
     mBar.progress.style.width = `${Math.max(0, Math.min(100, (1 - warning.t / warning.life) * 100))}%`;
-  } else mBar.second = -1;
+  } else if (mBar.second !== -1) mBar.second = -1;
 }

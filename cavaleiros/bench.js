@@ -1,7 +1,9 @@
 // Medição de desempenho reprodutível: abra com ?bench=1 (só para teste; não conta recorde).
 // Parâmetros: bench=segundos por trecho (1 = 15 s), fases=10,11,12 (um trecho por fase),
-// inimigos=quantidade mantida viva (padrão 40), herois=paladin,crusher,pyro,crossbow, graficos=baixa|alta.
+// inimigos=quantidade mantida viva (padrão 40), herois=paladin,crusher,pyro,crossbow,
+// auto=heróis que usam habilidades automaticamente (ou all), graficos=baixa|alta, sombra=1024|2048.
 // Mantém os heróis vivos (vida cheia) e repõe os inimigos para a carga ficar constante.
+// Tempo em renderer.render mede envio de comandos pela CPU, não conclusão do trabalho da GPU.
 // Resultado: console "BENCH {...}", window.__benchResult e um painel no canto da tela.
 
 // gerador determinístico: as mesmas ondas a cada rodada
@@ -24,29 +26,76 @@ const percentile = (list, p) => {
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function recordRafSample(state, timestamp, visibilityState) {
+  state.rafFrames++;
+  const visibility = visibilityState || 'unknown';
+  state.visibilityFrameCounts[visibility] = (state.visibilityFrameCounts[visibility] || 0) + 1;
+  const now = Number.isFinite(timestamp) ? timestamp : performance.now();
+  if (state.lastRafTimestamp !== null) state.rafIntervals.push(now - state.lastRafTimestamp);
+  state.lastRafTimestamp = now;
+}
+
 export async function runBench(api) {
+  const original = {
+    requestAnimationFrame: window.requestAnimationFrame,
+    render: api.renderer.render,
+    random: Math.random,
+  };
+  let originalLowQuality;
+  let originalShadowSize;
+  try {
+    originalLowQuality = api.isLowQuality?.();
+    originalShadowSize = api.getShadowMapSize?.();
+    return await runBenchBody(api);
+  } finally {
+    try {
+      if (typeof originalLowQuality === 'boolean' && api.isLowQuality?.() !== originalLowQuality) {
+        document.getElementById('quality')?.click();
+      }
+    } finally {
+      try {
+        if (Number.isFinite(originalShadowSize) && api.getShadowMapSize?.() !== originalShadowSize) {
+          api.setShadowMapSize?.(originalShadowSize);
+        }
+      } finally {
+        window.requestAnimationFrame = original.requestAnimationFrame;
+        api.renderer.render = original.render;
+        Math.random = original.random;
+        api.game.paused = true;
+      }
+    }
+  }
+}
+
+async function runBenchBody(api) {
   const q = new URLSearchParams(location.search);
   const secs = +q.get('bench') > 1 ? +q.get('bench') : 15;
   const phases = (q.get('fases') || q.get('fase') || '12').split(',').map(Number).filter(Boolean);
   const target = +q.get('inimigos') || 40;
   const ids = (q.get('herois') || 'paladin,crusher,pyro,crossbow').split(',');
+  const overrideAuto = q.has('auto');
+  const autoHeroes = new Set((q.get('auto') || '').split(',').filter(Boolean));
   const warm = 3;
   Math.random = seeded(12345);
   const { renderer, game, units, heroes, world } = api;
   const quality = q.get('graficos');
   if (quality && api.isLowQuality() !== (quality === 'baixa')) document.getElementById('quality').click();
+  const shadowSize = Number(q.get('sombra'));
+  if ([1024, 2048].includes(shadowSize)) api.setShadowMapSize(shadowSize);
 
   // monta a jornada sem passar pelos menus
   api.setupJourney(phases[0]);
   for (const id of ids) {
     const cfg = api.VARIANTS.find((v) => v.id === id);
     if (!cfg) throw new Error(`bench: herói ${id} não existe`);
-    api.addHero(cfg);
+    const hero = api.addHero(cfg);
+    if (overrideAuto) hero.autoSkills.fill(autoHeroes.has('all') || autoHeroes.has(id));
   }
   await new Promise((ready) => api.withBattleAssets(ready));
   api.beginBattle();
 
-  const state = { phase: 'warmup', frames: [], renders: [], calls: [], tris: [], units: [] };
+  const state = { phase: 'warmup', frames: [], keepTimes: [], callbackTimes: [], submits: [], calls: [], tris: [], units: [],
+    rafIntervals: [], rafFrames: 0, lastRafTimestamp: null, visibilityStart: 'unknown', visibilityFrameCounts: {} };
   window.__benchState = 'warmup';
   window.__benchInspect = { scene: api.scene, renderer, units };
   // carga constante: heróis sempre de pé e o número de inimigos reposto a cada quadro
@@ -57,28 +106,38 @@ export async function runBench(api) {
     game.spawnTimer = 1;   // o surgimento normal fica parado; a reposição abaixo controla a carga
     let alive = 0;
     for (const u of units) if (u.team === 'skeleton' && !u.dead) alive++;
-    for (let k = 0; alive < target && k < 2; k++, alive++) api.spawnSkeleton();
+    // Enche no aquecimento; limitar a dois por quadro deixava a carga medida variar
+    // muito quando o navegador reduz requestAnimationFrame para 1–2 FPS.
+    while (alive < target) { api.spawnSkeleton(); alive++; }
   };
   const frameFn = api.frame;
   const rAF = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = (cb) => rAF((t) => {
     if (cb !== frameFn) return cb(t);
+    const measuring = state.phase === 'measure';
+    const callbackStart = measuring ? performance.now() : 0;
+    if (measuring) recordRafSample(state, t, document.visibilityState);
+    const keepStart = measuring ? performance.now() : 0;
     keep();
+    const keepMs = measuring ? performance.now() - keepStart : 0;
     const t0 = performance.now();
     cb(t);
-    if (state.phase !== 'measure') return;
-    state.frames.push(performance.now() - t0);
+    const cpuMs = performance.now() - t0;
+    if (!measuring || state.phase !== 'measure') return;
+    state.frames.push(cpuMs);
+    state.keepTimes.push(keepMs);
     state.calls.push(renderer.info.render.calls);
     state.tris.push(renderer.info.render.triangles);
     let n = 0;
     for (const u of units) if (!u.dead) n++;
     state.units.push(n);
+    state.callbackTimes.push(performance.now() - callbackStart);
   });
   const render = renderer.render.bind(renderer);
   renderer.render = (s, c) => {
     const t0 = performance.now();
     render(s, c);
-    if (state.phase === 'measure') state.renders.push(performance.now() - t0);
+    if (state.phase === 'measure') state.submits.push(performance.now() - t0);
   };
 
   const segments = [];
@@ -87,7 +146,8 @@ export async function runBench(api) {
     state.phase = 'warmup';
     window.__benchState = 'warmup';
     await wait(warm * 1000);
-    Object.assign(state, { frames: [], renders: [], calls: [], tris: [], units: [] });
+    Object.assign(state, { frames: [], keepTimes: [], callbackTimes: [], submits: [], calls: [], tris: [], units: [], rafIntervals: [], rafFrames: 0,
+      lastRafTimestamp: null, visibilityFrameCounts: {}, visibilityStart: document.visibilityState || 'unknown' });
     state.phase = 'measure';
     window.__benchState = 'measure';
     const programsBefore = new Set(renderer.info.programs || []);
@@ -100,8 +160,16 @@ export async function runBench(api) {
     segments.push({
       fase: phases[i],
       fps: round(state.frames.length / wall, 1),
+      framesMeasured: state.rafFrames,
+      rafIntervalP50Ms: round(percentile(state.rafIntervals, 0.5)),
+      rafIntervalP95Ms: round(percentile(state.rafIntervals, 0.95)),
+      visibilityStart: state.visibilityStart,
+      visibilityEnd: document.visibilityState || 'unknown',
+      visibilityFrameCounts: { ...state.visibilityFrameCounts },
       cpuMs: round(avg(state.frames)), cpuP95: round(percentile(state.frames, 0.95)),
-      renderMs: round(avg(state.renders)), renderP95: round(percentile(state.renders, 0.95)),
+      keepMs: round(avg(state.keepTimes)), keepP95Ms: round(percentile(state.keepTimes, 0.95)),
+      callbackMs: round(avg(state.callbackTimes)), callbackP95Ms: round(percentile(state.callbackTimes, 0.95)),
+      renderSubmitMs: round(avg(state.submits)), renderSubmitP95: round(percentile(state.submits, 0.95)),
       calls: Math.round(avg(state.calls)), callsMax: Math.max(0, ...state.calls),
       tris: Math.round(avg(state.tris)),
       units: round(avg(state.units), 1),
@@ -113,14 +181,14 @@ export async function runBench(api) {
     });
   }
   window.requestAnimationFrame = rAF;
-  const result = { heroes: ids, enemies: target, seconds: secs, lowQuality: api.isLowQuality(), pixelRatio: renderer.getPixelRatio(),
+  const result = { heroes: ids, enemies: target, seconds: secs, lowQuality: api.isLowQuality(), shadowMapSize: api.getShadowMapSize(), pixelRatio: renderer.getPixelRatio(),
     size: `${innerWidth}x${innerHeight}`, segments };
   window.__benchResult = result;
   window.__benchState = 'done';
   console.log('BENCH ' + JSON.stringify(result));
   const box = document.createElement('pre');
   box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99999;background:#000c;color:#9f9;font:12px monospace;padding:8px;max-width:95vw;white-space:pre-wrap';
-  box.textContent = segments.map((s) => `fase ${s.fase}: ${s.fps} fps · CPU ${s.cpuMs} ms (p95 ${s.cpuP95}) · render ${s.renderMs} ms · ${s.calls} draws · ${s.tris} tris · ${s.units} unid · geo ${s.geometries} tex ${s.textures} · heap ${s.heapMB} MB`).join('\n');
+  box.textContent = segments.map((s) => `fase ${s.fase}: ${s.fps} fps · ${s.framesMeasured} quadros · rAF p50/p95 ${s.rafIntervalP50Ms}/${s.rafIntervalP95Ms} ms · vis ${s.visibilityStart}→${s.visibilityEnd} · callback ${s.callbackMs} ms (manutenção ${s.keepMs}; jogo ${s.cpuMs}) · envio CPU ${s.renderSubmitMs} ms · ${s.calls} draws · ${s.tris} tris · ${s.units} unid · geo ${s.geometries} tex ${s.textures} · heap ${s.heapMB} MB`).join('\n');
   document.body.appendChild(box);
   return result;
 }

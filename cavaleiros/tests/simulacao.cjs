@@ -68,7 +68,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
     along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
   poof: noop, ring: noop, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], blasts: [], flames: [], wave: noop, burst: noop, column: noop,
-  FX: new Proxy({}, { get: () => noop }), audio: new Proxy({}, { get: () => noop }) });
+  FX: new Proxy({}, { get: () => noop }), clearFx: noop, popTextPool: { clear: noop }, audio: new Proxy({}, { get: () => noop }) });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
 vm.runInContext(campaign.replaceAll('export ', ''), context);
@@ -83,7 +83,7 @@ vm.runInContext(progression.replaceAll('export ', ''), context);   // sem localS
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'scene-perf.js'), 'utf8').replaceAll('export ', ''), context);   // disposeSkeletons
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
-vm.runInContext(part(source, 'let skillKey', 'function pressSkill'), context);   // glifos das habilidades usados na ficha da escolha
+vm.runInContext(part(source, 'let skillItems', 'function pressSkill'), context);   // glifos das habilidades usados na ficha da escolha
 vm.runInContext(part(source, 'const units =', '// projéteis e áreas'), context);
 vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), context);
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);

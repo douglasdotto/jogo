@@ -16,6 +16,8 @@ const upgradeBranches = fs.readFileSync(path.join(dir, 'upgrade-branches.js'), '
 const battleReport = fs.readFileSync(path.join(dir, 'battle-report.js'), 'utf8');
 const monsters = fs.readFileSync(path.join(dir, 'monsters.js'), 'utf8');
 const progression = fs.readFileSync(path.join(dir, 'progression.js'), 'utf8');
+const fxPool = fs.readFileSync(path.join(dir, 'fx-pool.js'), 'utf8');
+const campaignAura = fs.readFileSync(path.join(dir, 'campaign-aura.js'), 'utf8');
 class Vector3 {
   constructor(x=0,y=0,z=0) { Object.assign(this,{x,y,z}); }
   set(x,y,z) { Object.assign(this,{x,y,z}); return this; }
@@ -41,13 +43,13 @@ class Vector3 {
 }
 const noop=()=>{};
 const el=()=>{ const cls=new Set(); return { style:{setProperty:noop}, classList:{add:(...c)=>c.forEach(x=>cls.add(x)),remove:(...c)=>c.forEach(x=>cls.delete(x)),
-  toggle:(c,on)=>((on??!cls.has(c))?cls.add(c):cls.delete(c)),contains:c=>cls.has(c)}, children:[], setAttribute:noop,
+  toggle:(c,on)=>((on??!cls.has(c))?cls.add(c):cls.delete(c)),contains:c=>cls.has(c)}, children:[], attributes:{}, setAttribute(name,value){this.attributes[name]=String(value)},
   append(...c){ this.children.push(...c); }, prepend:noop,
   appendChild(c){ this.children.push(c); }, addEventListener:noop, querySelector:()=>el(), querySelectorAll:()=>[el(),el()],
   remove:noop, firstChild:{style:{}}, innerHTML:'', textContent:'' }; };
 const elements=new Map();
 const color=()=>({set:noop,setHex:noop});
-const material=()=>({color:color(),emissive:color(),dispose:noop,clone:material});
+const material=()=>({color:color(),emissive:color(),userData:{},dispose:noop,clone:material});
 const root=()=>({position:new Vector3(),rotation:{y:0,set:noop},scale:new Vector3(1,1,1),quaternion:{setFromUnitVectors:noop},
   traverse:noop,add:noop,removeFromParent:noop,getObjectByName:()=>({add:noop,rotation:{z:0}}),material:material(),children:[],rotateZ:noop});
 const geometry=()=>({attributes:{position:{needsUpdate:false,setXYZ:noop}},setFromPoints(){return this},computeBoundingSphere:noop,dispose:noop});
@@ -62,7 +64,7 @@ const THREE = new Proxy({ Vector3, Mesh:class {constructor(){Object.assign(this,
   MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2, RingGeometry:class{}, DoubleSide:2,
   Color:class{}, CylinderGeometry:class{}, SphereGeometry:class{}, TorusGeometry:class{} }, { get:(o,k)=>k in o?o[k]:class{constructor(){Object.assign(this,root())}} });
 const context=vm.createContext({THREE,document:{createElement:el,body:el(),getElementById:(id)=>{if(!elements.has(id))elements.set(id,el());return elements.get(id)}},
-  addEventListener:noop,removeEventListener:noop,hideTooltip:noop,tutorial:{on:noop,wants:()=>false},logoSVG:()=>"<svg class=\"game-logo\"></svg>",requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,aiming:null,battleGateId:0,battleLoadingVisible:false,
+  addEventListener:noop,removeEventListener:noop,hideTooltip:noop,tutorial:{on:noop,wants:()=>false},logoSVG:()=>"<svg class=\"game-logo\"></svg>",requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,performance:{now:()=>0},innerWidth:1440,innerHeight:1000,aiming:null,battleGateId:0,battleLoadingVisible:false,
   URLSearchParams,location:{search:''},
   biomeForSeed:seed=>seed===11?'Pradaria':['Pradaria','Outono','Pântano','Crepúsculo'][Math.abs(Math.trunc(seed))%4],
   localStorage:{data:{},getItem(k){return this.data[k]??null},setItem(k,v){this.data[k]=String(v)}},
@@ -73,7 +75,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   renderer:{render:noop,domElement:{addEventListener:noop}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
-  poof:noop,ring:noop,beam:noop,popText:noop, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
+  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
   wave:noop,burst:noop,column:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
@@ -89,30 +91,43 @@ vm.runInContext(upgradeBranches.replaceAll('export ',''),context);
 vm.runInContext(battleReport.replaceAll('export ',''),context);
 vm.runInContext(monsters.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
 vm.runInContext(progression.replaceAll('export ',''),context);
+vm.runInContext(fxPool.replaceAll('export ',''),context);
+vm.runInContext(campaignAura.replaceAll('export ',''),context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','scene-perf.js'),'utf8').replaceAll('export ',''),context);   // disposeSkeletons
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context);
+vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
 vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
+vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
 const t=context.t;
+vm.runInContext('t.goalShort=goalShort;',context);
+vm.runInContext('t.findGroundAimHit=findGroundAimHit;',context);
+vm.runInContext('t.equipCampaignCosmetic=equipCampaignCosmetic;',context);
 vm.runInContext('t.missionProgress=missionProgress;',context);
 vm.runInContext('t.makeTargetContext=makeTargetContext;',context);
+vm.runInContext('t.trackMissionFalls=trackMissionFalls;',context);
+vm.runInContext('t.matchSummary=matchSummary;',context);
 vm.runInContext('t.allies=allies;t.canHeroReachTarget=canHeroReachTarget;',context);
-vm.runInContext('t.Militia=Militia;t.musterMilitia=musterMilitia;t.militiaAlive=militiaAlive;t.placeParty=placeParty;t.progress=progress;',context);
+vm.runInContext('t.Militia=Militia;t.musterMilitia=musterMilitia;t.militiaAlive=militiaAlive;t.placeParty=placeParty;t.progress=progress;t.progressStorageWarning=progressStorageWarning;',context);
+vm.runInContext('t.poof=poof;t.updatePoofFx=updateFx;t.poofParticles=()=>fx;',context);
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 // a composição da equipe fica numa faixa fixa (pick.team) ao lado da ficha (pick.info)
 const pickText=()=>t.pick.info.innerHTML+t.pick.team.innerHTML;
 // papéis que faltam viram ícones (class="wanted", nome em data-role); "priority" marca os pedidos pela missão
 const wantedRoles=(priority)=>[...t.pick.team.innerHTML.matchAll(/class="wanted( priority)?" data-role="([^"]+)"/g)].filter(m=>!!m[1]===priority).map(m=>m[2]);
 // barra de habilidades (glifos usados também na ficha da escolha)
-vm.runInContext(part(source,'let skillKey','function pressSkill'),context);
-vm.runInContext('t.buildSkillBar=buildSkillBar;t.skillItems=()=>skillItems;',context);
+vm.runInContext(part(source,'let skillItems','function pressSkill'),context);
+const skillBarUpdate=part(source,'function updateSkillBar','// dica rica das habilidades')
+  .replace(/^function updateSkillBar\(\)/,'globalThis.skillBarUpdateTest = function updateSkillBar()');
+vm.runInContext(skillBarUpdate,context);
+vm.runInContext('t.buildSkillBar=buildSkillBar;t.updateSkillBar=skillBarUpdateTest;t.skillItems=()=>skillItems;',context);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
 for(const n of ['Minion','Warrior','Rogue','Mage']) context.assets['Skeleton_'+n]={scene:{},animations:[]};
 context.assets.Barbarian={scene:{},animations:[]};
@@ -120,20 +135,78 @@ context.location={search:'?tudo=1'};   // os testes antigos usam todas as varian
 for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skeleton_Staff','Skeleton_Crossbow']) context.assets[n]={scene:{clone:root}};
 const results=[];
 const failures=[];
-function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.message.split('\n')[0])}}
-function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,test:false});}
+function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.stack||e.message)}}
+function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,test:false,twinFocus:null});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
-  clear();const hero=new t.Hero(cfg('paladin'));hero.pos.set(0,0,-4);t.updateBars();
+  clear();const hero=new t.Hero(cfg('paladin'));hero.barHeight=0;hero.pos.set(0,0,-4);t.updateBars();
   const transform=hero.bar.style.transform,width=hero.bar.firstChild.style.width;
   assert.ok(transform);assert.equal(width,'100%');
-  t.game.paused=true;hero.pos.x+=10;hero.hp-=hero.maxHp*.5;t.updateBars();
+  t.game.paused=true;hero.pos.x+=.01;hero.hp-=hero.maxHp*.5;t.updateBars();
   assert.equal(hero.bar.style.transform,transform);assert.equal(hero.bar.firstChild.style.width,width);
   t.game.paused=false;t.updateBars();
   assert.notEqual(hero.bar.style.transform,transform);assert.equal(hero.bar.firstChild.style.width,'50%');
   const settled=hero.bar.style.transform;hero.pos.x+=0.0001;t.updateBars();assert.equal(hero.bar.style.transform,settled);
+  hero.pos.x=2;t.updateBars();assert.equal(hero.bar.style.display,'none','barra fora da tela não permanece visível');
+  hero.pos.x=0;t.updateBars();assert.equal(hero.bar.style.display,'','barra reaparece ao voltar para a tela');
   hero.pos.z=10;t.updateBars();assert.equal(hero.bar.style.display,'none');
   hero.pos.z=-4;t.updateBars();assert.equal(hero.bar.style.display,'');
   clear();
+});
+test('HUD mantém vivos e vida do santuário visíveis no rótulo compacto',()=>{
+  assert.equal(t.goalShort('Ninguém cai · 4 de pé',37),'4 de pé');
+  assert.equal(t.goalShort('De pé 3/4 · quedas 1',75),'3/4 · 1 queda');
+  assert.equal(t.goalShort('De pé 4/4 · quedas 0',100),'4/4 · 0 quedas');
+  assert.equal(t.goalShort('Santuário 100% · 1:15',0),'100% · 1:15');
+  assert.equal(t.goalShort('Santuário 68% · limpe a onda',100),'68% · final');
+  assert.equal(t.goalShort('Passaram 2/6 · 0:31',56),'2/6 · 0:31');
+  assert.equal(t.goalShort('Totens 2/3',67),'2/3','outros objetivos continuam usando o progresso já conhecido');
+});
+test('o cosmético de capítulo equipa no herói, gira e some quando ele cai',()=>{
+  clear();context.location={search:''};context.localStorage.data={};
+  context.saveStars('vila',3);context.saveStars('ponte',3);
+  assert.equal(context.equipCampaignCosmetic('vila'),true,'seis estrelas liberam o estandarte do capítulo');
+  const h=new t.Hero(cfg('paladin'));
+  assert.equal(h.campaignAura.userData.auraStyle,'banner');
+  assert.equal(h.campaignAuraSpin,.11);
+  let disposed=0;h.campaignAuraMaterial.dispose=()=>disposed++;
+  h.die();assert.equal(h.campaignAura.visible,false,'o efeito não fica flutuando sobre um herói caído');
+  h.remove();assert.equal(disposed,1,'o material exclusivo do herói é liberado uma vez');
+  context.equipCampaignCosmetic(null);context.localStorage.data={};context.location={search:'?tudo=1'};clear();
+});
+test('poof reutiliza materiais só depois que as partículas expiram',()=>{
+  clear();
+  const originalMesh=context.THREE.Mesh,originalLambert=context.THREE.MeshLambertMaterial,originalBasic=context.THREE.MeshBasicMaterial;
+  const created={lambert:0,basic:0};let disposed=0;
+  const trackMaterial=(Base,key)=>class extends Base{
+    constructor(...args){super(...args);this.userData||={};created[key]++;this.dispose=()=>{disposed++;};}
+  };
+  context.THREE.Mesh=class extends originalMesh{
+    constructor(geometry,material){super();this.geometry=geometry;this.material=material;}
+  };
+  context.THREE.MeshLambertMaterial=trackMaterial(originalLambert,'lambert');
+  context.THREE.MeshBasicMaterial=trackMaterial(originalBasic,'basic');
+  try {
+    t.updatePoofFx(2); // limpa qualquer efeito legado antes de contar
+    const fx=t.poofParticles(),start=fx.length;
+    t.poof(new Vector3(1,0,1));
+    const first=fx.slice(start).map(m=>m.material);
+    assert.equal(first.length,12);assert.equal(new Set(first).size,12,'cada partícula ativa tem material exclusivo');
+    t.poof(new Vector3(2,0,2));
+    const peak=fx.slice(start).map(m=>m.material);
+    assert.equal(peak.length,24);assert.equal(new Set(peak).size,24,'dois efeitos simultâneos não compartilham material');
+    const madeAtPeak={...created};
+    t.updatePoofFx(1);assert.equal(fx.length,start,'partículas são removidas depois das vidas originais');assert.equal(disposed,0,'materiais dentro do limite voltam ao pool');
+    t.poof(new Vector3(3,0,3));
+    const reused=fx.slice(start).map(m=>m.material);
+    assert.equal(created.lambert,madeAtPeak.lambert);assert.equal(created.basic,madeAtPeak.basic,'a terceira explosão não cria materiais novos');
+    assert.ok(reused.every(m=>peak.includes(m)),'a explosão seguinte reutiliza os materiais já expirados');
+    assert.ok(reused.every(m=>m.opacity===1),'opacidade retorna ao valor original ao reutilizar');
+    t.updatePoofFx(1);assert.equal(fx.length,start);
+  } finally {
+    t.updatePoofFx(2);
+    context.THREE.Mesh=originalMesh;context.THREE.MeshLambertMaterial=originalLambert;context.THREE.MeshBasicMaterial=originalBasic;
+    clear();
+  }
 });
 test('24 variantes, receitas e animações existentes nos GLB',()=>{
   assert.equal(t.VARIANTS.length,24);
@@ -165,6 +238,26 @@ test('72 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes no
   for(let i=0;i<200;i++) h.tickSkillBody(0.02);
   assert.equal(h.skillMove,null);assert.equal(h.lift,0);assert.equal(h.root.rotation.x,0);
   clear();
+});
+test('mira no chão reduz amostras e ainda encontra o primeiro cruzamento na rampa',()=>{
+  let samples=0;
+  const flatRay={origin:{x:0,y:100,z:0},at(distance,out){out.x=0;out.y=100-distance;out.z=0;return out;}};
+  const flatHit={x:0,y:0,z:0};
+  assert.equal(t.findGroundAimHit(flatRay,()=>{samples++;return 0;},flatHit),true);
+  assert.ok(Math.abs(flatHit.y)<.01,'refina a interseção no chão plano');
+  assert.ok(samples<70,'usa menos de 70 consultas para um alvo a 100 m');
+
+  samples=0;
+  const rampRay={origin:{x:0,y:12,z:0},at(distance,out){out.x=distance*.5;out.y=12-distance*.5;out.z=0;return out;}};
+  const rampHeight=x=>x<4?0:x<10?(x-4)*.5:x<16?3:0;
+  const rampHit={x:0,y:0,z:0};
+  assert.equal(t.findGroundAimHit(rampRay,(x)=>{samples++;return rampHeight(x);},rampHit),true);
+  assert.ok(rampHit.x>9&&rampHit.x<10,'encontra a primeira interseção dentro da rampa do platô');
+  assert.ok(Math.abs(rampHit.y-rampHeight(rampHit.x))<.01,'retorna a altura lógica do terreno');
+  assert.ok(samples<30,'a rampa curta também usa poucas consultas');
+
+  const missRay={origin:{x:0,y:10,z:0},at(distance,out){out.x=distance;out.y=10+distance;out.z=0;return out;}};
+  assert.equal(t.findGroundAimHit(missRay,()=>0,{x:0,y:0,z:0}),false,'não cria alvo quando o raio não cruza o terreno');
 });
 test('classes: Druida entra em Suporte e Cronomante em Mago, com os atributos de antes',()=>{
   assert.equal(t.HEROES.length,5);assert.equal(t.CLASSES.length,5);
@@ -322,12 +415,13 @@ test('o snapshot do quadro não atualiza uma unidade criada durante o próprio q
   t.frame();assert.equal(newcomerUpdates,1);clear();
 });
 test('contexto tático reutiliza seus arrays sem carregar alvos removidos',()=>{
-  clear();const contextRef=t.makeTargetContext(t.frameTargetContext),skeletonsRef=contextRef.skeletons;
+  clear();const ranged=new t.Hero(cfg('pyro')),contextRef=t.makeTargetContext(t.frameTargetContext),skeletonsRef=contextRef.skeletons,rangedRef=contextRef.rangedHeroes;
+  assert.ok(rangedRef.includes(ranged),'o contexto separa atiradores para reutilizar na IA dos Fantasmas');
   const first=new t.Skeleton('Minion',1);assert.equal(contextRef.skeletons.includes(first),false);
   const refreshed=t.makeTargetContext(t.frameTargetContext);
-  assert.equal(refreshed,contextRef);assert.equal(refreshed.skeletons,skeletonsRef);assert.equal(refreshed.skeletons.length,1);assert.ok(refreshed.skeletons.includes(first));
+  assert.equal(refreshed,contextRef);assert.equal(refreshed.skeletons,skeletonsRef);assert.equal(refreshed.rangedHeroes,rangedRef);assert.equal(refreshed.skeletons.length,1);assert.ok(refreshed.skeletons.includes(first));
   first.dead=true;t.game.paused=true;t.frame();assert.equal(t.frameTargetContext.skeletons.length,0);
-  first.remove();const afterRemoval=t.makeTargetContext(t.frameTargetContext);assert.equal(afterRemoval.skeletons.length,0);
+  first.remove();ranged.remove();const afterRemoval=t.makeTargetContext(t.frameTargetContext);assert.equal(afterRemoval.skeletons.length,0);assert.equal(afterRemoval.rangedHeroes.length,0);
 });
 test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
@@ -341,13 +435,22 @@ test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à 
 });
 test('dificuldade escala esqueletos e ondas; Pesadelo segura o caído uma fase',()=>{
   clear();t.setDifficulty(0);const easy=new t.Skeleton('Warrior',1).maxHp;
-  t.setDifficulty(3);const hard=new t.Skeleton('Warrior',1);assert.ok(hard.maxHp>easy*1.5&&hard.dmg>11);
+  t.setDifficulty(3);const hard=new t.Skeleton('Warrior',1);assert.ok(hard.maxHp>easy*1.45&&hard.dmg>11);
   Object.assign(t.game,{phase:4});t.startPhase();assert.equal(t.game.toSpawn,Math.round(10*t.getDifficulty().count));assert.ok(t.game.toSpawn>10);
   for(const u of [...t.units])u.remove();
   const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('pyro'));Object.assign(t.game,{phase:3});b.die();
   Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);assert.equal(b.dead,true);
   Object.assign(t.game,{phase:4,state:'fight',toSpawn:0});t.updateGame(.1);assert.equal(b.dead,false);assert.equal(b.hp,b.maxHp*.25);
   t.setDifficulty(1);
+});
+test('curva de dificuldade cresce em passos regulares a partir do Normal neutro',()=>{
+  const [easy,normal,hard,nightmare]=t.DIFFICULTIES;
+  assert.deepEqual([normal.hp,normal.dmg,normal.count,normal.interval],[1,1,1,1],'Normal usa os multiplicadores-base');
+  for(const key of ['hp','dmg','count']){
+    assert.ok(easy[key]<normal[key]&&normal[key]<hard[key]&&hard[key]<nightmare[key],`${key} cresce entre níveis`);
+    for(let i=1;i<t.DIFFICULTIES.length;i++)assert.ok(t.DIFFICULTIES[i][key]/t.DIFFICULTIES[i-1][key]<=1.3,`${key} não dá um salto excessivo`);
+  }
+  assert.ok(easy.interval>normal.interval&&normal.interval>hard.interval&&hard.interval>nightmare.interval,'as ondas surgem gradualmente mais rápido');
 });
 test('recorde guarda a melhor fase por dificuldade e marca vitória',()=>{
   clear();context.localStorage.data={};Object.assign(t.game,{start:1,phase:5,kills:40});t.endGame('Derrota',false);
@@ -633,6 +736,73 @@ test('heróis distribuem ataques contra alvos quase derrotados sem perder priori
   priest.hp=priest.maxHp*.1;focused.targetFocus=priest;
   assert.equal(t.chooseHeroTarget(teammate,[alternative,nearby,priest],.016,team),priest);
 });
+test('Trono de Ossos concentra no chefe com menos vida relativa e retém o foco',()=>{
+  clear();
+  const first=new t.Hero(cfg('paladin')),second=new t.Hero(cfg('berserker'));
+  first.pos.set(0,0,0);first.post.copy(first.pos);second.pos.set(0,0,0);second.post.copy(second.pos);
+  const lich=new t.Skeleton('Lich',12,true),executioner=new t.Skeleton('Executioner',12,true);
+  lich.spawning=executioner.spawning=false;lich.pos.set(0,0,3);executioner.pos.set(0,0,4);
+  lich.hp=lich.maxHp*.3;executioner.hp=executioner.maxHp*.6;
+  t.game.mission={goal:{type:'twin'}};
+  const team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(first,[executioner,lich],.016,team),lich,'a vida relativa mais baixa define o foco inicial');
+  assert.equal(t.chooseHeroTarget(second,[lich,executioner],.016,team),lich,'todos os heróis usam o mesmo chefe');
+  lich.hp=lich.maxHp*.9;executioner.hp=executioner.maxHp*.1;
+  assert.equal(t.chooseHeroTarget(first,[executioner,lich],.016,team),lich,'mudanças de vida não dividem o grupo enquanto o foco estiver atacável');
+  lich.dead=true;lich.hp=0;
+  assert.equal(t.chooseHeroTarget(second,[executioner,lich],.016,team),executioner,'o grupo troca quando o chefe focado morre');
+  clear();
+});
+test('Trono de Ossos desempata com ordem determinística e troca foco inacessível',()=>{
+  clear();
+  const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);
+  const lich=new t.Skeleton('Lich',12,true),executioner=new t.Skeleton('Executioner',12,true);
+  lich.spawning=executioner.spawning=false;lich.pos.set(0,0,3);executioner.pos.set(0,0,4);
+  lich.hp=lich.maxHp*.5;executioner.hp=executioner.maxHp*.5;
+  t.game.mission={goal:{type:'twin'}};
+  const team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner],.016,team),executioner,'empates favorecem a chave de tipo em ordem lexical');
+  lich.hp=lich.maxHp*.1;
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner],.016,team),executioner,'o foco empatado permanece estável mesmo que a outra vida caia');
+  executioner.pos.set(0,0,100);
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner],.016,team),lich,'um foco fora do alcance de toda equipe é substituído');
+  clear();
+});
+test('Trono de Ossos espera os dois chefes saírem do surgimento antes de fixar o foco',()=>{
+  clear();
+  const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);
+  const lich=new t.Skeleton('Lich',12,true),executioner=new t.Skeleton('Executioner',12,true);
+  lich.spawning=false;executioner.spawning=true;lich.pos.set(0,0,3);executioner.pos.set(0,0,4);
+  lich.hp=lich.maxHp*.5;executioner.hp=executioner.maxHp*.5;
+  t.game.mission={goal:{type:'twin'}};
+  let team=t.makeTargetContext();
+  t.chooseHeroTarget(h,[lich,executioner],.016,team);
+  assert.equal(t.game.twinFocus,null,'o Lich pronto não fica comprometido enquanto o Carrasco surge');
+  executioner.spawning=false;
+  team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner],.016,team),executioner,'com ambos prontos, o desempate lexical é aplicado');
+  lich.hp=lich.maxHp*.1;
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner],.016,team),executioner,'o foco válido se mantém após mudar a vida relativa');
+  clear();
+});
+test('Trono de Ossos interrompe o foco coletivo por ameaça urgente e retoma o chefe',()=>{
+  clear();
+  const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);
+  const lich=new t.Skeleton('Lich',12,true),executioner=new t.Skeleton('Executioner',12,true);
+  lich.spawning=executioner.spawning=false;lich.pos.set(0,0,3);executioner.pos.set(0,0,4);
+  lich.hp=lich.maxHp*.2;executioner.hp=executioner.maxHp*.7;
+  const threat=new t.Skeleton('Warrior',12);threat.spawning=false;threat.pos.set(0,0,1);
+  threat.pendingHit={target:h};
+  t.game.mission={goal:{type:'twin'}};
+  const team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner,threat],.016,team),threat,'ameaça prestes a acertar um herói interrompe a concentração');
+  threat.pendingHit=null;
+  assert.equal(t.chooseHeroTarget(h,[lich,executioner,threat],.016,team),lich,'o foco no chefe é retomado quando o perigo passa');
+  t.game.mission={goal:{type:'win'}};
+  t.chooseHeroTarget(h,[lich,executioner,threat],.016,t.makeTargetContext());
+  assert.equal(t.game.twinFocus,null,'outros objetivos não carregam o foco da missão twin');
+  clear();
+});
 test('escolta troca para ameaça urgente, mantém foco comum e respeita limite',()=>{
   clear();const h=new t.Hero(cfg('pyro'));h.pos.set(0,0,0);h.post.copy(h.pos);
   const minion=new t.Skeleton('Minion',1),other=new t.Skeleton('Warrior',1);
@@ -663,6 +833,29 @@ test('sem quedas permite interceptar ameaça curta fora do limite normal',()=>{
   t.game.mission={goal:{type:'nofall'}};
   assert.equal(t.chooseHeroTarget(h,[attacker],.016),attacker);
 });
+test('defesa fixa não desloca o grupo por atirador remoto, mas intercepta quem ameaça o objetivo',()=>{
+  for(const goalType of ['defend','breach']){
+    clear();t.game.shrine=null;t.game.gate=null;t.game.phase=1;
+    const guards=['paladin','berserker','pyro'].map(id=>new t.Hero(cfg(id)));
+    for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);h.range=1;}
+    const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
+    t.game.mission={goal:{type:goalType}};
+    if(goalType==='defend')t.game.shrine=objective;else t.game.gate=objective;
+    const shooter=new t.Skeleton('Mage',1);shooter.spawning=false;shooter.ranged=true;shooter.mobile=false;shooter.pos.set(0,0,17);
+    let team=t.makeTargetContext();
+    assert.equal(team.villager,objective,goalType+': o objetivo protegido entra no contexto tático');
+    for(const h of guards)assert.equal(t.chooseHeroTarget(h,[shooter],.016,team),null,goalType+': atirador remoto não arranca um defensor do posto');
+
+    shooter.pos.set(0,0,10);shooter.pendingHit=null;
+    team=t.makeTargetContext();
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': ameaça próxima ao objetivo continua interceptável');
+    guards[0].targetFocus=null;guards[0].targetFocusT=0;
+    shooter.pos.set(0,0,11);shooter.pendingHit={target:objective};
+    team=t.makeTargetContext();
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': golpe preparado contra o objetivo continua interceptável');
+  }
+  clear();t.game.shrine=null;t.game.gate=null;
+});
 test('heróis interceptam arqueiros de uma onda sem perseguir indefinidamente nem puxar totens',()=>{
   clear();const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);
   const shooter=new t.Skeleton('Mage',1);shooter.spawning=false;shooter.pos.set(0,0,17);
@@ -677,6 +870,27 @@ test('heróis interceptam arqueiros de uma onda sem perseguir indefinidamente ne
   shooter.pos.set(0,0,10);shooter.totem=true;t.game.mission={goal:{type:'totems'}};
   assert.equal(t.chooseHeroTarget(h,[shooter],.016),shooter);
   t.game.mission={goal:{type:'win'}};assert.equal(t.chooseHeroTarget(h,[shooter],.016),null);
+});
+test('Caçada: dois heróis interceptam o alvo marcado dentro do limite e priorizam sua captura',()=>{
+  clear();
+  const first=new t.Hero(cfg('paladin')),second=new t.Hero(cfg('berserker')),third=new t.Hero(cfg('assassin'));
+  for(const h of [first,second,third]){h.pos.set(0,0,0);h.post.set(0,0,0);}
+  const mark=new t.Skeleton('Rogue',7);mark.spawning=false;mark.hunted=true;mark.pos.set(0,0,18);
+  const minion=new t.Skeleton('Minion',7);minion.spawning=false;minion.pos.set(0,0,1);
+  t.game.huntMark=mark;t.game.mission={goal:{type:'hunt'}};
+  const team=t.makeTargetContext();
+  assert.ok(t.heroTargetScore(first,mark,first.pos,team)<t.heroTargetScore(first,minion,first.pos,team),'a captura é objetivo urgente');
+  assert.equal(t.chooseHeroTarget(first,[minion,mark],.016,team),mark);
+  assert.equal(t.chooseHeroTarget(second,[minion,mark],.016,team),mark);
+  assert.equal(t.chooseHeroTarget(third,[minion,mark],.016,team),minion,'um terceiro herói mantém a formação');
+  const priest=new t.Skeleton('Priest',7);priest.spawning=false;priest.pos.set(0,0,.5);
+  mark.pos.set(0,0,25);
+  first.targetFocus=priest;first.targetFocusT=1;second.targetFocus=priest;second.targetFocusT=1;
+  assert.equal(t.chooseHeroTarget(first,[priest,mark],.016,team),mark,'a marca vence um sacerdote próximo no limite da perseguição');
+  assert.equal(t.chooseHeroTarget(second,[priest,mark],.016,team),mark,'dois interceptores mantêm a perseguição limitada');
+  assert.equal(t.chooseHeroTarget(third,[priest,mark],.016,team),priest,'o terceiro herói não ultrapassa o limite de interceptores');
+  mark.pos.set(0,0,25.1);
+  assert.equal(t.canHeroReachTarget(first,mark,team),false,'ninguém persegue além do alcance tático');
 });
 test('Pyro escolhe um grupo para a explosão em vez de um alvo isolado',()=>{
   clear();const h=new t.Hero(cfg('pyro'));h.pos.set(0,0,0);
@@ -704,7 +918,7 @@ test('dica pós-derrota usa o objetivo e o estado real da missão',()=>{
   const tip=mission=>context.buildBattleReport({won:false,mission}).find(item=>item.id==='next-try').text;
   assert.match(tip({goal:{type:'escort'},villagerDown:true}),/aldeão caiu/);
   assert.match(tip({goal:{type:'escort'},villagerDown:false}),/grupo caiu antes de concluir a escolta/);
-  assert.match(tip({goal:{type:'nofall'}}),/ninguém caia/);
+  assert.match(tip({goal:{type:'nofall'}}),/Todo o grupo caiu.*quedas individuais tiram as estrelas extras/i);
   assert.match(tip({goal:{type:'timer',time:240},time:241}),/limite de tempo acabou/);
   assert.match(tip({goal:{type:'totems',count:3},totemsDown:1}),/Faltaram 2 totens/);
   assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:false,phase:5}),/antes da estreia do chefe.*fase 6/);
@@ -751,6 +965,38 @@ test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
 // ---------- campanha ----------
 const mission=id=>t.MISSIONS.find(m=>m.id===id);
 const idx=id=>t.pick.options.findIndex(v=>v.id===id);
+test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de revival',()=>{
+  clear();context.localStorage.data={};t.setMission(mission('lago'));t.showDifficulty();
+  const subtitle=elements.get('pickSub').textContent;
+  assert.equal(subtitle,`⚑ ${context.goalText(mission('lago').goal)}`,'o objetivo da missão continua no subtítulo');
+  const nightmareIndex=idx('pesadelo'),nightmare=t.pick.cards[nightmareIndex];
+  nightmare.onfocus();
+  const team='Equipe para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área).';
+  assert.ok(elements.get('pickHint').textContent.includes(team),'a recomendação aparece quando Pesadelo recebe foco');
+  assert.ok(nightmare.classList.contains('sel'));
+  assert.ok(nightmare.attributes['data-tip'].includes('Caídos só voltam uma fase depois.'),'a dica existente sobre reviver continua no tooltip');
+  assert.ok(nightmare.attributes['data-tip'].includes(team),'o tooltip também inclui a composição recomendada');
+  assert.ok(nightmare.attributes['aria-label'].includes(team),'a composição fica disponível na acessibilidade do cartão');
+  assert.ok(nightmare.attributes['aria-label'].includes('Fases 4–5.'),'o cartão mantém o trecho da missão acessível');
+  assert.equal(elements.get('pickSub').textContent,subtitle,'focar a dificuldade não substitui o objetivo no subtítulo');
+  t.pick.cards[idx('dificil')].onfocus();
+  assert.equal(elements.get('pickHint').textContent,'← → · Enter · Esc','a recomendação sai ao focar outra dificuldade');
+
+  clear();context.localStorage.data={};t.setMission(mission('duelo'));t.showDifficulty();
+  const duelSubtitle=elements.get('pickSub').textContent;
+  assert.equal(duelSubtitle,`⚑ ${context.goalText(mission('duelo').goal)}`,'o objetivo do Duelo permanece no subtítulo');
+  const duelNightmare=t.pick.cards[idx('pesadelo')];duelNightmare.onfocus();
+  const solo='Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.';
+  assert.ok(elements.get('pickHint').textContent.includes(solo),'a sugestão respeita a vaga única do Duelo');
+  assert.ok(duelNightmare.attributes['data-tip'].includes(solo));
+  assert.ok(duelNightmare.attributes['aria-label'].includes(solo));
+  assert.ok(!duelNightmare.attributes['aria-label'].includes('Guardião')&&!duelNightmare.attributes['aria-label'].includes('Clériga'),'não promete heróis que o Duelo não permite escolher');
+
+  clear();context.localStorage.data={};t.showDifficulty();
+  const journeyNightmare=t.pick.cards[idx('pesadelo')];journeyNightmare.onfocus();
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),'a recomendação completa continua disponível na Jornada');
+  clear();t.setDifficulty(1);
+});
 test('mapas da campanha ficam estáveis ao voltar da dificuldade e rerrolam na próxima visita',()=>{
   let draws=0;
   const session=context.createCampaignMapSeedSession(t.MISSIONS,()=>((++draws)%90)/100);
@@ -787,10 +1033,11 @@ test('estrelas da campanha são cumulativas e missão sem quedas usa vida como d
   assert.equal(stars({won:true,falls:0,hpRatio:.4}),2);
   assert.equal(stars({won:true,falls:0,hpRatio:.5}),3);
   const nofall={type:'nofall'};
-  assert.equal(stars({won:true,falls:1,hpRatio:1,goal:nofall}),0);
+  assert.equal(stars({won:true,falls:1,hpRatio:1,goal:nofall}),1);
   assert.equal(stars({won:true,falls:0,hpRatio:.6,goal:nofall}),1);
   assert.equal(stars({won:true,falls:0,hpRatio:.75,goal:nofall}),2);
   assert.equal(stars({won:true,falls:0,hpRatio:.9,goal:nofall}),3);
+  assert.deepEqual(Array.from(context.starTargetsFor(nofall)),['1★ Concluir a missão','2★ Sem quedas e 75%+ de vida','3★ Sem quedas e 90%+ de vida']);
   const regular=Array.from(context.starConditions({won:true,falls:1,hpRatio:.8}),c=>[c.achieved,c.label]);
   assert.deepEqual(regular,[[true,'Concluir a missão'],[false,'Terminar sem quedas (1 queda)'],[false,'Sem quedas e com 50%+ de vida (atual 80%)']]);
   const special=Array.from(context.starConditions({won:true,falls:0,hpRatio:.8,goal:nofall}),c=>c.achieved);
@@ -829,13 +1076,14 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   context.renderCampaign(root,m=>started.push(m),m=>m.id==='ponte'?'Outono':'Pradaria',m=>t.campaignThreats(m.from,m.to));
   const focusedNode=map.children[1];focusedNode.classList.add('camp-node');focusedNode.onfocus();
   assert.ok(info.innerHTML.includes('ARENA 02 · OUTONO'));
+  assert.ok(info.innerHTML.includes('Capítulo I · Sinais na estrada'),'capítulo aparece à vista na missão focada');
   assert.ok(info.innerHTML.includes('Inimigos especiais'));
   assert.ok(info.innerHTML.includes('Fase 3 · '));   // ponte 2–4: o bombardeiro estreia dentro do trecho
   assert.ok(info.innerHTML.includes('Bombardeiro'));
   assert.ok(info.innerHTML.includes('Seus melhores tempos')&&info.innerHTML.includes('1:12'));
   // painel enxuto: história, plano e descrições dos inimigos só em dicas; Batalhar continua no painel
   const visible=info.innerHTML.replace(/\s(?:data-tip|aria-label)="[^"]*"/g,'');
-  for(const gone of ['Plano de batalha','Estrelas acumulativas','Inimigos especiais','Desafios opcionais','Capítulo','Bombardeiro'])assert.ok(!visible.includes(gone),`${gone} não fica à vista`);
+  for(const gone of ['Plano de batalha','Estrelas acumulativas','Inimigos especiais','Desafios opcionais','Bombardeiro'])assert.ok(!visible.includes(gone),`${gone} não fica à vista`);
   assert.ok(info.innerHTML.includes('data-tip="1★ Concluir a missão"'),'critério de cada estrela na dica');
   assert.ok(visible.includes('class="camp-play"'));
   context.document.activeElement=focusedNode;
@@ -866,12 +1114,12 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   const previousLocation=context.location,previousStorage=context.localStorage.data;
   context.location={search:''};
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,1])))};
-  const render=()=>{
+  const render=(storageWarning='')=>{
     const map=el(),info=el(),root=el();
     map.children=[];root.isConnected=true;root.closest=()=>null;
     root.querySelector=selector=>selector==='.camp-map'?map:info;
-    context.renderCampaign(root,noop);
-    return {map,info};
+    context.renderCampaign(root,noop,null,null,storageWarning);
+    return {map,info,root};
   };
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
@@ -882,6 +1130,11 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
   assert.match(view.info.innerHTML,/Todas as 51 estrelas foram conquistadas/);
+  view=render('O save da campanha estava corrompido; uma cópia foi preservada.');
+  assert.match(view.info.innerHTML,/Campanha perfeita/);
+  assert.equal(view.map.children.length,17);
+  assert.match(view.root.innerHTML,/class="storage-warning" role="status"/);
+  assert.match(view.root.innerHTML,/save da campanha estava corrompido/);
   context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('atalho ?tudo=1 não grava estrelas de campanha',()=>{
@@ -908,14 +1161,24 @@ test('campanha: escolhe N heróis em sequência, já no nível da missão e sem 
   t.selectCard(idx('pyro'));assert.equal(elements.get('pickHint').textContent,hint);
   assert.equal(t.heroes().length,0,'a formação anterior deve ser apenas uma sugestão');context.setTimeout=noop;
 });
-test('objetivos: aldeão, ninguém cai e tempo derrubam a missão',()=>{
+test('objetivos: aldeão, grupo inteiro caindo e tempo derrubam a missão',()=>{
   context.location={search:''};
   begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
   assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('aldeão'));assert.equal(t.starsOf('ponte'),0);
   begin('lago-sombrio',['paladin','pyro','berserker','assassin']);t.heroes()[1].die();t.updateGame(.1);
-  assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('caiu'));
+  assert.equal(t.game.over,false,'uma queda não encerra enquanto houver heróis de pé');assert.equal(t.game.falls,1);
+  for(const h of t.heroes())if(!h.dead)h.die();t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('Todo o grupo caiu'));
   begin('cemiterio',['paladin','pyro','berserker','assassin']);t.game.missionT=239.95;t.updateGame(.1);
   assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.includes('tempo'));
+});
+test('Lago Sombrio permite queda recuperável no Pesadelo sem apagar o desafio de estrelas',()=>{
+  context.location={search:''};begin('lago-sombrio',['paladin','pyro','cryo','assassin']);t.setDifficulty(3);
+  const fallen=t.heroes()[0];fallen.die();Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);
+  assert.equal(t.game.over,false);assert.equal(t.game.falls,1);assert.equal(fallen.dead,true,'Pesadelo espera uma fase para reerguer o herói');
+  Object.assign(t.game,{phase:10,state:'fight',toSpawn:0});t.updateGame(.1);
+  assert.equal(fallen.dead,false,'o herói volta na fase seguinte');assert.equal(fallen.hp,fallen.maxHp*t.getDifficulty().revive);
+  assert.equal(context.starsFor({won:true,falls:t.game.falls,hpRatio:1,goal:{type:'nofall'}}),1,'queda permite vitória, mas tira as estrelas extras');
 });
 test('cronômetro para enquanto a vitória da última fase é exibida',()=>{
   begin('cemiterio',['paladin','pyro','berserker','assassin']);
@@ -1033,15 +1296,17 @@ test('medalha guarda a melhor dificuldade vencida e desafios de 3★ nas dificul
   assert.ok(info.innerHTML.includes('Desafios opcionais')&&info.innerHTML.includes('Vencida no Difícil'));
 });
 test('fim da missão mostra recompensa, medalha e o botão da próxima missão',()=>{
-  context.location={search:''};context.localStorage.data={};
+  context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({ponte:1,santuario:1,chamas:1})};
   try{
+    context.saveStars('chamas',1); // avanço já salvo no capítulo; a vitória de Vila cruza 4★
     begin('vila',['paladin']);t.setDifficulty(2);Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});t.updateGame(.1);
     const html=elements.get('overlayStars').innerHTML;
-    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/51'));
+    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 6/51'));
+    assert.ok(html.includes('Cosmético novo')&&html.includes('Estandarte da Vila desbloqueado'),'avisa ao cruzar o marco de estrelas do capítulo');
     assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
     // o próximo passo virou só o botão "Próxima ▸" ao lado de "Mapa"; o nome da missão fica na dica e no aria-label
     const next=elements.get('overlayNext').innerHTML;
-    assert.ok(next.includes('Nova missão liberada: A Ponte do Rio')&&next.includes('Próxima missão: A Ponte do Rio')&&next.includes('Próxima ▸'));
+    assert.ok(next.includes('Próxima missão: Fazendas')&&next.includes('Próxima ▸'),next);
     context.createWorld=()=>t.world;   // a próxima missão recria o cenário; aqui o duplo basta
     t.startGame(mission('ponte'));assert.equal(t.game.mission.id,'ponte');assert.equal(t.pick.mode,'difficulty');
     begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
@@ -1072,6 +1337,27 @@ const cMath=vm.runInContext('Math',context);   // o sorteio do jogo é o Math do
 const foe=(type,x,z,boss=false)=>{const u=new t.Skeleton(type,6,boss);u.spawning=false;u.busy=0;u.pos.set(x,0,z);return u};
 const hero=(id,x,z)=>{const h=new t.Hero(cfg(id));h.pos.set(x,0,z);h.post.copy(h.pos);return h};   // posto no lugar: não volta à formação
 const tick=(dt,n=1)=>{for(let i=0;i<n;i++){for(const u of [...t.units])u.update(dt);context.updateEnemyBolts(dt)}};
+test('queda, revival e nova queda contam cada ocorrência no total da missão',()=>{
+  clear();const h=hero('paladin',0,0);
+  h.die();t.trackMissionFalls(t.heroes());
+  assert.equal(t.game.falls,1);assert.equal(t.game.fallLog.length,1);
+  h.revive();assert.equal(h.fell,false,'o revival libera a próxima queda para contagem');
+  h.die();t.trackMissionFalls(t.heroes());
+  assert.equal(t.game.falls,2);assert.equal(t.game.fallLog.length,2,'o total acompanha o registro de quedas');
+  clear();
+});
+test('Jornada envia à progressão a mesma contagem de quedas do relatório',()=>{
+  clear();context.location={search:''};const h=hero('paladin',0,0);let recorded,reportFalls=null;
+  const record=t.progress.recordMatch,summaryHTML=context.summaryHTML;
+  t.progress.recordMatch=function(run){recorded={...run};return record.call(this,run);};
+  context.summaryHTML=(_party,_report,options)=>{reportFalls=options.falls;return '';};
+  try { h.die();t.updateGame(.1); }
+  finally { t.progress.recordMatch=record;context.summaryHTML=summaryHTML; }
+  assert.equal(t.game.over,true);assert.equal(t.game.fallLog.length,1);
+  assert.equal(reportFalls,1,'o relatório exibe a queda registrada');
+  assert.equal(recorded?.mode,'journey');assert.equal(recorded?.falls,reportFalls,'a progressão usa a mesma contagem do relatório');
+  clear();
+});
 test('grade espacial separa unidades grandes nas células vizinhas e mantém colisão com obstáculos',()=>{
   clear();const obstacles=t.world.obstacles;
   try{
@@ -1163,6 +1449,82 @@ test('habilidades usam a dica própria em vez do title nativo',()=>{
   t.showPick('','');t.selectCard(t.pick.options.findIndex(v=>v.id==='pyro'));
   assert.equal((t.pick.info.innerHTML.match(/data-tip="skill"/g)||[]).length,3,'habilidades da ficha também têm a dica');
   clear();
+});
+test('barra de habilidades só reconstrói quando a identidade ou ordem do grupo muda',()=>{
+  clear();
+  const originalPerformance=context.performance;
+  context.performance={now:()=>100};
+  const first=new t.Hero(cfg('paladin')),second=new t.Hero(cfg('pyro'));
+  const bar=context.document.getElementById('skills');
+  let html=bar.innerHTML,rebuilds=0;
+  Object.defineProperty(bar,'innerHTML',{configurable:true,get(){return html;},set(value){html=value;rebuilds++;}});
+  try {
+    t.updateSkillBar();
+    assert.equal(rebuilds,1,`constrói a barra inicial (escritas: ${rebuilds}; heróis=${t.heroes().length}; barras=${t.skillItems().length}; cache=${vm.runInContext('skillRoster.length',context)})`);
+    const initialItems=t.skillItems();
+    assert.equal(initialItems[0].h,first);assert.equal(initialItems[3].h,second);
+    first.skillTimers[0]=2.2;t.updateSkillBar();
+    assert.equal(rebuilds,1,'quadros seguintes reutilizam a barra existente');
+    assert.equal(t.skillItems()[0].secs.textContent,'3','a recarga continua atualizando sem reconstrução');
+    first.skillTimers[0]=1.2;t.updateSkillBar();
+    assert.equal(t.skillItems()[0].secs.textContent,'2','o texto do cooldown continua acompanhando o tempo');
+    assert.equal(rebuilds,1);
+    t.units.reverse();t.updateSkillBar();
+    assert.equal(rebuilds,2,'reconstrói quando a ordem dos heróis muda');
+    assert.equal(t.skillItems()[0].h,second);assert.equal(t.skillItems()[3].h,first);
+    first.remove();
+    const replacement=new t.Hero(cfg('paladin'));
+    t.updateSkillBar();
+    assert.equal(rebuilds,3,'reconstrói quando um herói é substituído por outro da mesma classe');
+    assert.equal(t.skillItems()[0].h,second);assert.equal(t.skillItems()[3].h,replacement);
+  } finally {
+    Object.defineProperty(bar,'innerHTML',{configurable:true,writable:true,value:html});
+    if(originalPerformance===undefined)delete context.performance;else context.performance=originalPerformance;
+    clear();
+  }
+});
+test('barra de habilidades só alterna classes quando o estado muda',()=>{
+  const previousPerformance=context.performance,previousAiming=vm.runInContext('aiming',context),previousStorage=context.localStorage.data;
+  const create=context.document.createElement;
+  context.performance={now:()=>1000};vm.runInContext('aiming=null',context);context.localStorage.data={};
+  let calls=[];
+  context.document.createElement=(...args)=>{
+    const node=create(...args),toggle=node.classList.toggle;
+    node.classList.toggle=(name,active)=>{calls.push([node,name,active]);return toggle(name,active);};
+    return node;
+  };
+  try {
+    clear();
+    const party=['paladin','pyro','guardian','crossbow'].map(id=>new t.Hero(cfg(id)));
+    t.updateSkillBar();
+    const items=t.skillItems(),item=items.find(it=>it.h===party[0]&&it.slot===0);
+    assert.equal(items.length,12,'quatro heróis têm doze botões');
+    assert.equal(calls.length,72,'a primeira pintura aplica as seis classes dinâmicas de cada botão');
+
+    calls=[];t.updateSkillBar();
+    assert.equal(calls.length,0,'quadros sem mudança não chamam classList.toggle');
+    const changed=(action)=>{calls=[];action();t.updateSkillBar();return calls.filter(([node])=>node===item.b).map(([,name,active])=>[name,active]);};
+
+    assert.deepEqual(changed(()=>{party[0].skillTimers[0]=0}),[['ready',true],['cooling',false]],'fim da recarga atualiza pronto e recarregando');
+    assert.ok(item.b.classList.contains('ready'));assert.ok(!item.b.classList.contains('cooling'));
+    assert.deepEqual(changed(()=>{party[0].autoSkills[0]=false}),[['manual',true]],'modo manual atualiza a classe');
+    assert.ok(item.b.classList.contains('manual'));
+    context.skillAimHero=party[0];
+    assert.deepEqual(changed(()=>{vm.runInContext('aiming={hero:skillAimHero}',context)}),[['aiming',true]],'mira atualiza a classe');
+    assert.ok(item.b.classList.contains('aiming'));
+    assert.deepEqual(changed(()=>{vm.runInContext('aiming=null',context)}),[['aiming',false]],'cancelar a mira remove a classe');
+    assert.deepEqual(changed(()=>{party[0].noTarget=.6}),[['nope',true]],'falha sem alvo mostra o aviso');
+    assert.ok(item.b.classList.contains('nope'));
+    assert.deepEqual(changed(()=>{party[0].noTarget=0}),[['nope',false]],'o aviso some quando há alvo');
+    assert.deepEqual(changed(()=>{party[0].dead=true}),[['ready',false],['down',true]],'herói caído perde pronto e ganha a classe down');
+    assert.ok(item.b.classList.contains('down'));assert.equal(item.secs.textContent,'✖');
+  } finally {
+    context.document.createElement=create;
+    if(previousPerformance===undefined)delete context.performance;else context.performance=previousPerformance;
+    context.savedSkillAiming=previousAiming;vm.runInContext('aiming=savedSkillAiming',context);
+    delete context.savedSkillAiming;delete context.skillAimHero;context.localStorage.data=previousStorage;
+    clear();
+  }
 });
 test('relatório de batalha registra golpes corpo a corpo e tiros inimigos',()=>{
   clear();t.clearMonsterFx();const h=hero('king',0,0);h.hp=h.maxHp=10000;
@@ -1395,8 +1757,35 @@ test('Funda ricocheteante salta o tiro comum e o Prisma dá +1 alvo aos magos',(
   assert.equal(t.bolts.length,1);assert.equal(t.bolts[0].target,y);assert.ok(Math.abs(t.bolts[0].dmg-mage.dmg*.7)<1e-6);
   for(const bolt of t.bolts)context.scene.remove(bolt.mesh);t.bolts.length=0;clear();
 });
+test('projéteis reutilizam o vetor de destino sem clonar a posição do alvo a cada quadro',()=>{
+  clear();t.bolts.length=0;
+  const caster=hero('pyro',0,0),target=foe('Minion',0,-12);
+  t.fireBolt(caster,target,'magic');
+  const clone=target.pos.clone;
+  target.pos.clone=()=>{throw new Error('clone de destino no quadro do projétil');};
+  try {
+    t.updateBolts(1/60);
+    assert.equal(t.bolts.length,1,'o projétil continua em voo após atualizar sem alocação de destino');
+  } finally {
+    target.pos.clone=clone;
+    for(const bolt of t.bolts)context.scene.remove(bolt.mesh);
+    t.bolts.length=0;clear();
+  }
+});
 // ---------- objetivos novos da campanha ----------
 const party=n=>['paladin','pyro','cryo','assassin'].slice(0,n);
+test('reforços de defesa, sobrevivência e ponte respeitam o teto de inimigos ativos',()=>{
+  const fillEnemies=count=>{for(let i=0;i<count;i++){const enemy=foe('Warrior',0,-14-i);enemy.busy=99;enemy.hp=enemy.maxHp=100000;}};
+  begin('santuario',party(2));t.startPhase();for(const s of t.skeletonsAlive())s.remove();fillEnemies(6);
+  Object.assign(t.game,{state:'fight',toSpawn:0,surviveT:45,spawnTimer:99});t.updateGame(.1);
+  assert.equal(t.game.toSpawn,1,'o santuário completa a horda até sete vivos');clear();
+  begin('lago',party(3));t.game.phase=5;t.startPhase();for(const s of t.skeletonsAlive())s.remove();fillEnemies(5);
+  Object.assign(t.game,{state:'fight',toSpawn:0,surviveT:45,spawnTimer:99});t.updateGame(.1);
+  assert.equal(t.game.toSpawn,1,'o lago completa a horda até seis vivos');clear();
+  begin('chamas',party(2));t.startPhase();for(const s of t.skeletonsAlive())s.remove();fillEnemies(6);
+  Object.assign(t.game,{state:'fight',toSpawn:0,surviveT:45,spawnTimer:99});t.updateGame(.1);
+  assert.equal(t.game.toSpawn,1,'a ponte completa a horda até sete vivos');clear();
+});
 test('santuário: estrutura aliada que os saqueadores atacam e que derruba a missão ao cair',()=>{
   context.location={search:''};context.localStorage.data={};
   begin('santuario',party(2));const shrine=t.game.shrine;
@@ -1431,13 +1820,23 @@ test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abat
   clear();
 });
 test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s ainda vence',()=>{
-  context.location={search:''};context.localStorage.data={};
+  context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({torre:2,'lago-sombrio':1,cemiterio:1,castelo:1})};
   begin('horda',party(4));t.startPhase();Object.assign(t.game,{toSpawn:0});for(const s of t.skeletonsAlive())s.die();
   t.updateGame(.5);assert.ok(t.game.toSpawn>0,'a horda repõe esqueletos');assert.ok(t.game.endlessT>0);
   const goal=mission('horda').goal;
   assert.equal(context.starsFor({won:true,goal,endlessTime:61}),1);assert.equal(context.starsFor({won:true,goal,endlessTime:185}),3);
-  t.game.endlessT=125;for(const h of t.heroes()){h.hp=0;h.dead=true;}t.updateGame(.1);
+  const originalRecordMatch=t.progress.recordMatch;let endedRun=null;
+  t.progress.recordMatch=function(run){endedRun={...run};return originalRecordMatch.call(this,run);};
+  try { t.game.endlessT=125;for(const h of t.heroes())h.die();t.updateGame(.1); }
+  finally { t.progress.recordMatch=originalRecordMatch; }
   assert.equal(t.game.over,true);assert.match(context.document.getElementById('overlayText').textContent,/contida/);assert.equal(t.starsOf('horda'),2);
+  assert.equal(t.game.falls,4,'a vitória por tempo mantém as quedas reais no resultado');assert.equal(t.game.fallLog.length,4);
+  assert.equal(endedRun?.falls,4,'o resumo enviado à progressão inclui as quedas da horda');
+  assert.equal(context.starsFor({won:true,falls:4,goal,endlessTime:125}),2,'as estrelas da horda continuam dependendo só do tempo');
+  const cleanProgress=context.createProgression(null),cleanReward=cleanProgress.recordMatch(endedRun);
+  assert.ok(!cleanReward.unlocked.some(a=>a.id==='muralha'),'quem caiu não desbloqueia Muralha intacta');
+  assert.match(elements.get('overlayStars').innerHTML,/Cosmético novo/,'a derrota que cruza o limite de estrelas avisa do cosmético recém-desbloqueado');
+  assert.match(elements.get('overlayStars').innerHTML,/Brasão da Marcha/);
   begin('horda',party(4));t.startPhase();t.game.endlessT=40;for(const h of t.heroes()){h.hp=0;h.dead=true;}t.updateGame(.1);
   assert.match(context.document.getElementById('overlayText').textContent,/A horda venceu/);assert.equal(t.starsOf('horda'),2,'derrota não apaga o melhor');
   begin('horda',party(4));t.startPhase();t.game.endlessT=goal.dawn-.01;t.updateGame(.1);
@@ -1513,15 +1912,22 @@ test('duelo: um herói só, ondas menores e o chefe encerra; 3★ pede vida e te
 });
 test('cripta sombria: três ondas de elite mais fortes antes de limpar a fase',()=>{
   context.location={search:''};context.localStorage.data={};
+  t.setDifficulty(1);
   begin('cripta',party(4));t.startPhase();const goal=mission('cripta').goal;
-  assert.equal(t.game.eliteWave,1);assert.ok(t.game.eliteSize<Math.round(24*t.getDifficulty().count),'cada onda é menor que a fase comum');
+  assert.equal(t.game.eliteWave,1);assert.equal(t.game.eliteSize,Math.round(24*t.getDifficulty().count*goal.scale));
+  assert.ok(t.game.eliteSize<Math.round(24*t.getDifficulty().count),'cada onda é menor que a fase comum');
   assert.equal(elements.get('banner').textContent,'Cripta Sombria · Elite 1/3');
   for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=2;t.spawnSkeleton();
   const elite=t.skeletonsAlive().at(-1),plain=new t.Skeleton(elite.enemyKind,11);
   assert.equal(elite.elite,true);assert.equal(elite.maxHp,Math.round(plain.maxHp*1.45));assert.ok(elite.dmg>plain.dmg);plain.remove();
+  const partyHeroes=t.heroes();partyHeroes.forEach(h=>h.hp=h.maxHp*.5);
+  const fallen=partyHeroes.at(-1);fallen.dead=true;fallen.hp=0;
   for(const wave of [2,3]){
     for(const s of t.skeletonsAlive())s.remove();Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);
     assert.equal(t.game.eliteWave,wave);assert.equal(t.game.toSpawn,t.game.eliteSize);assert.equal(t.game.state,'fight');
+    assert.ok(t.game.spawnTimer>2.8&&t.game.spawnTimer<=3,'a pausa dá tempo para reagir à nova onda');assert.equal(fallen.dead,true,'a pausa não revive heróis caídos');
+    const ratio=partyHeroes[0].hp/partyHeroes[0].maxHp;assert.ok(Math.abs(ratio-(wave===2?.68:.86))<.001,'a equipe recebe recuperação parcial entre ondas');
+    t.spawnSkeleton();assert.equal(t.skeletonsAlive().at(-1).elite,true,`a onda ${wave} também contém elites`);t.skeletonsAlive().at(-1).remove();
   }
   assert.ok(Math.abs(t.missionProgress(goal)-2/3)<.001);
   for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=0;t.updateGame(.1);
@@ -1531,7 +1937,7 @@ test('cripta sombria: três ondas de elite mais fortes antes de limpar a fase',(
 });
 test('trono de ossos: Lich e Carrasco juntos; só termina com os dois e fecha a campanha',()=>{
   context.location={search:''};context.localStorage.data={};
-  begin('trono',party(4));t.startPhase();assert.equal(t.game.bossPending,true);
+  t.setDifficulty(1);begin('trono',party(4));t.startPhase();assert.equal(t.game.toSpawn,21,'Normal reduz a onda de 26 para 21 spawns planejados');assert.equal(t.game.bossPending,true,'a redução não remove o chefe da fase 12');
   for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=1;t.spawnSkeleton();
   const bosses=t.units.filter(u=>u.phaseBoss);assert.deepEqual([...bosses.map(b=>b.enemyKind)].sort(),['Executioner','Lich']);
   const exec=bosses.find(b=>b.enemyKind==='Executioner'),alone=new t.Skeleton('Executioner',12,true);
@@ -1705,6 +2111,17 @@ test('guarda: quem cai não volta e não pesa em derrota, quedas ou estrelas',()
   h.die();t.game.state='fight';t.game.toSpawn=0;t.updateGame(.05);assert.equal(t.game.over,true,'sem heróis é derrota, mesmo com guarda de pé');
   clear();
 });
+test('derrota no mesmo quadro contabiliza todas as quedas antes de avaliar estrelas',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('lago-sombrio',party(4));
+  for(const h of t.heroes())h.die();
+  t.updateGame(.1);
+  assert.equal(t.game.falls,4,'a queda é contabilizada antes da derrota encerrar o quadro');
+  assert.equal(t.game.over,true);
+  assert.match(elements.get('overlayText').textContent,/Todo o grupo caiu na fase/);
+  assert.ok(elements.get('overlayStars').innerHTML.includes('Concluir a missão'));
+  assert.equal(t.game.fallLog.length,4);
+});
 test('herói à distância recua de quem encosta, sem sair da corda; corpo a corpo não recua',()=>{
   clear();t.game.state='fight';const mage=hero('cryo',0,0),e=foe('Minion',0,-1.5);e.busy=99;e.hp=e.maxHp=1e4;
   tick(.05,14);const d=Math.hypot(mage.pos.x-e.pos.x,mage.pos.z-e.pos.z);
@@ -1726,6 +2143,50 @@ test('herói corpo a corpo não pipoca na borda do alcance do posto',()=>{
   e.pos.z=k.post.z-(5+k.range+1.5);const z0=k.pos.z;tick(.05,4);   // passa um pouco do limite do posto
   assert.equal(k.engagedWith,e,'continua no alvo dentro da folga');assert.ok(k.pos.z<z0,'segue o alvo em vez de voltar ao posto');
   e.pos.z=k.post.z-(5+k.range+5);tick(.05,4);assert.equal(k.engagedWith,null,'larga quando o alvo se afasta bem');clear();
+});
+test('aviso da meta-progressão corrompida é específico e aparece no resultado',()=>{
+  const corrupted=Object.getOwnPropertyDescriptor(t.progress,'corrupted');
+  const backupFailed=Object.getOwnPropertyDescriptor(t.progress,'corruptBackupFailed');
+  context.location={search:''};context.localStorage.data={};
+  try {
+    Object.defineProperty(t.progress,'corrupted',{configurable:true,get:()=>true});
+    Object.defineProperty(t.progress,'corruptBackupFailed',{configurable:true,get:()=>false});
+    const warning=t.progressStorageWarning();
+    assert.match(warning,/save da meta-progressão \(ouro, melhorias e maestria\) estava corrompido/);
+    assert.match(warning,/cópia foi preservada no navegador/);
+    assert.notEqual(warning.indexOf('meta-progressão'),-1,'o texto identifica especificamente o save de meta-progressão');
+    Object.defineProperty(t.progress,'corruptBackupFailed',{configurable:true,get:()=>true});
+    const failedBackupWarning=t.progressStorageWarning();
+    assert.match(failedBackupWarning,/não foi possível preservar uma cópia/);
+    assert.doesNotMatch(failedBackupWarning,/cópia foi preservada no navegador/,'não promete um backup que falhou');
+    Object.defineProperty(t.progress,'corruptBackupFailed',{configurable:true,get:()=>false});
+
+    begin('vila',['paladin']);
+    Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});
+    t.updateGame(.1);
+    assert.match(elements.get('overlayStars').innerHTML,/save da meta-progressão/,'a tela de resultado usa o aviso');
+    assert.match(elements.get('overlayStars').innerHTML,/cópia foi preservada/);
+  } finally {
+    if(corrupted)Object.defineProperty(t.progress,'corrupted',corrupted);
+    if(backupFailed)Object.defineProperty(t.progress,'corruptBackupFailed',backupFailed);
+    clear();
+  }
+});
+test('resultado avisa quando o navegador não consegue salvar a campanha',()=>{
+  const originalSet=context.localStorage.setItem;
+  context.location={search:''};context.localStorage.data={};
+  context.localStorage.setItem=()=>{throw new Error('quota cheia');};
+  try {
+    begin('vila',['paladin']);
+    Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});
+    t.updateGame(.1);
+    assert.match(elements.get('overlayStars').innerHTML,/storage-warning/);
+    assert.match(elements.get('overlayStars').innerHTML,/pode se perder ao recarregar/);
+    assert.ok(t.starsOf('vila')>0,'o progresso continua válido durante a sessão');
+  } finally {
+    context.localStorage.setItem=originalSet;
+    clear();
+  }
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

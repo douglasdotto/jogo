@@ -376,6 +376,7 @@
 .camp-info .medal.big { width: 56px; height: 56px; font-size: 28px; border: 1px solid rgba(255, 235, 183, .85); color: #fff; -webkit-text-stroke: 1px rgba(83, 52, 26, .75);
   background: linear-gradient(145deg, #f4cb70, #b97e2b); box-shadow: 0 5px 12px rgba(0, 0, 0, .25); }
 .camp-ident { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.camp-chapter-label { align-self: flex-start; max-width: 100%; overflow: hidden; color: #9fb8d0; font: 600 9px/1.15 'Fredoka', sans-serif; letter-spacing: .75px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .camp-arena-tag { align-self: flex-start; padding: 0; border: 0; border-radius: 0; color: #f1d28f; font: 700 10px/1 'Fredoka', sans-serif; letter-spacing: 1.35px; background: none; box-shadow: none; text-shadow: none; }
 .camp-name { overflow: hidden; color: #f8fbff; font: 600 24px/1.1 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; -webkit-text-stroke: 0; text-shadow: none; }
 .camp-info .camp-desc { margin: 0; overflow: hidden; color: #b9cadb; font: 400 13px/1.3 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; text-shadow: none; }
@@ -386,6 +387,16 @@
 .camp-score .camp-seal { width: 24px; height: 24px; font-size: 12px; }
 .camp-record { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: #ffe18b; font: 600 15px 'Fredoka', sans-serif; }
 .camp-record i { color: #b7c8d8; font-style: normal; font-size: 14px; }
+.camp-chapter-reward { width: 100%; flex: none; display: grid; gap: 5px; padding: 8px 10px; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--chapter-color) 35%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--chapter-color) 8%, transparent); }
+.camp-chapter-reward-head { min-width: 0; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.camp-chapter-reward-icon { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; color: var(--chapter-color); background: color-mix(in srgb, var(--chapter-color) 16%, transparent); font: 600 15px/1 'Fredoka', sans-serif; }
+.camp-chapter-reward-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.camp-chapter-reward-copy small { color: #b8cadb; font: 600 11px/1 'Fredoka', sans-serif; letter-spacing: .8px; text-transform: uppercase; }
+.camp-chapter-reward-copy b { overflow: hidden; color: #f5f8fc; font: 600 13px/1.1 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.camp-chapter-reward-head strong { color: #f1d58e; font: 600 12px/1 'Fredoka', sans-serif; white-space: nowrap; }
+.camp-chapter-track { height: 4px; overflow: hidden; border-radius: 999px; background: rgba(220, 233, 246, .14); }
+.camp-chapter-track i { height: 100%; display: block; border-radius: inherit; background: var(--chapter-color); box-shadow: 0 0 9px color-mix(in srgb, var(--chapter-color) 55%, transparent); transition: width .28s ease; }
+.camp-chapter-reward-foot { color: #b8cadb; font: 500 11px/1.2 'Fredoka', sans-serif; }
 .camp-goal { width: 100%; padding: 13px 15px; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; gap: 10px; border: 1px solid rgba(246, 185, 106, .32); border-left: 3px solid #e8a35d; border-radius: 11px;
   color: #fff5e8; font: 600 17px/1.25 'Fredoka', sans-serif; text-shadow: none; background: rgba(204, 120, 59, .14); box-shadow: none; }
 .camp-goal i { color: #f0b46a; font-style: normal; font-size: 18px; }
@@ -492,7 +503,25 @@
   #overlay.results #overlayText, #overlay.results #overlayStars:not(:empty), #overlay.results #overlayStats { width: min(100%, 680px); }
   #overlay.results #overlayStats { grid-template-columns: minmax(0, 1fr); }
   #overlay.results #overlayStats .battle-report { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
-  #overlay.results #overlayStars:not(:empty) { grid-template-columns: 1fr; }
+  #overlay.results #overlayStars:not(:empty) {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    grid-template-columns: 1fr;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  #overlay.results #overlayStars .star-best {
+    flex: 0 1 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    box-sizing: border-box;
+    align-self: stretch;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
   #overlay.results #overlayStars .star-best, #overlay.results #overlayStars .unlock { grid-column: auto; }
 }
 
@@ -1033,12 +1062,90 @@
 }
 /* celular: uma coluna só (abas, cartões rolando de lado e ficha embaixo) */
 @media (max-width: 760px) {
-  #pick:has(#pickList.grid) { padding: 10px 8px 4px; }
-  #pick:has(#pickList.grid) #pickList.grid { width: 100%; height: calc(100dvh - 128px); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 46%); gap: 8px; }
-  #pick:has(#pickList.grid) .pick-info { grid-column: 1; grid-row: 3; max-height: 100%; padding: 10px; }
-  #pick:has(#pickList.grid) .pick-rows { padding: 8px; }
-  #pick:has(#pickList.grid) .pick-row { flex-wrap: nowrap; justify-content: flex-start; }
-  #pick:has(#pickList.grid) #pickList.grid .pick-row .card { flex: 0 0 128px; min-width: 128px; height: 100%; }
+  #pick:has(#pickList.grid) {
+    align-items: stretch;
+    padding: 10px 8px 16px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #pick:has(#pickList.grid) #pickList.grid {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas: "tabs" "cards" "info" "team";
+    gap: 8px;
+    overflow: visible;
+  }
+  #pick:has(#pickList.grid) .pick-filters { gap: 6px; }
+  #pick:has(#pickList.grid) .pick-filters .pick-filter { min-height: 40px; padding: 6px 8px; font-size: 14px; }
+  #pick:has(#pickList.grid) .pick-rows {
+    height: 204px;
+    min-height: 0;
+    padding: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+  #pick:has(#pickList.grid) .pick-row {
+    width: max-content;
+    min-width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  #pick:has(#pickList.grid) .pick-row:has(> .card:only-child) { width: 100%; }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row > .card:nth-child(3):last-child,
+  #pick:has(#pickList.grid) #pickList.grid .pick-row > .card:nth-child(5):last-child { width: 128px; grid-column: auto; justify-self: auto; }
+  #pick:has(#pickList.grid) .pick-row:has(> .card:nth-child(5)) { grid-auto-rows: auto; }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row .card {
+    flex: 0 0 128px;
+    width: 128px;
+    height: 184px;
+    min-width: 128px;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding: 7px;
+    scroll-snap-align: start;
+  }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row .card .portrait { width: 100%; height: 100%; max-height: none; }
+  #pick:has(#pickList.grid) .pick-card-copy { padding: 2px 3px; text-align: center; }
+  #pick:has(#pickList.grid) .pick-card-copy .pick-card-role { font-size: 13px; }
+  #pick:has(#pickList.grid) .pick-info {
+    width: 100%;
+    max-height: none;
+    height: auto;
+    min-width: 0;
+    padding: 10px;
+    overflow: visible;
+    box-sizing: border-box;
+  }
+  #pick:has(#pickList.grid) .pick-info .crest { width: 76px; height: 76px; flex-basis: 76px; }
+  #pick:has(#pickList.grid) .pick-info .ribbon { font-size: 24px; }
+  #pick:has(#pickList.grid) .hero-profile { gap: 10px; }
+  #pick:has(#pickList.grid) .pick-info .skill-detail { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; padding: 6px; }
+  #pick:has(#pickList.grid) .pick-info .skill-icon { width: 34px; height: 34px; }
+  #pick:has(#pickList.grid) .pick-info .skill-detail strong { font-size: 15px; }
+  #pick:has(#pickList.grid) .pick-info .skill-detail .skill-meta { font-size: 12px; }
+  #pick:has(#pickList.grid) .hero-select-btn {
+    position: static;
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  }
+  #pick:has(#pickList.grid) .pick-team-bar { padding: 9px 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   #pick:has(#pickList.grid) .pick-filters .pick-filter,
@@ -1147,6 +1254,8 @@
   box-sizing: border-box; overflow-y: auto; color: #fff; font-family: 'Lilita One', sans-serif; scrollbar-width: thin; scrollbar-color: #7893aa transparent;
   background: radial-gradient(ellipse at 50% 4%, rgba(255, 190, 106, .32), transparent 44%), radial-gradient(ellipse at 50% 100%, #102447, transparent 58%), linear-gradient(180deg, #2869a2, #173c68 48%, #0b1b35); }
 #camp.hidden { display: none; }
+.storage-warning { width: min(620px, calc(100vw - 36px)); box-sizing: border-box; padding: 9px 13px; border: 1px solid rgba(255, 221, 132, .78); border-left: 4px solid #ffd44a; border-radius: 10px;
+  background: rgba(79, 47, 19, .88); color: #fff0c1; font: 600 14px/1.35 'Fredoka', sans-serif; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,.28); }
 #camp .camp-head { justify-content: flex-start; }
 .camp-gold { margin-left: auto; height: 40px; padding: 0 16px; display: inline-flex; align-items: center; gap: 7px; box-sizing: border-box; border: 1px solid rgba(255, 224, 138, .45); border-radius: 999px;
   background: rgba(8, 25, 43, .52); color: #ffe08a; font: 600 20px 'Fredoka', sans-serif; }
@@ -1190,6 +1299,23 @@
   background: radial-gradient(circle at 35% 30%, #ffe58a, #c98a12); text-shadow: 0 2px 0 #7a4512; }
 .ach-item:not(.done) .ach-medal { filter: grayscale(1) brightness(.7); }
 .ach-item.done .ach-medal { box-shadow: 0 0 0 3px rgba(255, 212, 74, .25), 0 0 14px rgba(255, 212, 74, .35); }
+/* cosméticos da campanha: marcos visuais sem bônus de combate */
+.camp-cosmetics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cosmetic-item { min-width: 0; padding: 12px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  border: 1px solid rgba(255,255,255,.14); border-radius: 14px; background: rgba(8,18,32,.42); opacity: .72; }
+.cosmetic-item.unlocked { border-color: color-mix(in srgb, var(--cosmetic-color) 48%, transparent); opacity: 1; }
+.cosmetic-item.equipped { box-shadow: inset 0 0 0 1px var(--cosmetic-color), 0 0 16px color-mix(in srgb, var(--cosmetic-color) 18%, transparent); }
+.cosmetic-icon { width: 46px; height: 46px; display: grid; place-items: center; border: 2px solid var(--cosmetic-color); border-radius: 50%; color: var(--cosmetic-color); background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.2), rgba(8,18,32,.84)); font-size: 25px; text-shadow: 0 2px 5px #081220; }
+.cosmetic-copy { min-width: 0; display: grid; gap: 3px; }
+.cosmetic-copy small { overflow: hidden; color: #b8cae0; font: 600 11px 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.cosmetic-copy b { overflow: hidden; color: #fff; font-size: 16px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.cosmetic-copy em { color: #b8cae0; font: 500 11px 'Fredoka', sans-serif; font-style: normal; }
+.cosmetic-progress { height: 5px; overflow: hidden; border-radius: 99px; background: rgba(0,0,0,.35); }
+.cosmetic-progress i { display: block; height: 100%; border-radius: inherit; background: var(--cosmetic-color); box-shadow: 0 0 8px var(--cosmetic-color); }
+.cosmetic-equip { min-width: 96px; padding: 7px 10px; }
+.cosmetic-equip:disabled { cursor: default; filter: grayscale(.45) brightness(.82); transform: none; }
+.cosmetic-item.equipped .cosmetic-equip { border-color: var(--cosmetic-color); color: var(--cosmetic-color); }
+.cosmetic-clear { grid-column: 1 / -1; justify-self: end; }
 /* aviso de conquista: entra pelo topo e some sozinho */
 #achToasts { position: fixed; top: 84px; right: 18px; z-index: 30; display: grid; gap: 8px; pointer-events: none; }
 .ach-toast { display: flex; align-items: center; gap: 10px; min-width: 300px; padding: 9px 16px 9px 10px; border: 3px solid #ffd44a; border-radius: 14px; color: #fff;

@@ -23,8 +23,10 @@ function element(focusState) {
   };
 }
 
-function render(stars) {
+function render(stars, visuals = null) {
   const data = new Map([['cavaleiros-campanha', JSON.stringify(stars)]]);
+  if (visuals) data.set('cavaleiros-campanha-visual', JSON.stringify(visuals));
+  const writes = new Map();
   const focusState = { current: null };
   const map = element(focusState), info = element(focusState), root = element(focusState);
   let replayButton = null, playButton = null, infoMarkup = '';
@@ -47,23 +49,41 @@ function render(stars) {
     document,
     location: { search: '' },
     URLSearchParams,
-    localStorage: { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, String(value)) },
+    localStorage: {
+      getItem: (key) => data.get(key) ?? null,
+      setItem(key, value) {
+        writes.set(key, (writes.get(key) || 0) + 1);
+        data.set(key, String(value));
+      },
+    },
     addEventListener() {}, removeEventListener() {},
   });
-  vm.runInContext(`${source}\nthis.renderCampaign = renderCampaign;`, context);
+  vm.runInContext(`${source}\nthis.renderCampaign = renderCampaign; this.campaignCosmetics = campaignCosmetics; this.equippedCampaignCosmetic = equippedCampaignCosmetic;`, context);
   context.renderCampaign(root, () => {});
-  return { map, info, focusState, get replayButton() { return replayButton; }, get playButton() { return playButton; } };
+  return {
+    map, info, focusState, data,
+    campaignCosmetics: () => context.campaignCosmetics(),
+    equippedCampaignCosmetic: () => context.equippedCampaignCosmetic(),
+    visualWriteCount: () => writes.get('cavaleiros-campanha-visual') || 0,
+    get replayButton() { return replayButton; }, get playButton() { return playButton; },
+  };
 }
 
 const allDone = { vila: 3, ponte: 3, santuario: 3, chamas: 3, fazendas: 3, lago: 3, duelo: 3, caca: 3, resgate: 3, ruinas: 3, torre: 3, 'lago-sombrio': 3, cemiterio: 3, horda: 3, castelo: 3, cripta: 3, trono: 3 };
 const imperfect = { ...allDone, vila: 1, 'lago-sombrio': 2 };
 let view = render(imperfect);
+assert.match(view.info.innerHTML, /Auréola do Trono/);
+assert.match(view.info.innerHTML, /aria-valuemax="2" aria-valuenow="2"/);
+assert.match(view.info.innerHTML, /Desbloqueado · 6\/6 estrelas do capítulo/);
+assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo V · Além do Castelo<\/div>/);
+assert.ok(view.info.innerHTML.indexOf('camp-chapter-label') < view.info.innerHTML.indexOf('camp-name'), 'o capítulo aparece antes do nome da missão');
 assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a última missão (Trono de Ossos) destacada quando a campanha foi concluída');
 assert.match(view.info.innerHTML, /A Vila ainda pode render estrelas/);
 assert.match(view.info.innerHTML, /3 estrelas restantes/);
 view.replayButton.onclick();
 assert.ok(view.map.children[0].classList.contains('sel'), 'a recomendação leva à primeira missão com estrelas faltando');
 assert.match(view.info.innerHTML, /A Vila/);
+assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo I · Sinais na estrada<\/div>/, 'o capítulo acompanha a missão selecionada');
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'), 'o atalho some quando a missão recomendada já está selecionada');
 assert.equal(view.focusState.current, view.playButton, 'o foco vai para Batalhar após a seleção');
 
@@ -76,6 +96,33 @@ assert.ok(view.map.children[1].classList.contains('sel'), 'a recomendação igno
 view = render(allDone);
 assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a última missão selecionada quando a campanha está perfeita');
 assert.match(view.info.innerHTML, /Campanha perfeita/);
+assert.match(view.info.innerHTML, /Auréola do Trono/);
+assert.match(view.info.innerHTML, /aria-valuemax="2" aria-valuenow="2"/, 'a barra continua cheia após o desbloqueio');
+assert.match(view.info.innerHTML, /Desbloqueado · 6\/6 estrelas do capítulo/, 'as estrelas de domínio continuam visíveis separadamente');
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'));
 
-console.log('OK: a campanha mantém a última missão destacada e oferece um atalho para a missão com estrelas faltando.');
+view = render({ vila: 2, fazendas: 3 });
+assert.ok(view.map.children[1].classList.contains('sel'), 'a missão liberada seguinte é selecionada');
+assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo I · Sinais na estrada<\/div>/);
+assert.match(view.info.innerHTML, /ARENA 02 · MAPA ALEATÓRIO/, 'o capítulo não substitui a arena e o bioma');
+assert.match(view.info.innerHTML, /Estandarte da Vila/);
+assert.match(view.info.innerHTML, /aria-valuemax="4" aria-valuenow="1"/, 'antes do desbloqueio, o progresso conta arenas com vitória');
+assert.match(view.info.innerHTML, /1 de 4 arenas concluídas; faltam 3 arenas para desbloquear/, 'estrelas de outras arenas não compensam arenas sem vitória');
+
+view = render({}, { equipped: 'vila' });
+assert.equal(view.campaignCosmetics()[0].unlocked, false, 'equipamento legado sem estrelas não concede o visual');
+assert.equal(view.equippedCampaignCosmetic(), null, 'um equipamento sem entitlement não fica ativo');
+assert.deepEqual(JSON.parse(view.data.get('cavaleiros-campanha-visual')).legacyUnlocked, [], 'a migração não concede recompensas a saves sem estrelas');
+
+view = render({ vila: 3, ponte: 3 }, { equipped: 'vila' });
+assert.equal(view.campaignCosmetics()[0].unlocked, true, 'a migração preserva um visual já conquistado pela regra antiga');
+assert.match(view.info.innerHTML, /aria-valuemax="4" aria-valuenow="2"/, 'o save legado mostra as arenas realmente concluídas mesmo com o visual já liberado');
+assert.match(view.info.innerHTML, /desbloqueado, 2 de 4 arenas concluídas/, 'o rótulo acessível distingue desbloqueio e progresso incompleto legado');
+const visualWritesAfterMigration = view.visualWriteCount();
+view.campaignCosmetics();
+view.campaignCosmetics();
+view.equippedCampaignCosmetic();
+assert.equal(view.visualWriteCount(), visualWritesAfterMigration, 'a migração v2 não grava de novo em chamadas seguintes');
+assert.equal(view.equippedCampaignCosmetic().id, 'vila', 'o visual legado equipado continua ativo após chamadas repetidas');
+
+console.log('OK: a campanha mantém a última missão destacada, exibe o progresso de capítulo e preserva a migração de visuais legados.');

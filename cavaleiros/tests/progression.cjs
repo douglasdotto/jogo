@@ -151,6 +151,7 @@ test('save corrompido ou ausente não quebra o jogo', () => {
   const broken = storage({ [P.PROGRESS_KEY]: '{"gold": 50, ' });
   const p = P.createProgression(broken);
   assert.equal(p.corrupted, true);
+  assert.equal(p.corruptBackupFailed, false, 'o backup da meta-progressão foi gravado');
   assert.equal(p.gold, 0);
   assert.equal(broken.data[`${P.PROGRESS_KEY}-corrompido`], '{"gold": 50, ', 'o texto estragado fica guardado à parte');
   p.recordMatch(run());
@@ -161,11 +162,77 @@ test('save corrompido ou ausente não quebra o jogo', () => {
     assert.equal(q.mastery('king').level, 1, raw);
   }
   assert.equal(P.createProgression(storage({ [P.PROGRESS_KEY]: '{"version":2,"upgrades":{"vigor":"2"}}' })).upgradeLevel('vigor'), 2);
+  const noBackup = P.createProgression({ getItem(key) { return key === P.PROGRESS_KEY ? '{"gold":50,' : null; }, setItem() { throw new Error('quota cheia'); } });
+  assert.equal(noBackup.corrupted, true);
+  assert.equal(noBackup.corruptBackupFailed, true, 'a falha ao preservar a meta-progressão fica sinalizada');
+  const transientRaw = '{"gold":50,';
+  const transientData = { [P.PROGRESS_KEY]: transientRaw };
+  let backupAvailable = false;
+  const transientStorage = {
+    getItem(key) { return transientData[key] ?? null; },
+    setItem(key, value) {
+      if (key.endsWith('-corrompido') && !backupAvailable) throw new Error('falha transitória de backup');
+      transientData[key] = String(value);
+    },
+  };
+  const transientCorrupt = P.createProgression(transientStorage);
+  transientCorrupt.recordMatch(run());
+  assert.equal(transientData[P.PROGRESS_KEY], transientRaw, 'não substitui o save corrompido enquanto não conseguiu copiá-lo');
+  assert.equal(transientCorrupt.corruptBackupFailed, true);
+  backupAvailable = true;
+  transientCorrupt.recordMatch(run({ kills: 0, phasesCleared: 0, stars: 0, won: false, totalStars: 0, heroes: [] }));
+  assert.equal(transientData[`${P.PROGRESS_KEY}-corrompido`], transientRaw, 'a gravação seguinte tenta preservar o raw novamente');
+  assert.equal(transientCorrupt.corruptBackupFailed, false);
+  assert.equal(JSON.parse(transientData[P.PROGRESS_KEY]).gold, 82, 'só grava progresso novo depois do backup');
+
+  const unreadRaw = JSON.stringify({ version: 2, gold: 900 });
+  const unreadData = { [P.PROGRESS_KEY]: unreadRaw };
+  let readsAvailable = false, writes = 0;
+  const unreadStorage = {
+    getItem(key) { if (!readsAvailable) throw new Error('falha transitória de leitura'); return unreadData[key] ?? null; },
+    setItem(key, value) { writes++; unreadData[key] = String(value); },
+  };
+  const unread = P.createProgression(unreadStorage);
+  assert.equal(unread.persistenceUnavailable, true);
+  unread.recordMatch(run());
+  assert.equal(unreadData[P.PROGRESS_KEY], unreadRaw, 'uma leitura falha bloqueia qualquer escrita sobre a chave original');
+  assert.equal(writes, 0);
+  readsAvailable = true;
+  unread.recordMatch(run({ kills: 0, phasesCleared: 0, stars: 0, won: false, totalStars: 0, heroes: [] }));
+  assert.equal(JSON.parse(unreadData[P.PROGRESS_KEY]).gold, 982, 'ao recuperar a leitura, combina o save original com as partidas pendentes');
+  assert.equal(JSON.parse(unreadData[P.PROGRESS_KEY]).counters.matches, 2);
+  assert.equal(unread.persistenceUnavailable, false);
+
+  const weightedRaw = JSON.stringify({ version: 2, gold: 900, upgrades: { bounty: 1 }, heroes: { paladin: { xp: 100, games: 2 } } });
+  const weightedData = { [P.PROGRESS_KEY]: weightedRaw };
+  let weightedReadsAvailable = false;
+  const weightedProgress = P.createProgression({
+    getItem(key) { if (!weightedReadsAvailable) throw new Error('falha transitória de leitura'); return weightedData[key] ?? null; },
+    setItem(key, value) { weightedData[key] = String(value); },
+  });
+  weightedProgress.recordMatch(run()); // fica pendente na memória porque a base não pôde ser lida
+  weightedReadsAvailable = true;
+  const recoveredResult = weightedProgress.recordMatch(run({ kills: 50, phasesCleared: 0, stars: 0, won: false, totalStars: 0, heroes: [{ id: 'paladin', kills: 0 }] }));
+  assert.equal(recoveredResult.gold.total, 54, 'releitura antes da partida aplica a Bolsa de saque da base recuperada');
+  assert.equal(recoveredResult.heroes[0].before, 2, 'maestria retornada considera XP recuperado e a partida pendente');
+  assert.equal(recoveredResult.total, 1043);
+
   const throwing = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('cheio'); } };
   const q = P.createProgression(throwing);
   assert.equal(q.recordMatch(run()).gold.total, 82, 'storage bloqueado: segue na memória');
   assert.equal(P.createProgression(null).gold, 0);
   same(P.createProgression(storage()).snapshot(), P.freshProgress(), 'sem save, começa zerado');
+});
+
+test('progresso sinaliza quando compras e recompensas só ficam na sessão', () => {
+  const blocked = P.createProgression({ getItem() { return null; }, setItem() { throw new Error('quota cheia'); } });
+  assert.equal(blocked.persistenceUnavailable, false);
+  blocked.recordMatch(run());
+  assert.equal(blocked.persistenceUnavailable, true);
+  const writable = P.createProgression(storage());
+  writable.recordMatch(run());
+  assert.equal(writable.persistenceUnavailable, false);
+  assert.equal(P.createProgression(null).persistenceUnavailable, true, 'sem localStorage o save é volátil');
 });
 
 test('recompensa do fim de partida mostra ouro, conta e maestria', () => {
@@ -179,6 +246,51 @@ test('recompensa do fim de partida mostra ouro, conta e maestria', () => {
   assert.match(html, /Paladino/);
   assert.match(html, /Maestria 2!/, '63 XP sobem o Paladino para a maestria 2');
   assert.equal(P.rewardHTML(null), '');
+});
+
+test('acampamento mostra o progresso por arenas e o domínio em estrelas dos cosméticos', () => {
+  let equipped = null;
+  const button = { dataset: { cosmetic: 'vila' }, focus() {} };
+  const root = {
+    ownerDocument: {}, innerHTML: '',
+    querySelector(selector) { return selector === '.camp-back' ? {} : null; },
+    querySelectorAll(selector) { return selector === '[data-cosmetic]' ? [button] : []; },
+  };
+  const renderCosmetic = (cosmetic) => P.renderCamp(root, P.createProgression(null), {
+    cosmetics: [cosmetic], tab: 'cosmeticos',
+    equippedCosmetic: equipped ? cosmetic : null,
+    onEquipCosmetic(id) { equipped = id; return true; },
+  });
+  const cosmeticBase = { id: 'vila', chapter: 'Capítulo I', name: 'Estandarte da Vila', icon: '⚑', color: 0x72d5ff, maxStars: 12, requiredArenas: 4 };
+  renderCosmetic({ ...cosmeticBase, stars: 3, completedArenas: 1, unlocked: false });
+  assert.match(root.innerHTML, /Estandarte da Vila/);
+  assert.match(root.innerHTML, /1 de 4 arenas concluídas/);
+  assert.match(root.innerHTML, /faltam 3 arenas para desbloquear/);
+  assert.match(root.innerHTML, /aria-valuemax="4" aria-valuenow="1"/);
+  assert.match(root.innerHTML, /width:25%/);
+  assert.doesNotMatch(root.innerHTML, /width:100%|faltam \d+ estrelas?/,'3★ numa arena não preenche a barra nem sugere uma estrela faltante');
+
+  renderCosmetic({ ...cosmeticBase, stars: 6, completedArenas: 2, unlocked: true });
+  assert.match(root.innerHTML, /6\/12 estrelas do capítulo/,'um visual legado parcial continua mostrando as estrelas de domínio');
+  assert.match(root.innerHTML, /aria-valuemax="4" aria-valuenow="2"/);
+  assert.match(root.innerHTML, /width:50%/,'a barra reflete as arenas concluídas no save legado parcial');
+
+  renderCosmetic({ ...cosmeticBase, stars: 6, completedArenas: 4, unlocked: true });
+  assert.match(root.innerHTML, /Estandarte da Vila/);
+  assert.match(root.innerHTML, /6\/12 estrelas do capítulo/);
+  assert.match(root.innerHTML, /aria-valuemax="4" aria-valuenow="4"/);
+  assert.match(root.innerHTML, /width:100%/,'concluir todas as arenas preenche a barra mesmo com estrelas extras por buscar');
+  button.onclick();
+  assert.equal(equipped, 'vila');
+  assert.match(root.innerHTML, /cosmetic-item unlocked equipped/);
+  assert.match(root.innerHTML, />Equipado</);
+});
+
+test('acampamento avisa que o progresso está só na sessão', () => {
+  const root = { ownerDocument: {}, innerHTML: '', querySelector() { return {}; }, querySelectorAll() { return []; } };
+  P.renderCamp(root, P.createProgression(null), { storageWarning: () => 'Não foi possível salvar o progresso. pode se perder ao recarregar.' });
+  assert.match(root.innerHTML, /class="storage-warning" role="status"/);
+  assert.match(root.innerHTML, /pode se perder ao recarregar/);
 });
 
 console.log(failures ? `${failures} falharam.` : 'Progressão: tudo certo.');

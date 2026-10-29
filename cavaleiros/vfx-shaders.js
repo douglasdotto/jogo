@@ -259,6 +259,19 @@ export function spriteGeometry(points = [[0, 0, 0, 1, 0]], key = null) {
   if (key) geometries.set(key, g);
   return g;
 }
+
+// Sprites dispostos num anel compartilham uma única chamada de desenho. A escala e a semente
+// continuam variando por sprite; o objeto pode expandir o raio sem alterar o tamanho das chamas.
+export function radialSpriteGeometry(count) {
+  if (!Number.isInteger(count) || count < 1) throw new RangeError('o anel precisa de ao menos um sprite');
+  const points = Array.from({ length: count }, (_, i) => {
+    const angle = i / count * Math.PI * 2 + Math.sin((i + 1) * 12.9898) * 0.12;
+    const sizeNoise = Math.sin((i + 1) * 78.233) * 0.5 + 0.5;
+    const seedNoise = Math.sin((i + 1) * 127.1) * 43758.5453;
+    return [Math.cos(angle), 0, Math.sin(angle), 0.8 + sizeNoise * 0.45, seedNoise - Math.floor(seedNoise)];
+  });
+  return spriteGeometry(points, `radial${count}`);
+}
 export const SPRITE = spriteGeometry(undefined, 'sprite');
 
 // malha de efeito com material compartilhado; mexa em mesh.userData.fx (opacity, size, seed, progress)
@@ -266,7 +279,8 @@ export function vfxMesh(kind, palette, geo = SPRITE, o = {}) {
   const m = new THREE.Mesh(geo, vfxMaterial(kind, palette));
   m.userData.fx = { opacity: o.opacity ?? 1, size: o.size ?? 1, seed: o.seed ?? Math.random() * 10, progress: o.progress ?? 0 };
   m.castShadow = false;
-  m.frustumCulled = false;   // os quadrados saem da caixa da geometria ao virar para a câmera
+  // Billboards deslocam cada vértice no shader; os efeitos FLAT_VERT usam os limites normais da geometria.
+  m.frustumCulled = !SPRITES.has(kind);
   m.renderOrder = o.renderOrder ?? 2;
   return m;
 }

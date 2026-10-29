@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { recolor } from './characters.js';
-import { bandsByZ } from './scene-perf.js';
+import { bandsByZ, disposeInstancedMeshes, isInstancedBandVisible } from './scene-perf.js';
 
 // muitas peças já vêm sem índice; o three avisa a cada "desindexação" repetida. Mesma saída (uma cópia), sem o aviso
 const toNonIndexed = THREE.BufferGeometry.prototype.toNonIndexed;
@@ -44,6 +44,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
 
   function releaseTrees(roots) {
     const geometries = new Set(), materials = new Set(), textures = new Set();
+    disposeInstancedMeshes(roots);
     for (const root of roots) root?.traverse?.((obj) => {
       if (obj.geometry) geometries.add(obj.geometry);
       for (const material of (Array.isArray(obj.material) ? obj.material : [obj.material])) {
@@ -100,11 +101,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     zones.set(phase, zone);
   }
   const zoneOf = (phase) => zones.get(phase) || null;
-  const local = (zone, p) => {
-    const dx = p.x - zone.center.x, dz = p.z - zone.center.z;
-    return { x: dx * zone.side.x + dz * zone.side.z, z: dx * zone.fwd.x + dz * zone.fwd.z };
-  };
-  const inRamp = (p) => Math.abs(p.x) <= 1.5 && p.z >= -9 && p.z <= -3;
+  const inRamp = (x, z) => Math.abs(x) <= 1.5 && z >= -9 && z <= -3;
   // fundo do lago: margem irregular, rasa na borda e funda no meio
   const shore = (zone, x, z) => {
     const a = Math.atan2(z - zone.center.z, x - zone.center.x);
@@ -122,8 +119,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   function groundHeight(x, z) {
     for (const zone of zones.values()) {
       if (zone.type === 'plateau') {
-        // Keep this hot query allocation-free; manual ground aiming can sample it
-        // hundreds of times per frame while the player moves the pointer.
+        // Keep this hot query allocation-free; manual ground aiming samples it repeatedly.
         const dx = x - zone.center.x, dz = z - zone.center.z;
         const px = dx * zone.side.x + dz * zone.side.z;
         const pz = dx * zone.fwd.x + dz * zone.fwd.z;
@@ -145,32 +141,50 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   }
   function aroundZone(from, to, zone, radius) {
     const edge = zone.type === 'lake' ? 3.2 : zone.radius;
-    radius = Math.min(radius, Math.max(edge, to.clone().setY(0).distanceTo(zone.center) - 0.05));
-    const delta = new THREE.Vector3().subVectors(to, from).setY(0), len = delta.lengthSq();
-    const off = new THREE.Vector3().subVectors(zone.center, from).setY(0);
-    const t = len ? THREE.MathUtils.clamp(off.dot(delta) / len, 0, 1) : 0;
-    if (from.clone().addScaledVector(delta, t).setY(0).distanceTo(zone.center) >= radius) return to;
-    const a = local(zone, from), b = local(zone, to), angle = Math.atan2(a.z, a.x);
-    const turn = Math.atan2(Math.sin(Math.atan2(b.z, b.x) - angle), Math.cos(Math.atan2(b.z, b.x) - angle));
+    const targetX = to.x - zone.center.x, targetZ = to.z - zone.center.z;
+    radius = Math.min(radius, Math.max(edge, Math.sqrt(targetX * targetX + zone.center.y * zone.center.y + targetZ * targetZ) - 0.05));
+    const dx = to.x - from.x, dz = to.z - from.z, len = dx * dx + dz * dz;
+    const offX = zone.center.x - from.x, offZ = zone.center.z - from.z;
+    const t = len ? THREE.MathUtils.clamp((offX * dx + offZ * dz) / len, 0, 1) : 0;
+    const closestX = from.x + dx * t - zone.center.x, closestZ = from.z + dz * t - zone.center.z;
+    if (Math.sqrt(closestX * closestX + zone.center.y * zone.center.y + closestZ * closestZ) >= radius) return to;
+
+    // Only build a waypoint after the scalar segment test confirms a real detour.
+    const fromX = from.x - zone.center.x, fromZ = from.z - zone.center.z;
+    const toX = to.x - zone.center.x, toZ = to.z - zone.center.z;
+    const ax = fromX * zone.side.x + fromZ * zone.side.z;
+    const az = fromX * zone.fwd.x + fromZ * zone.fwd.z;
+    const bx = toX * zone.side.x + toZ * zone.side.z;
+    const bz = toX * zone.fwd.x + toZ * zone.fwd.z;
+    const angle = Math.atan2(az, ax);
+    const turn = Math.atan2(Math.sin(Math.atan2(bz, bx) - angle), Math.cos(Math.atan2(bz, bx) - angle));
     const next = angle + THREE.MathUtils.clamp(turn, -0.55, 0.55);
     return zone.center.clone().addScaledVector(zone.side, Math.cos(next) * (radius + 0.65)).addScaledVector(zone.fwd, Math.sin(next) * (radius + 0.65));
   }
-  function nextWaypoint(from, to) {
+  function terrainWaypoint(from, to) {
     for (const zone of zones.values()) {
       if (zone.type === 'plateau') {
-        const a = local(zone, from), b = local(zone, to);
-        const ah = Math.hypot(a.x, a.z) < 4 || inRamp(a) ? groundHeight(from.x, from.z) : 0;
-        const bh = Math.hypot(b.x, b.z) < 4 || inRamp(b) ? groundHeight(to.x, to.z) : 0;
-        if (ah < 0.1 && bh < 0.1 && !inRamp(a)) {
+        const fromX = from.x - zone.center.x, fromZ = from.z - zone.center.z;
+        const toX = to.x - zone.center.x, toZ = to.z - zone.center.z;
+        const ax = fromX * zone.side.x + fromZ * zone.side.z;
+        const az = fromX * zone.fwd.x + fromZ * zone.fwd.z;
+        const bx = toX * zone.side.x + toZ * zone.side.z;
+        const bz = toX * zone.fwd.x + toZ * zone.fwd.z;
+        const fromRamp = inRamp(ax, az), toRamp = inRamp(bx, bz);
+        const ah = Math.hypot(ax, az) < 4 || fromRamp ? groundHeight(from.x, from.z) : 0;
+        const bh = Math.hypot(bx, bz) < 4 || toRamp ? groundHeight(to.x, to.z) : 0;
+        if (ah < 0.1 && bh < 0.1 && !fromRamp) {
           // Contorna também as laterais da rampa, sem cortar a encosta.
           let lo = 0, hi = 1;
-          for (const [v, d, min, max] of [[a.x,b.x-a.x,-1.5,1.5],[a.z,b.z-a.z,-9,-3]]) {
-            if (Math.abs(d) < 0.0001) { if (v < min || v > max) hi = -1; }
-            else { const t0=(min-v)/d,t1=(max-v)/d; lo=Math.max(lo,Math.min(t0,t1)); hi=Math.min(hi,Math.max(t0,t1)); }
-          }
+          let d = bx - ax;
+          if (Math.abs(d) < 0.0001) { if (ax < -1.5 || ax > 1.5) hi = -1; }
+          else { const t0=(-1.5-ax)/d,t1=(1.5-ax)/d; lo=Math.max(lo,Math.min(t0,t1)); hi=Math.min(hi,Math.max(t0,t1)); }
+          d = bz - az;
+          if (Math.abs(d) < 0.0001) { if (az < -9 || az > -3) hi = -1; }
+          else { const t0=(-9-az)/d,t1=(-3-az)/d; lo=Math.max(lo,Math.min(t0,t1)); hi=Math.min(hi,Math.max(t0,t1)); }
           if (lo <= hi) {
-            const sign = (a.z > -9.3 ? a.x : b.x) < 0 ? -1 : 1;
-            if (b.z > -3 && Math.abs(a.x) > 1.8) {
+            const sign = (az > -9.3 ? ax : bx) < 0 ? -1 : 1;
+            if (bz > -3 && Math.abs(ax) > 1.8) {
               const side = zone.center.clone().addScaledVector(zone.side, sign * 5.3).addScaledVector(zone.fwd, -2);
               return aroundZone(from, side, zone, 4.5);
             }
@@ -181,21 +195,21 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
           if (around !== to) return around;
           continue;
         }
-        if (Math.abs(ah - bh) < 0.1 && !inRamp(a)) continue;
-        const up = bh > ah || (inRamp(a) && bh >= 3);
-        if (up && (Math.hypot(b.x, b.z) < 4 || inRamp(b))) {
-          if (ah < 0.1 && !inRamp(a)) {
+        if (Math.abs(ah - bh) < 0.1 && !fromRamp) continue;
+        const up = bh > ah || (fromRamp && bh >= 3);
+        if (up && (Math.hypot(bx, bz) < 4 || toRamp)) {
+          if (ah < 0.1 && !fromRamp) {
             if (from.distanceTo(zone.ramp.bottom) < 0.45) return zone.ramp.top;
-            if (a.z > -9.2 && (Math.abs(a.x) > 1.6 || a.z > -8.5)) {
-              const entry = zone.ramp.bottom.clone().addScaledVector(zone.side, a.x < 0 ? -2.3 : 2.3).addScaledVector(zone.fwd, -1);
+            if (az > -9.2 && (Math.abs(ax) > 1.6 || az > -8.5)) {
+              const entry = zone.ramp.bottom.clone().addScaledVector(zone.side, ax < 0 ? -2.3 : 2.3).addScaledVector(zone.fwd, -1);
               return aroundZone(from, entry, zone, 4.5);
             }
             return zone.ramp.bottom;
           }
-          if (ah < 2.95) return inRamp(b) ? to : zone.ramp.top;
-        } else if ((ah > 0 || inRamp(a)) && bh < 3) {
-          if (!inRamp(a) && from.distanceTo(zone.ramp.top) > 0.45) return zone.ramp.top;
-          return inRamp(b) ? to : zone.ramp.bottom.clone().addScaledVector(zone.fwd, -0.7);
+          if (ah < 2.95) return toRamp ? to : zone.ramp.top;
+        } else if ((ah > 0 || fromRamp) && bh < 3) {
+          if (!fromRamp && from.distanceTo(zone.ramp.top) > 0.45) return zone.ramp.top;
+          return toRamp ? to : zone.ramp.bottom.clone().addScaledVector(zone.fwd, -0.7);
         }
       } else {
         const around = aroundZone(from, to, zone, 3.9);
@@ -203,6 +217,106 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
       }
     }
     return to;
+  }
+
+  // Desvia de círculos bloqueadores por tangentes e mantém o mesmo lado até sair deles.
+  // O plano por unidade evita que o desvio reaja a cada quadro e faça o grupo orbitar o obstáculo.
+  const segmentDistanceSq = (a, b, x, z) => {
+    const dx = b.x - a.x, dz = b.z - a.z, lengthSq = dx * dx + dz * dz;
+    const t = lengthSq > 1e-8 ? THREE.MathUtils.clamp(((x - a.x) * dx + (z - a.z) * dz) / lengthSq, 0, 1) : 0;
+    const ox = a.x + dx * t - x, oz = a.z + dz * t - z;
+    return ox * ox + oz * oz;
+  };
+  function tangentPoint(point, obstacle, radius, nx, nz) {
+    const dx = point.x - obstacle.x, dz = point.z - obstacle.z, distanceSq = dx * dx + dz * dz;
+    if (distanceSq <= radius * radius + 0.01) return new THREE.Vector3(obstacle.x + nx * (radius + 0.25), 0, obstacle.z + nz * (radius + 0.25));
+    const distance = Math.sqrt(distanceSq), ux = dx / distance, uz = dz / distance;
+    const px = -uz, pz = ux;
+    const tangentSign = px * nx + pz * nz >= 0 ? 1 : -1;
+    const along = radius * radius / distance, side = radius * Math.sqrt(Math.max(0, distanceSq - radius * radius)) / distance * tangentSign;
+    return new THREE.Vector3(obstacle.x + ux * along + px * side, 0, obstacle.z + uz * along + pz * side);
+  }
+  function obstacleWaypoint(from, to, navigation) {
+    if (!navigation || !obstacles.length) return to;
+    const dx = to.x - from.x, dz = to.z - from.z, distanceSq = dx * dx + dz * dz;
+    if (distanceSq < 0.04) { navigation.pathing = null; return to; }
+    const distance = Math.sqrt(distanceSq), dirX = dx / distance, dirZ = dz / distance;
+    const margin = Math.max(0.9, (navigation.size || 1) * 0.55 + 0.65);
+    const intersects = (obstacle) => {
+      const radius = obstacle.r + margin;
+      if ((to.x - obstacle.x) ** 2 + (to.z - obstacle.z) ** 2 <= radius * radius) return false;
+      return segmentDistanceSq(from, to, obstacle.x, obstacle.z) < radius * radius * 0.98;
+    };
+    let route = navigation.pathing;
+    if (route) {
+      const goalShift = Math.hypot(to.x - route.goalX, to.z - route.goalZ);
+      const heading = dirX * route.dirX + dirZ * route.dirZ;
+      if (goalShift > 7 || heading < 0.25 || !intersects(route.obstacle)) {
+        navigation.pathing = route = null;
+      }
+    }
+    if (!route) {
+      let blocker = null, blockerT = Infinity;
+      for (const obstacle of obstacles) {
+        const radius = obstacle.r + margin;
+        if ((to.x - obstacle.x) ** 2 + (to.z - obstacle.z) ** 2 <= radius * radius) continue;
+        const t = ((obstacle.x - from.x) * dx + (obstacle.z - from.z) * dz) / distanceSq;
+        if (t <= 0.025 || t >= 0.975 || t >= blockerT) continue;
+        const ox = from.x + dx * t - obstacle.x, oz = from.z + dz * t - obstacle.z;
+        if (ox * ox + oz * oz >= radius * radius * 0.98) continue;
+        blocker = obstacle;
+        blockerT = t;
+      }
+      if (!blocker) return to;
+
+      const sideX = -dirZ, sideZ = dirX;
+      const cross = dx * (blocker.z - from.z) - dz * (blocker.x - from.x);
+      const awaySide = cross >= 0 ? -1 : 1;
+      // Tangent points joined by a straight segment form a shallow chord; the extra ring
+      // keeps that shortcut outside the real collision radius.
+      const radius = blocker.r + margin + 0.5;
+      let side = awaySide, best = Infinity;
+      for (const candidateSide of [awaySide, -awaySide]) {
+        const nx = sideX * candidateSide, nz = sideZ * candidateSide;
+        const start = tangentPoint(from, blocker, radius, nx, nz);
+        const end = tangentPoint(to, blocker, radius, nx, nz);
+        let cost = Math.hypot(start.x - from.x, start.z - from.z)
+          + Math.hypot(end.x - start.x, end.z - start.z)
+          + Math.hypot(to.x - end.x, to.z - end.z);
+        for (const obstacle of obstacles) {
+          if (obstacle === blocker) continue;
+          const clearance = obstacle.r + margin * 0.7;
+          const limit = clearance * clearance;
+          if (segmentDistanceSq(from, start, obstacle.x, obstacle.z) < limit) cost += 24;
+          if (segmentDistanceSq(start, end, obstacle.x, obstacle.z) < limit) cost += 24;
+          if (segmentDistanceSq(end, to, obstacle.x, obstacle.z) < limit) cost += 24;
+        }
+        if (cost < best) { best = cost; side = candidateSide; }
+      }
+      route = navigation.pathing = {
+        obstacle: blocker, side, radius, stage: 0,
+        start: tangentPoint(from, blocker, radius, sideX * side, sideZ * side),
+        end: tangentPoint(to, blocker, radius, sideX * side, sideZ * side),
+        dirX, dirZ, goalX: to.x, goalZ: to.z,
+      };
+    }
+
+    const alongObstacle = (from.x - route.obstacle.x) * route.dirX + (from.z - route.obstacle.z) * route.dirZ;
+    const clearance = Math.hypot(from.x - route.obstacle.x, from.z - route.obstacle.z);
+    if (route.stage === 0) {
+      if (Math.hypot(route.start.x - from.x, route.start.z - from.z) < 0.9
+          || (alongObstacle > 0 && clearance >= route.obstacle.r + margin)) route.stage = 1;
+      else return route.start;
+    }
+    if (Math.hypot(route.end.x - from.x, route.end.z - from.z) < 0.9
+        || (alongObstacle > route.radius + 0.2 && !intersects(route.obstacle))) {
+      navigation.pathing = null;
+      return to;
+    }
+    return route.end;
+  }
+  function nextWaypoint(from, to, navigation = null) {
+    return obstacleWaypoint(from, terrainWaypoint(from, to), navigation);
   }
 
   // ---------- rio, cruzando a estrada entre as fases 3 e 4 ----------
@@ -934,7 +1048,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
         band.forEach((i, j) => { im.setMatrixAt(j, matrices[i]); im.setColorAt(j, colors[k][i]); });
         im.computeBoundingSphere();
         im.castShadow = shadow;
-        im.receiveShadow = true;
+        im.receiveShadow = shadow;   // detalhes sem sombra própria também dispensam o custo de receber sombras
         scene.add(im);
       });
     }
@@ -1473,20 +1587,57 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   }
 
   // ---------- borboletas ----------
-  const butterflies = [];
-  const wingGeo = new THREE.CircleGeometry(0.16, 6).translate(0.15, 0, 0);
+  const butterflies = [], butterflyBatches = [];
+  const butterflyRoot = new THREE.Object3D(), butterflyWing = new THREE.Object3D(), butterflyMatrix = new THREE.Matrix4();
+  const butterflyColors = [0xffe066, 0xffffff, 0xffa3c8, 0x9fd8ff, 0xffb35c];
   for (let i = 0; i < 45; i++) {
     const home = spot(0, ROAD + 14, 1.6);
     if (!home || gloomAt(home.z) > 0.3) continue;
-    const wingMat = new THREE.MeshLambertMaterial({ color: pick([0xffe066, 0xffffff, 0xffa3c8, 0x9fd8ff, 0xffb35c]), side: THREE.DoubleSide });
-    const b = new THREE.Group();
-    const left = new THREE.Mesh(wingGeo, wingMat), right = new THREE.Mesh(wingGeo, wingMat);
-    left.rotation.x = right.rotation.x = -Math.PI / 2;
-    right.scale.x = -1;
-    b.add(left, right);
-    b.userData = { home, left, right, phase: rand() * 10, speed: range(0.6, 1.2) };
-    scene.add(b);
-    butterflies.push(b);
+    butterflies.push({ home, color: pick(butterflyColors), phase: rand() * 10, speed: range(0.6, 1.2) });
+  }
+  if (butterflies.length) {
+    const wingGeo = new THREE.CircleGeometry(0.16, 6).translate(0.15, 0, 0);
+    const mirroredWingGeo = wingGeo.clone().scale(-1, 1, 1);
+    // A reflexão da geometria inverte o winding; corrige os triângulos para manter as normais.
+    const indices = mirroredWingGeo.index;
+    if (indices) {
+      const data = indices.array;
+      for (let i = 0; i < data.length; i += 3) [data[i + 1], data[i + 2]] = [data[i + 2], data[i + 1]];
+      indices.needsUpdate = true;
+    }
+    const wingMat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const colorValue = new THREE.Color();
+    for (const band of bandsByZ(butterflies.map((b) => b.home.z), INSTANCE_BAND)) {
+      const entries = band.map((i) => butterflies[i]);
+      const left = new THREE.InstancedMesh(wingGeo, wingMat, entries.length);
+      const right = new THREE.InstancedMesh(mirroredWingGeo, wingMat, entries.length);
+      for (const mesh of [left, right]) {
+        mesh.castShadow = mesh.receiveShadow = false;
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      }
+      entries.forEach((b, i) => {
+        butterflyRoot.position.set(b.home.x, b.home.y + 1, b.home.z);
+        butterflyRoot.rotation.set(0, 0, 0);
+        butterflyRoot.updateMatrix();
+        butterflyWing.rotation.set(-Math.PI / 2, 0, 0);
+        butterflyWing.scale.setScalar(1);
+        butterflyWing.updateMatrix();
+        butterflyMatrix.multiplyMatrices(butterflyRoot.matrix, butterflyWing.matrix);
+        left.setMatrixAt(i, butterflyMatrix);
+        right.setMatrixAt(i, butterflyMatrix);
+        colorValue.setHex(b.color);
+        left.setColorAt(i, colorValue);
+        right.setColorAt(i, colorValue);
+      });
+      for (const mesh of [left, right]) {
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mesh.computeBoundingSphere();
+        mesh.boundingSphere.radius += 3.5;   // cobre a órbita de ±2,2 m e o tamanho das asas
+        scene.add(mesh);
+      }
+      butterflyBatches.push({ entries, left, right });
+    }
   }
 
   // ---------- fogos-fátuos: luzinhas que flutuam nas terras escuras ----------
@@ -1496,10 +1647,28 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   for (let i = 0; i < 120; i++) {
     const home = darkSpot(0, ROAD + 16, 0.45);
     if (!home) continue;
-    const w = new THREE.Mesh(wispGeo, pick(wispMats));
-    w.userData = { home, phase: rand() * 10, speed: range(0.3, 0.8) };
-    scene.add(w);
-    wisps.push(w);
+    wisps.push({ home, color: Math.floor(rand() * wispMats.length), phase: rand() * 10, speed: range(0.3, 0.8) });
+  }
+  const wispBatches = [], wispTransform = new THREE.Object3D();
+  for (let color = 0; color < wispMats.length; color++) {
+    const sameColor = wisps.filter((w) => w.color === color);
+    const zs = sameColor.map((w) => w.home.z);
+    for (const band of bandsByZ(zs, INSTANCE_BAND)) {
+      const entries = band.map((i) => sameColor[i]);
+      const mesh = new THREE.InstancedMesh(wispGeo, wispMats[color], entries.length);
+      mesh.castShadow = mesh.receiveShadow = false;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      entries.forEach((w, i) => {
+        wispTransform.position.set(w.home.x, w.home.y + 0.9, w.home.z);
+        wispTransform.scale.setScalar(1);
+        wispTransform.updateMatrix();
+        mesh.setMatrixAt(i, wispTransform.matrix);
+      });
+      mesh.computeBoundingSphere();
+      mesh.boundingSphere.radius += 2.1;   // cobre a deriva de ±1,4 m sem refazer o volume a cada quadro
+      scene.add(mesh);
+      wispBatches.push({ mesh, entries });
+    }
   }
   const cloudDay = new THREE.Color(0xffffff), cloudGloom = new THREE.Color(0x6e667e);
 
@@ -1538,16 +1707,20 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     for (let n = 0, tries = 0; n < 26 && tries < 400; tries++) {
       const p = along(range(-5, L + 5), (rand() < 0.5 ? -1 : 1) * range(ROAD + 26, ROAD + 52));
       if (!farOk(p, ROAD + 24)) continue;
+      const name = pick(bigs);
       const s = range(6, 10);
-      place(pick(bigs), scene, p.x, heightAt(p.x, p.z) - 0.4, p.z, s, s * range(0.9, 1.3), rand() * 6.3, p.z);
+      place(name, scene, p.x, heightAt(p.x, p.z) - 0.4, p.z, s, s * range(0.9, 1.3), rand() * 6.3, p.z);
+      obstacles.push({ x: p.x, z: p.z, r: Math.max(size[name].x, size[name].z) * s * 0.46 + 0.8 });
       n++;
     }
     const hills = ['hills_A_trees', 'hills_B_trees', 'hills_C_trees'];
     for (let n = 0, tries = 0; n < 22 && tries < 400; tries++) {
       const p = along(range(-5, L + 5), (rand() < 0.5 ? -1 : 1) * range(ROAD + 14, ROAD + 26));
       if (!farOk(p, ROAD + 12)) continue;
+      const name = pick(hills);
       const s = range(3.5, 5);
-      place(pick(hills), scene, p.x, heightAt(p.x, p.z) - 0.3, p.z, s, s * 0.7, rand() * 6.3, p.z);
+      place(name, scene, p.x, heightAt(p.x, p.z) - 0.3, p.z, s, s * 0.7, rand() * 6.3, p.z);
+      obstacles.push({ x: p.x, z: p.z, r: Math.max(size[name].x, size[name].z) * s * 0.46 + 0.6 });
       n++;
     }
     // pedras grandes soltas perto do caminho (só visual, fora da área de luta)
@@ -1561,20 +1734,46 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   }).catch((e) => { if (!disposed) console.warn('modelos de montanha não carregaram', e); });
 
   let time = 0;
-  function update(dt, viewZ = 0) {
+  const animationFrustum = new THREE.Frustum();
+  const animationProjectionView = new THREE.Matrix4();
+  function update(dt, viewZ = 0, camera = null) {
     time += dt;
-    for (const w of wisps) {
-      const u = w.userData, t = time * u.speed + u.phase;
-      w.position.set(u.home.x + Math.sin(t) * 1.4, u.home.y + 0.9 + Math.sin(t * 1.7) * 0.5, u.home.z + Math.cos(t * 0.8) * 1.4);
-      w.scale.setScalar(0.8 + Math.sin(time * 5 + u.phase) * 0.35);
+    if (camera) {
+      camera.updateMatrixWorld();
+      animationProjectionView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      animationFrustum.setFromProjectionMatrix(animationProjectionView);
+    }
+    for (const { mesh, entries } of wispBatches) {
+      if (!isInstancedBandVisible(camera && animationFrustum, mesh)) continue;
+      entries.forEach((w, i) => {
+        const t = time * w.speed + w.phase;
+        wispTransform.position.set(w.home.x + Math.sin(t) * 1.4, w.home.y + 0.9 + Math.sin(t * 1.7) * 0.5, w.home.z + Math.cos(t * 0.8) * 1.4);
+        wispTransform.scale.setScalar(0.8 + Math.sin(time * 5 + w.phase) * 0.35);
+        wispTransform.updateMatrix();
+        mesh.setMatrixAt(i, wispTransform.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
     }
     cloudMat.color.lerpColors(cloudDay, cloudGloom, gloomAt(viewZ));
-    for (const b of butterflies) {   // voo em laço em volta de um ponto, batendo as asas
-      const u = b.userData, t = time * u.speed + u.phase;
-      b.position.set(u.home.x + Math.sin(t) * 2.2, u.home.y + 1 + Math.sin(t * 2.3) * 0.4, u.home.z + Math.sin(t * 0.7) * 2.2);
-      b.rotation.y = Math.atan2(Math.cos(t) * 2.2, Math.cos(t * 0.7) * 1.5);
-      const flap = Math.sin(time * 22 + u.phase) * 1.1;
-      u.left.rotation.y = flap; u.right.rotation.y = -flap;
+    for (const { entries, left, right } of butterflyBatches) {   // voo em laço e asas instanciadas por faixa
+      if (!isInstancedBandVisible(camera && animationFrustum, left)) continue;
+      entries.forEach((b, i) => {
+        const t = time * b.speed + b.phase;
+        butterflyRoot.position.set(b.home.x + Math.sin(t) * 2.2, b.home.y + 1 + Math.sin(t * 2.3) * 0.4, b.home.z + Math.sin(t * 0.7) * 2.2);
+        butterflyRoot.rotation.set(0, Math.atan2(Math.cos(t) * 2.2, Math.cos(t * 0.7) * 1.5), 0);
+        butterflyRoot.updateMatrix();
+        const flap = Math.sin(time * 22 + b.phase) * 1.1;
+        butterflyWing.rotation.set(-Math.PI / 2, flap, 0);
+        butterflyWing.updateMatrix();
+        butterflyMatrix.multiplyMatrices(butterflyRoot.matrix, butterflyWing.matrix);
+        left.setMatrixAt(i, butterflyMatrix);
+        butterflyWing.rotation.y = -flap;
+        butterflyWing.updateMatrix();
+        butterflyMatrix.multiplyMatrices(butterflyRoot.matrix, butterflyWing.matrix);
+        right.setMatrixAt(i, butterflyMatrix);
+      });
+      left.instanceMatrix.needsUpdate = true;
+      right.instanceMatrix.needsUpdate = true;
     }
     lantern.emissiveIntensity = 0.9 + Math.sin(time * 9) * 0.1 + Math.sin(time * 23) * 0.05;
     water.material.color.copy(riverTint).offsetHSL(0, 0, Math.sin(time * 1.5) * 0.02);

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { checkTerrain } from './terrain.js';
 class Vector3 {
-  constructor(x=0,y=0,z=0) { Object.assign(this,{x,y,z}); }
+  constructor(x=0,y=0,z=0) { Vector3.allocations=(Vector3.allocations||0)+1; Object.assign(this,{x,y,z}); }
   clone() { return new Vector3(this.x,this.y,this.z); }
   copy(v) { return this.set(v.x,v.y,v.z); }
   set(x,y,z) { Object.assign(this,{x,y,z}); return this; }
@@ -41,21 +41,31 @@ const tangentAt=s=>new Vector3(Math.cos(s*0.03)*0.15,0,-1).normalize();
 const sideOf=t=>new Vector3(-t.z,0,t.x);
 const along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
 const anchorS=p=>12+(p-1)*23;
-const world=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep})',{THREE,pointAt,tangentAt,sideOf,along,anchorS});
+const world=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,obstacles:[]});
+const clearFrom=new Vector3(1000,0,1000),clearTo=new Vector3(1010,0,1000);
+Vector3.allocations=0;
+if(world.nextWaypoint(clearFrom,clearTo)!==clearTo)throw Error('Rota livre substituiu o destino');
+if(Vector3.allocations!==0)throw Error(`Rota livre alocou ${Vector3.allocations} vetores`);
 console.log(checkTerrain(world,THREE));
 const main=readFileSync(new URL('../main.js',import.meta.url),'utf8');
 const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // anima a locomoção'));
-world.obstacles=[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2}));
+world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));
 const Walker=runInNewContext('class Walker {'+move+'}; Walker',{THREE,world,tmp:new Vector3(),moveDir:new Vector3()});
-function walk(from,to) {
+function walk(from,to,guard=null) {
   const u=new Walker();Object.assign(u,{pos:from.clone(),vel:new Vector3(),speed:3.2,size:1,face:()=>{}});
-  let maxY=u.pos.y;
+  const guards=(Array.isArray(guard)?guard:[guard]).filter(Boolean);
+  let maxY=u.pos.y,minClearance=Infinity;
   for(let i=0;i<4000;i++) {
     const next=u.pos.clone().addScaledVector(u.vel,1/60);
     if(world.canStep(u.pos,next))u.pos.copy(next);else u.vel.set(0,0,0);
     u.pos.y=world.groundHeight(u.pos.x,u.pos.z);maxY=Math.max(maxY,u.pos.y);
+    for(const obstacle of guards) {
+      const clearance=Math.hypot(u.pos.x-obstacle.x,u.pos.z-obstacle.z)-obstacle.r;
+      minClearance=Math.min(minClearance,clearance);
+      if(clearance<1.0)throw Error(`Rota atravessou montanha/obstáculo: ${clearance.toFixed(2)} m de margem`);
+    }
     u.moveTo(to,1/60);
-    if(u.pos.distanceTo(to)<0.2)return {u,maxY};
+    if(u.pos.distanceTo(to)<0.2)return {u,maxY,minClearance};
   }
   throw Error('Trajeto preso: '+JSON.stringify({from,to,at:u.pos,next:world.nextWaypoint(u.pos,to)}));
 }
@@ -88,6 +98,24 @@ for(const phase of [5,9]) {
   walk(z.center.clone().addScaledVector(z.fwd,7),z.center.clone().addScaledVector(z.fwd,-7));
   for(const from of z.water)walk(from,z.ground[0]);
 }
+world.obstacles.length=0;
+const mountain={x:0,z:0,r:2};world.obstacles.push(mountain);
+const aroundMountain=walk(new Vector3(-10,0,0),new Vector3(10,0,0),mountain);
+if(aroundMountain.minClearance<1.0)throw Error('A rota não preservou margem da montanha');
+if(aroundMountain.u.pos.distanceTo(new Vector3(10,0,0))>=0.2)throw Error('A rota não retomou o destino depois do desvio');
+console.log(`Navegação: contorna obstáculo com ${aroundMountain.minClearance.toFixed(2)} m de folga e retoma o alvo OK`);
+for(let i=0;i<8;i++) {
+  const angle=i*Math.PI/8,dx=Math.cos(angle),dz=Math.sin(angle);
+  const from=new Vector3(-10*dx,0,-10*dz),to=new Vector3(10*dx,0,10*dz);
+  const result=walk(from,to,mountain);
+  if(result.minClearance<1.0||result.u.pos.distanceTo(to)>=0.2)throw Error(`Rota instável ao redor da montanha no ângulo ${i}`);
+}
+console.log('Navegação: 8 direções contornam a montanha sem órbita ou retorno OK');
+world.obstacles.length=0;
+const mountainPair=[{x:-3.5,z:0,r:2},{x:3.5,z:0,r:2}];world.obstacles.push(...mountainPair);
+const aroundPair=walk(new Vector3(-12,0,0),new Vector3(12,0,0),mountainPair);
+if(aroundPair.minClearance<1.0)throw Error('A rota dupla perdeu margem entre duas montanhas');
+console.log(`Navegação: contorna sequência de montanhas com ${aroundPair.minClearance.toFixed(2)} m de folga OK`);
 console.log('Movimento real: subida, descida, contorno de platôs e lagos OK');
 
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
@@ -151,7 +179,7 @@ tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador v
 living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não terminou após último inimigo');
 const removed=[],enemyBolts=[{mesh:{id:'tiro'}}],resetGame={};let chose=false;
 const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.indexOf('function startPhase()'))+';startGame',{
-  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},setUserPause:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
+  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},setUserPause:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},clearFx:()=>{},popTextPool:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
   closeHeroPanel:()=>{},clearMonsterFx:()=>{},document:{body:{classList:{add:()=>{}}}},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
   enemyBolts,bolts:[],blasts:[],flames:[],fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
   follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;},progress:{rerolls:()=>0},renderRelicTray:()=>{}
