@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { recolor } from './characters.js';
+import { bandsByZ } from './scene-perf.js';
 
 // muitas peças já vêm sem índice; o three avisa a cada "desindexação" repetida. Mesma saída (uma cópia), sem o aviso
 const toNonIndexed = THREE.BufferGeometry.prototype.toNonIndexed;
@@ -843,24 +844,33 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
 
   // ---------- natureza instanciada (muitas cópias baratas) ----------
   const dummy = new THREE.Object3D();
+  const INSTANCE_BAND = 32;   // comprimento (em z) de cada pedaço da natureza instanciada
   // parts: [[geometria, cores], ...] — várias peças (ex.: tronco e copa) com a mesma posição
   const gloomTint = new THREE.Color(0x4f465e);
   function instanced(parts, count, place, shadow = true, material = null) {
     if (!Array.isArray(parts[0])) parts = [parts];
-    const ims = parts.map(([geo]) => new THREE.InstancedMesh(geo, material || new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), count));
+    const mats = parts.map(() => material || new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
+    const matrices = [], colors = parts.map(() => []), zs = [];
     let n = 0;
     for (let tries = 0; n < count && tries < count * 6; tries++) {
       if (!place(dummy)) continue;
       dummy.updateMatrix();
       const g = material ? 0 : gloomAt(dummy.position.z) * 0.6;   // a vegetação perde a cor rumo ao castelo
-      ims.forEach((im, k) => { im.setMatrixAt(n, dummy.matrix); im.setColorAt(n, c.set(pick(parts[k][1])).lerp(gloomTint, g)); });
+      matrices.push(dummy.matrix.clone());
+      zs.push(dummy.position.z);
+      parts.forEach((part, k) => colors[k].push(c.set(pick(part[1])).lerp(gloomTint, g).clone()));
       n++;
     }
-    for (const im of ims) {
-      im.count = n;
-      im.castShadow = shadow;
-      im.receiveShadow = true;
-      scene.add(im);
+    // uma InstancedMesh por faixa de z: a câmera e a sombra só desenham as faixas por perto
+    for (const band of bandsByZ(zs, INSTANCE_BAND)) {
+      parts.forEach(([geo], k) => {
+        const im = new THREE.InstancedMesh(geo, mats[k], band.length);
+        band.forEach((i, j) => { im.setMatrixAt(j, matrices[i]); im.setColorAt(j, colors[k][i]); });
+        im.computeBoundingSphere();
+        im.castShadow = shadow;
+        im.receiveShadow = true;
+        scene.add(im);
+      });
     }
   }
   // sorteia um ponto perto do caminho (mais denso perto, mais raro longe); a distância

@@ -80,7 +80,8 @@ async function portraits() {
   const VARIANTS = ['a', 'b', 'c'].map((id) => ({ id, name: id, hide: [], idle: 'Idle', built: { scene: { id }, animations: [] } }));
   const ctx = vm.createContext({
     VARIANTS, haloGeo: {}, goldMat: {}, setTimeout, console: { warn() {} },
-    document: { images },
+    document: { images, body: { classList: { contains: () => false } } },   // batalha na tela
+    game: { paused: false },
     URL: { createObjectURL: () => `blob:${++blobs}` },
     SkeletonUtils: { clone: (scene) => ({ ...node(), id: scene.id }) },
     THREE: {
@@ -105,7 +106,12 @@ async function portraits() {
   assert.notEqual(marker, a.portrait, 'cada herói tem seu marcador');
   images.push({ getAttribute: () => marker, set src(url) { this.url = url; } });
   const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
-  for (let k = 0; k < 40 && blobs < 9; k++) await wait();
+  // em plena batalha só o retrato pedido pela tela sai; a fila de fundo espera (cada retrato trava um quadro)
+  for (let k = 0; k < 200 && blobs < 6; k++) await wait();
+  await new Promise((resolve) => setTimeout(resolve, 650));
+  assert.deepEqual([...renders], ['c', 'c', 'c', 'a', 'a', 'a'], 'na batalha só os pedidos da tela (c e a) saem; b, de fundo, espera');
+  ctx.game.paused = true;   // pausa (menu, evolução): o resto sai
+  for (let k = 0; k < 200 && blobs < 9; k++) await wait();
   assert.equal(renders[0], 'c', 'o retrato pedido pela tela vem antes da fila');
   assert.deepEqual([...renders].sort(), ['a', 'a', 'a', 'b', 'b', 'b', 'c', 'c', 'c']);
   assert.match(images[0].url, /^blob:/, 'o marcador na tela vira o retrato');
