@@ -40,10 +40,6 @@ const HEROES = [
     weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
   { name: 'Suporte', model: 'Mage', post: [-1.7, 0.1], hp: 225, dmg: 27, range: 5, speed: 3, cooldown: 1.2, idle: 'Idle', ranged: true, attacks: ['Spellcast_Shoot'],
     weapons: ['2H_Staff'] },
-  { name: 'Druida', model: 'Rogue', post: [1.7, -0.3], hp: 180, dmg: 20, range: 5.5, speed: 3, cooldown: 1.15, idle: 'Idle', ranged: true, attacks: ['Spellcast_Shoot'],
-    weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
-  { name: 'Cronomante', model: 'Rogue', post: [1.7, -0.3], hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, idle: 'Idle', ranged: true, attacks: ['Spellcast_Shoot'],
-    weapons: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'] },
 ];
 // As receitas substituem o modelo e as peças da classe.
 const VARIANTS = [
@@ -80,7 +76,7 @@ const VARIANTS = [
   { id: 'necro', names: ['Necromante', 'Senhor dos Ossos', 'Soberano Espectral'], desc: 'Invoca dois esqueletinhos amigos.', ability: 'Amigos do além', color: CHARACTERS[1].color,
     recipe: CHARACTERS[1], classId: 2, dmg: 24, splash: 0, stats: { Vida: 2, Força: 3, Rapidez: 2, Alcance: 5 } },
   { id: 'druid', names: ['Druida', 'Guardião do Bosque', 'Espírito da Floresta'], desc: 'Raízes prendem e a natureza cura.', ability: 'Abraço da floresta', color: CHARACTERS[0].color,
-    recipe: CHARACTERS[0], classId: 5, ranged: true, range: 6, dmg: 21, cooldown: 1, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 } },
+    recipe: CHARACTERS[0], classId: 4, hp: 180, speed: 3, ranged: true, range: 6, dmg: 21, cooldown: 1, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 } },
   { id: 'cleric', names: ['Clériga', 'Sacerdotisa', 'Santa Guardiã'], desc: 'Orações curam e fortalecem quem está na linha de frente.', ability: 'Oração restauradora', color: CHARACTERS[4].color,
     recipe: CHARACTERS[4], classId: 4, hp: 225, dmg: 27, range: 5, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 4 } },
   { id: 'bard', names: ['Bardo', 'Mestre das Canções', 'Lenda Errante'], desc: 'Sua música acelera os ataques de todo o grupo.', ability: 'Acorde heroico', color: CHARACTERS[5].color,
@@ -88,7 +84,7 @@ const VARIANTS = [
   { id: 'angel', names: ['Anjo', 'Arcanjo', 'Serafim'], desc: 'Paira acima da batalha e desce com impacto de luz para amparar o grupo.', ability: 'Descida celeste', color: CHARACTERS[6].color,
     recipe: CHARACTERS[6], classId: 4, hp: 180, dmg: 20, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.6, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
   { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
-    recipe: CHARACTERS[7], classId: 6, hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 5 } },
+    recipe: CHARACTERS[7], classId: 2, splash: 0, hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 5 } },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -275,7 +271,7 @@ function setGoalUI(text, progress) {
 
 // tela de escolha estilo arcade: grade com uma linha por classe, todas as variantes à mostra
 const pick = { options: [], cards: [], classFilters: [], classRows: [], activeClass: -1, suggestedId: null, sel: 0, open: false, timer: null };
-const PICK_CLASS_GLYPHS = ['♜', '⚒', '✦', '☾', '⚕', '☘', '⌛'];
+const PICK_CLASS_GLYPHS = ['♜', '⚒', '✦', '☾', '⚕'];
 
 function showPick(title, sub) {
   pick.mode = 'hero';

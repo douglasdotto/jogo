@@ -2,11 +2,9 @@
 export const CLASSES = [
   { name: 'Cavaleiro', role: 'Proteção e combate próximo', summary: 'Segura a linha de frente, protege aliados e interrompe avanços.' },
   { name: 'Bárbaro', role: 'Pressão e impacto', summary: 'Combina muita vida com golpes fortes, atordoamentos e machados.' },
-  { name: 'Mago', role: 'Magia à distância', summary: 'Ataca de longe com fogo, raios, gelo e invocações.' },
+  { name: 'Mago', role: 'Magia à distância', summary: 'Ataca de longe com fogo, raios, gelo, invocações e magia do tempo.' },
   { name: 'Ladino', role: 'Agilidade e precisão', summary: 'Elimina alvos, perfura filas e ataca de ângulos diferentes.' },
-  { name: 'Suporte', role: 'Cura e reforço do grupo', summary: 'Mantém os aliados na luta com cura, proteção e inspiração.' },
-  { name: 'Druida', role: 'Controle da natureza', summary: 'Prende ameaças com raízes e fortalece os companheiros com a natureza.' },
-  { name: 'Cronomante', role: 'Controle temporal', summary: 'Prende ameaças e ganha tempo para o grupo reagir.' },
+  { name: 'Suporte', role: 'Cura e reforço do grupo', summary: 'Mantém os aliados na luta com cura, proteção, inspiração e a força da natureza.' },
 ];
 
 const VARIANT_INFO = {

@@ -162,11 +162,13 @@ test('63 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes no
   assert.equal(h.skillMove,null);assert.equal(h.lift,0);assert.equal(h.root.rotation.x,0);
   clear();
 });
-test('classes agrupam apoio, dão categoria própria à natureza e Bardo usa silhueta leve',()=>{
-  assert.equal(t.HEROES.length,7);assert.equal(t.CLASSES.length,7);
-  for(const [id,classId] of [['cleric',4],['bard',4],['angel',4],['druid',5],['chronist',6]])assert.equal(cfg(id).classId,classId,id);
+test('classes: Druida entra em Suporte e Cronomante em Mago, com os atributos de antes',()=>{
+  assert.equal(t.HEROES.length,5);assert.equal(t.CLASSES.length,5);
+  for(const [id,classId] of [['cleric',4],['bard',4],['angel',4],['druid',4],['chronist',2]])assert.equal(cfg(id).classId,classId,id);
+  const d=cfg('druid'),c=cfg('chronist');
+  assert.deepEqual([d.hp,d.dmg,d.range,d.speed,d.cooldown],[180,21,6,3,1]);
+  assert.deepEqual([c.hp,c.dmg,c.range,c.speed,c.cooldown,c.splash],[165,21,6,3.5,1.05,0]);
   assert.equal(cfg('cleric').recipe.base,'Mage');assert.ok(cfg('cleric').recipe.add.some(a=>a.part==='2H_Staff'));
-  assert.notEqual(cfg('druid').classId,3,'Druida deve sair da categoria Ladino');assert.equal(t.CLASSES[5].name,'Druida');
   assert.equal(cfg('bard').recipe.base,'Rogue');assert.ok(cfg('bard').recipe.extras.some(e=>e.type==='lute'));
 });
 test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>{
@@ -206,7 +208,7 @@ test('navegação respeita as linhas de classe, pula ocupadas e usa postos disti
     &&pickText().includes('Controle')&&pickText().includes('Nas próximas vagas'));
   t.confirmPick(at('pyro'));assert.equal(t.pick.open,true);
   t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'));
-  t.moveGrid(0,1);assert.equal(t.pick.sel,at('cryo'));t.moveGrid(-1,0);assert.equal(t.pick.sel,at('necro'));
+  t.moveGrid(0,1);assert.equal(t.pick.sel,at('cryo'));t.moveGrid(-1,0);assert.equal(t.pick.sel,at('chronist'));
   t.moveGrid(1,0);assert.equal(t.pick.sel,at('cryo'));
 });
 test('escolha na campanha mostra objetivo e papéis prioritários projetados',()=>{
