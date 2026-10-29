@@ -150,7 +150,7 @@ tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador v
 living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não terminou após último inimigo');
 const removed=[],enemyBolts=[{mesh:{id:'tiro'}}],resetGame={};let chose=false;
 const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.indexOf('function startPhase()'))+';startGame',{
-  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
+  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},setUserPause:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
   closeHeroPanel:()=>{},clearMonsterFx:()=>{},document:{body:{classList:{add:()=>{}}}},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
   enemyBolts,bolts:[],blasts:[],flames:[],fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
   follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;}

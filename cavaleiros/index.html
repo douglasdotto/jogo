@@ -9,6 +9,8 @@
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2228; font-family: 'Fredoka', system-ui, sans-serif; color: #f1ecdc; }
     canvas { display: block; }
+    /* o palco 3D sempre cobre a tela inteira, mesmo quando a barra do navegador do celular muda a altura */
+    body > canvas { position: fixed; inset: 0; width: 100% !important; height: 100% !important; }
     /* ---------- interface fofa e medieval: pergaminho, madeira e ouro ---------- */
     :root { --wood: #8a5a2e; --wood-dark: #4a2c1a; --gold: #f2c94c; --parch: #fff3d6; --parch-dark: #f0d9a8; }
     #hud { position: absolute; top: 12px; left: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -414,7 +416,9 @@
     .skillHeroCount { padding: 3px 5px; border-radius: 99px; color: #c6d9f5; background: rgba(3, 11, 28, .4); font: 700 8px/1 'Fredoka', sans-serif; letter-spacing: .5px; }
     .skillSlots { display: grid; grid-template-columns: repeat(3, 86px); gap: 7px; }
     .skill { position: relative; width: 86px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-    .skill:focus-visible { outline: 3px solid var(--gold); outline-offset: 5px; border-radius: 10px; }
+    /* o botão de usar cobre rosto e nome; o AUTO fica ao lado, fora dele */
+    .skill .use { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: inherit; }
+    .skill .use:focus-visible { outline: 3px solid var(--gold); outline-offset: 5px; border-radius: 10px; }
     .skill .face { position: relative; width: 68px; height: 68px; border: 3px solid color-mix(in srgb, var(--cd) 72%, var(--outline)); border-radius: 17px; overflow: hidden;
       background: radial-gradient(circle at 50% 26%, color-mix(in srgb, var(--c) 58%, #fff), color-mix(in srgb, var(--cd) 88%, #080e1b));
       box-shadow: inset 0 2px 0 rgba(255, 255, 255, .56), inset 0 -8px 12px rgba(5, 12, 28, .22), 0 4px 0 var(--outline), 0 7px 13px rgba(0,0,0,.23); transition: transform .18s ease, box-shadow .18s ease, filter .18s ease; }
@@ -467,13 +471,21 @@
       .skill.ready .face, .skill.ready .glyph, .skill.ultimate.ready .face::after, .skill.nope .face { animation: none !important; }
     }
     @media (max-width: 600px) {
-      #skills { width: calc(100vw - 16px); max-width: calc(100vw - 16px); box-sizing: border-box; justify-content: space-around;
-        gap: clamp(2px, 1.5vw, 8px); padding: 12px 8px 8px; bottom: 8px; }
-      .skillGroup { padding: 0 4px; }
-      .skillSlots { grid-template-columns: repeat(3, 56px); gap: 2px; }
-      .skill { width: 56px; min-width: 56px; flex: 0 0 56px; }
-      .skill .face { width: clamp(42px, 16vw, 64px); height: clamp(42px, 16vw, 64px); }
-      .skill .name b { font-size: clamp(10px, 3vw, 13px); }
+      /* barra compacta: só os ícones; se não couber, rola de lado a partir do primeiro herói */
+      #skills { width: calc(100vw - 16px); max-width: calc(100vw - 16px); box-sizing: border-box; justify-content: safe center;
+        gap: 6px; padding: 6px 6px 5px; bottom: 6px; border-radius: 16px; }
+      .skillGroup { gap: 4px; padding: 4px 5px; border-radius: 11px; }
+      .skillHero { min-height: 0; padding: 1px 4px; font-size: 11px; gap: 4px; }
+      .skillHeroMark { width: 16px; height: 16px; flex-basis: 16px; font-size: 11px; border-radius: 5px; }
+      .skillHeroName { max-width: 110px; }
+      .skillHeroCount, .skill .name, .skill .key { display: none; }
+      .skillSlots { grid-template-columns: repeat(3, 46px); gap: 4px; }
+      .skill { width: 46px; min-width: 46px; flex: 0 0 46px; }
+      .skill .face { width: 46px; height: 46px; border-radius: 12px; }
+      .skill .glyph { font-size: 24px; }
+      .skill .secs { bottom: 2px; height: 16px; min-width: 22px; font-size: 11px; }
+      .skill.down .secs { min-width: 36px; font-size: 9px; }
+      .skill .auto { top: -5px; right: -5px; min-width: 0; padding: 2px 3px; font-size: 7px; border-width: 1px; border-radius: 6px; }
     }
     /* barra do chefe no topo (monsters.js) */
     #bossBar { position: absolute; top: 62px; left: 50%; translate: -50% 0; width: min(560px, 80vw); padding: 4px 14px 10px; text-align: center; pointer-events: none;
@@ -494,6 +506,47 @@
     #bossBar .warning-progress { position: absolute; bottom: 0; left: 0; width: 0; height: 3px; background: #fff; box-shadow: 0 0 8px #fff; transition: width .08s linear; }
     @keyframes boss-warning-pulse { to { filter: brightness(1.35); box-shadow: 0 0 26px #ff343bcc, 0 3px 0 var(--outline); } }
     @media (prefers-reduced-motion: reduce) { #bossBar .boss-telegraph { animation: none; } }
+    /* opções do HUD: em tela grande ficam na linha; no celular recolhem atrás da engrenagem */
+    #hudOptions { display: contents; }
+    #hudMenu { display: none; }
+    #pause[aria-pressed="true"] { background: linear-gradient(#85df70, #4da53b 55%, #2e7428); }
+    /* pausa e confirmação de reinício */
+    .modal { position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; box-sizing: border-box; background: rgba(10, 16, 32, .55); }
+    .modal[hidden] { display: none; }
+    .modal-box { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 340px; padding: 20px 26px; text-align: center; color: #fff;
+      background: linear-gradient(var(--navy-2), var(--navy)); border: 4px solid var(--navy-edge); border-radius: 18px; box-shadow: inset 0 3px 0 rgba(255,255,255,.15), 0 6px 0 var(--navy-edge), 0 14px 30px rgba(0,0,0,.5); }
+    .modal-box b { font: 400 34px 'Lilita One', sans-serif; -webkit-text-stroke: 5px var(--outline); paint-order: stroke fill; }
+    .modal-box span { font: 500 15px/1.35 'Fredoka', sans-serif; color: #dbe7fb; }
+    .modal-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .modal .danger { background: linear-gradient(#ff8a7a, #d0402f 55%, #9e2318); }
+    /* dica discreta: o som começa desligado e só liga pelo botão */
+    #soundHint { position: absolute; z-index: 35; top: 64px; left: 12px; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 6px 12px; border: 2px solid rgba(184, 212, 255, .6); border-radius: 10px;
+      color: #fff; background: rgba(20, 33, 60, .92); font: 500 13px 'Fredoka', sans-serif; pointer-events: none; animation: fadeHint 5s forwards; }
+    #soundHint[hidden] { display: none; }
+    @keyframes fadeHint { 0% { opacity: 0; } 8%, 85% { opacity: 1; } 100% { opacity: 0; } }
+    #mute.hint { outline: 3px solid var(--gold); outline-offset: 2px; }
+    /* mira manual no toque: botão para desistir sem Esc nem botão direito */
+    #aimCancel { position: fixed; z-index: 31; left: 50%; bottom: 210px; translate: -50% 0; }
+    #aimCancel[hidden] { display: none; }
+    @media (max-width: 600px) {
+      /* HUD compacto: textos menores, só o essencial à mostra e opções num menu */
+      #hud { top: 6px; left: 6px; right: 6px; gap: 5px; }
+      #hud .chip { padding: 2px 7px 3px 6px; gap: 3px; font-size: 12px; border-width: 2px; border-radius: 9px; box-shadow: 0 2px 0 var(--wood-dark); }
+      #hud .chip::after { display: none; }
+      #wave::before, #left::before, #kills::before, #party::before, #level::before { font-size: 13px; }
+      #level, #kills { display: none; }
+      #goal { min-width: 0; font-size: 11px; }
+      #hud button { padding: 4px 9px 5px; font-size: 12px; border-width: 2px; border-radius: 10px; box-shadow: 0 2px 0 var(--wood-dark); }
+      #hudMenu { display: inline-block; }
+      #hudOptions { display: none; }
+      #hud.open #hudOptions { position: absolute; top: calc(100% + 6px); right: 0; z-index: 36; display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px;
+        background: rgba(20, 33, 60, .94); border: 2px solid rgba(184, 212, 255, .6); border-radius: 12px; }
+      #soundHint { top: 46px; left: 6px; font-size: 12px; }
+      #bossBar { top: 44px; width: calc(100vw - 16px); }
+      body #aimHint { bottom: 120px; font-size: 12px; }
+      #aimCancel { bottom: 170px; }
+      #banner { font-size: 28px; padding: 6px 36px 10px; -webkit-text-stroke-width: 5px; }
+    }
   </style>
   <link rel="stylesheet" href="campaign.css">
   <script type="importmap">
@@ -512,39 +565,21 @@
     <span class="chip" id="kills">Abates: 0</span>
     <span class="chip" id="party">Heróis: 0/4</span>
     <span class="chip hidden" id="goal"></span>
-    <button id="speed">Velocidade 1x</button>
-    <button id="autoEvolve" type="button" aria-pressed="false">Autoevoluir: não</button>
-    <button id="restart">Reiniciar</button>
-    <button id="quality" type="button" aria-pressed="false">Gráficos: alta</button>
+    <button id="pause" type="button" aria-pressed="false" title="Pausar (P ou Espaço)">Pausar</button>
+    <!-- no celular as opções ficam recolhidas atrás da engrenagem -->
+    <button id="hudMenu" type="button" aria-expanded="false" aria-controls="hudOptions" aria-label="Opções" title="Opções">⚙</button>
+    <div id="hudOptions">
+      <button id="speed">Velocidade 1x</button>
+      <button id="autoEvolve" type="button" aria-pressed="false">Autoevoluir: não</button>
+      <button id="restart">Reiniciar</button>
+      <button id="quality" type="button" aria-pressed="false">Gráficos: alta</button>
+    </div>
     <button id="mute" title="Som (liga/desliga)" aria-label="Desligar o som"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
       <path class="spk" d="M3 9h4l5-4v14l-5-4H3z"/><path class="on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg></button>
   </div>
+  <div id="soundHint" role="status" hidden>O som está desligado · use o botão do alto-falante para ligar</div>
   <div id="skills" role="group" aria-label="Habilidades dos heróis"></div>
-  <script>
-    // As skills são recriadas durante a partida; torne cada cartão focável sem
-    // depender do momento em que main.js atualiza a barra.
-    (() => {
-      const bar = document.getElementById('skills');
-      if (!bar) return;
-      const enhanceSkills = () => {
-        bar.querySelectorAll('.skill[role="button"]').forEach((skill) => {
-          skill.tabIndex = 0;
-          if (!skill.hasAttribute('aria-label')) skill.setAttribute('aria-label', skill.title || 'Ativar habilidade');
-        });
-      };
-      new MutationObserver(enhanceSkills).observe(bar, { childList: true, subtree: true });
-      enhanceSkills();
-      bar.addEventListener('keydown', (event) => {
-        const skill = event.target.closest?.('.skill[role="button"]');
-        if (!skill || event.target !== skill || event.isComposing) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          skill.click();
-        }
-      });
-    })();
-  </script>
-  <div id="banner"></div>
+  <div id="banner" aria-live="polite"></div>
   <div id="bossBar" hidden></div>
   <div id="pick" class="hidden">
     <span id="pickTitle"></span>
@@ -554,6 +589,13 @@
   </div>
   <div id="campaign" class="hidden"></div>
   <aside id="heroPanel" class="hidden"></aside>
+  <div id="pauseOverlay" class="modal" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" hidden>
+    <div class="modal-box"><b id="pauseTitle">Pausado</b><span>P ou Espaço continuam</span><button id="resume" type="button">Continuar</button></div>
+  </div>
+  <div id="restartConfirm" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="restartTitle" aria-describedby="restartText" hidden>
+    <div class="modal-box"><b id="restartTitle">Reiniciar?</b><span id="restartText">A partida atual será perdida e você volta ao menu.</span>
+      <div class="modal-actions"><button id="restartNo" type="button">Continuar jogando</button><button id="restartYes" type="button" class="danger">Reiniciar</button></div></div>
+  </div>
   <div id="overlay"><span id="overlayText">Carregando modelos...</span><div id="overlayStars"></div><div id="overlayStats"></div><button id="overlayBtn" hidden>Jogar de novo</button></div>
   <script type="module" src="main.js"></script>
 </body>

@@ -1100,6 +1100,15 @@
   #pick:has(#pickList.grid) .pick-row { grid-auto-rows: 220px; }
   #pick:has(#pickList.grid) .pick-info { max-height: none; overflow: visible; }
 }
+/* celular: uma coluna só (abas, cartões rolando de lado e ficha embaixo) */
+@media (max-width: 760px) {
+  #pick:has(#pickList.grid) { padding: 10px 8px 4px; }
+  #pick:has(#pickList.grid) #pickList.grid { width: 100%; height: calc(100dvh - 128px); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 46%); gap: 8px; }
+  #pick:has(#pickList.grid) .pick-info { grid-column: 1; grid-row: 3; max-height: 100%; padding: 10px; }
+  #pick:has(#pickList.grid) .pick-rows { padding: 8px; }
+  #pick:has(#pickList.grid) .pick-row { flex-wrap: nowrap; justify-content: flex-start; }
+  #pick:has(#pickList.grid) #pickList.grid .pick-row .card { flex: 0 0 128px; min-width: 128px; height: 100%; }
+}
 @media (prefers-reduced-motion: reduce) {
   #pick:has(#pickList.grid) .pick-filters .pick-filter,
   #pick:has(#pickList.grid) #pickList.grid .pick-row .card,

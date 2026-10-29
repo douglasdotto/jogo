@@ -23,7 +23,7 @@ export function openHeroPanel(hero, levels) {
   current = hero;
   xpLevels = levels;
   panel().classList.remove('hidden');
-  renderHeroPanel();
+  renderHeroPanel(true);
 }
 
 export function closeHeroPanel() {
@@ -42,7 +42,16 @@ export function tickHeroPanel(real) {
   renderHeroPanel();
 }
 
-function renderHeroPanel() {
+// copia para o painel só o que mudou: o foco e a rolagem continuam onde o jogador deixou
+function patchNode(old, next) {
+  if (old.nodeType !== next.nodeType || old.nodeName !== next.nodeName || old.childNodes.length !== next.childNodes.length) return old.replaceWith(next);
+  if (old.nodeType !== 1) { if (old.nodeValue !== next.nodeValue) old.nodeValue = next.nodeValue; return; }
+  for (const { name, value } of next.attributes) if (old.getAttribute(name) !== value) old.setAttribute(name, value);
+  for (const { name } of [...old.attributes]) if (!next.hasAttribute(name)) old.removeAttribute(name);
+  [...next.childNodes].forEach((child, i) => patchNode(old.childNodes[i], child));
+}
+
+function renderHeroPanel(full = false) {
   const h = current, c = h.cfg, s = h.stats;
   const info = heroInfo(c);
   const skills = skillSetFor(c);
@@ -60,7 +69,7 @@ function renderHeroPanel() {
   const el = panel();
   el.style.setProperty('--c', c.color[0]);
   el.style.setProperty('--cd', c.color[1]);
-  el.innerHTML = `
+  const html = `
     <button class="close" aria-label="Fechar">✕</button>
     <section class="hero-panel-main">
       <div class="hp-top">
@@ -89,6 +98,11 @@ function renderHeroPanel() {
         <section><h4>Nesta partida</h4><dl class="hero-match-stats">${LABELS.map(([k, label]) => `<dt>${label}</dt><dd>${fmt(k, s[k])}</dd>`).join('')}</dl></section>
       </div>
     </aside>`;
+  const fresh = document.createElement('template');
+  fresh.innerHTML = html;
+  const nodes = [...fresh.content.childNodes];
+  if (full || nodes.length !== el.childNodes.length) el.innerHTML = html;
+  else nodes.forEach((child, i) => patchNode(el.childNodes[i], child));
   el.querySelector('.close').onclick = closeHeroPanel;
 }
 
