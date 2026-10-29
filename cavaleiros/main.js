@@ -20,7 +20,7 @@ import { tutorial } from './tutorial.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { disposeSkeletons } from './scene-perf.js';
-import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
+import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
 import { startKingdom, linkKingdom } from './kingdom.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
@@ -534,7 +534,33 @@ const MODES = [
   { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
   { name: 'Reino', icon: '♜', desc: 'Construa a vila, colete recursos, treine soldados e heróis e destrua o Portal de Ossos.', color: ['#b9f0a8', '#4f9a3a'] },
 ];
-// Cartões do menu: nome e um número; a explicação de cada modo fica na dica e no aria-label.
+// Menu inicial estilo Clash: barra de perfil em cima, um botão grande de batalha (Campanha) com a equipe ao lado
+// e Jornada, Acampamento e Reino como botões menores embaixo. Pouco texto: os detalhes ficam na dica e no aria-label.
+// A ordem de pick.cards segue MODES (atalhos 1–4 e setas ← →).
+const SEEN_ACHIEVEMENTS_KEY = 'cavaleiros-conquistas-vistas';
+const seenAchievements = () => { try { return +localStorage.getItem(SEEN_ACHIEVEMENTS_KEY) || 0; } catch { return 0; } };
+// missão sugerida: a primeira ainda sem estrelas; com todas jogadas, a primeira que ainda rende estrela
+function recommendedMission() {
+  return MISSIONS.find((m) => !starsOf(m.id)) || MISSIONS.find((m) => starsOf(m.id) < 3) || null;
+}
+// equipe do menu: a última da campanha, completada com o primeiro herói de cada classe
+function menuSquad() {
+  const ids = [...loadCampaignSquad()];
+  for (const [classId] of HEROES.entries()) if (ids.length < 4) { const cfg = variantsOf(classId)[0]; if (cfg && !ids.includes(cfg.id)) ids.push(cfg.id); }
+  return ids.slice(0, 4).map((id) => VARIANTS.find((cfg) => cfg.id === id)).filter(Boolean);
+}
+const MENU_SPEAKER = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path class="spk" d="M3 9h4l5-4v14l-5-4H3z"/><path class="on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg>';
+function paintMenuBar(bar) {
+  const muted = $('mute').classList.contains('off'), low = $('quality').textContent.includes('baixa');
+  const sound = bar.querySelector('.menu-sound'), gfx = bar.querySelector('.menu-gfx');
+  sound.classList.toggle('off', muted);
+  sound.setAttribute('aria-label', muted ? 'Ligar o som' : 'Desligar o som');
+  sound.setAttribute('data-tip', muted ? 'Som desligado' : 'Som ligado');
+  gfx.classList.toggle('low', low);
+  gfx.setAttribute('aria-pressed', String(low));
+  gfx.setAttribute('aria-label', low ? 'Gráficos leves. Clique para altos' : 'Gráficos altos. Clique para leves');
+  gfx.setAttribute('data-tip', low ? 'Gráficos leves' : 'Gráficos altos');
+}
 function showMenu() {
   tutorial.on('leave');
   pick.mode = 'mode';
@@ -544,36 +570,86 @@ function showMenu() {
   pick.options = MODES;
   $('pickTitle').innerHTML = logoSVG();
   $('pickSub').textContent = '';
-  $('pickHint').textContent = '← → · Enter';
+  $('pickHint').textContent = '';   // sem rodapé: setas, Enter e 1–4 seguem valendo
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
   const records = Object.values(loadRecords());
   const achievements = progress.achievements(), achieved = achievements.filter((a) => a.unlocked).length;
   const best = records.length ? Math.max(...records.map((r) => r.phase)) : 0;
-  const lines = [`★ ${totalStars()}/${MISSIONS.length * 3}`,
-    records.some((r) => r.won) ? '♛ Vencida' : best ? `Fase ${best}` : '',
-    `${GOLD.icon} ${progress.gold} · ✦ ${achieved}/${achievements.length}`, ''];
-  const spoken = [`${totalStars()} de ${MISSIONS.length * 3} estrelas`,
+  const stars = totalStars(), maxStars = MISSIONS.length * 3;
+  const mastery = Math.max(1, ...VARIANTS.map((cfg) => progress.mastery(cfg.id).level));
+  const next = recommendedMission();
+  const shopReady = UPGRADES.some((u) => { const cost = progress.upgradeCost(u.id); return cost != null && progress.gold >= cost; });
+  const newAchievements = Math.max(0, achieved - seenAchievements());
+  const journey = records.some((r) => r.won) ? '♛' : best ? `Fase ${best}` : '';
+
+  const home = document.createElement('div');
+  home.className = 'menu-home';
+  // barra de perfil: ícones e números; o detalhe vai na dica
+  const bar = document.createElement('div');
+  bar.className = 'menu-bar';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', 'Perfil');
+  bar.innerHTML = `<div class="menu-stats">
+      <span class="menu-stat gold" tabindex="0" data-tip="${GOLD.name}: ${progress.gold}" aria-label="${progress.gold} de ouro"><i aria-hidden="true">${GOLD.icon}</i>${progress.gold}</span>
+      <span class="menu-stat stars" tabindex="0" data-tip="Estrelas da campanha: ${stars} de ${maxStars}" aria-label="${stars} de ${maxStars} estrelas"><i aria-hidden="true">★</i>${stars}<small>/${maxStars}</small></span>
+      <span class="menu-stat feats" tabindex="0" data-tip="Conquistas: ${achieved} de ${achievements.length}" aria-label="${achieved} de ${achievements.length} conquistas"><i aria-hidden="true">✦</i>${achieved}/${achievements.length}</span>
+      <span class="menu-stat mastery" tabindex="0" data-tip="Maestria mais alta: ${mastery} de ${MASTERY_PERKS.length}" aria-label="Maestria mais alta ${mastery}"><i aria-hidden="true">✪</i>${mastery}</span>
+    </div>
+    <div class="menu-tools">
+      <button type="button" class="menu-tool menu-sound">${MENU_SPEAKER}</button>
+      <button type="button" class="menu-tool menu-gfx"><span aria-hidden="true">◐</span></button>
+    </div>`;
+  bar.querySelector('.menu-sound').onclick = () => { $('mute').onclick?.(); paintMenuBar(bar); };
+  bar.querySelector('.menu-gfx').onclick = () => { $('quality').onclick?.(); paintMenuBar(bar); };
+  paintMenuBar(bar);
+
+  // palco: equipe dos dois lados do botão de batalha
+  const stage = document.createElement('div');
+  stage.className = 'menu-stage';
+  const squad = menuSquad();
+  const crew = (side, from) => {
+    const box = document.createElement('div');
+    box.className = `menu-crew ${side}`;
+    box.setAttribute('aria-hidden', 'true');
+    box.innerHTML = squad.slice(from, from + 2).map((cfg, k) => `<span class="menu-hero" data-tip="${attrText(cfg.name)}" data-glyph="${PICK_CLASS_GLYPHS[cfg.classId] || '♜'}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]};--d:${380 + (from + k) * 110}ms;--bob:${(from + k) * 0.7}s"><img src="${cfg.portrait || ''}" alt=""></span>`).join('');
+    return box;
+  };
+  const row = document.createElement('div');
+  row.className = 'menu-row';
+  const label = ['Batalhar', 'Jornada', 'Acampamento', 'Reino'];
+  const extra = [
+    `<small class="menu-next">${next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : '♛'}</small><span class="menu-badge-stars">★ ${stars}/${maxStars}</span>`,
+    journey ? `<small>${journey}</small>` : '',
+    `<small class="menu-gold">${GOLD.icon} ${progress.gold}</small>${shopReady || newAchievements ? '<span class="menu-new" aria-hidden="true">!</span>' : ''}`,
+    '',
+  ];
+  const spoken = [`${stars} de ${maxStars} estrelas${next ? `. Próxima: ${next.name}` : ''}`,
     records.some((r) => r.won) ? 'Jornada vencida' : best ? `Recorde: fase ${best}` : 'Sem recorde ainda',
-    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas`, 'Estratégia: vila, recursos e ondas'];
+    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`,
+    'Estratégia: vila, recursos e ondas'];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
-    b.className = 'card diff mode';
+    b.className = `menu-btn ${i === 0 ? 'menu-battle' : 'menu-side'}`;
     b.tabIndex = 0;
     b.setAttribute('role', 'button');
+    b.setAttribute('aria-keyshortcuts', String(i + 1));
     b.setAttribute('aria-label', `${m.name}: ${m.desc} ${spoken[i]}.`);
-    b.setAttribute('data-tip', m.desc);
+    b.setAttribute('data-tip', i === 0 ? `${m.name} · ${m.desc}` : m.desc);
     b.style.setProperty('--c', m.color[0]);
     b.style.setProperty('--cd', m.color[1]);
-    b.style.setProperty('--d', `${i * 90}ms`);
-    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${m.icon}</div><div class="ribbon">${m.name}</div>${lines[i] ? `<div class="record">${lines[i]}</div>` : ''}`;
+    b.style.setProperty('--d', `${i === 0 ? 160 : 260 + i * 80}ms`);
+    b.innerHTML = `<span class="menu-icon" aria-hidden="true">${i === 0 ? '⚔' : m.icon}</span><b>${label[i]}</b>${extra[i]}`;
     b.onclick = () => confirmPick(i);
     b.onfocus = () => selectCard(i);
-    bindCard(b, i);
-    list.appendChild(b);
+    b.onmouseenter = () => selectCard(i);
     return b;
   });
+  stage.append(crew('left', 0), pick.cards[0], crew('right', 2));
+  row.append(...pick.cards.slice(1));
+  home.append(bar, stage, row);
+  list.appendChild(home);
   selectCard(0);
   pick.open = true;
   game.paused = true;
@@ -592,6 +668,8 @@ function showCamp() {
   game.paused = true;
   $('pick').classList.add('hidden');
   toastAchievements(progress.refresh(totalStars()));   // estrelas de antes da progressão também contam
+  // as conquistas foram vistas: o selo de novidade do menu some
+  try { localStorage.setItem(SEEN_ACHIEVEMENTS_KEY, String(progress.achievements().filter((a) => a.unlocked).length)); } catch {}
   renderCamp($('camp'), progress, { variants: VARIANTS, onBack: showMenu });
   $('camp').classList.remove('hidden');
   $('camp').querySelector('.camp-back')?.focus?.();
@@ -1217,7 +1295,7 @@ addEventListener('keydown', (e) => {
   else if (!grid && /^[1-4]$/.test(e.key) && +e.key <= pick.cards.length) confirmPick(+e.key - 1);
   else return;
   // o foco do teclado acompanha a seleção (nos cartões de modo/dificuldade, se já estiver num deles)
-  if (e.key.startsWith('Arrow') && (grid || document.activeElement?.classList?.contains('card'))) {
+  if (e.key.startsWith('Arrow') && (grid || document.activeElement?.classList?.contains('card') || document.activeElement?.classList?.contains('menu-btn'))) {
     pick.cards[pick.sel].scrollIntoView({ block: 'nearest' });
     pick.cards[pick.sel].focus({ preventScroll: true });
   }
@@ -5356,6 +5434,9 @@ function startGame(view = 'menu') {
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
 }
 
+// balanço da câmera no menu inicial (orbitMenu); placeParty o zera junto com a câmera
+const menuOrbit = { t: 0, angle: 0 };
+
 // põe o grupo (e a câmera) na fase inicial e zera a partida; game.mission continua
 function placeParty(first) {
   const m = game.mission;
@@ -5371,6 +5452,7 @@ function placeParty(first) {
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
   camera.position.set(follow.x, 27.6, follow.z + 25.2);   // mesmo ângulo, 20% mais longe: mais campo de visão
+  menuOrbit.t = menuOrbit.angle = 0;   // o balanço do menu recomeça do ângulo de jogo
   $('goal').classList.toggle('hidden', !m);
   if (m) {
     $('goal').setAttribute('data-icon', GOAL_ICONS[m.goal.type] || '⚑');
@@ -6269,7 +6351,10 @@ function frame() {
   showEvolution();
   // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez; no Reino a câmera é livre
   if (game.realm) game.realm.camera(real);
-  else followParty(real);
+  else {
+    followParty(real);
+    if (pick.open && pick.mode === 'mode') orbitMenu(real);
+  }
   sun.position.set(follow.x + 14, 30, follow.z + 12);
   sun.target.position.copy(follow);
   world.update(real, follow.z);
@@ -6297,6 +6382,17 @@ function frame() {
   updateSkillBar();
   updateAim();
   audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
+}
+
+// menu inicial: a câmera balança devagar em volta da vila (vai e volta, sem sair do cenário);
+// a partida reposiciona a câmera em placeParty
+const MENU_ORBIT_AXIS = new THREE.Vector3(0, 1, 0);
+function orbitMenu(real) {
+  menuOrbit.t += real;
+  const angle = Math.sin(menuOrbit.t * 0.12) * 0.32;
+  tmp.subVectors(camera.position, controls.target).applyAxisAngle(MENU_ORBIT_AXIS, angle - menuOrbit.angle);
+  camera.position.copy(controls.target).add(tmp);
+  menuOrbit.angle = angle;
 }
 
 // enquadra o grupo e a briga por perto (Campanha e Jornada)

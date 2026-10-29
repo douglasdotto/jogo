@@ -126,9 +126,108 @@
   background: linear-gradient(180deg, #ffe5a1, #dfb65e);
 }
 #campaign::-webkit-scrollbar-corner, #campaign .camp-info::-webkit-scrollbar-corner, .pick-info::-webkit-scrollbar-corner, #heroPanel::-webkit-scrollbar-corner, #overlay::-webkit-scrollbar-corner { background: transparent; }
-/* menu inicial: dois cartões grandes */
-.card.diff.mode { width: 230px; }
-#pickSub:empty { display: none; }   /* menu e jornada sem subtítulo */
+#pickSub:empty, #pickHint:empty { display: none; }   /* menu sem subtítulo nem rodapé */
+
+/* ==================== menu inicial estilo Clash ==================== */
+/* cena 3D aparente: só uma vinheta nas bordas, sem escurecer o meio */
+#pick:has(.menu-home) { gap: 18px; padding-top: 40px; box-sizing: border-box;
+  background: radial-gradient(ellipse 75% 70% at 50% 48%, transparent 55%, rgba(8, 12, 26, .55) 100%),
+    linear-gradient(rgba(8, 12, 26, .45), transparent 16%, transparent 78%, rgba(8, 12, 26, .4)); }
+#pick:has(.menu-home) #pickList { position: static; perspective: none; padding: 0; }
+.menu-home { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.menu-home button, .menu-btn { font-family: 'Lilita One', sans-serif; }
+
+/* barra de perfil */
+.menu-bar { position: absolute; top: 14px; left: 18px; right: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  animation: menu-bar-in .45s ease backwards; }
+.menu-stats { display: flex; flex-wrap: wrap; gap: 10px 22px; padding-left: 14px; }
+.menu-stat { position: relative; display: inline-flex; align-items: center; gap: 3px; height: 32px; padding: 0 14px 0 22px; box-sizing: border-box; cursor: default;
+  color: #fff; font: 400 18px 'Lilita One', sans-serif; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill;
+  background: linear-gradient(#2c4272, #1b2c50); border: 3px solid var(--outline); border-radius: 999px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .18), 0 3px 0 var(--outline); }
+.menu-stat small { font-size: 13px; opacity: .8; }
+.menu-stat i { --ic: var(--gold); position: absolute; left: -16px; top: 50%; translate: 0 -50%; width: 34px; height: 34px; display: grid; place-items: center;
+  font-style: normal; font-size: 19px; color: #fff; border: 3px solid var(--outline); border-radius: 50%; box-sizing: border-box;
+  background: radial-gradient(circle at 38% 30%, #fff8, transparent 45%), var(--ic); box-shadow: 0 3px 0 var(--outline); }
+.menu-stat.gold i { --ic: #f2b82e; }
+.menu-stat.stars i { --ic: #ffcf3a; }
+.menu-stat.feats i { --ic: #a77bf0; }
+.menu-stat.mastery i { --ic: #3f9be8; }
+.menu-stat:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.menu-tools { display: flex; gap: 8px; }
+.menu-tool { width: 44px; height: 42px; padding: 0; display: grid; place-items: center; line-height: 0; border-radius: 12px; font-size: 22px; }
+.menu-tool svg { overflow: visible; filter: drop-shadow(0 2px 0 var(--outline)); }
+.menu-tool .spk { fill: #fff; stroke: var(--outline); stroke-width: 2.2; stroke-linejoin: round; paint-order: stroke; }
+.menu-tool path:not(.spk) { fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; }
+.menu-sound.off .on, .menu-sound:not(.off) .off { display: none; }
+.menu-tool.off, .menu-tool.low { background: linear-gradient(#c8ced9, #8a93a6 45%, #5d6578); }
+.menu-tool:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+/* palco: equipe + botão de batalha */
+.menu-stage { display: flex; align-items: center; gap: 26px; }
+.menu-crew { display: flex; align-items: center; gap: 12px; }
+.menu-crew .menu-hero:nth-child(2) { margin-top: 34px; }
+.menu-crew.right { flex-direction: row-reverse; }
+.menu-hero { position: relative; width: 92px; height: 92px; overflow: hidden; box-sizing: border-box; border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #fff9e9, var(--c) 58%, var(--cd)); border: 4px solid var(--outline);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, .45), 0 5px 0 var(--outline), 0 10px 18px rgba(0, 0, 0, .35);
+  animation: menu-hero-in .5s cubic-bezier(.2, 1.6, .4, 1) var(--d) backwards, menu-hero-bob 3.6s ease-in-out var(--bob) infinite; }
+/* retrato ainda não desenhado: o símbolo da classe segura o lugar */
+.menu-hero:has(img[src^="data:"])::before, .menu-hero:has(img[src=""])::before { content: attr(data-glyph); position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 40px; color: #fff; -webkit-text-stroke: 4px var(--outline); paint-order: stroke fill; opacity: .85; }
+.menu-hero img { position: absolute; left: -22%; top: -4%; width: 144%; height: 144%; object-fit: contain; }
+
+.menu-btn { position: relative; isolation: isolate; box-sizing: border-box; cursor: pointer; text-align: center; color: #fff; user-select: none;
+  border: 4px solid var(--outline); outline: none;
+  transition: transform .18s ease, filter .18s ease, opacity .25s ease, box-shadow .25s ease;
+  animation: menu-btn-in .45s cubic-bezier(.2, 1.4, .4, 1) var(--d) backwards; }
+.menu-btn b { display: block; font-weight: 400; -webkit-text-stroke: 5px var(--outline); paint-order: stroke fill; text-shadow: 0 3px 0 var(--outline); }
+.menu-btn small { display: inline-block; padding: 3px 10px; font-size: 14px; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill;
+  background: rgba(13, 20, 38, .45); border-radius: 999px; }
+.menu-icon { display: block; line-height: 1; color: #fff; -webkit-text-stroke: 4px var(--outline); paint-order: stroke fill; text-shadow: 0 3px 0 var(--outline); }
+.menu-btn:hover { transform: translateY(-4px); filter: brightness(1.07); }
+.menu-btn:active { transform: translateY(2px); }
+.menu-btn:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+.menu-btn.chosen { transform: scale(1.08); filter: brightness(1.2); }
+.menu-btn.gone { opacity: 0; transform: scale(.9) translateY(14px); }
+
+/* botão principal: dourado, brilho passando e pulso suave */
+.menu-battle { width: 320px; padding: 16px 22px 14px; display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; row-gap: 6px; border-radius: 24px;
+  background: linear-gradient(#fff2a6, #ffd23f 42%, #f0a018); overflow: hidden;
+  box-shadow: inset 0 5px 0 rgba(255, 255, 255, .6), inset 0 -7px 0 rgba(160, 80, 0, .45), 0 7px 0 var(--outline), 0 0 26px 4px rgba(255, 210, 80, .45);
+  animation: menu-btn-in .5s cubic-bezier(.2, 1.4, .4, 1) var(--d) backwards, menu-battle-pulse 2.4s ease-in-out 1s infinite; }
+.menu-battle .menu-icon { grid-row: span 2; font-size: 52px; }
+.menu-battle b { font-size: 42px; line-height: 1; text-align: left; }
+.menu-battle .menu-next, .menu-battle .menu-badge-stars { grid-column: 2; justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-battle .menu-badge-stars { position: absolute; top: 10px; right: 12px; font-size: 15px; color: #fff3a8; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+.menu-battle::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, .55) 48%, transparent 60%) no-repeat;
+  background-size: 250% 100%; animation: menu-shine 3.6s ease-in-out 1.2s infinite; }
+.menu-battle.sel, .menu-battle:hover { box-shadow: inset 0 5px 0 rgba(255, 255, 255, .6), inset 0 -7px 0 rgba(160, 80, 0, .45), 0 7px 0 var(--outline), 0 0 0 4px #fff, 0 0 34px 8px rgba(255, 210, 80, .6); }
+
+/* modos secundários */
+.menu-row { display: flex; gap: 18px; }
+.menu-side { width: 148px; min-height: 112px; padding: 10px 8px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 18px;
+  background: linear-gradient(var(--c), var(--cd)); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45), inset 0 -5px 0 rgba(0, 0, 0, .22), 0 6px 0 var(--outline); }
+.menu-side .menu-icon { font-size: 34px; }
+.menu-side b { font-size: 19px; line-height: 1.1; -webkit-text-stroke-width: 4px; }
+.menu-side.sel { box-shadow: inset 0 3px 0 rgba(255, 255, 255, .45), inset 0 -5px 0 rgba(0, 0, 0, .22), 0 6px 0 var(--outline), 0 0 0 3px #fff, 0 0 20px var(--c); }
+.menu-new { position: absolute; top: -12px; right: -12px; width: 30px; height: 30px; display: grid; place-items: center; color: #fff; font-size: 20px;
+  -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; background: radial-gradient(circle at 38% 30%, #ff8f8f, #e0303a 70%);
+  border: 3px solid var(--outline); border-radius: 50%; box-sizing: border-box; animation: menu-new 1.4s ease-in-out infinite; }
+
+@keyframes menu-bar-in { from { opacity: 0; translate: 0 -24px; } }
+@keyframes menu-btn-in { from { opacity: 0; translate: 0 26px; scale: .9; } }
+@keyframes menu-hero-in { from { opacity: 0; scale: .3; } }
+@keyframes menu-hero-bob { 50% { translate: 0 -6px; } }
+@keyframes menu-battle-pulse { 50% { scale: 1.03; } }
+@keyframes menu-shine { 0% { background-position: 130% 0; } 45%, 100% { background-position: -30% 0; } }
+@keyframes menu-new { 50% { scale: 1.15; } }
+@media (max-height: 760px) { .menu-home { gap: 20px; } .menu-hero { width: 76px; height: 76px; } .menu-side { min-height: 96px; } }
+@media (prefers-reduced-motion: reduce) {
+  .menu-btn, .menu-hero, .menu-bar, .menu-new, .menu-battle::after { animation: none !important; }
+  .menu-btn { transition: none; }
+}
 /* objetivo da missão no HUD */
 #goal.hidden { display: none; }
 #goal { background: linear-gradient(#ff9a5a, #d0502f); }
