@@ -1502,5 +1502,12 @@ test('chefe abaixo de metade da vida se enfurece e recupera parte dela uma vez s
   b.hp=b.maxHp*0.3;b.update(.05);assert.equal(b.hp,b.maxHp*0.3,'só uma vez');
   const c=foe('Warrior',0,-8);c.hp=c.maxHp*0.2;c.update(.05);assert.equal(c.hp,c.maxHp*0.2,'inimigo comum não');clear();
 });
+test('herói corpo a corpo não pipoca na borda do alcance do posto',()=>{
+  clear();t.game.state='fight';const k=hero('champion',0,0);const e=foe('Warrior',0,-5);e.busy=99;e.hp=e.maxHp=1e5;e.speed=0;
+  tick(.05,4);assert.equal(k.engagedWith,e,'engaja o alvo dentro do alcance');
+  e.pos.z=k.post.z-(5+k.range+1.5);const z0=k.pos.z;tick(.05,4);   // passa um pouco do limite do posto
+  assert.equal(k.engagedWith,e,'continua no alvo dentro da folga');assert.ok(k.pos.z<z0,'segue o alvo em vez de voltar ao posto');
+  e.pos.z=k.post.z-(5+k.range+5);tick(.05,4);assert.equal(k.engagedWith,null,'larga quando o alvo se afasta bem');clear();
+});
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

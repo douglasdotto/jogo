@@ -24,6 +24,7 @@ const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
 const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
+const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
 const RANGED_INTERCEPT = 18.5; // cobre arqueiros da onda, sem perseguição pelo mapa
 const RANGED_INTERCEPTORS = 2;
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
@@ -1985,6 +1986,9 @@ function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+// quem já está brigando só larga o alvo quando ele se afasta bem do posto (evita ir e voltar na borda)
+const stillEngaged = (hero, target) => hero.engagedWith === target && tacticalDistance(hero.post, target.pos) <= LEASH + hero.range + ENGAGE_SLACK;
+
 // Heróis à distância recuam alguns passos quando um inimigo corpo a corpo encosta, puxando para o
 // posto (atrás da linha de frente), e voltam a atirar; a recarga evita que passem a luta fugindo.
 const KITE_TRIGGER = 2.2, KITE_STEP = 2.6, KITE_TIME = 0.7, KITE_COOLDOWN = 3;
@@ -2170,7 +2174,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
   let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
   for (const target of candidates) {
-    if (target.dead || target.spawning || !canHeroReachTarget(hero, target, context)) continue;
+    if (target.dead || target.spawning || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target))) continue;
     const score = heroTargetScore(hero, target, hero.pos, context);
     if (target === hero.targetFocus) { focused = target; focusedScore = score; }
     if (score < bestScore) { best = target; bestScore = score; }
@@ -4342,7 +4346,9 @@ class Hero extends Unit {
       }
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
-    const engage = target && canHeroReachTarget(this, target);
+    // margem para não pipocar: quem já está brigando só larga o alvo quando ele se afasta bem do posto
+    const engage = target && (canHeroReachTarget(this, target) || stillEngaged(this, target));
+    this.engagedWith = engage ? target : null;
     const captive = !engage && game.state === 'fight' ? captivePrisoner() : null;   // sem luta, vai libertar o prisioneiro
     if (captive) {
       if (this.pos.distanceTo(captive.pos) > RESCUE_RADIUS - 0.8) this.moveTo(captive.pos, dt);
