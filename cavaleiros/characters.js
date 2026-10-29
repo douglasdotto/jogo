@@ -2,6 +2,7 @@
 // então dá para trocar cabeça, chapéu, capa e arma entre eles, mudar as cores e pôr acessórios.
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // receitas: base = modelo de partida; hide = peças da base que somem; add = peças de outros modelos;
 // paint = mudança de cor por peça (hue gira o tom, tint pinta por cima mantendo a sombra);
@@ -17,8 +18,12 @@ export const CHARACTERS = [
       Rogue_Body: { tint: '#9b7a4a', amount: 0.55 }, Rogue_ArmLeft: { tint: '#9b7a4a', amount: 0.55 }, Rogue_ArmRight: { tint: '#9b7a4a', amount: 0.55 },
       Rogue_LegLeft: { hue: -40 }, Rogue_LegRight: { hue: -40 },
       Mage_Cape: { tint: '#5fae3e', amount: 0.85 }, '2H_Staff': { tint: '#8a5a2e', amount: 0.6 },
+      Rogue_Head: { face: { skin: '#c8946a', hair: '#6a9a2a', eyes: '#8ff060' } },   // cabelo de musgo e olhos de folha
     },
-    extras: [{ type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }, { type: 'leafMantle', bone: 'chest' }],
+    extras: [
+      { type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }, { type: 'leafMantle', bone: 'chest' },
+      { type: 'facePaint', bone: 'head', style: 'dots', color: 0x7fd040 }, { type: 'motes', bone: 'root', color: 0xd8ff6a, n: 5, size: 0.045 },
+    ],
   },
   {
     id: 'necromante', name: 'Necromante', desc: 'Mago esqueleto que brinca com magia verde.', color: ['#c9a3ff', '#6b3fa0'],
@@ -31,8 +36,13 @@ export const CHARACTERS = [
     ],
     paint: {
       Mage_Cape: { tint: '#39254e', amount: 0.86 }, Skeleton_Mage_Hat: { tint: '#6d43a6', amount: 0.72 },
+      Skeleton_Mage_Body: { tint: '#4a2e6a', amount: 0.55 }, Skeleton_Mage_ArmLeft: { tint: '#4a2e6a', amount: 0.4 }, Skeleton_Mage_ArmRight: { tint: '#4a2e6a', amount: 0.4 },
     },
-    extras: [{ type: 'orb', bone: 'handslotl' }, { type: 'skull', bone: 'handslotr', y: 1.38 }],   // caveira na ponta do cajado
+    extras: [
+      { type: 'orb', bone: 'handslotl' }, { type: 'skull', bone: 'handslotr', y: 1.38 },   // caveira na ponta do cajado
+      { type: 'pauldrons', bone: 'chest', color: 0x59436f, spikes: true, size: 0.92 },
+      { type: 'runeRing', bone: 'root', color: 0x72db8b }, { type: 'motes', bone: 'root', color: 0x7dffa0, n: 5, size: 0.045 },
+    ],
   },
   {
     id: 'rei', name: 'Rei Dourado', desc: 'Armadura de ouro, coroa e espadão.', color: ['#ffe07a', '#d19a1c'],
@@ -44,8 +54,13 @@ export const CHARACTERS = [
       Knight_Body: { tint: '#ffc93c', amount: 0.75 }, Knight_ArmLeft: { tint: '#ffc93c', amount: 0.75 }, Knight_ArmRight: { tint: '#ffc93c', amount: 0.75 },
       Knight_LegLeft: { tint: '#ffc93c', amount: 0.75 }, Knight_LegRight: { tint: '#ffc93c', amount: 0.75 },
       Barbarian_Cape: { tint: '#8a3fd1', amount: 0.85 }, '2H_Sword': { tint: '#fff2b0', amount: 0.35 },
+      Knight_Head: { face: { skin: '#f2c8a0', hair: '#e8b830', eyes: '#9a5ae0' } },
     },
-    extras: [{ type: 'crown', bone: 'head' }],
+    extras: [
+      { type: 'crown', bone: 'head' },
+      { type: 'beard', bone: 'head', color: 0xd8a828 }, { type: 'mustache', bone: 'head', color: 0xd8a828, curl: 0.45 },
+      { type: 'pauldrons', bone: 'chest', color: 0xe8b93e, trim: 0x8a3fd1, size: 1.12 },
+    ],
   },
   {
     id: 'viking', name: 'Viking do Gelo', desc: 'Bárbaro do norte com elmo de chifres.', color: ['#a8e4ff', '#3f8fc4'],
@@ -57,8 +72,9 @@ export const CHARACTERS = [
       Barbarian_Body: { tint: '#7fc4ff', amount: 0.6 }, Barbarian_ArmLeft: { tint: '#7fc4ff', amount: 0.35 }, Barbarian_ArmRight: { tint: '#7fc4ff', amount: 0.35 },
       Barbarian_LegLeft: { tint: '#3f6fa0', amount: 0.7 }, Barbarian_LegRight: { tint: '#3f6fa0', amount: 0.7 },
       Knight_Helmet: { tint: '#d8ecff', amount: 0.4 }, Knight_Cape: { tint: '#ffffff', amount: 0.8 }, '2H_Axe': { tint: '#a8e4ff', amount: 0.5 },
+      Barbarian_Head: { face: { skin: '#dfe8f2', hair: '#eef6ff', eyes: '#9ff4ff' } },   // barba de geada e olhos claros
     },
-    extras: [{ type: 'horns', bone: 'head' }],
+    extras: [{ type: 'horns', bone: 'head' }, { type: 'furMantle', bone: 'chest', color: 0xd9eafa }],
   },
   {
     id: 'cleric', name: 'Clériga', desc: 'Clériga de túnica leve e cajado sagrado.', color: ['#fff0dc', '#d89b61'],
@@ -70,8 +86,12 @@ export const CHARACTERS = [
       Mage_Body: { tint: '#f4edda', amount: 0.8 }, Mage_ArmLeft: { tint: '#f4edda', amount: 0.76 }, Mage_ArmRight: { tint: '#f4edda', amount: 0.76 },
       Mage_LegLeft: { tint: '#e4d8bb', amount: 0.74 }, Mage_LegRight: { tint: '#e4d8bb', amount: 0.74 },
       Mage_Cape: { tint: '#fff0dc', amount: 0.68 }, '2H_Staff': { tint: '#d3a64a', amount: 0.58 },
+      Mage_Head: { face: { skin: '#a8724e', hair: '#2a1a12', eyes: '#d8a040' } },
     },
-    extras: [{ type: 'robeSkirt', bone: 'hips' }, { type: 'clericStole', bone: 'chest' }, { type: 'crossBadge', bone: 'chest' }],
+    extras: [
+      { type: 'robeSkirt', bone: 'hips' }, { type: 'clericStole', bone: 'chest' }, { type: 'crossBadge', bone: 'chest' },
+      { type: 'circlet', bone: 'head', gem: 0x9fe0ff }, { type: 'brows', bone: 'head', color: 0x2a1a12, angle: -0.15 },
+    ],
   },
   {
     id: 'bard', name: 'Bardo', desc: 'Cantor de guerra que inspira os aliados.', color: ['#f4c6ff', '#875ac7'],
@@ -82,8 +102,12 @@ export const CHARACTERS = [
     paint: {
       Rogue_Body: { tint: '#59477c', amount: 0.82 }, Rogue_ArmLeft: { tint: '#59477c', amount: 0.7 }, Rogue_ArmRight: { tint: '#59477c', amount: 0.7 },
       Rogue_LegLeft: { tint: '#33284e', amount: 0.78 }, Rogue_LegRight: { tint: '#33284e', amount: 0.78 }, Barbarian_Cape: { tint: '#bd5cbb', amount: 0.78 },
+      Rogue_Head: { face: { skin: '#f0c8a8', hair: '#f0b040', eyes: '#b070e0' } },   // cachos loiros e olhos violeta
     },
-    extras: [{ type: 'lute', bone: 'handslotr' }, { type: 'travelHat', bone: 'head' }, { type: 'feather', bone: 'head', color: 0xffd676, y: 1.2 }, { type: 'luteStrap', bone: 'chest' }],
+    extras: [
+      { type: 'lute', bone: 'handslotr' }, { type: 'travelHat', bone: 'head' }, { type: 'feather', bone: 'head', color: 0xffd676, y: 1.2 }, { type: 'luteStrap', bone: 'chest' },
+      { type: 'mustache', bone: 'head', color: 0xc8902a, curl: 0.65 }, { type: 'brows', bone: 'head', color: 0xc8902a, angle: -0.1 },
+    ],
   },
   {
     id: 'angel', name: 'Anjo', desc: 'Mensageiro celeste que paira com asas de luz.', color: ['#fff4b5', '#d8a632'],
@@ -94,8 +118,9 @@ export const CHARACTERS = [
     paint: {
       Mage_Body: { tint: '#fff0c2', amount: 0.88 }, Mage_ArmLeft: { tint: '#fff0c2', amount: 0.82 }, Mage_ArmRight: { tint: '#fff0c2', amount: 0.82 },
       Mage_LegLeft: { tint: '#d8d2bd', amount: 0.75 }, Mage_LegRight: { tint: '#d8d2bd', amount: 0.75 }, Mage_Cape: { tint: '#ffe27a', amount: 0.7 },
+      Mage_Head: { face: { skin: '#ffe6d6', hair: '#fff2b8', eyes: '#ffc830' } },   // cabelo platinado e olhos dourados
     },
-    extras: [{ type: 'halo', bone: 'head' }, { type: 'wings', bone: 'chest' }],
+    extras: [{ type: 'halo', bone: 'head' }, { type: 'wings', bone: 'chest' }, { type: 'motes', bone: 'root', color: 0xffe8a0, n: 5, size: 0.045, y: 1.3 }],
   },
   {
     id: 'chronist', name: 'Cronomante', desc: 'Ladino arcano que dobra o tempo ao redor.', color: ['#a8d9ff', '#4968c7'],
@@ -107,8 +132,12 @@ export const CHARACTERS = [
       Rogue_Body: { tint: '#394b83', amount: 0.82 }, Rogue_ArmLeft: { tint: '#394b83', amount: 0.76 }, Rogue_ArmRight: { tint: '#394b83', amount: 0.76 },
       Rogue_LegLeft: { tint: '#232a50', amount: 0.82 }, Rogue_LegRight: { tint: '#232a50', amount: 0.82 }, Mage_Cape: { tint: '#526ed4', amount: 0.85 },
       '2H_Staff': { tint: '#9ddcff', amount: 0.6 },
+      Rogue_Head: { face: { skin: '#e8c8b0', hair: '#9cb8ff', eyes: '#5ad8ff' } },   // cabelo prateado-azul
     },
-    extras: [{ type: 'stars', bone: 'head', color: 0xa8d9ff }, { type: 'orb', bone: 'handslotl', color: 0xb9e8ff, glow: 0x5075ff }],
+    extras: [
+      { type: 'stars', bone: 'head', color: 0xa8d9ff }, { type: 'orb', bone: 'handslotl', color: 0xb9e8ff, glow: 0x5075ff },
+      { type: 'monocle', bone: 'head' }, { type: 'runeRing', bone: 'root', color: 0x75b8ff },
+    ],
   },
 ];
 
@@ -166,6 +195,14 @@ export function applyLook(root, assets, r) {
     const [x = 1, y = 1, z = 1] = factors;
     mesh.scale.set(mesh.scale.x * x, mesh.scale.y * y, mesh.scale.z * z);
   }
+  // peças rígidas (escudo, arma) maiores ou menores sem mexer nas proporções do corpo
+  for (const [part, factor] of Object.entries(r.resize || {})) root.getObjectByName(part)?.scale.multiplyScalar(factor);
+  // nova orientação de uma peça rígida no seu osso (ex.: livro aberto virado para a frente)
+  for (const [part, { rot, pos }] of Object.entries(r.pose || {})) {
+    const obj = root.getObjectByName(part);
+    if (rot) obj?.rotation.fromArray(rot);
+    if (pos) obj?.position.fromArray(pos);
+  }
 
   for (const [part, op] of Object.entries(r.paint || {})) {
     root.getObjectByName(part)?.traverse((o) => {
@@ -184,24 +221,39 @@ export function applyLook(root, assets, r) {
 // ---------- cores: recolore o atlas de cores do modelo ----------
 const recolored = new Map();
 
+// casas do atlas KayKit (grade 8x4) usadas pelo rosto: pele, cabelo/barba, olhos e capuz
+const FACE_CELLS = { skin: [0, 0], hair: [1, 0], eyes: [2, 0], hood: [1, 1] };
+// quanto cada casa do rosto puxa para a cor nova; os olhos clareiam para a íris aparecer
+const FACE_MIX = { skin: [0.35, 0.62], hair: [0.6, 0.88], eyes: [0.95, 0.9], hood: [0.35, 0.85] };
+
+// pinta mantendo a luz e a sombra do desenho original
+function tintPixel(r, g, b, tint, a, base = 0.35) {
+  const lum = 0.3 * r + 0.59 * g + 0.11 * b, k = base + 0.95 * lum;
+  return [r + (Math.min(1, tint.r * k * 1.25) - r) * a, g + (Math.min(1, tint.g * k * 1.25) - g) * a, b + (Math.min(1, tint.b * k * 1.25) - b) * a];
+}
+
 export function recolor(tex, op) {
   const key = `${tex.uuid}|${JSON.stringify(op)}`;
   if (recolored.has(key)) return recolored.get(key);
-  const { width: w, height: h } = tex.image;
+  // o atlas é feito de faixas lisas: metade da resolução basta e gasta 4x menos memória por variante
+  const scale = Math.min(1, 512 / tex.image.width);
+  const w = Math.round(tex.image.width * scale), h = Math.round(tex.image.height * scale);
   const canvas = document.createElement('canvas');
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(tex.image, 0, 0);
+  ctx.drawImage(tex.image, 0, 0, w, h);
   const img = ctx.getImageData(0, 0, w, h), px = img.data;
   const tint = op.tint ? new THREE.Color(op.tint) : null;
+  // face: { skin, hair, eyes, hood } troca só as casas do rosto, sem tingir o resto da cabeça
+  const cells = Object.entries(op.face || {}).map(([part, color]) => [FACE_CELLS[part], new THREE.Color(color), FACE_MIX[part]]);
+  const cw = w / 8, ch = h / 4;
   for (let i = 0; i < px.length; i += 4) {
     let r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255;
     if (op.hue) [r, g, b] = rotateHue(r, g, b, op.hue);
-    if (tint) {   // pinta mantendo a luz e a sombra do desenho original
-      const lum = 0.3 * r + 0.59 * g + 0.11 * b, k = 0.35 + 0.95 * lum, a = op.amount ?? 0.7;
-      r += (Math.min(1, tint.r * k * 1.25) - r) * a;
-      g += (Math.min(1, tint.g * k * 1.25) - g) * a;
-      b += (Math.min(1, tint.b * k * 1.25) - b) * a;
+    if (tint) [r, g, b] = tintPixel(r, g, b, tint, op.amount ?? 0.7);
+    if (cells.length) {
+      const p = i / 4, cx = Math.floor((p % w) / cw), cy = Math.floor(Math.floor(p / w) / ch);
+      for (const [[x, y], color, [base, a]] of cells) if (cx === x && cy === y) [r, g, b] = tintPixel(r, g, b, color, a, base);
     }
     px[i] = r * 255; px[i + 1] = g * 255; px[i + 2] = b * 255;
   }
@@ -231,6 +283,19 @@ function rotateHue(r, g, b, deg) {
 // ---------- acessórios (posições em relação ao osso, em unidades do modelo) ----------
 const lambert = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
 const gold = lambert(0xffcc33, { emissive: 0x6a4a00, emissiveIntensity: 0.4 });
+
+// peça de geometria já posicionada, para juntar várias numa malha só (uma chamada de desenho por material)
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+function piece(geo, pos = [0, 0, 0], rot = [0, 0, 0], scale = 1) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+  const sc = Array.isArray(scale) ? scale : [scale, scale, scale];
+  return g.applyMatrix4(_m.compose(_p.fromArray(pos), _q.setFromEuler(_e.set(...rot)), _s.fromArray(sc)));
+}
+const merged = (pieces) => mergeGeometries(pieces.map((g) => {
+  for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(name)) g.deleteAttribute(name);
+  return g;
+}));
 
 const ACCESSORIES = {
   crown() {
@@ -282,31 +347,26 @@ const ACCESSORIES = {
     return g;
   },
   // elmo fechado de fortaleza: perfil largo e pesado para o guardião, diferente do elmo emplumado do paladino
-  greathelm({ color = 0x7890ad, trim = 0xc8d9ec, slit = 0x17243a } = {}) {
+  // (a cabeça KayKit vai de y≈0 a 1.07 no osso; olhos em y≈0.37, rosto em z≈0.5)
+  greathelm({ color = 0x7890ad, trim = 0xc8d9ec, slit = 0x101826, eyes = 0x7fd4ff } = {}) {
     const g = new THREE.Group();
-    const steel = lambert(color), edge = lambert(trim), dark = lambert(slit);
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.62), steel);
-    dome.scale.set(1.12, 0.95, 1.02);
-    dome.position.y = 0.18;
-    g.add(dome);
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.77, 0.11, 0.12), edge);
-    brow.position.set(0, 0.08, 0.31);
-    g.add(brow);
-    const face = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.38, 0.1), steel);
-    face.position.set(0, -0.13, 0.31);
-    g.add(face);
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.045, 0.025), dark);
-    visor.position.set(0, -0.035, 0.37);
-    g.add(visor);
-    for (const s of [-1, 1]) {
-      const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.42, 0.18), steel);
-      cheek.position.set(s * 0.31, -0.2, 0.13);
-      cheek.rotation.z = -s * 0.12;
-      g.add(cheek);
-    }
-    const neckGuard = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.31, 0.16, 10), edge);
-    neckGuard.position.y = -0.38;
-    g.add(neckGuard);
+    const steel = [
+      piece(new THREE.CylinderGeometry(0.6, 0.62, 0.78, 12), [0, 0.42, 0]),   // balde do elmo
+      piece(new THREE.SphereGeometry(0.6, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2), [0, 0.8, 0], [0, 0, 0], [1, 0.42, 1]),   // topo arredondado
+    ];
+    const edge = [
+      piece(new THREE.BoxGeometry(0.1, 0.62, 0.08), [0, 0.6, 0.6]),   // aresta vertical na frente
+      piece(new THREE.TorusGeometry(0.615, 0.035, 4, 16), [0, 0.03, 0], [Math.PI / 2, 0, 0]),   // aro de baixo
+      piece(new THREE.BoxGeometry(1.0, 0.07, 0.06), [0, 0.47, 0.6]),   // sobrancelha da viseira
+    ];
+    for (let i = 0; i < 3; i++) edge.push(piece(new THREE.BoxGeometry(0.05, 0.05, 0.03), [0.12 + i * 0.1, 0.18, 0.61]));   // respiros
+    const dark = [piece(new THREE.BoxGeometry(0.86, 0.09, 0.05), [0, 0.38, 0.6])];   // fenda da viseira
+    g.add(new THREE.Mesh(merged(steel), lambert(color)));
+    g.add(new THREE.Mesh(merged(edge), lambert(trim)));
+    g.add(new THREE.Mesh(merged(dark), lambert(slit)));
+    // olhos acesos dentro da fenda: dá rosto ao guardião sem mostrar o rosto
+    const glow = [-1, 1].map((s) => piece(new THREE.BoxGeometry(0.1, 0.045, 0.02), [s * 0.17, 0.38, 0.625]));
+    g.add(new THREE.Mesh(merged(glow), new THREE.MeshBasicMaterial({ color: eyes })));
     return g;
   },
   horns() {
@@ -412,22 +472,20 @@ const ACCESSORIES = {
     }
     return g;
   },
-  // ombreiras redondas (no osso do peito)
-  pauldrons({ color = 0xb0b8c4, spikes = false, size = 1 } = {}) {
-    const g = new THREE.Group();
-    g.scale.setScalar(size);
+  // ombreiras redondas (no osso do peito): o tamanho cresce a peça, não a altura,
+  // para não subirem até a cabeça e virarem "orelhas" no retrato
+  pauldrons({ color = 0xb0b8c4, spikes = false, size = 1, trim } = {}) {
+    const plates = [], studs = [], rims = [];
     for (const s of [-1, 1]) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), lambert(color));
-      p.position.set(s * 0.42, 0.38, 0);
-      p.rotation.z = -s * 0.5;
-      g.add(p);
-      if (spikes) {
-        const sp = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 5), lambert(0xe8e0c8));
-        sp.position.set(s * 0.5, 0.55, 0);
-        sp.rotation.z = -s * 0.6;
-        g.add(sp);
-      }
+      const x = s * (0.4 + (size - 1) * 0.12), tilt = [0, 0, -s * 0.42];
+      plates.push(piece(new THREE.SphereGeometry(0.21, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), [x, 0.2, 0], tilt, [size * 1.05, size * 0.8, size]));
+      rims.push(piece(new THREE.TorusGeometry(0.2, 0.03, 4, 12), [x, 0.2, 0], [Math.PI / 2, 0, tilt[2]], [size * 1.05, size, size]));
+      if (spikes) studs.push(piece(new THREE.ConeGeometry(0.06, 0.24, 5), [x + s * 0.06 * size, 0.2 + 0.17 * size, 0], [0, 0, -s * 0.5], 1));
     }
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged(plates), lambert(color)));
+    if (trim) g.add(new THREE.Mesh(merged(rims), lambert(trim)));   // friso em outro tom
+    if (studs.length) g.add(new THREE.Mesh(merged(studs), lambert(0xe8e0c8)));
     return g;
   },
   // pele grossa em volta dos ombros, usada para deixar o viking do gelo mais robusto
@@ -533,33 +591,59 @@ const ACCESSORIES = {
     g.position.set(0.05, 0.05, 0.06); g.rotation.z = -0.15;
     return g;
   },
-  wings() {
+  // asas em três camadas de penas (rêmiges longas atrás, secundárias e coberteiras na frente),
+  // abertas em leque a partir de uma borda curva; branco perolado com pontas douradas.
+  // Cada asa é uma malha só (penas juntadas), e o grupo de cada lado bate com userData.wingFlap
+  wings({ color = 0xffffff, tip = 0xf0b840 } = {}) {
     const g = new THREE.Group();
-    const featherMat = lambert(0xfffbeb, { emissive: 0x8a7540, emissiveIntensity: 0.18 });
-    const tipMat = lambert(0xffe8a0, { emissive: 0xb88932, emissiveIntensity: 0.22 });
+    const pearl = new THREE.Color(color), goldTip = new THREE.Color(tip), cream = new THREE.Color(0xeee8f8);   // base levemente lilás: brilho perolado
+    // pena: folha alongada de 0 a 1 no eixo Y, com leve volume no meio para pegar luz
+    const featherShape = new THREE.Shape();
+    featherShape.moveTo(0, 0);
+    featherShape.quadraticCurveTo(0.13, 0.35, 0.07, 0.86);
+    featherShape.quadraticCurveTo(0.03, 1.0, 0, 1.0);
+    featherShape.quadraticCurveTo(-0.05, 0.9, -0.09, 0.62);
+    featherShape.quadraticCurveTo(-0.1, 0.25, 0, 0);
+    const feather = (len, width, tipped, shade) => {
+      const geo = new THREE.ExtrudeGeometry(featherShape, { depth: 0.02, bevelEnabled: false, curveSegments: 4 });
+      const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3), c = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        c.copy(shade).lerp(pearl, Math.min(1, y * 1.6));
+        if (tipped && y > 0.72) c.lerp(goldTip, (y - 0.72) / 0.28);
+        colors.set([c.r, c.g, c.b], i * 3);
+        pos.setZ(i, pos.getZ(i) - Math.sin(y * Math.PI) * 0.06);   // curvatura: a pena arqueia para trás
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geo.scale(width, len, 1);
+      return geo;
+    };
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0xc8c0d8, emissiveIntensity: 0.32 });
     for (const side of [-1, 1]) {
+      const pieces = [];
+      // borda de ataque: sobe do ombro para fora, como um braço da asa
+      const edge = (t) => [side * (0.05 + 0.7 * t), 0.05 + 0.5 * Math.sin(t * Math.PI * 0.55)];
+      const layers = [
+        { n: 9, len: [0.62, 1.1], ang: [160, 48], z: -0.05, tipped: true, width: 1.25 },   // rêmiges
+        { n: 7, len: [0.45, 0.7], ang: [150, 62], z: 0, tipped: false, width: 1.15, span: 0.85 },   // secundárias
+        { n: 6, len: [0.26, 0.36], ang: [140, 75], z: 0.05, tipped: false, width: 1.05, span: 0.8 },   // coberteiras
+      ];
+      for (const L of layers) {
+        for (let i = 0; i < L.n; i++) {
+          const t = (i / (L.n - 1)) * (L.span || 1), [x, y] = edge(t);
+          const len = L.len[0] + (L.len[1] - L.len[0]) * (i / (L.n - 1));
+          const ang = THREE.MathUtils.degToRad(L.ang[0] + (L.ang[1] - L.ang[0]) * (i / (L.n - 1)));
+          pieces.push(piece(feather(len, L.width, L.tipped, L.tipped ? cream : pearl), [x, y, L.z - i * 0.004], [0, side * 0.25, -side * ang], 1));
+        }
+      }
       const wing = new THREE.Group();
-      // duas camadas abertas em leque, maiores nas pontas para ler como asa mesmo à distância
-      for (let i = 0; i < 9; i++) {
-        const feather = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), i >= 7 ? tipMat : featherMat);
-        feather.scale.set(0.54, 2.15 - i * 0.12, 0.34);
-        feather.position.set(side * (0.12 + i * 0.105), 0.2 - i * 0.048, -0.04 - i * 0.01);
-        feather.rotation.z = -side * (0.2 + i * 0.078);
-        wing.add(feather);
-      }
-      for (let i = 0; i < 6; i++) {
-        const covert = new THREE.Mesh(new THREE.SphereGeometry(0.1, 7, 5), featherMat);
-        covert.scale.set(0.58, 1.3, 0.3);
-        covert.position.set(side * (0.12 + i * 0.115), 0.06 - i * 0.022, 0.035);
-        covert.rotation.z = -side * (0.18 + i * 0.09);
-        wing.add(covert);
-      }
-      wing.position.set(side * 0.25, 0.1, -0.3);
-      wing.rotation.y = side * -0.28;
+      wing.add(new THREE.Mesh(merged(pieces), mat));
+      wing.position.set(side * 0.18, 0.18, -0.32);
+      wing.rotation.y = side * -0.3;
       wing.userData.wingFlap = side;
       g.add(wing);
     }
-    g.scale.set(1.62, 1.36, 1.05);
+    g.scale.set(1.25, 1.2, 1.1);
     return g;
   },
   // chaminhas saindo do chapéu
@@ -719,9 +803,114 @@ const ACCESSORIES = {
   // máscara cobrindo a parte de baixo do rosto
   mask({ color = 0x2a2238 } = {}) {
     const g = new THREE.Group();
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.4, 0.2, 12, 1, true, -Math.PI * 0.42, Math.PI * 0.84), new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, flatShading: true }));
-    m.position.set(0, 0.28, 0.02);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.5, 0.3, 12, 1, true, -Math.PI * 0.42, Math.PI * 0.84), new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide, flatShading: true }));
+    m.position.set(0, 0.19, -0.02);
     g.add(m);
+    return g;
+  },
+  // ---------- rosto (osso da cabeça: olhos em y≈0.37, testa em y≈0.5, boca em y≈0.15, frente em z≈0.5) ----------
+  // sobrancelhas: angle > 0 = cara fechada (pontas de dentro descem), < 0 = expressão gentil
+  brows({ color = 0x3a2416, angle = 0.25, y = 0.5, size = 1 } = {}) {
+    const parts = [-1, 1].map((s) => piece(new THREE.BoxGeometry(0.2 * size, 0.055 * size, 0.04), [s * 0.19, y, 0.47], [0, 0, s * angle]));
+    return new THREE.Mesh(merged(parts), lambert(color));
+  },
+  // barba: full = cheia no queixo, long = de mago até o peito, goatee = cavanhaque, braids = duas tranças com anéis
+  beard({ color = 0x5a3a22, style = 'full', ring = 0xe8c060 } = {}) {
+    const g = new THREE.Group(), hair = [];
+    if (style === 'full' || style === 'long' || style === 'braids') {
+      hair.push(piece(new THREE.SphereGeometry(0.36, 10, 6, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55), [0, 0.2, 0.2], [0.25, 0, 0], [1.05, 0.75, 0.95]));
+      for (const s of [-1, 1]) hair.push(piece(new THREE.BoxGeometry(0.08, 0.24, 0.16), [s * 0.43, 0.25, 0.3], [0, 0, s * 0.1]));   // costeletas
+    }
+    if (style === 'long') hair.push(piece(new THREE.ConeGeometry(0.24, 0.62, 7), [0, -0.18, 0.38], [Math.PI + 0.35, 0, 0]));
+    if (style === 'goatee') hair.push(piece(new THREE.ConeGeometry(0.09, 0.22, 6), [0, 0.02, 0.45], [Math.PI + 0.3, 0, 0]));
+    const rings = [];
+    if (style === 'braids') {
+      for (const s of [-1, 1]) {
+        hair.push(piece(new THREE.CylinderGeometry(0.05, 0.075, 0.38, 6), [s * 0.12, -0.12, 0.44], [0.3, 0, s * 0.1]));
+        rings.push(piece(new THREE.CylinderGeometry(0.065, 0.065, 0.06, 7), [s * 0.125, -0.22, 0.475], [0.3, 0, s * 0.1]));
+      }
+    }
+    g.add(new THREE.Mesh(merged(hair), lambert(color)));
+    if (rings.length) g.add(new THREE.Mesh(merged(rings), lambert(ring)));
+    return g;
+  },
+  // bigode: curl > 0 levanta as pontas
+  mustache({ color = 0x5a3a22, curl = 0.3, y = 0.17 } = {}) {
+    const parts = [-1, 1].map((s) => piece(new THREE.CapsuleGeometry(0.045, 0.16, 3, 6), [s * 0.11, y, 0.52], [0, 0, s * (Math.PI / 2 - curl)]));
+    return new THREE.Mesh(merged(parts), lambert(color));
+  },
+  // cicatriz atravessando um olho
+  scar({ color = 0xc0605a, side = 1 } = {}) {
+    const parts = [piece(new THREE.BoxGeometry(0.035, 0.32, 0.03), [side * 0.2, 0.38, 0.5], [-0.1, 0, side * 0.35])];
+    for (const k of [-1, 0, 1]) parts.push(piece(new THREE.BoxGeometry(0.09, 0.022, 0.03), [side * (0.2 + k * 0.035), 0.38 - k * 0.09, 0.505], [0, 0, side * 0.35]));
+    return new THREE.Mesh(merged(parts), lambert(color));
+  },
+  // pintura de guerra: stripes = três riscos em cada bochecha, dots = pontinhos de folha/gelo
+  facePaint({ color = 0x2a1010, style = 'stripes', y = 0.27, x = 0.3 } = {}) {
+    const parts = [];
+    for (const s of [-1, 1]) {
+      if (style === 'stripes') for (let i = 0; i < 3; i++) parts.push(piece(new THREE.BoxGeometry(0.15, 0.032, 0.03), [s * (x + i * 0.012), y - i * 0.065, 0.49 - i * 0.02], [0, s * 0.45, s * 0.12]));
+      if (style === 'dots') for (let i = 0; i < 3; i++) parts.push(piece(new THREE.OctahedronGeometry(0.035 - i * 0.006), [s * (0.24 + i * 0.07), 0.24 - i * 0.03, 0.5 - i * 0.04], [0, 0, 0], [1, 1.4, 0.6]));
+    }
+    if (style === 'stripes') parts.push(piece(new THREE.BoxGeometry(0.05, 0.22, 0.03), [0, 0.62, 0.47], [0.1, 0, 0]));   // risco na testa
+    return new THREE.Mesh(merged(parts), lambert(color, style === 'dots' ? { emissive: color, emissiveIntensity: 0.35 } : {}));
+  },
+  // diadema fino com uma pedra na testa
+  circlet({ color = 0xe8c060, gem = 0xb07aff, y = 0.62 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged([piece(new THREE.TorusGeometry(0.51, 0.03, 4, 18), [0, y, 0.02], [Math.PI / 2 + 0.12, 0, 0], [1, 1.04, 1])]), lambert(color)));
+    const stone = new THREE.Mesh(new THREE.OctahedronGeometry(0.075), lambert(gem, { emissive: gem, emissiveIntensity: 0.55 }));
+    stone.position.set(0, y + 0.02, 0.53);
+    stone.scale.set(0.8, 1.2, 0.6);
+    g.add(stone);
+    return g;
+  },
+  // monóculo dourado com corrente: o cronomante "lê o tempo"
+  monocle({ color = 0xe8c060, lens = 0x9fe6ff, side = 1 } = {}) {
+    const g = new THREE.Group();
+    const frame = [piece(new THREE.TorusGeometry(0.11, 0.022, 5, 14), [side * 0.2, 0.37, 0.52]), piece(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 3), [side * 0.33, 0.2, 0.47], [0, 0, side * 0.5])];
+    g.add(new THREE.Mesh(merged(frame), lambert(color, { emissive: 0x5a3a00, emissiveIntensity: 0.3 })));
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.1, 12), new THREE.MeshBasicMaterial({ color: lens, transparent: true, opacity: 0.45, depthWrite: false }));
+    glass.position.set(side * 0.2, 0.37, 0.53);
+    g.add(glass);
+    return g;
+  },
+  // faixa amarrada na testa com duas pontas soltas atrás
+  headband({ color = 0xd13b3b, y = 0.62, radius = 0.55, depth = 1.1 } = {}) {
+    const parts = [piece(new THREE.CylinderGeometry(radius, radius, 0.11, 16, 1, true), [0, y, 0], [0.1, 0, 0], [1, 1, depth])];
+    for (const s of [-1, 1]) parts.push(piece(new THREE.BoxGeometry(0.09, 0.36, 0.03), [s * 0.1, y - 0.2, -radius * depth + 0.02], [0.35, 0, s * 0.35]));
+    return new THREE.Mesh(merged(parts), lambert(color, { side: THREE.DoubleSide }));
+  },
+  // partículas leves girando em volta do corpo (no osso raiz): brasas, vaga-lumes, flocos
+  motes({ color = 0xffb03a, n = 6, radius = 0.85, y = 1.0, size = 0.06 } = {}) {
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      parts.push(piece(new THREE.OctahedronGeometry(size * (0.7 + (i % 3) * 0.25)), [Math.cos(a) * radius, y + Math.sin(a * 3) * 0.35, Math.sin(a) * radius]));
+    }
+    const m = new THREE.Mesh(merged(parts), new THREE.MeshBasicMaterial({ color }));
+    m.userData.orbit = true;
+    return m;
+  },
+  // estrela de arremesso de 4 pontas, metal com miolo escuro
+  shuriken({ y = 0.12, z = 0.1, size = 1, rot = [0, 0, 0], pos } = {}) {
+    const g = new THREE.Group();
+    const blades = [];
+    for (let i = 0; i < 4; i++) blades.push(piece(new THREE.ConeGeometry(0.075, 0.24, 4), [0, 0.13, 0], [0, Math.PI / 4, 0], [1, 1, 0.3]).rotateZ((i * Math.PI) / 2));
+    blades.push(piece(new THREE.OctahedronGeometry(0.075), [0, 0, 0], [0, 0, Math.PI / 4], [1, 1, 0.35]));
+    g.add(new THREE.Mesh(merged(blades), lambert(0xc8d2dc, { emissive: 0x303a44, emissiveIntensity: 0.3 })));
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 6).rotateX(Math.PI / 2), lambert(0x1e2638));
+    g.add(hub);
+    g.scale.setScalar(size);
+    g.position.fromArray(pos || [0, y, z]);
+    g.rotation.fromArray(rot);
+    return g;
+  },
+  // cinturão com shurikens presas (osso do quadril)
+  shurikenBelt({ color = 0x1e2648 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged([piece(new THREE.TorusGeometry(0.37, 0.045, 4, 16), [0, 0.12, 0.02], [Math.PI / 2, 0, 0], [1.05, 1, 1])]), lambert(color)));
+    for (const [x, z, ry] of [[-0.24, 0.3, -0.6], [0, 0.39, 0], [0.24, 0.3, 0.6]]) g.add(ACCESSORIES.shuriken({ pos: [x, 0.12, z], rot: [0, ry, 0.3], size: 0.75 }));
     return g;
   },
   // cristal de gelo flutuando na mão
