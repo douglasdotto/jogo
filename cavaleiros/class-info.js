@@ -24,6 +24,7 @@ const VARIANT_INFO = {
   necro: ['Invocação de aliados', 'Invoca dois esqueletos temporários que lutam pelo grupo. Uma nova invocação substitui os anteriores.', 'Invoque no começo do confronto para aproveitar o tempo dos aliados. Eles não ocupam vagas de herói.'],
   assassin: ['Explosão de dano', 'Avança pelas sombras até um alvo próximo e desfere uma estocada de dano elevado. Também pode causar críticos e esquivar.', 'Escolha para eliminar alvos importantes. Precisa de um inimigo próximo e em altura semelhante para saltar.'],
   crossbow: ['Tiro perfurante', 'Dispara um virote que atravessa os inimigos em linha, atingindo cada um uma vez.', 'Aproveite inimigos enfileirados na estrada. O tiro segue reto e não acompanha mudanças de direção.'],
+  duelist: ['Cortes rápidos', 'Desfere quatro cortes seguidos no inimigo à frente, alternando as duas espadas curtas.', 'Fique colado nos inimigos. A técnica atravessa filas e a ultimate brilha quando o Duelista está cercado.'],
   ninja: ['Ataque em leque', 'Lança três adagas em direções diferentes. Cada adaga acerta o primeiro inimigo que encontrar.', 'Prefira grupos espalhados à frente. O leque cobre mais espaço, mas pode deixar passar alvos isolados.'],
   druid: ['Raízes e cura', 'Prende inimigos próximos com raízes e cura a si e aos heróis na área. Precisa de inimigos próximos para ativar.', 'Combine com ataques em área. As raízes impedem movimento, mas os inimigos ainda podem atacar ao alcance.'],
   cleric: ['Cura e proteção', 'Uma oração recupera a vida dos aliados próximos e deixa os feridos com uma breve proteção.', 'Fique perto do grupo. A técnica e a ultimate da clériga também ajudam contra grandes ondas.'],
@@ -37,7 +38,7 @@ const TEAM_ROLE_RULES = {
   berserker: ['Defesa', 'Área', 'Dano a chefe'], crusher: ['Defesa', 'Controle', 'Área', 'Dano a chefe'],
   viking: ['Defesa', 'Dano a chefe'], iceviking: ['Defesa', 'Controle', 'Área'],
   pyro: ['À distância', 'Área'], arcane: ['À distância', 'Área'], cryo: ['À distância', 'Controle', 'Área'],
-  assassin: ['Dano a chefe'], crossbow: ['À distância', 'Dano a chefe'], ninja: ['À distância', 'Área'], necro: ['À distância'],
+  assassin: ['Dano a chefe'], crossbow: ['À distância', 'Dano a chefe'], ninja: ['À distância', 'Área'], duelist: ['Área', 'Dano a chefe'], necro: ['À distância'],
   druid: ['À distância', 'Controle', 'Cura'], cleric: ['À distância', 'Cura'], bard: ['À distância', 'Dano a chefe'],
   angel: ['À distância', 'Cura', 'Área'], chronist: ['À distância', 'Controle'],
 };

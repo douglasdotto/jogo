@@ -15,6 +15,10 @@ assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'scarf'), 'Ninja man
 assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'mask'), 'Ninja reserva a máscara');
 assert.equal(LOOK_PREVIEW.find((hero) => hero.id === 'ninja')?.model, 'Rogue_Hooded', 'Ninja mantém o capuz do modelo');
 
+const duelistBlades = LOOKS.duelist.add.filter((piece) => piece.from === 'Knight' && piece.part.startsWith('1H_Sword')).map((piece) => piece.bone);
+assert.deepEqual(Array.from(duelistBlades).sort(), ['handslotl', 'handslotr'], 'Duelista leva uma espada curta em cada mão');
+assert.ok(!LOOKS.duelist.extras.some((extra) => extra.type === 'scarf' || extra.type === 'mask'), 'Duelista não repete cachecol nem máscara dos outros ladinos');
+
 const assassinShape = LOOKS.assassin.shape.Rogue_Body;
 const ninjaShape = LOOKS.ninja.shape.Rogue_Body;
 assert.ok(assassinShape[0] > ninjaShape[0] + 0.05, 'Assassino tem tronco mais largo');

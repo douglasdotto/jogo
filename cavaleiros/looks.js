@@ -212,6 +212,23 @@ export const LOOKS = {
       { type: 'shurikenBelt', bone: 'hips' },
     ],
   },
+  duelist: {   // espadachim de casaca bordô, ombreiras de aço e duas espadas curtas (uma em cada mão)
+    shape: silhouette('Rogue', { torso: 0.95, arms: 0.97, legs: 1.02, height: 1.05, depth: 0.95 }),
+    hide: ['Rogue_Cape'],
+    add: [
+      { from: 'Knight', part: 'Knight_Cape', scale: 0.85 },
+      { from: 'Knight', part: '1H_Sword', bone: 'handslotr', pos: [0, 0.03, 0], rot: [0, Math.PI, 0], scale: 0.7 },
+      { from: 'Knight', part: '1H_Sword_Offhand', bone: 'handslotl', pos: [0, 0.02, 0], scale: 0.7 },
+    ],
+    paint: {
+      ...outfit('Rogue', '#c0304a', '#4a4452', 0.9), ...face('Rogue', { skin: '#f0cfae', hair: '#e8e2d4', eyes: '#ff5a7a' }),
+      Knight_Cape: { tint: '#8a1c30', amount: 0.9 },
+    },
+    extras: [
+      { type: 'pauldrons', bone: 'chest', color: 0xc9d4e2, size: 0.8 }, { type: 'feather', bone: 'head', color: 0xdfe6ee, y: 0.95 },
+      { type: 'mustache', bone: 'head', color: 0xe8e2d4, curl: 0.5 }, { type: 'scar', bone: 'head', color: 0xc0605a, side: -1 },
+    ],
+  },
 };
 
 // para a vitrine: modelo e armas visíveis de cada variante (o jogo usa a lista de VARIANTS em main.js)
@@ -228,6 +245,7 @@ export const LOOK_PREVIEW = [
   { id: 'assassin', name: 'Assassino', model: 'Rogue', use: ['Knife', 'Knife_Offhand'] },
   { id: 'crossbow', name: 'Besteiro', model: 'Rogue', use: ['2H_Crossbow'] },
   { id: 'ninja', name: 'Ninja', model: 'Rogue_Hooded', use: ['Knife', 'Throwable'] },
+  { id: 'duelist', name: 'Duelista', model: 'Rogue', use: [] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],

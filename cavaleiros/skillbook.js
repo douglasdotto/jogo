@@ -59,6 +59,10 @@ const EXTRA_SKILLS = {
     { name: 'Bomba de Fumaça', description: 'Some em fumaça e atinge um alvo próximo.', effect: 'shadow', cooldown: 21, power: 1.7, color: 0x9daaff },
     { name: 'Dança dos Fantasmas', description: 'Cortes velozes atingem todos os inimigos ao redor.', effect: 'shadow-storm', cooldown: 62, radius: 5, power: 2.3, color: 0x9daaff },
   ],
+  duelist: [
+    { name: 'Corte em X', description: 'Avança em linha reta e corta em X todos os inimigos no caminho.', effect: 'cross-dash', cooldown: 19, radius: 6.5, range: 6.5, power: 1.6, color: 0xc9d4e2 },
+    { name: 'Dança de Lâminas', description: 'Gira por alguns segundos cortando todos ao redor e desviando de parte dos golpes.', effect: 'blade-dance', cooldown: 62, radius: 3.5, power: 2.6, duration: 3, color: 0xc9d4e2 },
+  ],
   necro: [
     { name: 'Escudo Ósseo', description: 'Reveste o grupo com uma barreira de ossos.', effect: 'ward', cooldown: 24, duration: 6, color: 0x73d97e },
     { name: 'Exército dos Mortos', description: 'Invoca quatro esqueletos para lutar ao lado do grupo.', effect: 'summon', cooldown: 70, count: 4, color: 0x73d97e },
