@@ -68,6 +68,8 @@ const VARIANTS = [
     use: ['2H_Crossbow'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 }, ranged: true, range: 7, cooldown: 1.05, attacks: ['2H_Ranged_Shoot'], classId: 3 },
   { id: 'ninja', names: ['Ninja', 'Vento Noturno', 'Lua Silenciosa'], desc: 'Lança três adagas em leque.', ability: 'Leque de adagas', color: ['#b6c5f4', '#768ac6'],
     use: ['Knife', 'Throwable'], stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 4 }, model: 'Rogue_Hooded', classId: 3 },
+  { id: 'duelist', names: ['Duelista', 'Lâmina Dupla', 'Mestre das Lâminas'], desc: 'Duas espadas curtas em cortes velozes.', ability: 'Rajada de lâminas', color: ['#dfe6ee', '#8394aa'],
+    use: ['1H_Sword', '1H_Sword_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, dmg: 18, cooldown: 0.5, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 3 },
   { id: 'king', names: ['Rei Dourado', 'Rei Radiante', 'Imperador Solar'], desc: 'Seu brado fortalece todo o grupo.', ability: 'Brado real', color: CHARACTERS[2].color,
     recipe: CHARACTERS[2], classId: 0, dmg: 28, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 } },
   { id: 'iceviking', names: ['Viking do Gelo', 'Jarl Glacial', 'Rei das Geleiras'], desc: 'Seu machado congela uma área.', ability: 'Machado glacial', color: CHARACTERS[3].color,
@@ -969,6 +971,7 @@ const SKILL_GLYPHS = {
   berserker: ['♨', '⚔', '✹'], crusher: ['⬟', '✹', '☄'], viking: ['⚒', '➶', '✹'],
   pyro: ['♨', '♨', '☄'], arcane: ['⚡', '✺', '✷'], cryo: ['❄', '⛨', '❆'],
   assassin: ['✦', '⚔', '☠'], crossbow: ['➶', '⇶', '✹'], ninja: ['✧', '☯', '✴'],
+  duelist: ['⚔', '✕', '✺'],
   king: ['♛', '✦', '☀'], iceviking: ['❄', '➶', '❆'], necro: ['☠', '♟', '☥'],
   druid: ['❀', '❧', '☘'], cleric: ['✚', '⛨', '☼'], bard: ['♫', '♪', '♬'],
   angel: ['✧', '⛨', '☼'], chronist: ['⌛', '⚡', '◷'],
@@ -1292,6 +1295,11 @@ class Unit {
         this.stats.esquivas++;
         return;
       }
+      if (this.bladeDanceT > 0 && Math.random() < 0.35) {   // girando, o Duelista desvia de parte dos golpes
+        popText(this.pos, 'Esquiva!', 'heal');
+        this.stats.esquivas++;
+        return;
+      }
       n *= this.damageTaken;
       if (this.guardT > 0) n *= 0.6;
       const protection = synergyDamageTakenMultiplier(this, heroes());
@@ -1492,6 +1500,16 @@ function inMeleeArc(owner, target, radius = 2.2) {
   const offset = new THREE.Vector3().subVectors(target.pos, owner.pos).setY(0);
   return offset.length() <= radius && offset.normalize().dot(forward) >= 0.5;
 }
+
+// inimigos numa faixa reta de "from" na direção de "to" (investida do Duelista que atravessa a fila)
+function lineTargets(from, to, candidates, length, halfWidth = 0.7) {
+  const dx = to.x - from.x, dz = to.z - from.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+  return candidates.filter((s) => {
+    const ox = s.pos.x - from.x, oz = s.pos.z - from.z, along = ox * ux + oz * uz;
+    return along >= -0.3 && along <= length + 0.3 * s.size && Math.abs(ox * uz - oz * ux) <= halfWidth + 0.3 * (s.size - 1);
+  });
+}
+const BLADE_DANCE_TICK = 0.3;   // intervalo entre as voltas da Dança de lâminas
 
 function damageCleave(owner, primary) {
   for (const s of skeletonsAlive()) {
@@ -2026,6 +2044,7 @@ const SKILL_ART = {
   assassin:  { color: 0x9974b5, accent: 0xe0c8ff, glyph: slashGeo, scale: 0.6 },
   crossbow:  { color: 0xc9eaa4, accent: 0xfff0a0, glyph: shardGeo, scale: 1.8 },
   ninja:     { color: 0x768ac6, accent: 0xffffff, glyph: shurikenGeo, scale: 1.45 },
+  duelist:   { color: 0xc9d4e2, accent: 0xff5a7a, glyph: slashGeo, scale: 0.6 },
   king:      { color: 0xffc61a, accent: 0xffffff, glyph: crownGeo, scale: 1.5 },
   iceviking: { color: 0x58aaca, accent: 0xffffff, glyph: iceGeo, scale: 2 },
   necro:     { color: 0x22e050, accent: 0xd8ffe0, glyph: skullGeo, scale: 2.2 },
@@ -2035,7 +2054,7 @@ const SKILL_ART = {
   angel:     { color: 0xffe27a, accent: 0xffc6ed, glyph: crystalGeo, scale: 1.55 },
   chronist:  { color: 0x8feaff, accent: 0xb6a4ff, glyph: boltGeo, scale: 1.8 },
 };
-const TARGETED_SKILLS = new Set(['assassin', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
+const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
 let shakeK = 0, stopT = 0;
 const jolt = new THREE.Vector3();
 
@@ -2619,6 +2638,58 @@ function slashX(target, h) {
   shake(0.15);
 }
 
+// Duelista: corte de aço de uma lâmina (side -1 ou 1) ou das duas em X (side 0)
+function bladeCut(target, h, side = 0) {
+  const p = target.pos.clone().setY(target.pos.y + 1);
+  (side ? [side] : [-1, 1]).forEach((s, i) => {
+    for (const [color, thick] of [[0xc9d4e2, 1], [0xffffff, 0.35]]) {
+      const m = new THREE.Mesh(slashGeo, glow(color, 1));
+      m.material.depthTest = false;
+      m.renderOrder = 5;
+      m.position.copy(p);
+      m.rotation.set(0, h.root.rotation.y, s * 0.7);
+      addFx(m, 0.3, (e, dt, k) => {
+        m.scale.set(1.1 * Math.min(1, e.t / 0.06), thick * 1.3 * (1 - k), 1);
+        m.material.opacity = e.base * (1 - k);
+      }, i * 0.06);
+    }
+  });
+  burst(p, [0xe8eef6, 0xff5a7a], side ? 6 : 10, 4);
+}
+
+// Duelista: rastro prateado da investida em X
+function steelDash(from, to) {
+  for (let i = 0; i <= 8; i++) {
+    const p = from.clone().lerp(to, i / 8).setY(from.y + 0.9 + (to.y - from.y) * (i / 8));
+    particle(sparkGeo, i % 2 ? 0xffffff : 0xc9d4e2, p, V(rnd(0.6), 0.8, rnd(0.6)), 0.45, { size: 1.2, delay: i * 0.015 });
+  }
+  wave(from, 0xc9d4e2, 0.25, 1.3, 0.35);
+  shake(0.12);
+}
+
+// Duelista: dois arcos de lâmina girando em volta dele enquanto a dança durar
+function bladeDance(h, radius) {
+  wave(h.pos, 0xc9d4e2, 0.3, radius, 0.5);
+  for (let i = 0; i < 2; i++) {
+    const m = new THREE.Mesh(arcGeo, glow(i ? 0xff5a7a : 0xe8eef6, 0.85));
+    addFx(m, 30, (e, dt) => {
+      m.position.copy(h.pos).setY(h.pos.y + 0.8 + i * 0.25);
+      m.rotation.set(-Math.PI / 2, 0, m.rotation.z + dt * (i ? -14 : 18));
+      m.scale.setScalar(radius * (0.55 + 0.2 * i) * Math.min(1, e.t / 0.15));
+      m.material.opacity = e.base * Math.min(1, Math.max(0, h.bladeDanceT) / 0.3);
+      if (h.dead || h.bladeDanceT <= 0 || !units.includes(h)) e.done = true;
+    });
+  }
+}
+
+// Duelista: faíscas de aço a cada volta da dança
+function bladeSpin(h, radius) {
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * TAU, r = radius * (0.5 + Math.random() * 0.5);
+    particle(sparkGeo, i % 2 ? 0xffffff : 0xc9d4e2, V(h.pos.x + Math.cos(a) * r, h.pos.y + 0.9, h.pos.z + Math.sin(a) * r), V(-Math.sin(a) * 3, 0.6, Math.cos(a) * 3), 0.35, { size: 1.1 });
+  }
+}
+
 // Rei: coroa dourada girando acima dele e ondas douradas pelo grupo
 function royal(h, party) {
   const crown = new THREE.Group();
@@ -2794,6 +2865,8 @@ function element(h, skill, target) {
     const tint = id === 'necro' ? 0x6dff8a : 0xb48cff;
     for (let i = 0; i < n / 2; i++) particle(puffGeo, id === 'necro' ? 0x14301c : 0x2a1640, spot(0.3), V(rnd(0.6), 0.8, rnd(0.6)), 0.9, { smoke: true, opacity: 0.5, size: 0.5, grow: 1.2, spin: 0 });
     for (let i = 0; i < n / 2; i++) particle(sparkGeo, tint, spot(0.6), V(rnd(1), 1.6, rnd(1)), 0.6, { size: 1.1 });
+  } else if (id === 'duelist') {   // aço: faíscas prateadas e rubras cortando o ar
+    for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xdfe6ee : 0xff5a7a, spot(0.9), V(rnd(2.5), 1 + Math.random(), rnd(2.5)), 0.5, { size: 1.1, delay: Math.random() * 0.2 });
   } else if (id === 'chronist') {   // mostrador de relógio no chão, com os ponteiros voltando
     clockFace(at, reach + 0.6, ult ? 1.4 : 0.9);
   } else if (id === 'bard') {   // ondas sonoras em pé saindo do bardo e notinhas
@@ -2855,6 +2928,7 @@ function stasis(enemy) {
 }
 
 const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column };
+Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -2893,6 +2967,7 @@ class Hero extends Unit {
     this.furyT = 0;
     this.guardT = 0;
     this.dodgeTimer = 2;
+    this.bladeDanceT = 0;
     this.age = 0;
     this.hover = cfg.id === 'angel' ? 0.52 : 0;
     for (const relic of game.relics || []) applyRelicToHero(this, relic);
@@ -3094,6 +3169,25 @@ class Hero extends Unit {
           FX.slashX(target, this);
           audio.play('sword');
         } };
+      };
+    } else if (id === 'duelist') {
+      // rajada: quatro cortes seguidos no alvo à frente, alternando a lâmina de cada mão
+      const reach = (s) => this.range + 0.9 + 0.4 * (s.size - 1);
+      if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
+        && s.pos.distanceTo(this.pos) <= reach(s) && Math.abs(s.pos.y - this.pos.y) < 0.85));
+      if (!target || target.pos.distanceTo(this.pos) > reach(target)) return false;
+      effect = () => {
+        const cut = (i) => {
+          if (target.dead) return;
+          this.face(target.pos, 1);
+          heroHit(this, target, this.dmg * (0.6 + 0.05 * (level - 1)) * power);
+          FX.bladeCut(target, this, i % 2 ? 1 : -1);
+          if (i > 0) audio.play('sword');
+          if (i >= 3) return;
+          this.busy = this.once(i % 2 ? 'Dualwield_Melee_Attack_Slice' : 'Dualwield_Melee_Attack_Chop', 2.8);
+          this.pendingHit = { target, t: this.busy * 0.35, effect: () => cut(i + 1) };
+        };
+        cut(0);
       };
     } else if (id === 'viking' || id === 'iceviking') {
       if (!manual) target = highestPriorityHeroTarget(this, skeletonsAlive().filter((s) => !s.spawning
@@ -3331,6 +3425,44 @@ class Hero extends Unit {
         }
         break;
       }
+      case 'cross-dash': {
+        // corte em X: avança em linha reta pela fila e corta todos no caminho
+        const reach = skill.range || 6.5;
+        const pool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= reach && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        let aim = force && pool.includes(target) ? target : null;
+        let line = aim ? lineTargets(this.pos, aim.pos, pool, reach) : [];
+        if (!aim) for (const s of pool) {
+          const hits = lineTargets(this.pos, s.pos, pool, Math.min(reach, s.pos.distanceTo(this.pos) + 1.6));
+          if (hits.length > line.length || (hits.length === line.length && s === target)) { line = hits; aim = s; }
+        }
+        if (!aim || (!force && line.length < 2 && !urgentEnemy)) return false;
+        target = aim;
+        effect = () => {
+          const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize();
+          const length = Math.min(reach, aim.pos.distanceTo(from) + 1.6);
+          const end = from.clone().addScaledVector(dir, length);
+          const hit = lineTargets(from, end, skeletonsAlive().filter((s) => !s.spawning && Math.abs(s.pos.y - from.y) < 0.85), length);
+          if (world.canStep(from, end)) { this.pos.copy(end).setY(world.groundHeight(end.x, end.z)); this.vel.set(0, 0, 0); }
+          else this.vel.add(dir.clone().multiplyScalar(6));
+          this.face(end.clone().add(dir), 1);
+          for (const enemy of hit) { damageOne(enemy); FX.bladeCut(enemy, this, 0); }
+          FX.steelDash(from, this.pos);
+        };
+        break;
+      }
+      case 'blade-dance': {
+        // dança de lâminas: gira por alguns segundos cortando todos ao redor (ticks em updateBladeDance)
+        if (!enemies.length && !force) return false;
+        effect = () => {
+          this.bladeDanceT = (skill.duration || 3) * (0.9 + 0.1 * power);
+          this.bladeDanceTick = 0;
+          this.bladeDance = { radius, hit: this.dmg * power * (skill.power || 1) * BLADE_DANCE_TICK / (skill.duration || 3) };
+          this.busy = this.bladeDanceT;
+          this.loop('2H_Melee_Attack_Spinning');
+          FX.bladeDance(this, radius);
+        };
+        break;
+      }
       case 'summon':
         effect = () => {
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
@@ -3353,6 +3485,25 @@ class Hero extends Unit {
   }
 
   // pedido do jogador (botão ou tecla): vale por um instante, até o golpe atual terminar
+  // Dança de lâminas: a cada volta corta todos ao redor e desliza devagar para o meio dos inimigos
+  updateBladeDance(dt) {
+    this.bladeDanceT -= dt;
+    if (this.dead || game.over) { this.bladeDanceT = 0; return; }
+    this.bladeDanceTick -= dt;
+    if (this.bladeDanceTick > 0) return;
+    this.bladeDanceTick += BLADE_DANCE_TICK;
+    const { radius, hit } = this.bladeDance;
+    const near = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= radius + 0.4 * (s.size - 1)
+      && Math.abs(s.pos.y - this.pos.y) < 0.85);
+    if (!near.length) return;
+    let cx = 0, cz = 0;
+    for (const s of near) { heroHit(this, s, hit); cx += s.pos.x / near.length; cz += s.pos.z / near.length; }
+    const dx = cx - this.pos.x, dz = cz - this.pos.z, d = Math.hypot(dx, dz);
+    if (d > 0.5) { this.vel.x += dx / d * 1.6; this.vel.z += dz / d * 1.6; }
+    FX.bladeSpin(this, radius);
+    audio.play('sword');
+  }
+
   requestSkill(target = null, slot = 0) {
     if (this.dead || game.over || game.paused) return 'off';
     if (this.skillTimers[slot] > 0) return 'wait';
@@ -3384,6 +3535,7 @@ class Hero extends Unit {
     this.songT = 0;
     this.songHaste = 1;
     this.furyT = 0;
+    this.bladeDanceT = 0;
     this.hp = this.maxHp * difficulty.revive;
     this.bar.style.display = '';
     this.current = null;
@@ -3421,6 +3573,7 @@ class Hero extends Unit {
     this.aura.material.color.set(rage ? 0xff4242 : this.cfg.color[1]);
     this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
+    if (this.bladeDanceT > 0) this.updateBladeDance(dt);
     this.updateCommon(dt);
     if (this.dead || this.busy > 0 || game.over) return;
     const escape = game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
@@ -3483,6 +3636,7 @@ const SKILL_MOVES = {
   assassin: ['Dodge_Forward', 0.8, 0.6, 'arrow'],
   crossbow: ['2H_Ranged_Shoot', 1.2, 0.4, 'arrow'],
   ninja: ['Throw', 1.5, 0.45, 'arrow'],
+  duelist: ['Dualwield_Melee_Attack_Slice', 1.6, 0.4, 'sword'],
   king: ['Cheer', 1.4, 0.35, 'shout'],
   iceviking: ['Throw', 1.4, 0.45, 'axe'],
   necro: ['Spellcast_Long', 1.8, 0.5, 'summon'],

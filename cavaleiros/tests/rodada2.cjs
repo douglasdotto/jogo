@@ -123,8 +123,8 @@ test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   hero.pos.z=-4;t.updateBars();assert.equal(hero.bar.style.display,'');
   clear();
 });
-test('20 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,20);
+test('21 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,21);
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
@@ -159,7 +159,7 @@ test('Anjo tem asas animadas e paira acima do chão',()=>{
 });
 test('navegação respeita as linhas de classe, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,20);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,21);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -363,7 +363,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas e ultimates das 20 variantes executam seus efeitos sem erro',()=>{
+test('técnicas e ultimates das 21 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -403,6 +403,32 @@ test('virotes perfurantes reutilizam vetores e acertam vários inimigos no quadr
   assert.equal(allocations,0,'a atualização de virotes existentes não deve alocar vetores');
   assert.equal(skeletonScans,0,'o quadro com snapshot pronto não deve reconstruir a lista de inimigos');
   t.bolts.length=0;clear();t.frameTargetContext.skeletons.length=0;
+});
+test('Duelista: rajada alterna as lâminas, Corte em X atravessa a fila e a Dança de lâminas corta todos ao redor',()=>{
+  const foe=(x,z)=>{const e=new t.Skeleton('Warrior',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e};
+  clear();let d=new t.Hero(cfg('duelist'));d.pos.set(0,0,0);
+  assert.equal(cfg('duelist').classId,3);assert.deepEqual(Array.from(cfg('duelist').use),['1H_Sword','1H_Sword_Offhand']);
+  assert.equal(t.skillSetFor(cfg('duelist')).length,3);
+  // básica: quatro cortes no alvo à frente
+  let e=foe(0,1.5);assert.equal(d.useSkill(e),true);
+  let cuts=0;while(d.pendingHit?.effect&&cuts<8){const hp=e.hp,p=d.pendingHit;d.pendingHit=null;p.effect();if(e.hp<hp)cuts++;}
+  assert.equal(cuts,4,"quatro cortes alternados");assert.ok(d.skillTimers[0]>0);
+  assert.equal(new t.Hero(cfg('duelist')).useSkill(foe(0,6)),false,'a rajada só usa alvo colado');
+  // técnica: a IA só avança com fila e atinge todos na linha, mas não quem está fora dela
+  clear();d=new t.Hero(cfg('duelist'));d.pos.set(0,0,0);
+  const lone=foe(0,3);assert.equal(d.useSkill(lone,false,false,1),false,'sem fila a IA guarda o Corte em X');
+  const line=[lone,foe(0.2,4.5),foe(-0.2,5.5)],off=foe(4,3);
+  assert.equal(d.useSkill(lone,false,false,1),true);d.pendingHit.effect();
+  for(const s of line)assert.ok(s.hp<s.maxHp,'inimigo da fila atingido');
+  assert.equal(off.hp,off.maxHp,'fora da linha não é atingido');assert.ok(d.pos.z>5,'atravessa a fila');
+  // ultimate: precisa de vários inimigos perto; gira cortando todos ao redor
+  clear();d=new t.Hero(cfg('duelist'));d.pos.set(0,0,0);
+  const ring=[foe(1.5,0),foe(-1.5,0),foe(0,1.5)],far=foe(0,9);
+  assert.equal(d.useSkill(null,false,false,2),true);d.pendingHit.effect();assert.ok(d.bladeDanceT>0);
+  const once=ring.map(s=>s.hp);for(let i=0;i<40;i++)d.update(.1);
+  for(const [i,s] of ring.entries())assert.ok(s.hp<once[i]-50,'todos ao redor levam vários cortes');
+  assert.equal(far.hp,far.maxHp,'longe da dança não é atingido');assert.ok(d.bladeDanceT<=0,'a dança termina');
+  clear();
 });
 test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
   clear();const b=new t.Hero(cfg('berserker')),a=new t.Hero(cfg('assassin'));b.pos.set(0,0,0);a.pos.set(3,0,0);
@@ -588,7 +614,7 @@ function begin(id,picks){
 test('10 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,10);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,20);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,21);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('para liberar'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

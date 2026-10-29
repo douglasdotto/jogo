@@ -109,6 +109,17 @@ export const LOOKS = {
     paint: { ...outfit('Rogue', '#2e3a6a', '#1e2648', 0.75), Rogue_Cape: { tint: '#3a4a8a', amount: 0.8 } },
     extras: [{ type: 'scarf', bone: 'head', color: 0xffffff }, { type: 'mask', bone: 'head', color: 0x1e2648 }],
   },
+  duelist: {   // espadachim de casaca bordô, ombreiras de aço e duas espadas curtas (uma em cada mão)
+    shape: silhouette('Rogue', { torso: 0.95, arms: 0.97, legs: 1.02, height: 1.05, depth: 0.95 }),
+    hide: ['Rogue_Cape'],
+    add: [
+      { from: 'Knight', part: 'Knight_Cape', scale: 0.85 },
+      { from: 'Knight', part: '1H_Sword', bone: 'handslotr', pos: [0, 0.03, 0], rot: [0, Math.PI, 0], scale: 0.7 },
+      { from: 'Knight', part: '1H_Sword_Offhand', bone: 'handslotl', pos: [0, 0.02, 0], scale: 0.7 },
+    ],
+    paint: { ...outfit('Rogue', '#c0304a', '#4a4452', 0.9), Knight_Cape: { tint: '#8a1c30', amount: 0.9 } },
+    extras: [{ type: 'pauldrons', bone: 'chest', color: 0xc9d4e2, size: 0.8 }, { type: 'feather', bone: 'head', color: 0xdfe6ee, y: 0.95 }],
+  },
   // ---------- heróis de campanha ----------
   king: {
     extras: [
@@ -147,6 +158,7 @@ export const LOOK_PREVIEW = [
   { id: 'assassin', name: 'Assassino', model: 'Rogue', use: ['Knife', 'Knife_Offhand'] },
   { id: 'crossbow', name: 'Besteiro', model: 'Rogue', use: ['2H_Crossbow'] },
   { id: 'ninja', name: 'Ninja', model: 'Rogue_Hooded', use: ['Knife', 'Throwable'] },
+  { id: 'duelist', name: 'Duelista', model: 'Rogue', use: [] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],
