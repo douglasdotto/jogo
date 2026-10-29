@@ -107,6 +107,8 @@ vm.runInContext('t.Militia=Militia;t.musterMilitia=musterMilitia;t.militiaAlive=
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 // a composição da equipe fica numa faixa fixa (pick.team) ao lado da ficha (pick.info)
 const pickText=()=>t.pick.info.innerHTML+t.pick.team.innerHTML;
+// papéis que faltam viram ícones (class="wanted", nome em data-role); "priority" marca os pedidos pela missão
+const wantedRoles=(priority)=>[...t.pick.team.innerHTML.matchAll(/class="wanted( priority)?" data-role="([^"]+)"/g)].filter(m=>!!m[1]===priority).map(m=>m[2]);
 // barra de habilidades (glifos usados também na ficha da escolha)
 vm.runInContext(part(source,'let skillKey','function pressSkill'),context);
 vm.runInContext('t.buildSkillBar=buildSkillBar;t.skillItems=()=>skillItems;',context);
@@ -206,7 +208,7 @@ test('navegação respeita as linhas de classe, pula ocupadas e usa postos disti
   for(const id of ['pyro','arcane'])assert.ok(t.pick.cards[at(id)].innerHTML.includes('No grupo'));
   assert.ok(!t.pick.cards[at('cryo')].innerHTML.includes('No grupo'));
   assert.ok(pickText().includes('Sua equipe com ')&&pickText().includes('class="candidate"')
-    &&pickText().includes('Controle')&&pickText().includes('Nas próximas vagas'));
+    &&pickText().includes('data-role="Controle"')&&wantedRoles(false).length>0,'fora da missão, os papéis que faltam aparecem como ícones');
   t.confirmPick(at('pyro'));assert.equal(t.pick.open,true);
   t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'));
   t.moveGrid(0,1);assert.equal(t.pick.sel,at('cryo'));t.moveGrid(-1,0);assert.equal(t.pick.sel,at('chronist'));
@@ -217,11 +219,11 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   clear();context.location={search:''};context.localStorage.data={};t.setMission(t.MISSIONS.find(m=>m.id==='ponte'));
   t.showPick('','');const at=id=>t.pick.options.findIndex(hero=>hero.id===id);t.selectCard(at('paladin'));
   assert.ok(pickText().includes('Proteja o aldeão'));
-  assert.ok(pickText().includes('priority')&&pickText().includes('Para esta missão, priorize: Controle.'));
+  assert.deepEqual(wantedRoles(true),['Controle'],'prioridade da missão ainda não coberta fica destacada');
   t.selectCard(at('pyro'));
-  assert.ok(pickText().includes('Para esta missão, priorize: Defesa · Cura · Controle.'));
+  assert.deepEqual(wantedRoles(true),['Defesa','Cura','Controle']);
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
-  assert.ok(pickText().includes('Derrote o chefe')&&pickText().includes('class="covered priority">Dano a chefe</span>'));
+  assert.ok(pickText().includes('Derrote o chefe')&&/class="covered priority" data-role="Dano a chefe"/.test(pickText()));
   clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
@@ -674,7 +676,7 @@ test('13 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,13);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
   assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,21);assert.equal(t.UNLOCKS.length,0);
-  clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('para liberar'));
+  clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));
 });
@@ -797,8 +799,8 @@ test('campanha: escolhe N heróis em sequência, já no nível da missão e sem 
   clear();t.setMission(mission('lago'));t.showDifficulty();
   let next;context.setTimeout=(fn,ms)=>{if(ms===550)next=fn};t.confirmPick(1);next();
   assert.equal(t.pick.options[t.pick.sel].id,'berserker');assert.ok(t.pick.cards[t.pick.sel].innerHTML.includes('Equipe anterior'));
-  assert.match(elements.get('pickHint').textContent,/Sugestão da equipe/);
-  t.selectCard(idx('pyro'));assert.match(elements.get('pickHint').textContent,/Clique no herói para ver/);
+  const hint=elements.get('pickHint').textContent;assert.ok(hint.length<=20,'rodapé mínimo');
+  t.selectCard(idx('pyro'));assert.equal(elements.get('pickHint').textContent,hint);
   assert.equal(t.heroes().length,0,'a formação anterior deve ser apenas uma sugestão');context.setTimeout=noop;
 });
 test('objetivos: aldeão, ninguém cai e tempo derrubam a missão',()=>{
