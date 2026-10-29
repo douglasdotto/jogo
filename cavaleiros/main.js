@@ -637,7 +637,7 @@ function renderInfo(cfg) {
         ? 'A equipe está completa.'
         : nextHint;
   const teamRoles = team.roles.map((role) => `<span class="${role.count ? 'covered' : ''}${priorityRoles.includes(role.name) ? ' priority' : ''}">${role.name}<b>${role.count}</b></span>`).join('');
-  const teamMembers = projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}"><img src="${member.portrait}" alt=""><em>${member.name}</em>${canAddCandidate && member.id === cfg.id ? '<small>em foco</small>' : ''}</span>`).join('')
+  const teamMembers = projectedTeam.map((member) => `<span class="${canAddCandidate && member.id === cfg.id ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}"><img src="${member.portrait}" alt=""><em>${member.name}</em>${canAddCandidate && member.id === cfg.id ? '<small>novo</small>' : ''}</span>`).join('')
     + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty"><i aria-hidden="true">+</i><em>Vaga livre</em></span>').join('');
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
     `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
@@ -657,7 +657,7 @@ function renderInfo(cfg) {
     </div></details>`;
   // equipe fixa ao lado dos cartões: mini-retratos, cobertura de papéis e o que falta
   pick.team.innerHTML = `<section class="party-composition">
-      <header><b>${canAddCandidate ? 'Equipe se escolher' : 'Equipe atual'}</b><span class="pick-team-count">Equipe ${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>${objective ? `<span class="party-objective"><b>Objetivo</b> ${goalText(objective)}</span>` : ''}</header>
+      <header><b>${canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe'}</b><span class="pick-team-count">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit} heróis</span>${objective ? `<span class="party-objective"><b>Objetivo</b> ${goalText(objective)}</span>` : ''}</header>
       <div class="party-members">${teamMembers}</div>
       <div class="pick-team-status"><div class="party-roles">${teamRoles}</div><p>${teamHint}</p></div>
     </section>`;

@@ -200,7 +200,7 @@ test('navegação respeita as linhas de classe, pula ocupadas e usa postos disti
   t.showPick('','');
   for(const id of ['pyro','arcane'])assert.ok(t.pick.cards[at(id)].innerHTML.includes('No grupo'));
   assert.ok(!t.pick.cards[at('cryo')].innerHTML.includes('No grupo'));
-  assert.ok(pickText().includes('Equipe se escolher')&&pickText().includes('class="candidate"')
+  assert.ok(pickText().includes('Sua equipe com ')&&pickText().includes('class="candidate"')
     &&pickText().includes('Controle')&&pickText().includes('Nas próximas vagas'));
   t.confirmPick(at('pyro'));assert.equal(t.pick.open,true);
   t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'));
