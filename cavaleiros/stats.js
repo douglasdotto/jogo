@@ -6,11 +6,13 @@ import { SYNERGIES } from './synergies.js';
 
 export const newStats = () => ({ dano: 0, recebido: 0, cura: 0, abates: 0, ataques: 0, habilidades: 0, criticos: 0, esquivas: 0, distancia: 0, tempo: 0 });
 
+// [chave, ícone, nome]: o painel mostra ícone + número; o nome fica na dica e no leitor de tela
 const LABELS = [
-  ['dano', 'Dano causado'], ['recebido', 'Dano recebido'], ['cura', 'Cura feita'], ['abates', 'Abates'],
-  ['ataques', 'Ataques'], ['habilidades', 'Habilidades usadas'], ['criticos', 'Críticos'], ['esquivas', 'Esquivas'],
-  ['distancia', 'Distância andada'],
+  ['dano', '⚔', 'Dano causado'], ['recebido', '⛨', 'Dano recebido'], ['cura', '✚', 'Cura feita'], ['abates', '☠', 'Abates'],
+  ['ataques', '⚒', 'Ataques'], ['habilidades', '✦', 'Habilidades usadas'], ['criticos', '✷', 'Críticos'], ['esquivas', '↯', 'Esquivas'],
+  ['distancia', '⇢', 'Distância andada'],
 ];
+const statCell = (icon, label, value) => `<span class="stat-cell" data-tip="${label}"><i aria-hidden="true">${icon}</i><b>${value}</b><span class="sr-only">${label}</span></span>`;
 const fmt = (k, v) => (k === 'distancia' ? `${Math.round(v)} m` : Math.round(v).toLocaleString('pt-BR'));
 const dps = (s) => (s.tempo > 1 ? s.dano / s.tempo : 0);
 const portraitOf = (h) => h.cfg.portraits?.[h.level - 1] || h.cfg.portrait;   // retrato do nível atual
@@ -59,12 +61,12 @@ function renderHeroPanel(full = false) {
   const next = xpLevels[h.level];
   const xpPct = next ? Math.min(100, ((h.xp - xpLevels[h.level - 1]) / (next - xpLevels[h.level - 1])) * 100) : 100;
   const attrs = [
-    ['Vida', `${Math.max(0, Math.round(h.hp))} / ${Math.round(h.maxHp)}`],
-    ['Dano por golpe', Math.round(h.dmg)],
-    ['Golpes por segundo', (1 / h.cooldown).toFixed(2)],
-    ['Alcance', `${h.range.toFixed(1)} m`],
-    ['Velocidade', h.speed.toFixed(1)],
-    ['Dano por segundo', Math.round(dps(s))],
+    ['♥', 'Vida', `${Math.max(0, Math.round(h.hp))}/${Math.round(h.maxHp)}`],
+    ['⚔', 'Dano por golpe', Math.round(h.dmg)],
+    ['⏱', 'Golpes por segundo', (1 / h.cooldown).toFixed(2)],
+    ['➶', 'Alcance', `${h.range.toFixed(1)} m`],
+    ['»', 'Velocidade', h.speed.toFixed(1)],
+    ['✹', 'Dano por segundo', Math.round(dps(s))],
   ];
   const el = panel();
   el.style.setProperty('--c', c.color[0]);
@@ -76,26 +78,26 @@ function renderHeroPanel(full = false) {
         <div class="portrait"><img src="${portraitOf(h)}" alt=""></div>
         <div class="hp-progress">
           <div class="ribbon">${c.names ? c.names[h.level - 1] : c.name}</div>
-          <div class="lvl">Nível ${h.level}${h.dead ? ' · caído' : ''}</div>
-          <div class="xp"><i style="width:${xpPct}%"></i></div>
-          <div class="xp-txt">${next ? `XP ${Math.round(h.xp)} / ${next}` : 'Nível máximo'}</div>
+          <div class="lvl">Nv ${h.level}${h.dead ? ' · caído' : ''}</div>
+          <div class="xp" data-tip="${next ? `XP ${Math.round(h.xp)} / ${next}` : 'Nível máximo'}"><i style="width:${xpPct}%"></i></div>
         </div>
       </div>
-      <div class="hero-guide hero-role"><h4>${info.name} · ${info.role}</h4><p>${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}</p></div>
-      <div class="ability skill-list"><b>Habilidades</b>${skills.map((skill) => {
+      <div class="hero-guide hero-role"><h4>${info.name} · ${info.role}</h4><p data-tip="${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}" aria-label="${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}">${c.ranged ? '➶' : '⚔'}</p></div>
+      <div class="ability skill-list">${skills.map((skill) => {
         const slot = skill.slot, timer = h.skillTimers?.[slot] ?? (slot === 0 ? h.skillTimer : 0);
         const automatic = h.autoSkills?.[slot] ?? (slot === 0 ? h.auto : true);
-        const mode = automatic ? 'Automático' : slot === 0 && aimSpec(h) ? 'Manual · mira no alvo' : 'Manual · ativação pelo botão';
-        const state = h.dead ? 'Indisponível enquanto caído' : timer > 0 ? `Disponível em ${Math.ceil(timer)} s` : 'Pronta para usar';
-        return `<div class="skill-detail${skill.ultimate ? ' ultimate-detail' : ''}"><strong>${skill.ultimate ? '✹ Ultimate · ' : skill.slot === 1 ? '✦ Técnica · ' : '✦ '}${skill.name}</strong><span>${skill.description}</span><span class="skill-meta">${state} · Recarga: ${cooldownForSkill(c, slot, h.level, h.skillRate).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s · ${mode}</span></div>`;
+        const mode = automatic ? '↻ auto' : slot === 0 && aimSpec(h) ? '☝ mira' : '☝ manual';
+        const state = h.dead ? '✖' : timer > 0 ? `${Math.ceil(timer)} s` : '✓';
+        const cd = cooldownForSkill(c, slot, h.level, h.skillRate).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+        return `<div class="skill-detail${skill.ultimate ? ' ultimate-detail' : ''}"><strong>${skill.ultimate ? '✹ ' : '✦ '}${skill.name}</strong><span>${skill.description}</span><span class="skill-meta" aria-label="${h.dead ? 'Indisponível' : timer > 0 ? `Disponível em ${Math.ceil(timer)} s` : 'Pronta'} · recarga ${cd} s · ${automatic ? 'automático' : 'manual'}">${state} · ⏱ ${cd} s · ${mode}</span></div>`;
       }).join('')}</div>
     </section>
     <aside class="hero-panel-side">
       <div class="hero-guide hero-tips"><h4>Como aproveitar</h4><p>${info.tip}</p></div>
       ${synergies.length ? `<div class="hero-guide hero-synergies"><h4>Sinergias de grupo</h4>${synergies.map((synergy) => `<p><b>${synergy.name}</b> · ${synergy.effect}</p>`).join('')}</div>` : ''}
       <div class="hero-panel-stats">
-        <section><h4>Atributos</h4><dl class="hero-attributes">${attrs.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></section>
-        <section><h4>Nesta partida</h4><dl class="hero-match-stats">${LABELS.map(([k, label]) => `<dt>${label}</dt><dd>${fmt(k, s[k])}</dd>`).join('')}</dl></section>
+        <section class="hero-attributes" aria-label="Atributos">${attrs.map(([icon, label, v]) => statCell(icon, label, v)).join('')}</section>
+        <section class="hero-match-stats" aria-label="Nesta partida">${LABELS.map(([k, icon, label]) => statCell(icon, label, fmt(k, s[k]))).join('')}</section>
       </div>
     </aside>`;
   const fresh = document.createElement('template');
@@ -109,8 +111,16 @@ function renderHeroPanel(full = false) {
 // ---------- resumo do fim da partida ----------
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-export function summaryHTML(heroes, highlights = []) {
+// fim da partida: três números à vista (dano, abates, quedas), dica de 1 linha na derrota e o resto em "Detalhes"
+export function summaryHTML(heroes, highlights = [], totals = {}) {
   if (!heroes.length && !highlights.length) return '';
+  const total = (k) => heroes.reduce((sum, h) => sum + h.stats[k], 0);
+  const keys = [['⚔', 'Dano', fmt('dano', total('dano'))], ['☠', 'Abates', fmt('abates', totals.kills ?? total('abates'))], ['✝', 'Quedas', totals.falls ?? 0]];
+  const numbers = `<div class="end-keys">${keys.map(([icon, label, v]) =>
+    `<span class="end-key" tabindex="0" data-tip="${label}" aria-label="${label}: ${v}"><i aria-hidden="true">${icon}</i><b>${v}</b></span>`).join('')}</div>`;
+  const tip = !totals.won && highlights.find((item) => item.id === 'next-try');
+  const tipLine = tip ? `<p class="end-tip">${escapeHTML(tip.text)}</p>` : '';
+  highlights = highlights.filter((item) => item.id !== 'next-try');   // a vitória já tem o botão "Próxima"; a derrota mostra a dica acima
   const best = (k) => heroes.length ? Math.max(...heroes.map((h) => h.stats[k])) : 0;
   const cols = [['dano', 'Dano'], ['abates', 'Abates'], ['recebido', 'Recebido'], ['cura', 'Cura']];
   const mvp = heroes.length ? heroes.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a)) : null;
@@ -121,5 +131,6 @@ export function summaryHTML(heroes, highlights = []) {
   const cards = highlights.length ? `<section class="battle-report" aria-label="Destaques da partida">${highlights.map((item) =>
     `<article class="report-item"><b>${escapeHTML(item.title)}</b><span>${escapeHTML(item.text)}</span></article>`).join('')}</section>` : '';
   const table = heroes.length ? `<table><tr><th>Herói</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr>${rows}</table>` : '';
-  return cards + table;
+  const details = cards || table ? `<details class="end-details"><summary>Detalhes</summary><div class="end-details-body">${cards}${table}</div></details>` : '';
+  return numbers + tipLine + details;
 }

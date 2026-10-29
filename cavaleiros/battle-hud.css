@@ -1,0 +1,145 @@
+/* ==================== HUD da batalha, barra de habilidades, faixas e fim de partida ====================
+   Pouco texto: ícone + número à vista; o nome completo fica na dica (data-tip) e no aria-label.
+   Carregado depois de campaign.css para sobrepor os estilos antigos com a mesma especificidade. */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- faixa única no topo ---------- */
+#hud { top: 10px; left: 50%; right: auto; translate: -50% 0; width: min(1080px, calc(100vw - 24px)); box-sizing: border-box;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 5px 8px 5px 10px; flex-wrap: nowrap;
+  background: linear-gradient(rgba(16, 26, 48, .72), rgba(10, 17, 33, .66)); backdrop-filter: blur(6px);
+  border: 1px solid rgba(184, 212, 255, .22); border-radius: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, .28); }
+.hud-left, .hud-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hud-right { position: relative; justify-self: end; }
+#hud .chip { gap: 5px; padding: 2px 6px; font: 400 18px/1 'Lilita One', sans-serif; color: #fff; background: none; border: 0; box-shadow: none; cursor: default;
+  -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; text-shadow: 0 2px 0 var(--outline); font-variant-numeric: tabular-nums; }
+#hud .chip::before { font-size: 15px; color: var(--gold); -webkit-text-stroke: 2px var(--outline); }
+#wave::before { content: '\2691\FE0E'; }
+#left::before { content: '\2620\FE0E'; color: #e8e8f0; }
+#left.objective { font-size: 14px; color: #ffe9a8; }
+#left.objective::before { content: '\25CE\FE0E'; color: var(--gold); }
+#hud #militia { font-size: 15px; opacity: .9; }
+#militia::before { content: '\2694\FE0E'; color: #e9c27a; }
+.hud-diff { width: 24px; height: 24px; flex: none; display: grid; place-items: center; box-sizing: border-box; cursor: default;
+  font: 400 13px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill;
+  background: radial-gradient(circle at 35% 30%, var(--c, #bfe0ff), var(--cd, #5a8fd0)); border: 2px solid var(--outline); border-radius: 50%; }
+.hud-diff:empty { display: none; }
+#hud .relic-slot { width: 26px; height: 26px; font-size: 14px; border-width: 2px; box-shadow: none; }
+#hud .relic-slot b { font-size: 9px; line-height: 13px; min-width: 13px; }
+
+/* objetivo: ícone + barra fina + valor curto, sem caixa grande */
+#hud #goal { display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0; padding: 3px 12px; font-size: 15px;
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(184, 212, 255, .2); border-radius: 99px; animation: none; }
+#hud #goal.hidden { display: none; }
+#hud #goal::before { content: attr(data-icon); font-size: 15px; color: var(--gold); }
+#hud #goal .goal-meter { order: 1; width: 120px; height: 6px; border: 0; background: rgba(0, 0, 0, .45); }
+#hud #goal .goal-label { order: 2; min-width: 38px; text-align: left; }
+#hud #goal.warn { background: rgba(223, 69, 69, .18); border-color: rgba(255, 120, 110, .6); }
+#hud #goal.warn .goal-label { color: #ffb8b0; }
+#hud #goal.done .goal-label { color: #b4f59a; }
+
+/* botões de ícone redondos à direita */
+#hud .hud-icon { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; position: relative;
+  font: 400 16px/1 'Lilita One', sans-serif; color: #eaf2ff; -webkit-text-stroke: 0; text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(184, 212, 255, .3); border-radius: 50%; box-shadow: none; }
+#hud .hud-icon:hover { background: rgba(255, 255, 255, .18); filter: none; }
+#hud .hud-icon:active { transform: translateY(1px); }
+#hud .hud-icon:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+#hud #speed small { position: absolute; right: -4px; bottom: -3px; padding: 0 3px; border-radius: 6px; font: 700 9px/12px 'Fredoka', sans-serif; color: #fff; background: #1d6fd6; }
+#hud #pause[aria-pressed="true"] { background: rgba(110, 210, 90, .35); }
+#hud #mute { line-height: 0; }
+#hud #mute.off { background: rgba(255, 255, 255, .04); opacity: .75; }
+#hud #hudMenu { display: inline-grid; font-size: 18px; }
+#hud #hudMenu[aria-expanded="true"] { background: rgba(255, 212, 74, .25); border-color: var(--gold); }
+
+/* menu da engrenagem: evolução, gráficos, reiniciar */
+#hud #hudOptions { display: none; }
+#hud.open #hudOptions { position: absolute; top: calc(100% + 10px); right: 0; z-index: 36; min-width: 220px; display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  background: rgba(14, 24, 46, .97); border: 1px solid rgba(184, 212, 255, .35); border-radius: 12px; box-shadow: 0 12px 26px rgba(0, 0, 0, .45); }
+#hud #hudOptions button { width: 100%; padding: 8px 12px; text-align: left; font: 500 14px 'Fredoka', sans-serif; color: #e8f2ff; -webkit-text-stroke: 0; text-shadow: none;
+  background: none; border: 0; border-radius: 8px; box-shadow: none; opacity: 1; }
+#hud #hudOptions button:hover { background: rgba(255, 255, 255, .09); transform: none; }
+#hud #hudOptions button[aria-pressed="true"]::after { content: '\2713'; float: right; color: #8ef07a; }
+#hud #hudOptions .danger { color: #ffb3a8; border-top: 1px solid rgba(184, 212, 255, .15); border-radius: 0 0 8px 8px; }
+
+/* ---------- barra de habilidades: ícone + tecla + recarga ---------- */
+#skills { gap: 8px; padding: 8px 10px; border-radius: 18px; }
+.skillGroup { gap: 6px; padding: 6px 8px 8px; border-radius: 13px; }
+.skillHero { min-height: 0; padding: 0 4px; gap: 5px; background: none; font: 600 12px 'Fredoka', sans-serif; color: #dfe9fb; }
+.skillHeroMark { width: 16px; height: 16px; flex-basis: 16px; font-size: 11px; border-radius: 5px; }
+.skillSlots { grid-template-columns: repeat(3, 62px); gap: 8px; }
+.skill { width: 62px; gap: 0; }
+.skill .face { width: 62px; height: 62px; border-radius: 16px; }
+.skill .glyph { font-size: 32px; }
+.skill .auto { top: -5px; right: -5px; width: 20px; height: 20px; min-width: 0; padding: 0; display: grid; place-items: center;
+  font: 400 12px/1 'Lilita One', sans-serif; border-radius: 50%; border-width: 2px; box-shadow: 0 2px 0 var(--outline); }
+.skill .key { top: -5px; left: -5px; min-width: 20px; height: 20px; font-size: 11px; border-radius: 6px; }
+
+/* ---------- faixa da luta: curta ---------- */
+#banner { font-size: 40px; padding: 8px 60px 12px; }
+
+/* ---------- pausa e reinício ---------- */
+.modal-box { gap: 14px; padding: 22px 30px; }
+.modal-box b { font-size: 30px; }
+
+/* ---------- painel do herói: números com ícones ---------- */
+#heroPanel .hero-panel-stats { grid-template-columns: minmax(0, 1fr); }
+#heroPanel .hero-attributes, #heroPanel .hero-match-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#heroPanel .stat-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px; border-radius: 8px; background: rgba(0, 0, 0, .18); cursor: default; }
+#heroPanel .stat-cell i { font-style: normal; font-size: 14px; color: var(--gold); }
+#heroPanel .stat-cell b { font: 400 14px 'Lilita One', sans-serif; color: #fff; white-space: nowrap; }
+#heroPanel .hero-role p { font-size: 14px; }
+
+/* ---------- fim de partida: cartão central compacto ---------- */
+.overlay-card { display: flex; flex-direction: column; gap: 18px; align-items: center; }
+#overlayTitle { display: none; }
+#overlay.results { justify-content: safe center; padding: 20px 16px; }
+#overlay.results .overlay-card { width: min(560px, calc(100vw - 32px)); box-sizing: border-box; gap: 12px; padding: 22px 26px 24px;
+  background: linear-gradient(160deg, #2f4a7a, #1c2d50 70%); border: 4px solid var(--navy-edge); border-radius: 22px;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .14), 0 6px 0 var(--navy-edge), 0 18px 40px rgba(0, 0, 0, .55); }
+#overlay.results #overlayTitle { display: block; font: 400 52px/1 'Lilita One', sans-serif; color: var(--gold); -webkit-text-stroke: 7px var(--outline); paint-order: stroke fill; text-shadow: 0 4px 0 var(--outline); }
+#overlay.results.lost #overlayTitle { color: #ff9a8a; }
+#overlay.results #overlayText { width: auto; max-width: 100%; padding: 0; font: 500 16px/1.3 'Fredoka', sans-serif; color: #d3e3f8; text-align: center;
+  -webkit-text-stroke: 0; background: none; border: 0; box-shadow: none; }
+#overlay.results #overlayStars:not(:empty) { width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
+#overlay.results #overlayStars .stars.big { order: -2; flex-basis: 100%; justify-content: center; }
+#overlay.results #overlayStars .stars.big i { font-size: 64px; cursor: help; }
+#overlayStars .end-chips, #overlayStars .mission-reward, #overlayStars .progress-reward { display: contents; }
+.end-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 99px; cursor: help;
+  font: 400 17px 'Lilita One', sans-serif; color: #fff; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 212, 74, .35); }
+.end-chip i { font-style: normal; color: var(--gold); }
+.end-chip.gold { order: -1; font-size: 20px; color: var(--gold); }
+.end-chip.unlock img { width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #fff9e9, var(--c)); }
+.end-chip:focus-visible, .prog-hero:focus-visible, .end-key:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+#overlay.results #overlayStars .star-best { order: 6; flex-basis: 100%; text-align: center; font: 500 13px 'Fredoka', sans-serif; color: #cfe0f7; -webkit-text-stroke: 0; }
+#overlayStars .prog-heroes { order: 5; flex-basis: 100%; display: flex; justify-content: center; gap: 12px; margin-top: 4px; }
+#overlayStars .prog-hero { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; background: none; outline: 0; cursor: help; }
+#overlayStars .prog-hero img { width: 42px; height: 42px; border: 2px solid var(--cd, #8bb9e7); }
+#overlayStars .prog-hero.up img { box-shadow: 0 0 0 2px var(--gold), 0 0 10px rgba(255, 212, 74, .6); }
+#overlayStars .prog-hero small { font: 600 11px 'Fredoka', sans-serif; color: #a7e3a7; }
+#overlayStars .prog-hero .crown { position: absolute; top: -12px; font-style: normal; font-size: 15px; color: var(--gold); -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill; }
+#overlayStars .prog-hero b { position: absolute; top: 26px; right: -6px; font-size: 12px; color: var(--gold); }
+
+#overlay.results #overlayStats { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.end-keys { display: flex; justify-content: center; gap: 24px; }
+.end-key { display: inline-flex; align-items: center; gap: 6px; cursor: help; font: 400 22px 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+.end-key i { font-style: normal; font-size: 17px; color: var(--gold); }
+.end-tip { margin: 0; max-width: 100%; font: 500 14px/1.3 'Fredoka', sans-serif; color: #ffd9a8; text-align: center; }
+.end-details { width: 100%; }
+.end-details summary { width: max-content; margin: 0 auto; padding: 3px 12px; cursor: pointer; list-style: none; border-radius: 99px;
+  font: 500 13px 'Fredoka', sans-serif; color: #b9d4f5; }
+.end-details summary::-webkit-details-marker { display: none; }
+.end-details summary::before { content: '\25B8  '; }
+.end-details[open] summary::before { content: '\25BE  '; }
+.end-details summary:hover { color: #fff; background: rgba(255, 255, 255, .06); }
+.end-details summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.end-details-body { display: grid; gap: 8px; margin-top: 8px; }
+#overlay.results #overlayStats .battle-report { width: 100%; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+#overlay.results #overlayStats .report-item { padding: 7px 10px; font-size: 12px; }
+#overlay.results #overlayStats .report-item b { font-size: 12px; }
+#overlay.results #overlayStats table { width: 100%; height: auto; font-size: 13px; }
+#overlay.results #overlayStats img { width: 26px; height: 26px; flex-basis: 26px; }
+
+#overlayActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+#overlayNext { display: contents; }
+#overlay.results #overlayBtn { min-width: 0; margin: 0; padding: 10px 24px 12px; font-size: 18px; }
+#overlay .mission-next-btn { padding: 10px 26px 12px; font-size: 20px; background: linear-gradient(#ffe995, #f2b32a 55%, #c98a12); }

@@ -144,8 +144,8 @@ if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alte
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};
 const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:world.zoneOf(3).top[0]}];
 const tick=runInNewContext(main.slice(main.indexOf('function updateGame('),main.indexOf('function endGame('))+';updateGame',{
-  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},showBanner:()=>{},popText:()=>{},setText:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
-  units:[],militiaAlive:()=>0,$:()=>({hidden:true})
+  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},showBanner:()=>{},popText:()=>{},setText:()=>{},setTip:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
+  units:[],militiaAlive:()=>0,$:()=>({hidden:true,classList:{toggle(){}}})
 });
 tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador vivo');
 living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não terminou após último inimigo');
