@@ -75,6 +75,18 @@ function objectiveTip(mission) {
     }
     return 'O chefe ainda está ativo. Concentre o dano nele e saia das áreas marcadas antes do impacto.';
   }
+  if (goal.type === 'defend' && mission.shrineDown) {
+    return 'O santuário caiu. Deixe um herói de defesa perto dele e derrube primeiro os saqueadores que correm para o cristal.';
+  }
+  if (goal.type === 'hunt' && !mission.huntDown) {
+    return mission.huntEscaped
+      ? 'O alvo marcado fugiu. Encurrale-o no fim da clareira e use lentidão, raízes ou atiradores antes que o tempo acabe.'
+      : 'O grupo caiu antes de abater o alvo marcado. Concentre o dano nele quando ele parar para lutar.';
+  }
+  if (goal.type === 'endless') {
+    const seconds = Math.floor(number(mission.endlessTime));
+    return `A horda venceu após ${seconds} s. A primeira estrela pede ${number(goal.marks?.[0]) || 60} s: guarde ultimates e cura para quando a onda engrossar.`;
+  }
   if (goal.type === 'survive' && number(mission.surviveRemaining) > 0) {
     return `Faltavam ${Math.ceil(number(mission.surviveRemaining))} s para sobreviver. Não persiga longe da formação e guarde controle para grupos perigosos.`;
   }
@@ -89,7 +101,10 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
         ? 'Prisioneiro resgatado! '
         : mission.goal?.type === 'tower' && number(mission.towersDown) >= number(mission.goal.count)
           ? `${number(mission.goal.count) === 1 ? 'Torre derrubada!' : 'Torres derrubadas!'} `
-          : '';
+          : mission.goal?.type === 'defend' ? 'Santuário de pé! '
+            : mission.goal?.type === 'hunt' && mission.huntDown ? 'Alvo marcado abatido! '
+              : mission.goal?.type === 'endless' ? `A horda foi contida por ${Math.floor(number(mission.endlessTime))} s! `
+                : '';
       if (mission.nextMission) {
         return stars < 3
           ? `${objective}Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada; confira os critérios acima para conquistar as que faltam.`

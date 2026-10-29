@@ -1161,6 +1161,11 @@
 .game-tooltip .tt-technique { --kind: #7fdc9a; }
 .game-tooltip .tt-ultimate { --kind: #f4d88b; }
 .game-tooltip .tt-skill header { display: flex; align-items: center; gap: 10px; }
+.game-tooltip .tt-relic { --kind: #e3e9f2; display: grid; gap: 8px; max-width: 260px; }
+.game-tooltip .tt-relic.rarity-rara { --kind: #7cc4ff; }
+.game-tooltip .tt-relic.rarity-epica { --kind: #d99bff; }
+.game-tooltip .tt-relic header { display: flex; align-items: center; gap: 10px; }
+.game-tooltip .tt-relic header b { display: block; color: #fff; font-size: 17px; font-weight: 600; line-height: 1.2; }
 .game-tooltip .tt-icon {
   flex: 0 0 40px;
   height: 40px;

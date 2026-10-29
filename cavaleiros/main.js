@@ -779,16 +779,38 @@ function confirmPick(i) {
 // Uma escolha por vez, inclusive quando vários heróis ganham XP no mesmo golpe.
 const evolutions = [];
 
+// Relíquias: as de bônus simples acumulam; as únicas (unique) mudam o jeito de jogar e valem uma vez por jornada.
+// A raridade (comum/rara/épica) pesa no sorteio e dá a cor do cartão e do ícone no HUD.
+// needs() tira da oferta o que não serve à equipe atual (ex.: bônus de mago sem mago).
+const RELIC_RARITY = {
+  comum: { name: 'Comum', weight: 6, c: '#e3e9f2', cd: '#67768c' },
+  rara: { name: 'Rara', weight: 3, c: '#7cc4ff', cd: '#2a5aa6' },
+  epica: { name: 'Épica', weight: 1.2, c: '#d99bff', cd: '#6a2fa6' },
+};
+const partyHas = (test) => heroes().some((h) => !h.dead && test(h));
 const RELICS = [
-  { id: 'keen-edge', name: 'Lâmina afiada', icon: '⚔', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
-  { id: 'swift-boots', name: 'Botas velozes', icon: '➤', desc: 'Heróis se movem 10% mais rápido pelo resto da jornada.' },
-  { id: 'oak-charm', name: 'Amuleto de carvalho', icon: '⬟', desc: 'Heróis recebem 12% menos dano pelo resto da jornada.' },
-  { id: 'vital-medallion', name: 'Medalhão vital', icon: '♥', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
-  { id: 'arcane-focus', name: 'Foco arcano', icon: '✦', desc: 'Habilidades ficam 15% mais fortes pelo resto da jornada.' },
-  { id: 'giant-bane', name: 'Ferrão de gigante', icon: '✹', desc: 'Heróis causam 20% mais dano contra chefes.' },
-  { id: 'healing-vial', name: 'Frasco curativo', icon: '⚗', desc: 'Heróis de pé recuperam 35% da vida máxima.' },
-  { id: 'wind-chime', name: 'Sino do vento', icon: '♫', desc: 'Heróis atacam 10% mais rápido pelo resto da jornada.' },
+  { id: 'keen-edge', name: 'Lâmina afiada', icon: '⚔', rarity: 'comum', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
+  { id: 'swift-boots', name: 'Botas velozes', icon: '➤', rarity: 'comum', desc: 'Heróis se movem 10% mais rápido pelo resto da jornada.' },
+  { id: 'oak-charm', name: 'Amuleto de carvalho', icon: '⬟', rarity: 'comum', desc: 'Heróis recebem 12% menos dano pelo resto da jornada.' },
+  { id: 'vital-medallion', name: 'Medalhão vital', icon: '♥', rarity: 'comum', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
+  { id: 'arcane-focus', name: 'Foco arcano', icon: '✦', rarity: 'comum', desc: 'Habilidades ficam 15% mais fortes pelo resto da jornada.' },
+  { id: 'giant-bane', name: 'Ferrão de gigante', icon: '✹', rarity: 'rara', desc: 'Heróis causam 20% mais dano contra chefes.', needs: () => bigFoeAhead() },
+  { id: 'healing-vial', name: 'Frasco curativo', icon: '⚗', rarity: 'comum', desc: 'Heróis de pé recuperam 35% da vida máxima.' },
+  { id: 'wind-chime', name: 'Sino do vento', icon: '♫', rarity: 'comum', desc: 'Heróis atacam 10% mais rápido pelo resto da jornada.' },
+  { id: 'ember-heart', name: 'Coração de brasa', icon: '✺', rarity: 'comum', unique: true, desc: 'Ao abater um inimigo, 25% de chance de ele explodir e ferir quem estiver por perto.' },
+  { id: 'dawn-ward', name: 'Égide da aurora', icon: '◈', rarity: 'comum', unique: true, desc: 'No início de cada fase, cada herói ganha um escudo de 20% da vida máxima.' },
+  { id: 'thorn-mail', name: 'Cota de espinhos', icon: '✶', rarity: 'comum', unique: true, desc: 'Inimigos corpo a corpo levam de volta 35% do dano que causam aos heróis.' },
+  { id: 'bulwark-banner', name: 'Estandarte do bastião', icon: '⛨', rarity: 'comum', unique: true, desc: 'Cada bloqueio recupera 5% da vida de quem bloqueou.', needs: () => partyHas(canBlock) },
+  { id: 'first-spark', name: 'Centelha inicial', icon: '⚡', rarity: 'rara', unique: true, desc: 'A primeira habilidade de cada herói em cada fase não entra em recarga.' },
+  { id: 'phoenix-feather', name: 'Pena da fênix', icon: '❦', rarity: 'rara', unique: true, desc: 'Usar a ultimate cura 20% da vida de quem usou e dos aliados próximos.' },
+  { id: 'ricochet-sling', name: 'Funda ricocheteante', icon: '↯', rarity: 'rara', unique: true, desc: 'Tiros comuns à distância ricocheteiam em mais um inimigo próximo (60% do dano).', needs: () => partyHas((h) => h.ranged && h.cfg.id !== 'crossbow') },
+  { id: 'shadow-mark', name: 'Marca das sombras', icon: '☾', rarity: 'rara', unique: true, desc: 'Cada abate de um Ladino tira 2 s das recargas das habilidades dele.', needs: () => partyHas((h) => h.cfg.classId === 3) },
+  { id: 'archmage-prism', name: 'Prisma do arquimago', icon: '✧', rarity: 'epica', unique: true, desc: 'Magos acertam +1 alvo: o tiro comum se divide e os raios em cadeia saltam mais uma vez.', needs: () => partyHas((h) => h.cfg.classId === 2) },
+  { id: 'last-oath', name: 'Juramento final', icon: '✠', rarity: 'epica', unique: true, desc: 'Uma vez por fase, o herói que cairia fica com 1 de vida e invulnerável por 2 s.' },
 ];
+const hasRelic = (id) => !!game.relics?.includes(id);
+// quem bloqueia golpes (cavaleiros e vikings), usado no dano recebido e na oferta do estandarte
+const canBlock = (h) => h.cfg.classId === 0 || h.cfg.id === 'viking' || h.cfg.id === 'iceviking';
 
 function applyRelicToHero(hero, id) {
   if (id === 'keen-edge') hero.dmg *= 1.12;
@@ -801,6 +823,90 @@ function applyRelicToHero(hero, id) {
   } else if (id === 'arcane-focus') hero.skillPower *= 1.15;
   else if (id === 'giant-bane') hero.bossBonus = (hero.bossBonus || 0) + 0.2;
   else if (id === 'wind-chime') hero.haste *= 1.1;
+  else if (id === 'archmage-prism' && hero.cfg.classId === 2) hero.extraTargets = (hero.extraTargets || 0) + 1;
+}
+
+// ganchos das relíquias que mudam o jogo; cada um só age se a relíquia estiver na jornada
+function relicPhaseStart() {
+  for (const h of heroes()) {
+    if (h.dead) continue;
+    h.freeCast = hasRelic('first-spark');
+    h.oathUsed = false;
+    h.relicShield = hasRelic('dawn-ward') ? Math.round(h.maxHp * 0.2) : 0;
+    if (h.relicShield) popText(h.pos, 'Escudo!', 'block');
+  }
+}
+
+function relicAfterCast(hero, slot, ultimate) {
+  if (hero.freeCast) {
+    hero.freeCast = false;
+    hero.skillTimers[slot] = 0.5;
+    popText(hero.pos, 'Centelha!', 'evolve');
+  }
+  if (ultimate && hasRelic('phoenix-feather')) for (const h of heroes()) {
+    if (h.dead || h.pos.distanceTo(hero.pos) > 7) continue;
+    const heal = Math.min(h.maxHp - h.hp, h.maxHp * 0.2);
+    if (heal <= 0) continue;
+    h.hp += heal;
+    hero.stats.cura += heal;
+    popText(h.pos, '+' + Math.round(heal), 'heal');
+  }
+}
+
+// dano que chega a um herói: escudo da aurora absorve e juramento segura a queda; devolve o que sobra
+function relicGuard(hero, n) {
+  if (hero.relicShield > 0) {
+    const soak = Math.min(n, hero.relicShield);
+    hero.relicShield -= soak;
+    n -= soak;
+    if (n <= 0) { popText(hero.pos, 'Escudo', 'block'); return 0; }
+  }
+  if (hasRelic('last-oath') && !hero.oathUsed && n >= hero.hp && hero.hp > 1) {
+    n = hero.hp - 1;
+    hero.oathUsed = true;
+    hero.oathUntil = game.runTime + 2;
+    popText(hero.pos, 'Juramento!', 'evolve');
+  }
+  return n;
+}
+
+function relicOnKill(foe) {
+  const killer = foe.lastHit?.team === 'hero' ? foe.lastHit : null;
+  if (hasRelic('ember-heart') && !foe.totem && Math.random() < 0.25) {
+    ring(foe.pos, 2.6, 0xff7a2e, 0.5);
+    poof(foe.pos, 1.2);
+    damageArea(foe.pos, 2.6, Math.max(14, (killer?.dmg || 18) * 0.8), killer);
+  }
+  if (hasRelic('shadow-mark') && killer?.cfg.classId === 3) {
+    for (let slot = 0; slot < 3; slot++) killer.skillTimers[slot] = Math.max(0, killer.skillTimers[slot] - 2);
+  }
+}
+
+// tiro comum de mago com o prisma: um segundo projétil vai para outro inimigo ao alcance
+function relicExtraShot(hero, target) {
+  if (!hero.extraTargets) return;
+  const others = skeletonsAlive().filter((s) => s !== target && !s.spawning && s.pos.distanceTo(hero.pos) <= hero.range + 1);
+  for (let k = 0; k < hero.extraTargets && others.length; k++) {
+    const other = nearest(target.pos, others);
+    others.splice(others.indexOf(other), 1);
+    fireBolt(hero, other, 'magic');
+    const bolt = bolts.at(-1);
+    if (bolt?.owner === hero) bolt.dmg *= 0.7;
+  }
+}
+
+// funda ricocheteante: o tiro comum que acertou salta uma vez para o inimigo mais perto
+function relicBounce(b) {
+  if (!hasRelic('ricochet-sling') || b.skill || b.bounced || b.owner?.team !== 'hero') return;
+  const from = b.target;
+  const next = nearest(from.pos, skeletonsAlive().filter((s) => s !== from && !s.spawning && s.pos.distanceTo(from.pos) <= 6));
+  if (!next) return;
+  fireBolt(b.owner, next, b.kind);
+  const bolt = bolts.at(-1);
+  if (bolt?.owner !== b.owner) return;
+  bolt.mesh?.position.copy(from.pos).setY(from.pos.y + 1.1);
+  bolt.dmg = b.dmg * 0.6;
+  bolt.bounced = true;
 }
 
 // chefe (fases 6 e 12) ou golem ainda à frente no trecho: só então o Ferrão de gigante tem uso
@@ -809,31 +915,46 @@ function bigFoeAhead() {
   return false;
 }
 
+// oferta contextual: tira únicas já pegas e o que não serve à equipe; a raridade pesa no sorteio
+function relicPool() {
+  return RELICS.filter((relic) => !(relic.unique && hasRelic(relic.id)) && (!relic.needs || relic.needs()));
+}
+
+function drawRelics(pool, n = 3, random = Math.random) {
+  pool = [...pool];
+  const options = [];
+  while (options.length < n && pool.length) {
+    let roll = random() * pool.reduce((sum, relic) => sum + RELIC_RARITY[relic.rarity].weight, 0);
+    let i = pool.findIndex((relic) => (roll -= RELIC_RARITY[relic.rarity].weight) < 0);
+    if (i < 0) i = pool.length - 1;
+    options.push(pool.splice(i, 1)[0]);
+  }
+  return options;
+}
+
 function showRelicPick() {
-  const pool = RELICS.filter((relic) => relic.id !== 'giant-bane' || bigFoeAhead());
   pick.mode = 'relic';
-  pick.options = [];
-  const choices = game.test ? 3 : progress.relicChoices();
-  while (pick.options.length < choices && pool.length) pick.options.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  pick.options = drawRelics(relicPool(), game.test ? 3 : progress.relicChoices());
   $('banner').style.opacity = 0;
   pick.open = true;
   game.paused = true;
   $('pickTitle').textContent = 'Relíquia encontrada!';
   $('pickSub').textContent = `Fase ${game.phase} · escolha um bônus para o restante da jornada`;
-  $('pickHint').textContent = `Uma escolha · bônus acumulam · 1–${pick.options.length} escolher`;
+  $('pickHint').textContent = `Uma escolha · comuns acumulam · únicas valem uma vez · 1–${pick.options.length} escolher`;
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
   pick.cards = pick.options.map((relic, i) => {
+    const rarity = RELIC_RARITY[relic.rarity];
     const card = document.createElement('div');
-    card.className = 'card relic';
+    card.className = `card relic rarity-${relic.rarity}`;
     card.setAttribute('role', 'button');
     card.setAttribute('tabindex', '0');
-    card.setAttribute('aria-label', `${relic.name}: ${relic.desc}`);
-    card.style.setProperty('--c', '#f5c75b');
-    card.style.setProperty('--cd', '#a65d35');
+    card.setAttribute('aria-label', `${relic.name}, relíquia ${rarity.name.toLowerCase()}: ${relic.desc}`);
+    card.style.setProperty('--c', rarity.c);
+    card.style.setProperty('--cd', rarity.cd);
     card.style.setProperty('--d', `${i * 90}ms`);
-    card.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.desc}</p><small>Acumulável nesta jornada</small>`;
+    card.innerHTML = `<div class="num">${i + 1}</div><span class="relic-rarity">${rarity.name}</span><div class="relic-icon">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.desc}</p><small>${relic.unique ? 'Única nesta jornada' : 'Acumulável nesta jornada'}</small>`;
     card.onclick = () => confirmPick(i);
     bindCard(card, i);
     list.appendChild(card);
@@ -851,6 +972,25 @@ function showRelicPick() {
   $('pick').classList.remove('hidden');
 }
 
+// relíquias ativas no HUD: um ícone por relíquia (com contagem); os detalhes ficam na dica
+function renderRelicTray() {
+  const tray = $('relics');
+  const counts = new Map();
+  for (const id of game.relics || []) counts.set(id, (counts.get(id) || 0) + 1);
+  tray.innerHTML = [...counts].map(([id, n]) => {
+    const relic = RELICS.find((r) => r.id === id);
+    return relic ? `<span class="relic-slot rarity-${relic.rarity}" tabindex="0" data-tip="relic" data-relic="${id}" aria-label="${relic.name}${n > 1 ? ` ×${n}` : ''}: ${relic.desc}">${relic.icon}${n > 1 ? `<b>${n}</b>` : ''}</span>` : '';
+  }).join('');
+  tray.classList.toggle('hidden', !counts.size);
+}
+
+function relicTooltip(el) {
+  const relic = RELICS.find((r) => r.id === el.getAttribute('data-relic'));
+  if (!relic) return '';
+  const n = (game.relics || []).filter((id) => id === relic.id).length;
+  return `<div class="tt-relic rarity-${relic.rarity}"><header><span class="tt-icon" aria-hidden="true">${relic.icon}</span><div><b>${relic.name}</b><span class="tt-kind">Relíquia ${RELIC_RARITY[relic.rarity].name.toLowerCase()}${n > 1 ? ` · ×${n}` : ''}</span></div></header><p class="tt-desc">${relic.desc}</p></div>`;
+}
+
 function confirmRelic(i) {
   const relic = pick.options[i];
   if (!relic) return;
@@ -860,6 +1000,7 @@ function confirmRelic(i) {
   } else {
     for (const hero of heroes()) applyRelicToHero(hero, relic.id);
   }
+  renderRelicTray();
   if (heroes()[0]) popText(heroes()[0].pos, `${relic.name}!`, 'evolve');
   pick.open = false;
   $('pick').classList.add('hidden');
@@ -1250,6 +1391,7 @@ function skillTooltip(el) {
   </div>`;
 }
 registerTooltip('skill', skillTooltip);
+registerTooltip('relic', relicTooltip);
 initTooltips();
 
 addEventListener('keydown', (e) => {
@@ -1509,6 +1651,7 @@ class Unit {
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
     if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
+      if (this.oathUntil > game.runTime) return;   // Juramento final: invulnerável por instantes
       if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
         this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
@@ -1529,11 +1672,14 @@ class Unit {
         n *= protection;
         if (this.synergyNoticeT <= 0) { popText(this.pos, SYNERGIES[2].name, 'heal'); this.synergyNoticeT = 1.2; }
       }
-      if ((this.cfg.classId === 0 || this.cfg.id === 'viking' || this.cfg.id === 'iceviking') && Math.random() < 0.3) {
+      if (canBlock(this) && Math.random() < 0.3) {
         n *= 0.5;
         popText(this.pos, 'Bloqueio!', 'block');
         if (this.busy <= 0 && THREE.AnimationClip.findByName(this.clips, 'Block_Hit')) this.busy = this.once('Block_Hit', 1.5);
+        if (hasRelic('bulwark-banner')) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.05);
       }
+      n = relicGuard(this, n);
+      if (n <= 0) return;
     }
     const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
     if (this.stats) this.stats.recebido += real;
@@ -1544,6 +1690,7 @@ class Unit {
       game.damageSources[name] ||= { name, damage: 0, hits: 0 };
       game.damageSources[name].damage += real;
       game.damageSources[name].hits++;
+      if (hasRelic('thorn-mail') && !owner.ranged && !owner.dead) owner.takeDamage(real * 0.35, null, this);   // Cota de espinhos
     }
     this.hp -= n;
     if (owner) this.lastHit = owner;
@@ -1578,6 +1725,7 @@ class Unit {
       if (this.lastHit?.stats) this.lastHit.stats.abates++;
       for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
       monsterDied(this);
+      relicOnKill(this);
     }
     if (this.aura) this.aura.visible = false;
     if (this.halo) this.halo.visible = false;
@@ -1636,7 +1784,10 @@ class Unit {
         this.pendingHit = null;
         if (!effect && this.team !== 'skeleton') audio.play(swingSound(this));
         if (effect) effect();
-        else if (this.ranged && !target.dead) this.team === 'skeleton' ? fireEnemyBolt(this, target) : fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic');
+        else if (this.ranged && !target.dead) {
+          if (this.team === 'skeleton') fireEnemyBolt(this, target);
+          else { fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic'); relicExtraShot(this, target); }
+        }
         else if (this.cleave) damageCleave(this, target);
         else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos, this);
       }
@@ -1660,7 +1811,9 @@ function makeTargetContext(reuse = null) {
     party.length = 0;
     for (const unit of units) if (unit.team === 'hero') party.push(unit);
   }
-  const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager : null;
+  // o santuário entra como "aldeão": os heróis interceptam quem chega perto dele
+  const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager
+    : goal?.type === 'defend' && game.shrine && !game.shrine.dead ? game.shrine : null;
   const friends = reuse ? reuse.friends : villager ? [...party, villager] : party;
   if (reuse) {
     friends.length = 0;
@@ -2076,6 +2229,7 @@ function updateBolts(dt) {
         const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0 : b.kind === 'viking' ? 0 : (b.kind === 'pyro' ? 1.1 + (b.level - 1) * 0.2 : 1.3 + (b.level - 1) * 0.25) * b.power;
         if (radius) damageArea(b.target.pos, radius, b.dmg, b.owner);
         else if (!b.target.dead) heroHit(b.owner, b.target, b.dmg * (b.kind === 'viking' ? 1.8 * b.power : 1));
+        relicBounce(b);
         if (b.kind === 'pyro') {
           const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0xff702e, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false }));
           mesh.rotation.x = -Math.PI / 2;
@@ -3546,6 +3700,7 @@ class Hero extends Unit {
     this.pendingHit = { target, effect, t: this.busy * at };
     FX.charge(this, this.pendingHit.t);
     this.skillTimers[0] = this.skillMaxes[0] = cooldownForSkill(this.cfg, 0, level, this.skillRate);
+    relicAfterCast(this, 0, false);
     this.stats.habilidades++;
     return true;
   }
@@ -3675,7 +3830,7 @@ class Hero extends Unit {
         if (!target) return false;
         effect = () => {
           let at = this.pos, next = target; const hit = new Set();
-          for (let i = 0; i < (skill.jumps || 4) && next && !next.dead; i++) {
+          for (let i = 0; i < (skill.jumps || 4) + (this.extraTargets || 0) && next && !next.dead; i++) {
             FX.zigzag(at, next.pos, i * 0.06); hit.add(next); damageOne(next, 1 - i * 0.08); at = next.pos;
             next = highestPriorityHeroTarget(this, enemies.filter((enemy) => !hit.has(enemy) && enemy.pos.distanceTo(at) < 5), at);
           }
@@ -3757,6 +3912,7 @@ class Hero extends Unit {
     this.pendingHit = { target, skill, slot, effect: () => { audio.play(sound); FX.release(this, skill.ultimate); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target); }, t: hitAt };
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
+    relicAfterCast(this, slot, !!skill.ultimate);
     this.stats.habilidades++;
     if (skill.ultimate) game.ultimates = (game.ultimates || 0) + 1;
     return true;
@@ -4238,7 +4394,8 @@ class Skeleton extends Unit {
     if (this.stunT > 0 || this.busy > 0) return;
     this.spawning = false;
     const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt
-      : nearest(this.pos, activeTargetContext?.alliedUnits ?? allies());
+      : this.raider && game.shrine && !game.shrine.dead ? game.shrine
+        : nearest(this.pos, activeTargetContext?.alliedUnits ?? allies());
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
       return;
@@ -4464,8 +4621,10 @@ function placeParty(first) {
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null,
+    shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0 });
   game.rerolls = game.test ? 0 : progress.rerolls();
+  renderRelicTray();
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
@@ -4482,6 +4641,7 @@ function startMission() {
     if (!m) return;
     if (m.goal.type === 'escort') game.villager = new Villager();
     if (m.goal.type === 'rescue') game.villager = new Villager(true);
+    if (m.goal.type === 'defend') game.shrine = new Shrine(world.along(world.anchorS(m.from) - 5, 0));
     showBanner(`${m.name} · ${world.biome}`, 3);
     document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
@@ -4509,7 +4669,13 @@ function startPhase() {
     s.pos.set(captive.pos.x + off, 0, captive.pos.z + 1.2);
     s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
   }
-  const text = goal?.type === 'survive' && game.phase === goal.phase ? `Aguente ${goal.time} s!` : game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`;
+  if (goal?.type === 'hunt' && !game.huntMark) spawnHuntMark();
+  relicPhaseStart();
+  const text = goal?.type === 'survive' && game.phase === goal.phase ? `Aguente ${goal.time} s!`
+    : goal?.type === 'defend' ? `Defenda o santuário por ${goal.time} s!`
+      : goal?.type === 'hunt' ? 'Abata o alvo marcado!'
+        : goal?.type === 'endless' ? 'A horda não para!'
+          : game.bossPending ? `Fase ${game.phase}: chefe!` : `Fase ${game.phase}`;
   if (!game.mission || game.phase !== game.start) return showBanner(text);
   // primeira fase da missão: a faixa leva o capítulo e a história (a faixa do bioma sai logo em seguida)
   showBanner(`${game.mission.name} · ${text}`, 5);
@@ -4666,6 +4832,99 @@ function placeTotem(k, tower = false) {
   game.totemsPlaced++;
 }
 
+// santuário da missão de defesa: pedestal de pedra com cristal azul; aliado parado que os saqueadores atacam
+let shrineParts = null;
+function shrineModel() {
+  shrineParts ||= { stone: new THREE.MeshLambertMaterial({ color: 0xb9b2a4 }), crystal: new THREE.MeshLambertMaterial({ color: 0x7fd6ff, emissive: 0x1d6fa8 }),
+    glow: new THREE.MeshBasicMaterial({ color: 0x8fe3ff }), base: new THREE.CylinderGeometry(1.05, 1.25, 0.45, 8), pillar: new THREE.CylinderGeometry(0.42, 0.55, 1.2, 8),
+    gem: new THREE.OctahedronGeometry(0.55, 0), ring: new THREE.TorusGeometry(1.15, 0.06, 6, 28) };
+  const P = shrineParts, g = new THREE.Group();
+  const base = new THREE.Mesh(P.base, P.stone);
+  base.position.y = 0.22;
+  const pillar = new THREE.Mesh(P.pillar, P.stone);
+  pillar.position.y = 1.05;
+  const gem = new THREE.Mesh(P.gem, P.crystal);
+  gem.name = 'gem';
+  gem.position.y = 2.25;
+  gem.scale.set(0.8, 1.3, 0.8);
+  const ring = new THREE.Mesh(P.ring, P.glow);
+  ring.name = 'glow';
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.5;
+  g.add(base, pillar, gem, ring);
+  return { scene: g, animations: [] };
+}
+
+class Shrine extends Unit {
+  constructor(at) {
+    super(shrineModel(), { hp: Math.round(520 / difficulty.dmg), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'villager');
+    this.structure = true;
+    this.ranged = true;      // o separate e os recuos não o tiram do lugar
+    this.busy = Infinity;
+    this.size = 1.4;
+    this.home = at.clone();
+    this.home.y = world.groundHeight(at.x, at.z);
+    this.pos.copy(this.home);
+    this.gem = this.root.getObjectByName('gem');
+    this.glow = this.root.getObjectByName('glow');
+    this.bar.classList.add('ally');
+    const label = document.createElement('span');
+    label.textContent = 'Santuário';
+    this.bar.appendChild(label);
+    this.popT = 0;
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.vel.set(0, 0, 0);
+    this.updateCommon(dt);
+    this.pos.copy(this.home);
+    if (this.gem?.position) { this.gem.rotation.y += dt * 1.4; this.gem.position.y = 2.25 + Math.sin(game.runTime * 2) * 0.12; }
+    if (this.glow?.rotation) this.glow.rotation.z -= dt;
+  }
+
+  die() {
+    this.dead = true;
+    this.hp = 0;
+    this.bar.style.display = 'none';
+    this.root.visible = false;
+    poof(this.pos, 1.8);
+    ring(this.pos, 2.6, 0x8fe3ff, 1);
+  }
+}
+
+// alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
+const HUNT_FLEE = 4.5, HUNT_EDGE = 20;
+const huntDest = new THREE.Vector3();
+function huntThink(u, dt) {
+  if (u.rootT > 0 || u.tauntT > 0) return false;   // preso ou provocado: luta onde está
+  const s0 = world.anchorS(game.phase), fwd = world.tangentAt(s0), anchor = world.pointAt(s0), side = world.sideOf(fwd);
+  const dx = u.pos.x - anchor.x, dz = u.pos.z - anchor.z;
+  const ahead = dx * fwd.x + dz * fwd.z;
+  const chased = heroes().some((h) => !h.dead && h.pos.distanceTo(u.pos) < HUNT_FLEE);
+  if (!chased || ahead >= HUNT_EDGE - 0.5) return false;   // sem perseguidor ou encurralado: volta a atacar
+  const lateral = THREE.MathUtils.clamp(dx * side.x + dz * side.z, -(ROAD - 1), ROAD - 1);
+  u.moveTo(huntDest.copy(world.along(s0 + Math.min(HUNT_EDGE, ahead + 4), lateral)), dt);
+  return true;
+}
+
+function spawnHuntMark() {
+  const s = new Skeleton('Rogue', game.phase);
+  s.maxHp = s.hp = Math.round(s.hp * 6);
+  s.speed = Math.max(s.speed, 2.6);
+  s.hunted = true;
+  s.kind = { ...s.kind, think: huntThink };
+  s.pos.copy(world.along(world.anchorS(game.phase) + 13, 0));
+  s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  s.bar.classList.add('boss');
+  const label = document.createElement('span');
+  label.textContent = 'Alvo marcado';
+  s.bar.appendChild(label);
+  for (const m of s.mats) { m.userData ||= {}; m.userData.glow = 0x5c1212; }
+  game.huntMark = s;
+  return s;
+}
+
 const clockText = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
 function missionProgress(goal, villager = game.villager, skeletons = skeletonsAlive()) {
@@ -4684,7 +4943,52 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
   if (goal.type === 'tower') return THREE.MathUtils.clamp(game.towersDown / goal.count, 0, 1);
   if (goal.type === 'totems') return THREE.MathUtils.clamp(game.totemsDown / goal.count, 0, 1);
   if (goal.type === 'timer') return THREE.MathUtils.clamp(game.missionT / goal.time, 0, 1);
+  if (goal.type === 'defend') return THREE.MathUtils.clamp(1 - game.surviveT / goal.time, 0, 1);
+  if (goal.type === 'hunt') {
+    const mark = game.huntMark;
+    return game.huntDown ? 1 : mark ? THREE.MathUtils.clamp(1 - mark.hp / mark.maxHp, 0, 1) : 0;
+  }
+  if (goal.type === 'endless') return THREE.MathUtils.clamp(game.endlessT / goal.marks.at(-1), 0, 1);
   return phaseProgress;
+}
+
+// fim de missão sem derrota: dissolve o que restou da onda e encerra na fase atual
+function closeMission() {
+  game.last = game.phase;
+  game.toSpawn = 0;
+  for (const s of skeletonsAlive()) { s.exploded = true; s.die(); }   // bombardeiros não explodem ao se desfazer
+}
+
+// regras dos objetivos novos (santuário, caçada e horda); devolve um texto de derrota ou null
+function newGoalTick(goal, dt, skeletons) {
+  if (goal.type === 'defend') {
+    if (game.shrine?.dead) return 'O santuário caiu! Ele não pode ser destruído.';
+    if (game.state === 'fight') {   // ondas sem parar até o tempo acabar
+      game.surviveT = Math.max(0, game.surviveT - dt);
+      if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 7) game.toSpawn = 4;
+    }
+  } else if (goal.type === 'hunt' && game.state === 'fight' && !game.huntDown) {
+    const mark = game.huntMark;
+    if (mark?.dead) {
+      game.huntDown = true;
+      closeMission();
+      showBanner('Alvo marcado abatido!', 2.5);
+    } else if (mark && (game.surviveT = Math.max(0, game.surviveT - dt)) <= 0) {
+      game.huntEscaped = true;
+      poof(mark.pos, 1.4);
+      return 'O alvo marcado fugiu na névoa!';
+    }
+  } else if (goal.type === 'endless' && game.state === 'fight' && game.endlessT < goal.dawn) {
+    game.endlessT = Math.min(goal.dawn, game.endlessT + dt);
+    const reached = goal.marks.filter((mark) => game.endlessT >= mark).length;
+    if (reached > game.endlessStars) { game.endlessStars = reached; showBanner(`${'★'.repeat(reached)} ${goal.marks[reached - 1]} s aguentados!`, 2.5); }
+    if (game.endlessT >= goal.dawn) { closeMission(); showBanner('Amanheceu! A horda recua.', 3); }
+    else {   // a horda engrossa com o tempo: mais esqueletos ao mesmo tempo e reforços maiores
+      const cap = Math.min(22, 6 + Math.floor(game.endlessT / 20) * 2);
+      if (game.toSpawn === 0 && skeletons.length < cap) game.toSpawn = Math.min(cap - skeletons.length, 3 + Math.floor(game.endlessT / 30));
+    }
+  }
+  return null;
 }
 
 // regras da missão a cada quadro; devolve true se a missão acabou em derrota
@@ -4728,6 +5032,8 @@ function campaignTick(dt, skeletons) {
     game.surviveT = Math.max(0, game.surviveT - dt);
     if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = 4;
   }
+  const lost = newGoalTick(goal, dt, skeletons);
+  if (lost) return fail(lost);
   if (hasDestructionGoal(goal) && game.state === 'fight') {
     for (const t of skeletons) if (t.totem && (t.spawnT -= dt) <= 0) {
       t.spawnT = 6 * difficulty.interval;
@@ -4751,11 +5057,24 @@ function campaignTick(dt, skeletons) {
     case 'tower': text = game.towersDown >= goal.count ? 'Torre derrubada!' : 'Derrube a torre de ossos'; break;
     case 'nofall': text = `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`; break;
     case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
+    case 'defend': {
+      const shrine = game.shrine;
+      text = `Santuário ${shrine ? Math.ceil(Math.max(0, shrine.hp) / shrine.maxHp * 100) : 100}% · ${game.surviveT > 0 ? clockText(game.surviveT) : 'limpe a onda'}`;
+      break;
+    }
+    case 'hunt': left = game.surviveT; text = game.huntDown ? 'Alvo abatido!' : `Alvo marcado · foge em ${clockText(left)}`; break;
+    case 'endless': {
+      const next = goal.marks.find((mark) => game.endlessT < mark);
+      text = `Noite ${clockText(game.endlessT)}${next ? ` · ★ em ${clockText(next - game.endlessT)}` : ` · ★★★ · amanhece em ${clockText(Math.max(0, goal.dawn - game.endlessT))}`}`;
+      break;
+    }
     default: text = goalText(goal);
   }
   setGoalUI(text, missionProgress(goal, v, skeletons));
-  $('goal').classList.toggle('warn', ((goal.type === 'escort' || goal.type === 'rescue' && !v?.rescued) && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30));
-  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'tower' && game.towersDown >= goal.count) || (goal.type === 'rescue' && game.rescueComplete) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0));
+  const shrineLow = goal.type === 'defend' && game.shrine && game.shrine.hp < game.shrine.maxHp * 0.35;
+  $('goal').classList.toggle('warn', ((goal.type === 'escort' || goal.type === 'rescue' && !v?.rescued) && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30) || (goal.type === 'hunt' && !game.huntDown && left < 15) || shrineLow);
+  $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'tower' && game.towersDown >= goal.count) || (goal.type === 'rescue' && game.rescueComplete) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0)
+    || (goal.type === 'defend' && game.surviveT <= 0) || (goal.type === 'hunt' && game.huntDown) || (goal.type === 'endless' && game.endlessStars >= goal.marks.length));
   return false;
 }
 
@@ -4783,14 +5102,16 @@ function missionNextHTML(won, next, unlockedNow) {
 function missionEnd(won) {
   const party = heroes();
   const hpRatio = game.missionHpRatio ?? party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
-  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal };
+  const shrine = game.shrine;
+  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, timeLeft: game.surviveT, endlessTime: game.endlessT };
   const stars = starsFor(result);
   const conditions = starConditions(result);
   const before = totalStars();
   const best = !game.test && saveStars(game.mission.id, stars);
   // a medalha compara com os recordes anteriores, então grava antes do tempo
   const medal = game.test ? null : saveMissionMedal(game.mission.id, { won, stars, difficultyId: difficulty.id });
-  const bestTime = !game.test && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
+  // na horda, tempo maior é melhor: quem mede são as estrelas, não o recorde de tempo
+  const bestTime = !game.test && game.mission.goal.type !== 'endless' && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
   const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
   const row = `<span class="stars big">${[1, 2, 3].map((k) => `<i class="${k <= stars ? 'on' : ''}">★</i>`).join('')}</span>`;
   const criteria = `<ul class="star-criteria" aria-label="Critérios das estrelas">${conditions.map((condition) => `<li class="${condition.achieved ? 'earned' : 'missed'}"><span aria-hidden="true">${condition.achieved ? '✓' : '○'}</span><span>${condition.label}</span></li>`).join('')}</ul>`;
@@ -4834,6 +5155,7 @@ function spawnSkeleton() {
   s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
+  if (game.mission?.goal.type === 'defend' && !lead && Math.random() < 0.45) s.raider = true;   // saqueadores correm para o santuário
 }
 
 // monsters.js usa estas peças do jogo (ele não importa o main.js)
@@ -4863,6 +5185,10 @@ function updateGame(dt) {
   const alive = heroes().filter((h) => !h.dead);
   const skeletons = skeletonsAlive();
 
+  if (!alive.length && game.mission?.goal.type === 'endless') {   // na horda, cair faz parte: vale o tempo aguentado
+    const held = game.endlessT >= game.mission.goal.marks[0];
+    return endGame(`${held ? 'A horda foi contida' : 'A horda venceu'} por ${clockText(game.endlessT)}. Abates: ${game.kills}`, held);
+  }
   if (!alive.length) return endGame(`Os esqueletos venceram na fase ${game.phase}. Abates: ${game.kills}`, false);
   if (game.mission && campaignTick(dt, skeletons)) return;
 
@@ -4976,6 +5302,10 @@ function endGame(text, won = false) {
       maxStars: MISSIONS.length * 3,
       rescueComplete: game.rescueComplete,
       towersDown: game.towersDown,
+      shrineDown: !!game.shrine?.dead,
+      huntDown: game.huntDown,
+      huntEscaped: game.huntEscaped,
+      endlessTime: game.endlessT,
     } : null,
   });
   $('overlayStats').innerHTML = summaryHTML(party, report);

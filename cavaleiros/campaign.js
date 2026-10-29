@@ -4,18 +4,23 @@
 // win = vencer · escort = proteger o aldeão · rescue = salvar um prisioneiro · tower = derrubar torres
 // boss = derrotar o chefe · survive = aguentar `time` s na fase `phase` · totems = destruir `count` totens
 // nofall = ninguém cai · timer = vencer em até `time` s
+// defend = o santuário não pode cair enquanto as ondas chegam por `time` s
+// hunt = abater o alvo marcado antes que ele fuja (`time` s) · endless = aguentar a noite; estrelas nos `marks` (s), amanhece em `dawn` s
 // Trechos: o início avança pelas 12 fases e só missões de chefe passam pelas fases 6 (Rei) e 12 (Lich);
 // o lago precisa da fase 5 e o lago sombrio da fase 9, onde o mundo tem água.
 export const MISSIONS = [
   { id: 'vila', name: 'A Vila', desc: 'Os primeiros esqueletos chegaram à praça.', chapter: 'Capítulo I · Sinais na estrada', story: 'A patrulha cai na praça. No estandarte inimigo, uma marca de ossos aponta para a ponte ao norte.', tip: 'Aprenda o ritmo de ataque dos inimigos e preserve a vida do herói para buscar as três estrelas.', icon: '⌂', from: 1, to: 2, heroes: 1, level: 1, goal: { type: 'win' } },
   { id: 'ponte', name: 'A Ponte do Rio', desc: 'Atiradores no rochedo vigiam a ponte.', chapter: 'Capítulo I · Sinais na estrada', story: 'Os arqueiros fecharam a travessia. Do outro lado, tochas acendem rumo às fazendas.', tip: 'Inimigos perto do aldeão são uma ameaça imediata. Cura, provocação e empurrões ajudam a mantê-lo protegido.', icon: '≈', from: 2, to: 4, heroes: 2, level: 1, goal: { type: 'escort' } },
+  { id: 'santuario', name: 'O Santuário', desc: 'Saqueadores querem quebrar o cristal da vila.', chapter: 'Capítulo I · Sinais na estrada', story: 'O cristal do santuário guarda a estrada. Se ele cair, as fazendas ficam sem proteção para o que vem do sul.', tip: 'Alguns esqueletos ignoram os heróis e correm para o santuário. Mantenha alguém perto dele e derrube os saqueadores primeiro.', icon: '✪', from: 3, to: 3, heroes: 2, level: 1, goal: { type: 'defend', time: 75 } },
   { id: 'fazendas', name: 'Fazendas', desc: 'O primeiro chefe ronda os campos.', chapter: 'Capítulo II · A marca de ossos', story: 'O chefe carrega um fragmento de totem. As pegadas dele terminam perto do lago.', tip: 'Guarde habilidades de alto impacto para o chefe e use efeitos de controle para reduzir a pressão dos reforços.', icon: '☘', from: 4, to: 6, heroes: 2, level: 2, goal: { type: 'boss' } },
   { id: 'lago', name: 'O Lago', desc: 'Eles saem da água rasa.', chapter: 'Capítulo II · A marca de ossos', story: 'Cada onda traz mais esqueletos. Segure a margem até a água revelar o caminho às ruínas.', tip: 'Na fase 5, sobreviva aos 90 segundos. Evite perseguições longas e fique atento aos avisos de ataques no chão.', icon: '≋', from: 4, to: 5, heroes: 3, level: 2, goal: { type: 'survive', time: 90, phase: 5 } },
+  { id: 'caca', name: 'A Caçada', desc: 'Um batedor do necromante leva o mapa das ruínas.', chapter: 'Capítulo III · O véu da morte', story: 'O batedor marcado carrega o mapa das ruínas. Abata-o antes que ele desapareça na névoa do bosque.', tip: 'O alvo marcado foge de quem chega perto. Encurrale-o no fim da clareira e use atiradores, lentidão e raízes para segurá-lo.', icon: '➹', from: 7, to: 7, heroes: 3, level: 2, goal: { type: 'hunt', time: 60 } },
   { id: 'resgate', name: 'Resgate no Bosque', desc: 'Uma pessoa desaparecida foi vista entre as árvores.', chapter: 'Capítulo III · O véu da morte', story: 'Um prisioneiro conhece a origem da névoa. Encontre-o antes que os esqueletos o levem para as ruínas.', tip: 'Aproxime-se do prisioneiro para libertá-lo. Limpe o caminho ao redor antes de avançar.', icon: '⚑', from: 7, to: 8, heroes: 3, level: 2, goal: { type: 'rescue' } },
   { id: 'ruinas', name: 'Ruínas Antigas', desc: 'Entre colunas caídas, o mundo começa a morrer.', chapter: 'Capítulo III · O véu da morte', story: 'Os totens alimentam uma névoa que cobre as ruínas. Quebre os focos para abrir a passagem ao lago sombrio.', tip: 'Totens invocam reforços com o tempo. Destruí-los cedo reduz a quantidade de inimigos na estrada.', icon: '☗', from: 8, to: 10, heroes: 3, level: 3, goal: { type: 'totems', count: 3 } },
   { id: 'torre', name: 'Torre de Ossos', desc: 'Um farol sombrio reúne o exército do necromante.', chapter: 'Capítulo IV · A marcha final', story: 'A torre marca o caminho até o castelo. Derrube sua estrutura antes que mais reforços cheguem.', tip: 'Concentre os ataques na torre e elimine os guardiões que tentarem afastar o grupo.', icon: '☠', from: 9, to: 10, heroes: 4, level: 3, goal: { type: 'tower', count: 1 } },
   { id: 'lago-sombrio', name: 'Lago Sombrio', desc: 'Água escura e névoa roxa.', chapter: 'Capítulo IV · A marcha final', story: 'A torre caiu, mas o lago escuro guarda o último caminho. Atravesse sem perder ninguém; a névoa vem do cemitério.', tip: 'A missão termina se qualquer herói cair. Priorize cura, controle de grupo e esquiva dos ataques marcados.', icon: '☽', from: 9, to: 11, heroes: 4, level: 3, goal: { type: 'nofall' } },
   { id: 'cemiterio', name: 'Cemitério', desc: 'Os mortos não descansam.', chapter: 'Capítulo IV · A marcha final', story: 'O cemitério inteiro se ergue em resposta ao chamado. Atravesse antes que os mortos cheguem ao castelo.', tip: 'O limite é de quatro minutos. Elimine rapidamente inimigos que curam ou trazem esqueletos de volta.', icon: '✝', from: 10, to: 11, heroes: 4, level: 3, goal: { type: 'timer', time: 240 } },
+  { id: 'horda', name: 'Noite sem Fim', desc: 'A horda não para de chegar.', chapter: 'Capítulo IV · A marcha final', story: 'Antes do castelo, o necromante solta a horda inteira. Segure a estrada o máximo que puder até o amanhecer.', tip: 'Não há cura entre fases: cada minuto vale uma estrela. Guarde as ultimates para quando a horda engrossar.', icon: '❂', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'endless', marks: [60, 120, 180], dawn: 300 } },
   { id: 'castelo', name: 'Castelo do Necromante', desc: 'A batalha final contra o chefe.', chapter: 'Capítulo IV · A marcha final', story: 'A fonte da invasão espera atrás dos portões. Derrote o necromante e encerre a marcha dos ossos.', tip: 'Observe os círculos de perigo, saia deles antes do impacto e concentre o dano no chefe quando houver abertura.', icon: '♜', from: 11, to: 12, heroes: 4, level: 3, goal: { type: 'boss' } },
 ];
 
@@ -53,6 +58,9 @@ export function goalText(goal) {
     totems: `Destrua ${goal.count} totens de ossos`,
     nofall: 'Nenhum herói pode cair',
     timer: `Vença em até ${Math.floor(goal.time / 60)} min`,
+    defend: `Defenda o santuário por ${goal.time} s`,
+    hunt: 'Abata o alvo marcado antes que fuja',
+    endless: 'Aguente a horda o máximo possível',
   }[goal.type];
 }
 
@@ -155,11 +163,32 @@ export const variantOpen = () => true;
 
 // Critérios cumulativos servem tanto para calcular estrelas quanto para
 // explicar o resultado no fim da missão.
-export function starConditions({ won, falls, hpRatio, goal }) {
+export function starConditions({ won, falls, hpRatio, goal, shrineRatio, timeLeft, endlessTime }) {
   const completed = Boolean(won);
   const hpPercent = Math.round(Math.max(0, Math.min(1, Number(hpRatio) || 0)) * 100);
   const fallCount = Math.max(0, Number(falls) || 0);
   const noFalls = completed && fallCount === 0;
+  if (goal?.type === 'endless') {
+    const seconds = Math.floor(Math.max(0, Number(endlessTime) || 0));
+    return goal.marks.map((mark) => ({ label: `Aguentar ${mark} s (atual ${seconds} s)`, achieved: seconds >= mark }));
+  }
+  if (goal?.type === 'defend') {
+    const shrinePercent = Math.round(Math.max(0, Math.min(1, Number(shrineRatio) || 0)) * 100);
+    const shrineSafe = completed && shrinePercent >= 50;
+    return [
+      { label: 'Defender o santuário até o fim', achieved: completed },
+      { label: `Santuário com 50%+ de vida (atual ${shrinePercent}%)`, achieved: shrineSafe },
+      { label: `Santuário 50%+ e sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: shrineSafe && fallCount === 0 },
+    ];
+  }
+  if (goal?.type === 'hunt') {
+    const left = Math.max(0, Number(timeLeft) || 0);
+    return [
+      { label: 'Abater o alvo marcado', achieved: completed },
+      { label: `Sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: noFalls },
+      { label: `Sem quedas e com metade do tempo sobrando (${Math.ceil(left)} s de ${goal.time} s)`, achieved: noFalls && left >= goal.time / 2 },
+    ];
+  }
   if (goal?.type === 'nofall') return [
     { label: `Concluir sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: noFalls },
     { label: `Terminar com 75%+ de vida (atual ${hpPercent}%)`, achieved: noFalls && hpRatio >= 0.75 },
@@ -189,6 +218,15 @@ export function saveStars(id, stars) {
   all[id] = stars;
   try { localStorage.setItem(KEY, JSON.stringify(all)); } catch {}
   return true;
+}
+
+// metas de estrela mostradas no mapa, conforme o objetivo
+export function starTargetsFor(goal) {
+  if (goal.type === 'nofall') return ['1★ Concluir sem quedas', '2★ Terminar com 75%+ de vida', '3★ Terminar com 90%+ de vida'];
+  if (goal.type === 'endless') return goal.marks.map((mark, i) => `${i + 1}★ Aguentar ${mark} s`);
+  if (goal.type === 'defend') return ['1★ Defender o santuário', '2★ Santuário com 50%+ de vida', '3★ Santuário 50%+ e sem quedas'];
+  if (goal.type === 'hunt') return ['1★ Abater o alvo', '2★ Sem quedas', '3★ Sem quedas e metade do tempo sobrando'];
+  return ['1★ Concluir a missão', '2★ Sem quedas', '3★ Sem quedas e 50%+ de vida'];
 }
 
 const starRow = (n, size = '') => `<span class="stars ${size}">${[1, 2, 3].map((k) => `<i class="${k <= n ? 'on' : ''}">★</i>`).join('')}</span>`;
@@ -232,7 +270,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
   announcement.setAttribute('aria-atomic', 'true');
   root.appendChild(announcement);
   // Marcos seguem a estrada e as referências visuais da ilustração.
-  const spots = [[50, 91], [56, 72], [36, 65], [55, 56], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [67, 9]];
+  const spots = [[50, 91], [56, 72], [46, 68], [36, 65], [55, 56], [64, 48], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [58, 13], [67, 9]];
   const nodes = MISSIONS.map((m, i) => {
     const b = document.createElement('button');
     const open = unlocked(i), stars = starsOf(m.id), medal = missionMedal(m.id);
@@ -262,9 +300,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null)
     const medal = missionMedal(m.id);
     const mapLabel = typeof biome === 'string' && biome.trim() ? biome.trim().toUpperCase() : 'MAPA ALEATÓRIO';
     announcement.textContent = `${i + 1}. ${m.name}. Objetivo: ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`;
-    const starTargets = m.goal.type === 'nofall'
-      ? ['1★ Concluir sem quedas', '2★ Terminar com 75%+ de vida', '3★ Terminar com 90%+ de vida']
-      : ['1★ Concluir a missão', '2★ Sem quedas', '3★ Sem quedas e 50%+ de vida'];
+    const starTargets = starTargetsFor(m.goal);
     const showReplayButton = remainingStars && replayTargetIndex >= 0 && i !== replayTargetIndex;
     info.innerHTML = `
       <div class="camp-info-head">

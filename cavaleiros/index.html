@@ -102,6 +102,17 @@
     .card.relic .ribbon { margin: 0; }
     .card.relic p { min-height: 50px; }
     .card.relic small { color: #d3e5ff; font: 400 12px 'Lilita One', sans-serif; }
+    /* raridade: a cor do cartão (--c/--cd) vem de RELIC_RARITY; o selo e o aro do ícone repetem a cor */
+    .card.relic .relic-rarity { padding: 2px 10px; border-radius: 99px; color: #1d1530; background: var(--c); font: 400 12px 'Lilita One', sans-serif; letter-spacing: .6px; text-transform: uppercase; }
+    .card.relic.rarity-rara .relic-icon { border-color: #7cc4ff; box-shadow: inset 0 3px 0 #ffffff55, 0 4px 0 var(--outline), 0 0 16px #7cc4ff88; }
+    .card.relic.rarity-epica .relic-icon { border-color: #d99bff; box-shadow: inset 0 3px 0 #ffffff55, 0 4px 0 var(--outline), 0 0 20px #d99bffaa; }
+    .relic-tray { display: inline-flex; gap: 5px; align-items: center; }
+    .relic-tray.hidden { display: none; }
+    .relic-slot { --r: #e3e9f2; position: relative; width: 34px; height: 34px; display: grid; place-items: center; color: #ffe07b; font-size: 19px; line-height: 1; cursor: help;
+      background: radial-gradient(circle at 35% 28%, #557bbb, #1c3158 74%); border: 3px solid var(--r); border-radius: 50%; box-shadow: 0 3px 0 var(--wood-dark), 0 5px 8px rgba(0,0,0,.25); }
+    .relic-slot.rarity-rara { --r: #7cc4ff; } .relic-slot.rarity-epica { --r: #d99bff; }
+    .relic-slot:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .relic-slot b { position: absolute; right: -5px; bottom: -4px; min-width: 16px; padding: 0 3px; border-radius: 99px; color: #fff; background: #b3261e; font: 700 11px/16px sans-serif; text-align: center; }
     .stats { width: 100%; display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; font-size: 13px; font-weight: 500; }
     .pips { display: flex; gap: 4px; }
     .pips i { width: 11px; height: 11px; background: #cabb9a; clip-path: polygon(50% 0, 100% 45%, 50% 100%, 0 45%); }
@@ -565,6 +576,7 @@
     <span class="chip" id="kills">Abates: 0</span>
     <span class="chip" id="party">Heróis: 0/4</span>
     <span class="chip hidden" id="goal"></span>
+    <span class="relic-tray hidden" id="relics" aria-label="Relíquias ativas"></span>
     <button id="pause" type="button" aria-pressed="false" title="Pausar (P ou Espaço)">Pausar</button>
     <!-- no celular as opções ficam recolhidas atrás da engrenagem -->
     <button id="hudMenu" type="button" aria-expanded="false" aria-controls="hudOptions" aria-label="Opções" title="Opções">⚙</button>
