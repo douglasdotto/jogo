@@ -75,7 +75,7 @@ export const LOOKS = {
     ],
   },
   // ---------- Bárbaro ----------
-  berserker: {   // cabeça raspada com chifres, barba ruiva, pintura de guerra e olhos em brasa
+  berserker: {   // moicano ruivo, barba ruiva, pintura de guerra e olhos em brasa
     shape: silhouette('Barbarian', { torso: 1.08, arms: 1.1, legs: 1.06, depth: 1.08 }),
     hide: ['Barbarian_Hat', 'Barbarian_Cape'],
     paint: {
@@ -83,7 +83,7 @@ export const LOOKS = {
       '1H_Axe': { tint: '#d89a8a', amount: 0.4 }, '1H_Axe_Offhand': { tint: '#d89a8a', amount: 0.4 },
     },
     extras: [
-      { type: 'horns', bone: 'head' }, { type: 'necklace', bone: 'head' },
+      { type: 'mohawk', bone: 'head', color: 0xd8481a }, { type: 'necklace', bone: 'head' },
       { type: 'facePaint', bone: 'head', color: 0x24346a, y: 0.47, x: 0.34 },   // pintura azul de guerra
       { type: 'brows', bone: 'head', color: 0xa8300f, angle: 0.45, size: 1.2 },
     ],

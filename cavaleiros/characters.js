@@ -472,6 +472,20 @@ const ACCESSORIES = {
     }
     return g;
   },
+  // moicano espetado: fileira de mechas da testa à nuca, mais altas no meio
+  mohawk({ color = 0xd8481a, y = 0.9, n = 6 } = {}) {
+    const g = new THREE.Group();
+    const mat = lambert(color);
+    for (let i = 0; i < n; i++) {
+      const k = i / (n - 1), tall = 0.22 + Math.sin(k * Math.PI) * 0.16;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(0.075, tall, 4), mat);
+      m.scale.set(0.55, 1, 1.4);
+      m.position.set(0, y + tall / 2 - Math.abs(k - 0.5) * 0.12, 0.3 - k * 0.65);
+      m.rotation.x = -0.5 + k * 0.9;   // inclina para trás acompanhando o crânio
+      g.add(m);
+    }
+    return g;
+  },
   // ombreiras redondas (no osso do peito): o tamanho cresce a peça, não a altura,
   // para não subirem até a cabeça e virarem "orelhas" no retrato
   pauldrons({ color = 0xb0b8c4, spikes = false, size = 1, trim } = {}) {
