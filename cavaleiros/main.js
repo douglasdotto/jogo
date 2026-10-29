@@ -4875,6 +4875,7 @@ function placeParty(first) {
     shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0 });
   game.rerolls = game.test ? 0 : progress.rerolls();
+  if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
