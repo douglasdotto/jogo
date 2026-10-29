@@ -4031,6 +4031,11 @@ const SKILL_ANIMS = {
     { clip: '2H_Ranged_Shooting', f: 0.3, kick: -1 },
     { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, lean: -0.3, hop: 0.3 },
   ],
+  duelist: [
+    { clip: 'Dualwield_Melee_Attack_Slice', f: 0.45, arc: 'slash', kick: 0.6 },
+    { clip: 'Dualwield_Melee_Attack_Stab', hold: 'Blocking', f: 0.5, arc: 'thrust', kick: 1.4, lean: 0.25 },
+    { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 3, hop: 0.3 },
+  ],
   ninja: [
     { clip: 'Throw', f: 0.45, lean: 0.15, hop: 0.25 },
     { clip: 'Dodge_Backward', f: 0.5, hop: 0.35 },
