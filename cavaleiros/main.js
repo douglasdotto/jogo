@@ -1059,7 +1059,7 @@ function updateSkillBar() {
 }
 
 addEventListener('keydown', (e) => {
-  if (pick.open || game.over || e.repeat || !/^[1-4qwerasdf]$/i.test(e.key)) return;
+  if (pick.open || game.over || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
@@ -1405,7 +1405,7 @@ class Unit {
         if (effect) effect();
         else if (this.ranged && !target.dead) this.team === 'skeleton' ? fireEnemyBolt(this, target) : fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic');
         else if (this.cleave) damageCleave(this, target);
-        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos);
+        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos, this);
       }
     }
   }
@@ -1786,7 +1786,7 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   const dir = new THREE.Vector3().subVectors(target.pos, from.pos).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   scene.add(mesh);
-  const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' ? 1 : from.skillPower, skill };
+  const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
   if (skill && kind === 'pyro') {   // a bola grande faz um arco no ar até o alvo
     bolt.base = mesh.position.clone();
@@ -1898,7 +1898,7 @@ function updateEnemyBolts(dt) {
     if (!b.target.dead) {
       b.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), goal.clone().sub(b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
-      if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos); b.life = 0; }
+      if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos, b.from); b.life = 0; }
     }
     if (b.life <= 0 || b.target.dead) { scene.remove(b.mesh); enemyBolts.splice(i, 1); }
   }
@@ -3008,8 +3008,8 @@ class Hero extends Unit {
       effect = () => {
         const party = heroes().filter((h) => !h.dead);
         for (const h of party) {
-          h.royalT = 5 * power;
-          h.royalBonus = 0.2;
+          h.royalT = Math.max(h.royalT, 5 * power);   // não encurta nem enfraquece um hino mais forte
+          h.royalBonus = Math.max(h.royalBonus, 0.2);
         }
         popText(this.pos, 'Brado!', 'evolve');
         FX.royal(this, party);
@@ -3017,7 +3017,7 @@ class Hero extends Unit {
     } else if (id === 'necro') {
       if (!target) return false;
       effect = () => {
-        for (const u of units.filter((u) => u.summoner === this)) { poof(u.pos); u.remove(); }
+        for (const u of units.filter((u) => u.summoner === this && !u.ultimate)) { poof(u.pos); u.remove(); }   // o exército da ultimate fica
         FX.summon(this, [-1, 1].map((side) => new Minion(this, side)));
       };
     } else if (id === 'druid') {
@@ -3210,7 +3210,7 @@ class Hero extends Unit {
       case 'summon':
         effect = () => {
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
-          FX.summon(this, [-1.5, -0.5, 0.5, 1.5].map((side) => new Minion(this, side)));
+          FX.summon(this, [-1.5, -0.5, 0.5, 1.5].map((side) => Object.assign(new Minion(this, side), { ultimate: true })));
           burst(this.pos, color, 20, 3);
         };
         break;
@@ -3277,6 +3277,7 @@ class Hero extends Unit {
     this.dodgeTimer -= dt;
     this.guardT -= dt;
     this.royalT -= dt;
+    if (this.royalT <= 0) this.royalBonus = 0;
     this.songT -= dt;
     if (this.songT <= 0) this.songHaste = 1;
     this.furyT -= dt;
@@ -3957,7 +3958,7 @@ function campaignTick(dt, skeletons) {
       game.bossDown = true;
       game.last = game.phase;
       game.toSpawn = 0;
-      for (const s of skeletonsAlive()) s.die();
+      for (const s of skeletonsAlive()) { s.exploded = true; s.die(); }   // bombardeiros não explodem ao se desfazer
       showBanner('Chefe derrotado!', 2.5);
     }
   }
