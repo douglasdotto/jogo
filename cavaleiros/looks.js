@@ -265,7 +265,8 @@ export const LOOKS = {
     shape: silhouette('Barbarian', { torso: 0.98, arms: 1.02, legs: 1, height: 1.02, depth: 0.98 }),
     hide: ['Barbarian_Hat', 'Barbarian_Cape'],
     paint: {
-      ...outfit('Barbarian', '#f2a23a', '#a8461e', 0.7), ...face('Barbarian', { skin: '#e2a878', hair: '#c88c5c', eyes: '#3a2414' }),
+      ...outfit('Barbarian', '#e8862a', '#7a2a18', 0.8), ...face('Barbarian', { skin: '#f3cfab', hair: '#d8a47c', eyes: '#3a2414' }),
+      Barbarian_ArmLeft: { tint: '#f3cfab', amount: 0.35 }, Barbarian_ArmRight: { tint: '#f3cfab', amount: 0.35 },   // braços à mostra: cor de pele
     },
     extras: [
       { type: 'beads', bone: 'chest' }, { type: 'sash', bone: 'chest' },

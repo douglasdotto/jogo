@@ -1021,6 +1021,8 @@ const ACCESSORIES = {
     const ends = [-1, 1].map((s) => piece(new THREE.ConeGeometry(0.04, 0.14, 4), [0, s * 0.62, -0.31], [s > 0 ? 0 : Math.PI, 0, 0]));
     g.add(new THREE.Mesh(merged(ends), lambert(tip, { emissive: 0x1f6a5a, emissiveIntensity: 0.3 })));
     g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.18, 3).translate(0, 0, -0.31), lambert(string)));
+    g.rotation.set(0, 0, Math.PI / 2);   // de frente para a câmera, não de perfil
+    g.scale.setScalar(1.15);
     return g;
   },
   // aljava de couro nas costas com flechas de penas coloridas (osso do peito)
