@@ -1,0 +1,1 @@
+{"name":"cavaleiros","private":true,"scripts":{"test":"node tests/run-all.cjs","test:rapido":"node tests/run-all.cjs --rapido","sim":"node tests/simulacao.cjs"}}
