@@ -286,7 +286,7 @@ function paintDifficulty() {
   setTip('level', `Dificuldade: ${difficulty.name}`);
 }
 // objetivo compacto: ícone por tipo + barra + valor curto (o texto inteiro vai na dica)
-const GOAL_ICONS = { escort: '⛨', rescue: '⚿', boss: '♛', survive: '⌛', totems: '♜', tower: '♜', nofall: '♥', timer: '⏱', defend: '✧', hunt: '◎', endless: '☾', win: '⚑' };
+const GOAL_ICONS = { escort: '⛨', rescue: '⚿', boss: '♛', survive: '⌛', totems: '♜', tower: '♜', nofall: '♥', timer: '⏱', defend: '✧', hunt: '◎', endless: '☾', win: '⚑', breach: '♨', duel: '⚔', elite: '✠', twin: '♛' };
 function goalShort(text, percent) {
   if (/!$/.test(text) && !/\d/.test(text)) return '✓';
   return text.match(/\d+\s?%|\d+\/\d+|\d+:\d{2}|\d+ s/g)?.at(-1) || `${percent}%`;
@@ -609,7 +609,7 @@ function showCampaign(autoPlay = null) {
     root.classList.add('hidden');
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to));
+  renderCampaign(root, play, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal));
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
@@ -1898,7 +1898,8 @@ function makeTargetContext(reuse = null) {
   }
   // o santuário entra como "aldeão": os heróis interceptam quem chega perto dele
   const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager
-    : goal?.type === 'defend' && game.shrine && !game.shrine.dead ? game.shrine : null;
+    : goal?.type === 'defend' && game.shrine && !game.shrine.dead ? game.shrine
+      : goal?.type === 'breach' && game.gate ? game.gate : null;   // a ponte: interceptar quem corre para ela
   const friends = reuse ? reuse.friends : villager ? [...party, villager] : party;
   if (reuse) {
     friends.length = 0;
@@ -2061,6 +2062,8 @@ function kiteFrom(h, dt) {
 }
 
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
+// objetivos que terminam com o chefe da fase: chefe, duelo e o par Lich + Carrasco
+const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goal?.type === 'twin';
 
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
@@ -2103,7 +2106,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   let score = distance;
   let distanceToVulnerable = Infinity;
 
-  if (target.boss) score -= goal?.type === 'boss' ? 12 : 3.5;
+  if (target.boss) score -= bossGoal(goal) ? 12 : 3.5;
   if (target.totem) score -= hasDestructionGoal(goal) ? 12 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
   if (target.kind?.priority) score -= target.kind.priority; // xamã: derrubá-lo desfaz o escudo de ossos
@@ -2242,7 +2245,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const urgentPriest = best.enemyKind === 'Priest' || !!best.kind?.priority;
   const urgentBomber = best.enemyKind === 'Bomber'
     && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
-  const urgentObjectiveTarget = (goal?.type === 'boss' && best.boss)
+  const urgentObjectiveTarget = (bossGoal(goal) && best.boss)
     || (hasDestructionGoal(goal) && best.totem)
     || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
   let criticalAllyNearFocus = false;
@@ -5125,6 +5128,7 @@ class Skeleton extends Unit {
     this.spawning = false;
     const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt
       : this.raider && game.shrine && !game.shrine.dead ? game.shrine
+        : this.raider && game.gate ? game.gate
         : nearest(this.pos, activeTargetContext?.alliedUnits ?? allies());
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
@@ -5355,7 +5359,7 @@ function placeParty(first) {
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
-    shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0,
+    shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0 });
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
@@ -5380,6 +5384,8 @@ function startMission() {
     if (m.goal.type === 'escort') game.villager = new Villager();
     if (m.goal.type === 'rescue') game.villager = new Villager(true);
     if (m.goal.type === 'defend') game.shrine = new Shrine(world.along(world.anchorS(m.from) - 5, 0));
+    if (m.goal.type === 'breach') game.gate = new Gate(world.along(world.anchorS(m.from) - GATE_BACK, 0));
+    if (m.goal.type === 'duel') for (const h of heroes()) h.maxHp = h.hp = Math.round(h.maxHp * m.goal.heroHp);   // o campeão do duelo aguenta por dois
     musterMilitia();
     document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
@@ -5395,6 +5401,9 @@ function startPhase() {
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
+  const waveScale = goal?.type === 'duel' ? goal.waves : goal?.type === 'elite' ? goal.scale : 0;   // duelo e cripta: ondas menores
+  if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
+  if (goal?.type === 'elite') { game.eliteWave = 1; game.eliteSize = game.toSpawn; }
   if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
     const n = Math.ceil((goal.count - game.totemsPlaced) / (game.last - game.phase + 1));
     for (let k = 0; k < n; k++) placeTotem(k);
@@ -5414,7 +5423,11 @@ function startPhase() {
     : goal?.type === 'defend' ? `Defenda ${goal.time} s!`
       : goal?.type === 'hunt' ? 'Abata o alvo!'
         : goal?.type === 'endless' ? 'Horda!'
-          : game.bossPending ? 'Chefe!' : `Fase ${game.phase}`;
+          : goal?.type === 'breach' ? 'Segure a ponte!'
+            : goal?.type === 'duel' ? '1 contra 1!'
+              : goal?.type === 'elite' ? `Elite 1/${goal.waves}`
+                : goal?.type === 'twin' ? 'Dois chefes!'
+                  : game.bossPending ? 'Chefe!' : `Fase ${game.phase}`;
   // faixa curta; na primeira fase da missão leva só o nome dela (a história fica no mapa)
   if (!game.mission || game.phase !== game.start) return showBanner(text);
   showBanner(`${game.mission.name} · ${text}`, 3);
@@ -5739,6 +5752,98 @@ class Shrine extends Unit {
   }
 }
 
+// Ponte em Chamas: marco da ponte atrás do grupo; quem chega perto dele cruza (conta como passagem).
+// Não recebe dano nem cura: a vida da missão é o limite de passagens, mostrado na etiqueta.
+const GATE_BACK = 7, GATE_RADIUS = 2.6;
+let gateParts = null;
+function gateModel() {
+  gateParts ||= { wood: new THREE.MeshLambertMaterial({ color: 0x6b4426 }), fire: new THREE.MeshBasicMaterial({ color: 0xff8a2a }),
+    post: new THREE.CylinderGeometry(0.18, 0.22, 2.2, 6), beam: new THREE.BoxGeometry(3.4, 0.3, 0.3), flame: new THREE.OctahedronGeometry(0.32, 0) };
+  const P = gateParts, g = new THREE.Group();
+  for (const x of [-1.5, 1.5]) {
+    const post = new THREE.Mesh(P.post, P.wood);
+    post.position.set(x, 1.1, 0);
+    const flame = new THREE.Mesh(P.flame, P.fire);
+    flame.name = 'flame';
+    flame.position.set(x, 2.45, 0);
+    flame.scale.set(1, 1.6, 1);
+    g.add(post, flame);
+  }
+  const beam = new THREE.Mesh(P.beam, P.wood);
+  beam.position.y = 1.9;
+  g.add(beam);
+  return { scene: g, animations: [] };
+}
+
+class Gate extends Unit {
+  constructor(at) {
+    super(gateModel(), { hp: 100, dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'villager');
+    this.structure = true;
+    this.ranged = true;      // o separate e os recuos não o tiram do lugar
+    this.busy = Infinity;
+    this.size = 1.4;
+    this.home = at.clone();
+    this.home.y = world.groundHeight(at.x, at.z);
+    this.pos.copy(this.home);
+    const fwd = world.tangentAt(world.anchorS(game.phase));
+    this.root.rotation.y = Math.atan2(fwd.x, fwd.z);
+    this.bar.classList.add('ally');
+    this.nameTag = document.createElement('span');
+    this.bar.appendChild(this.nameTag);
+    this.label();
+  }
+
+  label() { this.nameTag.textContent = `Ponte ♨ ${Math.max(0, (game.mission?.goal.leaks || 0) - game.leaks)}`; }
+
+  takeDamage() {}
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.vel.set(0, 0, 0);
+    this.updateCommon(dt);
+    this.hp = this.maxHp;
+    this.pos.copy(this.home);
+  }
+}
+
+// a cada quadro: quem alcança a ponte cruza e some; devolve true se passou do limite
+function gateTick() {
+  const gate = game.gate, limit = game.mission.goal.leaks;
+  if (!gate) return false;
+  for (const s of skeletonsAlive()) {
+    if (s.dead || s.totem || s.spawning || tacticalDistance(s.pos, gate.pos) > GATE_RADIUS) continue;
+    game.leaks++;
+    s.exploded = s.dissolved = true;
+    s.die();
+    popText(gate.pos, 'Cruzou!', 'dmg');
+    gate.label();
+    if (game.leaks < limit) showBanner(`♨ ${game.leaks}/${limit}`, 1.5);
+  }
+  return game.leaks >= limit;
+}
+
+// cripta: elite tem mais vida, bate mais forte, é um pouco maior e brilha dourado
+const ELITE_HP = 1.45, ELITE_DMG = 1.2, TWIN_HP = 0.6;
+function makeElite(s) {
+  s.elite = true;
+  s.maxHp = s.hp = Math.round(s.hp * ELITE_HP);
+  s.dmg = Math.round(s.dmg * ELITE_DMG);
+  s.size *= 1.08;
+  s.root.scale.setScalar(s.size);
+  for (const m of s.mats) if (m.emissive) { m.userData ||= {}; m.userData.glow ??= 0x4a3400; }
+  s.bar.classList.add('elite');
+}
+
+// trono: o Carrasco surge ao lado do Lich, com menos vida que sozinho na fase 9
+function spawnTwinBoss(lich) {
+  const s = new Skeleton('Executioner', game.phase, true);
+  s.maxHp = s.hp = Math.round(s.hp * TWIN_HP);
+  s.pos.copy(lich.pos).addScaledVector(world.sideOf(world.tangentAt(world.anchorS(game.phase))), 3);
+  s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  s.root.rotation.y = lich.root.rotation.y;
+  return s;
+}
+
 // alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
 const HUNT_FLEE = 4.5, HUNT_EDGE = 20;
 const huntDest = new THREE.Vector3();
@@ -5795,6 +5900,14 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
     return game.huntDown ? 1 : mark ? THREE.MathUtils.clamp(1 - mark.hp / mark.maxHp, 0, 1) : 0;
   }
   if (goal.type === 'endless') return THREE.MathUtils.clamp(game.endlessT / goal.marks.at(-1), 0, 1);
+  if (goal.type === 'breach') return THREE.MathUtils.clamp(1 - game.surviveT / goal.time, 0, 1);
+  if (goal.type === 'elite') return game.state === 'cleared' ? 1 : THREE.MathUtils.clamp((game.eliteWave - 1) / goal.waves, 0, 1);
+  if (goal.type === 'duel' || goal.type === 'twin') {   // vida que falta tirar dos chefes à vista
+    if (game.bossDown) return 1;
+    let hp = 0, max = 0;
+    for (const u of units) if (u.phaseBoss) { hp += u.dead ? 0 : Math.max(0, u.hp); max += u.maxHp; }
+    return max ? THREE.MathUtils.clamp(1 - hp / max, 0, 1) : 0;
+  }
   return phaseProgress;
 }
 
@@ -5824,6 +5937,17 @@ function newGoalTick(goal, dt, skeletons) {
       poof(mark.pos, 1.4);
       return 'O alvo marcado fugiu na névoa!';
     }
+  } else if (goal.type === 'breach' && game.state === 'fight') {
+    if (game.surviveT > 0) {
+      if (gateTick()) return 'Os esqueletos cruzaram a ponte!';
+      if ((game.surviveT = Math.max(0, game.surviveT - dt)) <= 0) { closeMission(); showBanner('Ponte salva!', 2.5); }
+      else if (game.toSpawn === 0 && skeletons.length < 7) { game.toSpawn = 4; game.refilling = true; }   // reforços sem novo golem
+    }
+  } else if (goal.type === 'elite' && game.state === 'fight' && game.toSpawn === 0 && !skeletons.length && game.eliteWave < goal.waves) {
+    game.eliteWave++;
+    game.toSpawn = game.eliteSize;
+    game.spawnTimer = 1.5;
+    showBanner(`Elite ${game.eliteWave}/${goal.waves}`, 2);
   } else if (goal.type === 'endless' && game.state === 'fight' && game.endlessT < goal.dawn) {
     game.endlessT = Math.min(goal.dawn, game.endlessT + dt);
     const reached = goal.marks.filter((mark) => game.endlessT >= mark).length;
@@ -5863,8 +5987,8 @@ function campaignTick(dt, skeletons) {
     showBanner('Resgatada!', 2.5);
   }
   if (goal.type === 'timer' && !finalPhaseCleared && game.missionT > goal.time) return fail(`O tempo acabou na fase ${game.phase}!`);
-  if (goal.type === 'boss') {   // chefe derrotado: o exército dele se desfaz e a missão termina
-    const boss = units.find((u) => u.phaseBoss);
+  if (bossGoal(goal)) {   // chefe derrotado: o exército dele se desfaz e a missão termina
+    const boss = units.find((u) => u.phaseBoss && !u.dead) || units.find((u) => u.phaseBoss);   // no trono há dois: só termina quando os dois caem
     if (boss) game.bossSeen = true;
     if (game.bossSeen && (!boss || boss.dead) && game.state === 'fight' && !game.bossDown) {
       game.bossDown = true;
@@ -5901,6 +6025,14 @@ function campaignTick(dt, skeletons) {
     case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : 'Sobreviveu!'; break;
     case 'totems': text = `Totens ${game.totemsDown}/${goal.count}`; break;
     case 'tower': text = game.towersDown >= goal.count ? 'Torre derrubada!' : 'Derrube a torre de ossos'; break;
+    case 'breach': text = game.surviveT > 0 ? `Passaram ${game.leaks}/${goal.leaks} · ${clockText(game.surviveT)}` : 'Ponte salva!'; break;
+    case 'duel': text = game.bossDown ? 'Duelo vencido!' : `Duelo ${clockText(game.missionT)}`; break;
+    case 'elite': text = `Elite ${game.eliteWave}/${goal.waves}`; break;
+    case 'twin': {
+      const standing = units.filter((u) => u.phaseBoss && !u.dead).length;
+      text = game.bossDown ? 'Trono derrubado!' : `Chefes ${game.bossSeen ? 2 - standing : 0}/2`;
+      break;
+    }
     case 'nofall': text = `Ninguém cai · ${heroes().filter((h) => !h.dead).length} de pé`; break;
     case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
     case 'defend': {
@@ -5918,9 +6050,9 @@ function campaignTick(dt, skeletons) {
   }
   setGoalUI(text, missionProgress(goal, v, skeletons));
   const shrineLow = goal.type === 'defend' && game.shrine && game.shrine.hp < game.shrine.maxHp * 0.35;
-  $('goal').classList.toggle('warn', ((goal.type === 'escort' || goal.type === 'rescue' && !v?.rescued) && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30) || (goal.type === 'hunt' && !game.huntDown && left < 15) || shrineLow);
+  $('goal').classList.toggle('warn', ((goal.type === 'escort' || goal.type === 'rescue' && !v?.rescued) && v && v.hp < v.maxHp * 0.35) || (goal.type === 'timer' && left < 30) || (goal.type === 'hunt' && !game.huntDown && left < 15) || shrineLow || (goal.type === 'breach' && game.leaks >= goal.leaks - 2));
   $('goal').classList.toggle('done', (goal.type === 'totems' && game.totemsDown >= goal.count) || (goal.type === 'tower' && game.towersDown >= goal.count) || (goal.type === 'rescue' && game.rescueComplete) || (goal.type === 'survive' && game.phase === goal.phase && game.surviveT <= 0)
-    || (goal.type === 'defend' && game.surviveT <= 0) || (goal.type === 'hunt' && game.huntDown) || (goal.type === 'endless' && game.endlessStars >= goal.marks.length));
+    || ((goal.type === 'defend' || goal.type === 'breach') && game.surviveT <= 0) || (bossGoal(goal) && game.bossDown) || (goal.type === 'hunt' && game.huntDown) || (goal.type === 'endless' && game.endlessStars >= goal.marks.length));
   return false;
 }
 
@@ -5955,7 +6087,7 @@ function missionEnd(won) {
   const party = heroes();
   const hpRatio = game.missionHpRatio ?? party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
   const shrine = game.shrine;
-  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, timeLeft: game.surviveT, endlessTime: game.endlessT };
+  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, timeLeft: game.surviveT, endlessTime: game.endlessT, leaks: game.leaks, seconds: game.missionT };
   const stars = starsFor(result);
   const conditions = starConditions(result);
   const before = totalStars();
@@ -5985,7 +6117,7 @@ function spawnSkeleton() {
   const zone = world.zoneOf(p);
   const onTop = zone?.type === 'plateau' && game.toSpawn <= 2;
   let type = 'Minion', boss = false;
-  const lead = game.toSpawn === 1 ? waveLeader(p, game.bossPending) : null;   // Rei (6), Lich (12) ou golem
+  const lead = game.toSpawn === 1 && !game.refilling ? waveLeader(p, game.bossPending) : null;   // Rei (6), Lich (12) ou golem
   if (lead) { type = lead; boss = game.bossPending; }
   else {
     const r = Math.random();
@@ -5998,7 +6130,7 @@ function spawnSkeleton() {
   if (onTop && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
-  const behind = p >= difficulty.behindFrom && !lead && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
+  const behind = p >= difficulty.behindFrom && !lead && game.mission?.goal.type !== 'breach' && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
   for (let tries = 0; tries < 12; tries++) {
     const at = behind ? s0 - 9 - Math.random() * 3 : s0 + 11 + Math.random() * 6;
     s.pos.copy(world.along(at, (Math.random() * 2 - 1) * (ROAD - 1)));
@@ -6013,6 +6145,13 @@ function spawnSkeleton() {
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
   if (game.mission?.goal.type === 'defend' && !lead && Math.random() < 0.45) s.raider = true;   // saqueadores correm para o santuário
+  if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.3) s.raider = true;   // corredores vão direto à ponte
+  if (game.mission?.goal.type === 'elite' && !lead) makeElite(s);
+  if (game.mission?.goal.type === 'twin' && lead && boss) spawnTwinBoss(s);
+  if (game.mission?.goal.type === 'duel' && lead && boss) {   // o Rei do duelo é feito para um herói só
+    s.maxHp = s.hp = Math.round(s.hp * game.mission.goal.bossHp);
+    s.dmg = Math.round(s.dmg * game.mission.goal.bossDmg);
+  }
 }
 
 // monsters.js usa estas peças do jogo (ele não importa o main.js)
@@ -6023,7 +6162,7 @@ linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, g
 // o avanço tem teto para o grupo não atravessar o terreno da fase seguinte.
 const PRESS_LIMIT = 7;
 function pressForward(dt, skeletons) {
-  if (game.mission?.goal.type === 'defend') return;   // na defesa o grupo fica perto do santuário
+  if (game.mission?.goal.type === 'defend' || game.mission?.goal.type === 'breach') return;   // na defesa o grupo fica perto do santuário (ou da ponte)
   const anchor = world.pointAt(game.guideS), fwd = world.tangentAt(game.guideS);
   let nearest = Infinity;
   for (const s of skeletons) {
@@ -6081,7 +6220,7 @@ function updateGame(dt) {
   } else if (game.state === 'cleared') {
     game.timer -= dt;
     if (game.timer <= 0) {
-      if (game.phase >= game.last) return endGame(game.mission ? `Missão cumprida: ${game.mission.name}!` : 'O grupo chegou ao castelo!', true);
+      if (game.phase >= game.last) return endGame(game.mission ? game.mission.ending || `Missão cumprida: ${game.mission.name}!` : 'O grupo chegou ao castelo!', true);
       game.phase++;
       game.state = 'advance';
       showRelicPick();
@@ -6173,6 +6312,9 @@ function endGame(text, won = false) {
       huntDown: game.huntDown,
       huntEscaped: game.huntEscaped,
       endlessTime: game.endlessT,
+      leaks: game.leaks,
+      eliteWave: game.eliteWave,
+      bossesLeft: units.filter((u) => u.phaseBoss && !u.dead).length,
     } : null,
   });
   $('overlayStats').innerHTML = summaryHTML(party, report, { won, kills: game.kills, falls: game.fallLog?.length || 0 });

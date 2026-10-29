@@ -772,8 +772,8 @@ function begin(id,picks){
   for(const p of picks){t.confirmPick(idx(p));next();}
   context.setTimeout=noop;
 }
-test('13 missões com objetivo e todo o elenco liberado desde o início',()=>{
-  assert.equal(t.MISSIONS.length,13);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+test('17 missões com objetivo e todo o elenco liberado desde o início',()=>{
+  assert.equal(t.MISSIONS.length,17);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
   assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,24);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
@@ -876,12 +876,12 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha concluída/);
-  assert.match(view.info.innerHTML,/26 estrelas restantes/);
+  assert.match(view.info.innerHTML,/34 estrelas restantes/);
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,3])))};
   view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.match(view.info.innerHTML,/Todas as 39 estrelas foram conquistadas/);
+  assert.match(view.info.innerHTML,/Todas as 51 estrelas foram conquistadas/);
   context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('atalho ?tudo=1 não grava estrelas de campanha',()=>{
@@ -1006,7 +1006,7 @@ test('trechos da campanha variam, crescem e só missões de chefe passam pelas f
     assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;
     assert.ok(!ranges.has(m.from+'-'+m.to),`${m.id} repete trecho`);ranges.add(m.from+'-'+m.to);
     assert.ok(!icons.has(m.icon),`${m.id} repete ícone`);icons.add(m.icon);
-    const bossPhase=[6,12].some(p=>p>=m.from&&p<=m.to);assert.equal(bossPhase,m.goal.type==='boss',m.id);
+    const bossPhase=[6,12].some(p=>p>=m.from&&p<=m.to);assert.equal(bossPhase,['boss','duel','twin'].includes(m.goal.type),m.id);
     if(m.goal.type==='survive')assert.ok(m.goal.phase>=m.from&&m.goal.phase<=m.to);
     assert.ok(m.chapter&&m.story,m.id);
   }
@@ -1037,7 +1037,7 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
   try{
     begin('vila',['paladin']);t.setDifficulty(2);Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});t.updateGame(.1);
     const html=elements.get('overlayStars').innerHTML;
-    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/39'));
+    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 3/51'));
     assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
     // o próximo passo virou só o botão "Próxima ▸" ao lado de "Mapa"; o nome da missão fica na dica e no aria-label
     const next=elements.get('overlayNext').innerHTML;
@@ -1446,12 +1446,125 @@ test('missões novas entram na ordem da campanha sem travar saves antigos',()=>{
     context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:2})};
     assert.equal(t.unlocked(i('santuario')),true);assert.equal(t.unlocked(i('fazendas')),false,'a nova missão vem antes das fazendas');
     context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:2,fazendas:1,lago:1,resgate:2})};
-    assert.equal(t.unlocked(i('fazendas')),true);assert.equal(t.unlocked(i('caca')),true);assert.equal(t.unlocked(i('resgate')),true);
+    assert.equal(t.unlocked(i('fazendas')),true);assert.equal(t.unlocked(i('duelo')),true);assert.equal(t.unlocked(i('caca')),false,'o duelo vem antes da caçada');assert.equal(t.unlocked(i('resgate')),true);
     for(const id of ['santuario','caca','horda']){const g=mission(id).goal;assert.ok(context.goalText(g),id);assert.equal(context.starTargetsFor(g).length,3,id);}
     const tip=m=>context.buildBattleReport({won:false,mission:m}).find(item=>item.id==='next-try').text;
     assert.match(tip({goal:mission('santuario').goal,shrineDown:true}),/santuário caiu/);
     assert.match(tip({goal:mission('caca').goal,huntDown:false,huntEscaped:true}),/fugiu/);
     assert.match(tip({goal:mission('horda').goal,endlessTime:42}),/42 s/);
+  }finally{context.location=previousLocation;context.localStorage.data=previousStorage;}
+});
+// ---------- missões novas: Ponte em Chamas, Duelo e o capítulo final (Cripta Sombria e Trono de Ossos) ----------
+const lossTip=m=>context.buildBattleReport({won:false,mission:m}).find(item=>item.id==='next-try').text;
+test('ponte em chamas: corredores vão à ponte, quem cruza conta e o tempo salva a ponte',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('chamas',party(2));const gate=t.game.gate;
+  assert.ok(gate&&gate.team==='villager'&&gate.structure,'a ponte é uma estrutura aliada');
+  assert.equal(t.makeTargetContext().villager,gate,'os heróis interceptam quem chega perto da ponte');
+  const hp=gate.hp;gate.takeDamage(9999);assert.equal(gate.hp,hp,'a ponte não leva dano: só conta quem cruza');
+  t.startPhase();assert.equal(elements.get('banner').textContent,'Ponte em Chamas · Segure a ponte!');
+  for(const s of t.skeletonsAlive())s.remove();
+  t.game.toSpawn=2;withRandom(0,()=>t.spawnSkeleton());const runner=t.skeletonsAlive().at(-1);
+  assert.equal(runner.raider,true,'corredor corpo a corpo vai direto à ponte');assert.ok(runner.pos.z<gate.pos.z,'ninguém nasce atrás da ponte');
+  Object.assign(t.game,{state:'fight',toSpawn:0});
+  const crosser=foe('Warrior',gate.pos.x,gate.pos.z);t.updateGame(.1);
+  assert.equal(t.game.leaks,1);assert.equal(crosser.dead,true);assert.match(gate.nameTag.textContent,/♨ 5/);
+  for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=0;t.updateGame(1);
+  assert.ok(t.game.toSpawn>0&&t.game.refilling,'reforços chegam enquanto o tempo corre');assert.ok(t.game.surviveT<70);
+  t.game.toSpawn=1;t.spawnSkeleton();assert.notEqual(t.skeletonsAlive().at(-1).enemyKind,'Golem','reforço não traz outro golem');
+  assert.ok(Math.abs(t.missionProgress(mission('chamas').goal)-(1-t.game.surviveT/70))<.001);
+  Object.assign(t.game,{surviveT:.05,toSpawn:0});t.updateGame(.1);assert.equal(t.game.last,t.game.phase,'o tempo acabou: a ponte está salva');
+  t.updateGame(.1);t.game.timer=0;t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.match(elements.get('overlayText').textContent,/Missão cumprida/);assert.equal(t.starsOf('chamas'),2,'1 passou: 2 estrelas');
+  begin('chamas',party(2));t.startPhase();for(const s of t.skeletonsAlive())s.remove();Object.assign(t.game,{state:'fight',toSpawn:0,leaks:5});
+  foe('Warrior',t.game.gate.pos.x,t.game.gate.pos.z);t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.match(elements.get('overlayText').textContent,/cruzaram a ponte/);
+  const goal=mission('chamas').goal;
+  assert.equal(context.starsFor({won:true,goal,leaks:0}),3);assert.equal(context.starsFor({won:true,goal,leaks:2}),2);assert.equal(context.starsFor({won:true,goal,leaks:3}),1);
+  assert.equal(context.starTargetsFor(goal).length,3);
+  assert.match(lossTip({goal,leaks:6}),/cruzaram a ponte/);assert.match(lossTip({goal,leaks:1}),/caiu antes/);
+  clear();
+});
+test('duelo: um herói só, ondas menores e o chefe encerra; 3★ pede vida e tempo',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('duelo',['paladin']);assert.equal(t.heroes().length,1);assert.equal(t.heroes()[0].level,3);
+  assert.ok(t.heroes()[0].maxHp>600&&t.heroes()[0].hp===t.heroes()[0].maxHp,'o herói do duelo entra com vida extra');
+  t.startPhase();assert.equal(elements.get('banner').textContent,'Duelo · 1 contra 1!');
+  assert.ok(t.game.toSpawn<Math.round(14*t.getDifficulty().count),'ondas do duelo são menores');assert.equal(t.game.bossPending,true);
+  for(const s of t.skeletonsAlive())s.remove();Object.assign(t.game,{state:'fight',toSpawn:0});
+  const boss=new t.Skeleton('Warrior',6,true);boss.spawning=false;boss.busy=99;t.updateGame(.1);assert.equal(t.game.bossSeen,true);
+  boss.hp=boss.maxHp/2;assert.ok(Math.abs(t.missionProgress(mission('duelo').goal)-.5)<.01,'a barra acompanha a vida do chefe');
+  boss.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);assert.equal(t.game.last,t.game.phase);
+  t.updateGame(.1);t.game.timer=0;t.updateGame(.1);assert.equal(t.game.over,true);assert.match(elements.get('overlayText').textContent,/Missão cumprida: Duelo/);
+  const goal=mission('duelo').goal;
+  assert.equal(context.starsFor({won:true,goal,hpRatio:.5,seconds:60}),3);
+  assert.equal(context.starsFor({won:true,goal,hpRatio:.5,seconds:100}),2);
+  assert.equal(context.starsFor({won:true,goal,hpRatio:.3,seconds:60}),1);
+  assert.match(context.starConditions({won:true,goal,hpRatio:.5,seconds:95})[2].label,/1:15.*1:35/);
+  assert.match(lossTip({goal,bossDown:false}),/venceu o duelo/);
+  assert.ok(t.progress.achievements().find(a=>a.id==='duelista').unlocked,'conquista do duelo');
+  clear();
+});
+test('cripta sombria: três ondas de elite mais fortes antes de limpar a fase',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('cripta',party(4));t.startPhase();const goal=mission('cripta').goal;
+  assert.equal(t.game.eliteWave,1);assert.ok(t.game.eliteSize<Math.round(24*t.getDifficulty().count),'cada onda é menor que a fase comum');
+  assert.equal(elements.get('banner').textContent,'Cripta Sombria · Elite 1/3');
+  for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=2;t.spawnSkeleton();
+  const elite=t.skeletonsAlive().at(-1),plain=new t.Skeleton(elite.enemyKind,11);
+  assert.equal(elite.elite,true);assert.equal(elite.maxHp,Math.round(plain.maxHp*1.45));assert.ok(elite.dmg>plain.dmg);plain.remove();
+  for(const wave of [2,3]){
+    for(const s of t.skeletonsAlive())s.remove();Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);
+    assert.equal(t.game.eliteWave,wave);assert.equal(t.game.toSpawn,t.game.eliteSize);assert.equal(t.game.state,'fight');
+  }
+  assert.ok(Math.abs(t.missionProgress(goal)-2/3)<.001);
+  for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=0;t.updateGame(.1);
+  assert.equal(t.game.state,'cleared','depois da 3ª onda a cripta está limpa');assert.equal(t.game.eliteWave,3);
+  assert.match(lossTip({goal,eliteWave:2}),/onda de elite 2\/3/);
+  clear();
+});
+test('trono de ossos: Lich e Carrasco juntos; só termina com os dois e fecha a campanha',()=>{
+  context.location={search:''};context.localStorage.data={};
+  begin('trono',party(4));t.startPhase();assert.equal(t.game.bossPending,true);
+  for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=1;t.spawnSkeleton();
+  const bosses=t.units.filter(u=>u.phaseBoss);assert.deepEqual([...bosses.map(b=>b.enemyKind)].sort(),['Executioner','Lich']);
+  const exec=bosses.find(b=>b.enemyKind==='Executioner'),alone=new t.Skeleton('Executioner',12,true);
+  assert.ok(exec.maxHp<alone.maxHp,'o Carrasco do trono tem menos vida');alone.remove();
+  for(const b of bosses){b.spawning=false;b.busy=99;}
+  Object.assign(t.game,{state:'fight',toSpawn:0});t.updateGame(.1);assert.equal(t.game.bossSeen,true);
+  bosses.find(b=>b.enemyKind==='Lich').die();t.updateGame(.1);
+  assert.equal(t.game.bossDown,false,'com o Carrasco de pé a luta continua');assert.equal(t.game.over,false);
+  exec.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);
+  t.updateGame(.1);t.game.timer=0;t.updateGame(.1);
+  assert.equal(t.game.over,true);assert.equal(elements.get('overlayText').textContent.split(' · ')[0],mission('trono').ending);
+  assert.ok(t.progress.achievements().find(a=>a.id==='alem-do-castelo').unlocked,'conquista do capítulo final');
+  assert.ok(t.campaignThreats(12,12,mission('trono').goal).some(x=>x.id==='Executioner'),'o mapa avisa do Carrasco');
+  const goal=mission('trono').goal;
+  assert.match(lossTip({goal,bossDown:false,bossesLeft:1}),/Faltou um chefe/);assert.match(lossTip({goal,bossDown:false,bossesLeft:2}),/um de cada vez/);
+  clear();
+});
+test('missões novas: ordem, capítulo final depois do castelo e nós do mapa sem sobrepor',()=>{
+  const previousLocation=context.location,previousStorage=context.localStorage.data;
+  try{
+    const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
+    assert.ok(i('santuario')<i('chamas')&&i('chamas')<i('fazendas'));assert.ok(i('lago')<i('duelo')&&i('duelo')<i('caca'));
+    assert.deepEqual([...t.MISSIONS.slice(-3).map(m=>m.id)],['castelo','cripta','trono']);
+    for(const id of ['cripta','trono'])assert.match(mission(id).chapter,/Além do Castelo/);
+    for(const id of ['chamas','duelo','cripta','trono']){
+      const m=mission(id);assert.ok(m.name.length<=16&&m.desc.length<=32&&m.story.length<=80,id+': textos curtos');
+      assert.ok(context.goalText(m.goal),id);assert.equal(context.starTargetsFor(m.goal).length,3,id);
+    }
+    context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({castelo:2})};
+    assert.equal(t.unlocked(i('cripta')),true);assert.equal(t.unlocked(i('trono')),false,'o trono vem depois da cripta');
+    context.location={search:'?tudo=1'};
+    const map=el(),info=el(),root=el();map.children=[];root.isConnected=true;root.closest=()=>null;root.querySelector=s=>s==='.camp-map'?map:info;
+    context.renderCampaign(root,noop);assert.equal(map.children.length,17);
+    const at=k=>[parseFloat(map.children[k].style.left),parseFloat(map.children[k].style.top)];
+    for(const id of ['chamas','duelo','cripta','trono'])for(let k=0;k<map.children.length;k++){
+      if(k===i(id))continue;const [x,y]=at(i(id)),[x2,y2]=at(k);
+      assert.ok(((x-x2)/9.4)**2+((y-y2)/7.5)**2>1,`${id} não encosta em ${t.MISSIONS[k].id}`);
+    }
+    const [cx,cy]=at(i('castelo'));for(const id of ['cripta','trono'])assert.ok(at(i(id))[0]>cx&&at(i(id))[1]<=cy+12,id+' fica além do castelo, no alto');
   }finally{context.location=previousLocation;context.localStorage.data=previousStorage;}
 });
 // ---------- inimigos novos: enxame, xamã, cavaleiro sombrio e o Carrasco (fase 9) ----------
