@@ -56,13 +56,13 @@ const VARIANTS = [
   { id: 'viking', names: ['Viking', 'Jarl Valente', 'Rei do Norte'], desc: 'Arremessa um machado à distância.', ability: 'Machado voador', color: ['#b8dfe5', '#5b9dab'],
     use: ['1H_Axe', 'Barbarian_Round_Shield'], stats: { Vida: 5, Força: 4, Rapidez: 3, Alcance: 3 }, cleave: 0, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop'], classId: 1 },
   { id: 'pyro', names: ['Piromante', 'Chama Viva', 'Fênix Solar'], desc: 'Bolas de fogo deixam chamas no chão.', ability: 'Chão em chamas', color: ['#ffc6a4', '#dc8757'],
-    use: [], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, dmg: 24, splash: 1.1, classId: 2 },
+    use: [], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, dmg: 22, splash: 1.1, classId: 2 },
   { id: 'arcane', names: ['Arcano', 'Sábio Astral', 'Mestre Estelar'], desc: 'Um raio salta entre os inimigos.', ability: 'Raio em cadeia', color: ['#d4b3ff', '#9a6be0'],
     use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, dmg: 24, splash: 0, cooldown: 1.05, classId: 2 },
   { id: 'cryo', names: ['Criomante', 'Sábio Glacial', 'Coração Polar'], desc: 'Gelo deixa os esqueletos lentinhos.', ability: 'Onda de gelo', color: ['#b9efff', '#58aaca'],
     use: ['1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 170, dmg: 24, splash: 0.8, cooldown: 1.2, classId: 2 },
   { id: 'assassin', names: ['Assassino', 'Sombra Ágil', 'Sombra Real'], desc: 'Golpes críticos e esquivas ligeiras.', ability: 'Passo das sombras', color: ['#d1b7df', '#9974b5'],
-    use: ['Knife', 'Knife_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, classId: 3 },
+    use: ['Knife', 'Knife_Offhand'], stats: { Vida: 3, Força: 5, Rapidez: 5, Alcance: 1 }, dmg: 21, classId: 3 },
   { id: 'crossbow', names: ['Besteiro', 'Mira de Águia', 'Flecha Real'], desc: 'Virotes atravessam a fila.', ability: 'Tiro perfurante', color: ['#c9eaa4', '#84ac50'],
     use: ['2H_Crossbow'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 }, ranged: true, range: 7, cooldown: 1.05, attacks: ['2H_Ranged_Shoot'], classId: 3 },
   { id: 'ninja', names: ['Ninja', 'Vento Noturno', 'Lua Silenciosa'], desc: 'Lança três adagas em leque.', ability: 'Leque de adagas', color: ['#b6c5f4', '#768ac6'],
@@ -1965,7 +1965,7 @@ function damageArea(center, radius, dmg, owner = null) {
 function heroHit(owner, target, dmg, center = owner.pos) {
   const attack = ['crossbow', 'ninja'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
   if (attack) dmg = applySynergy(attack, owner, target, dmg);
-  const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.65, (0.25 + (owner.level - 1) * 0.05) * owner.skillPower);
+  const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
   const bossBonus = target.boss ? 1 + (owner.bossBonus || 0) : 1;
   target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1) * bossBonus, center, owner.summoner || owner, critical);
 }

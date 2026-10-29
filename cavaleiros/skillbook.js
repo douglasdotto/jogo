@@ -48,8 +48,8 @@ const EXTRA_SKILLS = {
     { name: 'Nevasca', description: 'Uma nevasca prende e fere os inimigos em grande área.', effect: 'blizzard', cooldown: 68, radius: 6.5, power: 2.1, control: 'root', color: 0x9deaff },
   ],
   assassin: [
-    { name: 'Dança Sombria', description: 'Desaparece e ataca o inimigo prioritário pelas costas.', effect: 'shadow', cooldown: 18, power: 2.4 },
-    { name: 'Execução', description: 'Um golpe crítico concentra todo o dano em um alvo.', effect: 'execute', cooldown: 62, power: 4.2 },
+    { name: 'Dança Sombria', description: 'Desaparece e ataca o inimigo prioritário pelas costas.', effect: 'shadow', cooldown: 18, power: 2.8 },
+    { name: 'Execução', description: 'Um golpe crítico concentra todo o dano em um alvo.', effect: 'execute', cooldown: 62, power: 4.8 },
   ],
   crossbow: [
     { name: 'Rajada Perfurante', description: 'Dispara uma sequência rápida de virotes.', effect: 'volley', cooldown: 20, power: 1.2, shots: 4 },

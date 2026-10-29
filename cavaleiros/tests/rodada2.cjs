@@ -228,7 +228,7 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
-  assert.equal(t.evolutions.length,3);assert.equal(a.level,3);assert.ok(Math.abs(a.dmg-24*1.1**2)<.001);
+  assert.equal(t.evolutions.length,3);assert.equal(a.level,3);assert.ok(Math.abs(a.dmg-22*1.1**2)<.001);
   t.showEvolution();assert.equal(t.game.paused,true);assert.equal(new Set(t.pick.upgrades.map(o=>o.id)).size,3);
   t.confirmPick(0);assert.equal(t.evolutions.length,2);assert.equal(t.game.paused,true);
   t.confirmPick(0);t.confirmPick(0);assert.equal(t.evolutions.length,0);assert.equal(t.game.paused,false);
