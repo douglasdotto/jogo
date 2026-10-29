@@ -318,6 +318,14 @@ function defineClasses() {
     const color = new THREE.Color(tint);
     for (const m of u.mats) m.color?.lerp(color, 0.7);
     if (weapon) u.root.getObjectByName('handslotr')?.add(weapon);
+    u.kGlow = 0x1b3c6e;   // brilho azul: o bárbaro escuro vira "azulzinho" visto de cima
+  };
+  // depois de piscar vermelho ao levar golpe, o brilho azul volta
+  const keepGlow = (u) => {
+    if (u.flashOn) { u.kLit = false; return; }
+    if (u.kLit) return;
+    for (const m of u.mats) m.emissive?.setHex(u.kGlow);
+    u.kLit = true;
   };
 
   Worker = class extends Unit {
@@ -348,9 +356,26 @@ function defineClasses() {
     update(dt) {
       if (dt <= 0) return;
       this.updateCommon(dt);
+      keepGlow(this);
       if (this.dead) { if ((this.deadTime += dt) > 2.5) this.remove(); return; }
       if (G.game.over || !K) return;
       this.chopT -= dt;
+      // esqueleto colado: larga o serviço por um instante e corre para o depósito mais perto
+      this.scanT = (this.scanT || 0) - dt;
+      if (this.scanT <= 0) {
+        this.scanT = 0.3;
+        this.threat = null;
+        for (const s of G.skeletonsAlive()) if (!s.spawning && !s.kPortal && flat(s.pos, this.pos) < 4.5) { this.threat = s; break; }
+      }
+      if (this.threat && !this.threat.dead) {
+        const safe = nearestDrop(K, this.pos);
+        if (safe && flat(safe.pos, this.pos) - safe.reach > 1.2) {
+          this.goTo(safe.pos.x, safe.pos.z, dt);
+          if (this.busy <= 0) this.locomote('Running_A', 'Walking_A', 'Idle');
+          this.state = 'flee';
+          return;
+        }
+      }
       const state = workerStep(K, this, dt);
       this.state = state;
       const load = this.carry > 0.5;
@@ -408,6 +433,7 @@ function defineClasses() {
     update(dt) {
       if (dt <= 0) return;
       this.updateCommon(dt);
+      keepGlow(this);
       if (this.dead) { if ((this.deadTime += dt) > 2.5) this.remove(); return; }
       if (G.game.over || this.busy > 0) return;
       let target = null;
@@ -421,11 +447,12 @@ function defineClasses() {
       }
       if (!this.order) {
         // parado: briga com quem chega perto e não se afasta demais do posto
-        let bd = this.ranged ? this.range + 2.5 : 8;
+        if (K?.arena.blocked[K.arena.idxAt(this.anchor.x, this.anchor.z)]) this.anchor.copy(this.pos);   // posto dentro de prédio: fica onde está
+        let bd = this.ranged ? this.range + 3 : 10;
         for (const s of G.skeletonsAlive()) {
           if (s.spawning) continue;
           const d = flat(s.pos, this.pos) - (s.reach || 0);
-          if (d < bd && flat(s.pos, this.anchor) < 14) { bd = d; target = s; }
+          if (d < bd && flat(s.pos, this.anchor) < 16) { bd = d; target = s; }
         }
       }
       if (target) {
@@ -462,7 +489,7 @@ function defineClasses() {
       this.stunT = this.rootT = this.slowT = this.burnT = this.tauntT = 0;
       this.home = new THREE.Vector3(at.x, 0, at.z);
       this.pos.copy(this.home);
-      this.root.rotation.y = -Math.PI / 2;   // abre para o castelo
+      this.root.rotation.y = -0.55;   // arco de frente para a câmera, virado um pouco para o castelo
       this.low = hp;
       this.swirl = this.root.getObjectByName('swirl');
       this.glow = this.root.getObjectByName('glow');
@@ -593,6 +620,7 @@ function endKingdom(won) {
   $('overlayBtn').setAttribute('aria-label', 'Jogar o Reino de novo');
   $('overlayBtn').onclick = () => G.startGame('reino');
   $('overlayBtn').hidden = false;
+  R.panel.hidden = true;
   $('overlay').classList.add('results');
   $('overlay').classList.toggle('lost', !won);
   $('overlay').classList.remove('hidden');
@@ -1069,7 +1097,7 @@ function renderCommands() {
     for (const b of K.buildings) for (const q of b.queue) if (q.cfg) owned.add(q.cfg.id);
     const free = G.VARIANTS.filter((v) => G.variantOpen(v.id) && !owned.has(v.id));
     for (const cfg of free) {
-      const b = el('button', 'k-hero', `<img src="${cfg.portrait}" alt="">`);
+      const b = el('button', 'k-hero', `<span aria-hidden="true">${G.skillGlyph(cfg.id, 0)}</span><img src="${cfg.portrait}" alt="">`);
       b.type = 'button';
       b.setAttribute('data-tip', `${cfg.name} · ${cfg.desc}`);
       b.setAttribute('aria-label', cfg.name);
@@ -1239,7 +1267,7 @@ function bindInput() {
   });
   on(document, 'pointerleave', () => { if (R) R.mouse.inside = false; });
   on(window, 'blur', () => { if (R) { R.keys.clear(); R.mouse.inside = false; } });
-  on(window, 'pointerup', (e) => {
+  on(window, 'pointerup', (e) => {   // captura: o canvas corta a propagação para o resto do jogo
     if (!R) return;
     if (e.button === 1) R.pan = null;
     if (e.button !== 0 || !R.drag) return;
@@ -1259,7 +1287,7 @@ function bindInput() {
       return;
     }
     clickSelect(e.clientX, e.clientY, d.shift);
-  });
+  }, true);
   on(window, 'keydown', onKey, true);
   on(window, 'keyup', (e) => { if (R) R.keys.delete(e.key.toLowerCase()); });
 }
@@ -1327,4 +1355,7 @@ function onKey(e) {
 
 // main.js chama estes três enquanto o modo está ativo (game.realm)
 const realm = { tick, camera: cameraFrame, stop: stopKingdom, get state() { return K; } };
-export const kingdomDebug = { get K() { return K; }, get R() { return R; } };
+// atalhos para inspeção no console e nas capturas automáticas (não fazem parte da interface)
+export const kingdomDebug = { get K() { return K; }, get R() { return R; }, get game() { return G.game; },
+  build(type, x, z, done = true) { const { i0, j0 } = K.arena.snap(BUILDINGS[type].size, x, z); const b = addBuilding(K, type, i0, j0, (t) => new Building(t), done); if (!done) b.startSite(); return b; },
+  unit(kind, x, z) { const u = kind === 'worker' ? new Worker() : new Soldier(kind); u.pos.set(x, 0, z); if (u.anchor) u.anchor.copy(u.pos); u.kKind = kind; K.units.push(u); return u; } };

@@ -232,7 +232,7 @@ export function buildArenaScene(arena, parentScene, models) {
   // gramado com manchas suaves (cores por vértice) e uma faixa de terra entre o castelo e o portal
   const geo = new THREE.PlaneGeometry(W + 60, H + 60, 86, 70).rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, colors = [];
-  const grass = [new THREE.Color(0x76cc32), new THREE.Color(0x5db426), new THREE.Color(0x86d63e)], dirt = new THREE.Color(0xd8b06a), c = new THREE.Color();
+  const grass = [new THREE.Color(0x5fae35), new THREE.Color(0x4d9a2c), new THREE.Color(0x6dba40)], dirt = new THREE.Color(0xc9a466), c = new THREE.Color();
   for (let k = 0; k < pos.count; k++) {
     const x = pos.getX(k), z = pos.getZ(k);
     const n = Math.sin(x * 0.11) * Math.cos(z * 0.13) + Math.sin((x + z) * 0.05) * 0.6;
