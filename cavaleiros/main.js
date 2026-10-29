@@ -13,7 +13,7 @@ import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './u
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
-import { initTooltips, registerTooltip } from './tooltip.js';
+import { initTooltips, registerTooltip, hideTooltip } from './tooltip.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
@@ -787,6 +787,7 @@ function selectCard(i) {
 
 function confirmPick(i) {
   if (!pick.open) return;
+  hideTooltip();   // a dica do cartão não fica sobre a batalha
   if (pick.mode === 'evolution') return confirmEvolution(i);
   if (pick.mode === 'relic') return confirmRelic(i);
   if (pick.mode === 'difficulty') return confirmDifficulty(i);
@@ -1178,7 +1179,7 @@ function arrangeParty() {
 
 addEventListener('keydown', (e) => {
   if (!pick.open) return;
-  if (e.key === 'Escape' && pick.mode === 'difficulty') return game.mission ? showCampaign() : showMenu();
+  if (e.key === 'Escape' && pick.mode === 'difficulty') { e.stopImmediatePropagation(); return game.mission ? showCampaign() : showMenu(); }
   const grid = pick.mode === 'hero';
   const classFilter = grid ? e.target.closest?.('.pick-filter') : null;
   if (classFilter) {
@@ -1192,6 +1193,7 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (grid && e.target.closest?.('.hero-select-btn') && (e.key === 'Enter' || e.key === ' ')) return;
+  if (e.target.closest?.('.relic-reroll') && (e.key === 'Enter' || e.key === ' ')) return;   // Enter no ↻ troca as relíquias
   if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : selectCard(pick.sel - 1);
   else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : selectCard(pick.sel + 1);
   else if (e.key === 'ArrowUp' && grid) moveGrid(0, -1);
@@ -1779,7 +1781,7 @@ class Unit {
       this.diedIn = game.phase;   // no Pesadelo, decide quando volta
       game.fallLog.push({ name: this.cfg.names?.[this.level - 1] || this.cfg.name, phase: game.phase, time: game.runTime });
     }
-    if (this.team === 'skeleton') {
+    if (this.team === 'skeleton' && !this.dissolved) {
       audio.play('bones');
       game.kills++;
       if (this.lastHit?.stats) this.lastHit.stats.abates++;
@@ -1797,6 +1799,7 @@ class Unit {
     this.bar.remove();
     for (const m of this.mats) m.dispose();
     if (this.aura) this.aura.material.dispose();
+    this.masteryAura?.material.dispose();
     units.splice(units.indexOf(this), 1);
   }
 
@@ -4637,7 +4640,7 @@ class Skeleton extends Unit {
     }
     if (game.over) return;
     this.kind?.tick?.(this, dt);   // recargas, flutuar e investida dos tipos novos
-    if (this.boss) this.rally();   // depois do tick: o chefe entra na fase 2 e então se recupera
+    if (this.phaseBoss) this.rally();   // depois do tick: o chefe entra na fase 2 e então se recupera
     if (this.stunT > 0 || this.busy > 0) return;
     this.spawning = false;
     const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt
@@ -4907,6 +4910,7 @@ function startMission() {
 
 function startPhase() {
   game.state = 'fight';
+  for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
@@ -5318,7 +5322,7 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
 function closeMission() {
   game.last = game.phase;
   game.toSpawn = 0;
-  for (const s of skeletonsAlive()) { s.exploded = true; s.die(); }   // bombardeiros não explodem ao se desfazer
+  for (const s of skeletonsAlive()) if (!s.dead) { s.exploded = s.dissolved = true; s.die(); }   // desfaz sem explodir nem contar abate
 }
 
 // regras dos objetivos novos (santuário, caçada e horda); devolve um texto de derrota ou null
@@ -5386,7 +5390,7 @@ function campaignTick(dt, skeletons) {
       game.bossDown = true;
       game.last = game.phase;
       game.toSpawn = 0;
-      for (const s of skeletonsAlive()) { s.exploded = true; s.die(); }   // bombardeiros não explodem ao se desfazer
+      for (const s of skeletonsAlive()) if (!s.dead) { s.exploded = s.dissolved = true; s.die(); }   // desfaz sem explodir nem contar abate
       showBanner('Chefe derrotado!', 2.5);
     }
   }
@@ -5539,6 +5543,7 @@ linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, scene, assets, g
 // o avanço tem teto para o grupo não atravessar o terreno da fase seguinte.
 const PRESS_LIMIT = 7;
 function pressForward(dt, skeletons) {
+  if (game.mission?.goal.type === 'defend') return;   // na defesa o grupo fica perto do santuário
   const anchor = world.pointAt(game.guideS), fwd = world.tangentAt(game.guideS);
   let nearest = Infinity;
   for (const s of skeletons) {
@@ -5814,6 +5819,7 @@ function followParty(real) {
     }
   }
   frameNearFoes.length = 0;
+  frameSpread = 0;   // sem heróis vivos, a câmera não guarda o enquadramento da última briga
   if (frameHeroes.length) {
     tmp.set(0, 0, 0);
     for (const h of frameHeroes) tmp.add(h.pos);
@@ -5828,7 +5834,6 @@ function followParty(real) {
       tmp.lerp(frameFoeCenter, 0.3);
     }
     // quanto o grupo e a briga se espalham: a câmera nunca fica perto demais para mostrar todos
-    frameSpread = 0;
     for (const u of frameHeroes) frameSpread = Math.max(frameSpread, u.pos.distanceTo(tmp));
     for (const u of frameNearFoes) frameSpread = Math.max(frameSpread, u.pos.distanceTo(tmp));
     follow.lerp(tmp, Math.min(1, real * 2));
