@@ -12,6 +12,18 @@ function outfit(model, body, legs = body, amount = 0.7) {
   };
 }
 
+// Ladino: o atlas separa pano (0,1), gola e acabamento (1,1), couro (5,0 e 6,0; luvas 5,2), fivela (3,0), calça (7,1)
+// e botas (3,2); pintar cada casa dá roupa de várias cores em vez de um tom só por cima do verde original
+// (mesma função de characters.js: os dois arquivos são lidos à parte pelos testes)
+function rogueOutfit({ cloth, trim = cloth, leather, metal, pants = leather, boots = leather, sleeves = cloth, gloves = leather }, amount = 0.92) {
+  const p = (tint, cells) => ({ tint, amount, base: 0.5, cells });
+  const arm = p(sleeves, { '1,1': trim, '5,0': leather, '5,2': gloves }), leg = p(pants, { '3,2': boots });
+  return {
+    Rogue_Body: p(cloth, { '1,1': trim, '5,0': leather, '6,0': leather, '7,1': pants, ...(metal && { '3,0': metal }) }),
+    Rogue_ArmLeft: arm, Rogue_ArmRight: arm, Rogue_LegLeft: leg, Rogue_LegRight: leg,
+  };
+}
+
 // cores do rosto: { skin, hair (cabelo e barba do atlas), eyes, hood }
 function face(model, colors, head = `${model}_Head`) {
   return { [head]: { face: colors } };
@@ -165,34 +177,38 @@ export const LOOKS = {
     ],
   },
   // ---------- Ladino ----------
-  assassin: {   // duelista sem capuz: rosto à mostra, olhos carmim, cicatriz, cachecol vermelho e capa escura
+  assassin: {   // couro escuro com carmim: capuz baixo nas costas, gola de cachecol, faixas nos antebraços, olhos carmim e cicatriz
     shape: silhouette('Rogue', { torso: 0.98, arms: 0.96, legs: 1, height: 1.02, depth: 0.97 }),
     hide: ['Rogue_Cape'],
     add: [{ from: 'Mage', part: 'Mage_Cape' }],
     paint: {
-      ...outfit('Rogue', '#3a2e4a', '#2a2238', 0.75), ...face('Rogue', { skin: '#ead2c8', hair: '#1a1420', eyes: '#e8283a' }),
-      Mage_Cape: { tint: '#2a2238', amount: 0.85 },
+      ...rogueOutfit({ cloth: '#3a2228', trim: '#d01834', leather: '#1c1216', pants: '#2a1a1e', boots: '#140c10', gloves: '#1c1216', metal: '#d01834' }),
+      ...face('Rogue', { skin: '#ead2c8', hair: '#1a1420', eyes: '#e8283a' }),
+      Mage_Cape: { tint: '#6a1426', amount: 0.9 },
       Knife: { tint: '#9a7ab8', amount: 0.45 }, Knife_Offhand: { tint: '#9a7ab8', amount: 0.45 },
     },
     extras: [
-      { type: 'scarf', bone: 'head', color: 0xd13b4f },
+      { type: 'scarf', bone: 'head', color: 0xd01834 }, { type: 'cowl', bone: 'chest' },
+      { type: 'armWraps', bone: 'lowerarm.l' }, { type: 'armWraps', bone: 'lowerarm.r' },
       { type: 'scar', bone: 'head', side: -1, color: 0x9a4a5a },
       { type: 'brows', bone: 'head', color: 0x1a1420, angle: 0.4 },
     ],
   },
-  crossbow: {   // chapéu pontudo de caçador com pena (Robin Hood), aljava, cabelo castanho e bigode
+  crossbow: {   // caçador: gibão marrom e mangas verde-floresta, manto curto, chapéu com pena (Robin Hood), aljava, bigode
     shape: silhouette('Rogue', { torso: 1.03, arms: 1.02, legs: 1, height: 1.04, depth: 1.03 }),
+    hide: ['Rogue_Cape'],
     add: [
-      { from: 'Skeleton_Quiver', part: 'Skeleton_Quiver', bone: 'chest', pos: [0.15, 0.25, -0.35], rot: [0.2, 0, -0.5], scale: 0.9 },
+      { from: 'Skeleton_Quiver', part: 'Skeleton_Quiver', bone: 'chest', pos: [0.15, 0.25, -0.47], rot: [0.2, 0, -0.5], scale: 0.9 },
       { from: 'Mage', part: 'Mage_Hat', scale: 0.72, pos: [0, -0.08, 0] },
     ],
     paint: {
-      ...outfit('Rogue', '#7a9a4a', '#5a4a2e', 0.5), ...face('Rogue', { skin: '#e8b890', hair: '#8a4a1e', eyes: '#4ac83a' }),
-      Rogue_Cape: { tint: '#4a7a3a', amount: 0.8 }, Mage_Hat: { tint: '#4f8a3a', amount: 0.85 },
+      ...rogueOutfit({ cloth: '#9a6434', trim: '#7cc860', sleeves: '#5aa84a', leather: '#5a3418', pants: '#6a4a2a', boots: '#4a2e18', gloves: '#5a3418' }),
+      ...face('Rogue', { skin: '#e8b890', hair: '#8a4a1e', eyes: '#4ac83a' }),
+      Mage_Hat: { tint: '#4f9a44', amount: 0.85 },
       '2H_Crossbow': { tint: '#8a5a2e', amount: 0.5 },
     },
     extras: [
-      { type: 'feather', bone: 'head', color: 0xff3d3d },
+      { type: 'feather', bone: 'head', color: 0xff3d3d }, { type: 'capelet', bone: 'chest' },
       { type: 'mustache', bone: 'head', color: 0x8a4a1e, curl: 0.4 },
       { type: 'brows', bone: 'head', color: 0x6a3a16, angle: 0.15 },
     ],
@@ -201,8 +217,9 @@ export const LOOKS = {
     shape: silhouette('Rogue', { torso: 0.88, arms: 0.91, legs: 0.96, height: 1.08, depth: 0.89 }),
     hide: ['Knife', 'Throwable'],
     paint: {
-      ...outfit('Rogue', '#2e3a6a', '#1e2648', 0.75), ...face('Rogue', { skin: '#e8c8b0', hood: '#24305e', eyes: '#5fc8ff' }, 'Rogue_Head_Hooded'),
-      Rogue_Cape: { tint: '#3a4a8a', amount: 0.8 },
+      ...rogueOutfit({ cloth: '#2a46a8', trim: '#1c2e70', leather: '#121a3a', pants: '#203478', boots: '#0e142c', gloves: '#121a3a' }),
+      ...face('Rogue', { skin: '#e8c8b0', hood: '#2c4cb8', eyes: '#5fc8ff' }, 'Rogue_Head_Hooded'),
+      Rogue_Cape: { tint: '#2c44a0', amount: 0.85 },
     },
     extras: [
       { type: 'scarf', bone: 'head', color: 0xffffff }, { type: 'mask', bone: 'head', color: 0x1e2648 },
@@ -211,7 +228,7 @@ export const LOOKS = {
       { type: 'shurikenBelt', bone: 'hips' },
     ],
   },
-  duelist: {   // espadachim de casaca bordô, ombreiras de aço e duas espadas curtas (uma em cada mão)
+  duelist: {   // espadachim de casaca bordô com dourado, gola alta, cinto largo, dragonas douradas e duas espadas curtas
     shape: silhouette('Rogue', { torso: 0.95, arms: 0.97, legs: 1.02, height: 1.05, depth: 0.95 }),
     hide: ['Rogue_Cape'],
     add: [
@@ -220,11 +237,13 @@ export const LOOKS = {
       { from: 'Knight', part: '1H_Sword_Offhand', bone: 'handslotl', pos: [0, 0.02, 0], scale: 0.7 },
     ],
     paint: {
-      ...outfit('Rogue', '#c0304a', '#4a4452', 0.9), ...face('Rogue', { skin: '#f0cfae', hair: '#e8e2d4', eyes: '#ff5a7a' }),
-      Knight_Cape: { tint: '#8a1c30', amount: 0.9 },
+      ...rogueOutfit({ cloth: '#9c1838', trim: '#f0c040', leather: '#241418', pants: '#2e2228', boots: '#160e10', gloves: '#f4ecdc', metal: '#f0c040' }),
+      ...face('Rogue', { skin: '#f0cfae', hair: '#e8e2d4', eyes: '#ff5a7a' }),
+      Knight_Cape: { tint: '#7a1028', amount: 0.9 },
     },
     extras: [
-      { type: 'pauldrons', bone: 'chest', color: 0xc9d4e2, size: 0.8 }, { type: 'feather', bone: 'head', color: 0xdfe6ee, y: 0.95 },
+      { type: 'pauldrons', bone: 'chest', color: 0xf0c040, trim: 0x9c1838, size: 0.8 }, { type: 'feather', bone: 'head', color: 0xdfe6ee, y: 0.95 },
+      { type: 'highCollar', bone: 'chest' }, { type: 'wideBelt', bone: 'hips' },
       { type: 'mustache', bone: 'head', color: 0xe8e2d4, curl: 0.5 }, { type: 'scar', bone: 'head', color: 0xc0605a, side: -1 },
     ],
   },
