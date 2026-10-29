@@ -10,8 +10,8 @@ export const CLASSES = [
 ];
 
 const VARIANT_INFO = {
-  paladin: ['Cura em área', 'Cura a si e aos heróis feridos próximos. Só usa a habilidade quando alguém ao alcance precisa de vida.', 'Mantenha o grupo próximo para aproveitar a cura. Combine com um aliado que receba os golpes.'],
-  guardian: ['Tanque e provocação', 'Provoca inimigos próximos, interrompe seus golpes preparados e reduz o dano recebido enquanto a guarda está ativa.', 'Use quando vários inimigos cercarem o grupo; protege os aliados mais frágeis atraindo a atenção.'],
+  paladin: ['Cura em área', 'Cura a si e aos heróis feridos próximos e fere de leve os inimigos colados nele. Só usa a habilidade quando alguém ao alcance precisa de vida.', 'Mantenha o grupo próximo para aproveitar a cura. Combine com um aliado que receba os golpes.'],
+  guardian: ['Tanque e provocação', 'Provoca inimigos próximos com uma pancada de escudo, interrompe seus golpes preparados e reduz o dano recebido enquanto a guarda está ativa.', 'Use quando vários inimigos cercarem o grupo; protege os aliados mais frágeis atraindo a atenção.'],
   champion: ['Dano e afastamento', 'Gira a espada, causa dano aos inimigos próximos e os empurra para longe.', 'Funciona melhor cercado por vários inimigos. O empurrão abre espaço para os atiradores.'],
   king: ['Apoio ofensivo', 'Fortalece todos os heróis vivos, aumentando o dano do grupo por alguns segundos.', 'Ganha valor com um grupo completo. Ative antes de uma sequência de ataques ou contra chefes.'],
   berserker: ['Ataques rápidos', 'Entra em fúria e acelera seus ataques por alguns segundos.', 'Use contra inimigos resistentes para aproveitar toda a duração. Cura e proteção ajudam a mantê-lo lutando.'],
