@@ -17,6 +17,7 @@ import { initTooltips, registerTooltip } from './tooltip.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
+import { vfxMesh, spriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -162,6 +163,7 @@ function applyQuality() {
   renderer.setPixelRatio(lowQuality ? 1 : Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
   sun.castShadow = !lowQuality;
+  setVfxQuality(lowQuality);   // ruído mais simples nos shaders de efeito
   const button = document.getElementById('quality');
   button.textContent = `Gráficos: ${lowQuality ? 'baixa' : 'alta'}`;
   button.setAttribute('aria-pressed', String(lowQuality));
@@ -1532,6 +1534,7 @@ class Unit {
     const skinned = [];
     this.root.traverse((o) => {
       if (!o.isMesh) return;
+      if (o.material.userData?.vfx) { o.castShadow = o.frustumCulled = false; return; }   // chama em shader: material compartilhado, sem sombra
       o.castShadow = true;
       o.frustumCulled = true;
       if (o.isSkinnedMesh) skinned.push(o);
@@ -2234,19 +2237,14 @@ function updateBolts(dt) {
         else if (!b.target.dead) heroHit(b.owner, b.target, b.dmg * (b.kind === 'viking' ? 1.8 * b.power : 1));
         relicBounce(b);
         if (b.kind === 'pyro') {
-          const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0xff702e, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false }));
+          // chão chamuscado; as brasas e as chamas em shader vêm de FX.fireField e apagam com ele
+          const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0x3a1608, side: THREE.DoubleSide, transparent: true, opacity: 0.45, depthWrite: false }));
           mesh.rotation.x = -Math.PI / 2;
           mesh.position.copy(b.target.pos).setY(b.target.pos.y + 0.06);
           mesh.scale.setScalar(radius);
-          for (let k = 0; k < 5; k++) {
-            const flame = new THREE.Mesh(flameGeo, boltMats.pyro);
-            const a = k * Math.PI * 2 / 5;
-            flame.position.set(Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0.18);
-            flame.rotation.x = Math.PI / 2;
-            mesh.add(flame);
-          }
           scene.add(mesh);
           flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.15, t: (1.5 + b.level * 0.5) * b.power, tick: 0 });
+          FX.fireField(mesh, radius);
         }
         if (b.kind === 'cryo' || b.kind === 'iceviking') {
           if (targetSnapshot === null) targetSnapshot = frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive();
@@ -2263,9 +2261,7 @@ function updateBolts(dt) {
   for (let i = flames.length - 1; i >= 0; i--) {
     const f = flames[i];
     f.t -= dt; f.tick -= dt;
-    f.mesh.rotation.z += dt;
-    f.mesh.children.forEach((m, k) => m.scale.setScalar(0.8 + Math.sin(f.t * 9 + k) * 0.2));
-    f.mesh.material.opacity = Math.min(0.7, f.t * 0.7);
+    f.mesh.material.opacity = Math.min(0.45, f.t * 0.45);   // o fogo de FX.fireField segue esta opacidade
     if (f.tick <= 0 && dt > 0) {
       damageArea(f.mesh.position, f.radius, f.dmg * 0.5, f.owner);
       f.tick += 0.5;
@@ -2399,12 +2395,14 @@ const shellGeo = new THREE.IcosahedronGeometry(0.2, 0);
 const iceGeo = new THREE.OctahedronGeometry(0.15, 0).scale(0.7, 0.7, 2.4);   // cristal comprido apontando em +z
 const thornGeo = new THREE.OctahedronGeometry(0.16, 0).scale(0.55, 0.18, 1.6);   // folha/espinho do druida
 const basic = (color) => new THREE.MeshBasicMaterial({ color });
+const hiddenCore = new THREE.MeshBasicMaterial({ visible: false });
 // projétil de cada atirador: núcleo, cascas brilhantes, tamanho (comum, habilidade) e jeito de voar
 const BOLT_LOOKS = {
-  pyro: { geo: boltGeo, core: basic(0xfff3b0), shells: [[glow(0xff7a1a, 0.85), 1.35], [glow(0xff2a0a, 0.45), 1.85]], size: [2, 3.2], spin: true },
-  arcane: { geo: boltGeo, core: basic(0xf3e6ff), shells: [[glow(0x8a3cff, 0.8), 1.5], [glow(0xc999ff, 0.35), 2.1]], size: [1.6, 1.6], spin: true },
-  cryo: { geo: iceGeo, core: basic(0xe6fbff), shells: [[glow(0x5fd0ff, 0.6), 1.35]], size: [1.7, 2.6], aim: true },
-  necro: { geo: boltGeo, core: basic(0xd8ffe0), shells: [[glow(0x22e050, 0.8), 1.5], [glow(0x0f8a30, 0.4), 2.1]], size: [1.7, 1.7], spin: true },
+  // orb = bola de energia em shader (paleta, tamanho); ice = cristal facetado em shader; o corpo do tiro fica invisível
+  pyro: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['fire', 0.5], size: [2, 3.2], spin: true },
+  arcane: { geo: boltGeo, core: hiddenCore, shells: [[glow(0xc999ff, 0.35), 2.1]], orb: ['arcane', 0.42], size: [1.6, 1.6], spin: true },
+  cryo: { geo: iceGeo, core: hiddenCore, shells: [[glow(0x5fd0ff, 0.45), 1.35]], ice: true, size: [1.7, 2.6], aim: true },
+  necro: { geo: boltGeo, core: hiddenCore, shells: [[glow(0x0f8a30, 0.4), 2.1]], orb: ['necro', 0.44], size: [1.7, 1.7], spin: true },
   druid: { geo: thornGeo, core: basic(0x9be05a), shells: [[glow(0x5fbf2a, 0.5), 1.3]], size: [1.9, 1.9], aim: true, roll: true },
   crossbow: { size: [1.4, 2] },
 };
@@ -2470,6 +2468,7 @@ function dropFx(e) {
 }
 
 function updateSkillFx(dt) {
+  tickVfx(dt);   // relógio único de todos os shaders de efeito
   for (let i = skillFx.length - 1; i >= 0; i--) {
     const e = skillFx[i];
     const previous = e.t;
@@ -2504,6 +2503,139 @@ function particle(geo, color, at, vel, life, o = {}) {
     m.scale.setScalar(s0 * (1 + (o.grow ?? 0) * k));
     m.material.opacity = e.base * (1 - k * k);
   }, o.delay);
+}
+
+// ---------- efeitos em shader (vfx-shaders.js): chama, bola de fogo, fumaça, folha, runas, raios e gelo ----------
+// material e geometria compartilhados; cada malha só guarda userData.fx (opacity, size, seed, progress)
+const fewer = (n) => (lowQuality ? Math.ceil(n / 2) : n);   // Gráficos: baixa corta pela metade
+
+// partícula em shader que voa e se dissolve (progress come a borda com ruído)
+function sprite(kind, palette, at, vel, life, o = {}) {
+  const m = vfxMesh(kind, palette, SPRITE, { size: o.size ?? 1, opacity: o.opacity ?? 1 });
+  const p = m.userData.fx, s0 = p.size, o0 = p.opacity;
+  m.position.copy(at);
+  return addFx(m, life, (e, dt, k) => {
+    vel.y -= (o.gravity ?? 0) * dt;
+    if (o.drag) vel.multiplyScalar(Math.max(0, 1 - o.drag * dt));
+    m.position.addScaledVector(vel, dt);
+    p.size = s0 * Math.max(0.05, 1 + (o.grow ?? 0) * k);
+    p.progress = (o.dissolve ?? 1) * k;
+    p.opacity = o0 * (1 - k ** 3);
+  }, o.delay);
+}
+
+// nuvens de fumaça cartum que sobem, crescem e se desfazem
+function puffs(at, n, palette = 'smoke', o = {}) {
+  n = lowQuality ? Math.floor(n / 2) : n;
+  const spread = o.spread ?? 0.5, speed = o.speed ?? 0.8;
+  for (let i = 0; i < n; i++)
+    sprite('puff', palette, V(at.x + rnd(spread), at.y + rnd(0.2), at.z + rnd(spread)), V(rnd(speed), (o.rise ?? 1.2) * (0.6 + Math.random() * 0.6), rnd(speed)),
+      (o.life ?? 1.1) * (0.8 + Math.random() * 0.4), { size: (o.size ?? 0.9) * (0.7 + Math.random() * 0.6), grow: o.grow ?? 1, drag: o.drag ?? 1.2, opacity: o.opacity ?? 0.95, delay: (o.delay ?? 0) * Math.random() });
+}
+
+// anel de chamas correndo pelo chão a partir do centro
+function flameRing(at, radius, n = 12, life = 0.75, palette = 'fire', size = 1.1) {
+  n = fewer(n);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + rnd(0.12), m = vfxMesh('flame', palette, SPRITE, { size: size * (0.8 + Math.random() * 0.45) });
+    const p = m.userData.fx, s0 = p.size;
+    addFx(m, life, (e, dt, k) => {
+      const r = radius * (1 - (1 - k) ** 2);
+      m.position.set(at.x + Math.cos(a) * r, at.y + 0.05, at.z + Math.sin(a) * r);
+      p.size = s0 * (0.45 + 0.75 * Math.sin(Math.PI * Math.min(1, 0.2 + k * 1.2)));
+      p.progress = k * k * 0.7;
+      p.opacity = 1 - k ** 4;
+    });
+  }
+}
+
+// bola de fogo que incha e se rasga (explosões)
+function blast(at, size, life = 0.5, palette = 'fire', delay = 0) {
+  const m = vfxMesh('orb', palette, SPRITE, { size });
+  const p = m.userData.fx;
+  m.position.copy(at);
+  return addFx(m, life, (e, dt, k) => { p.size = size * (0.35 + 0.9 * (1 - (1 - k) ** 3)); p.progress = k * 1.15; }, delay);
+}
+
+// disco plano em shader no chão (runas, brasas); follow = acompanha a unidade
+function shaderDisc(kind, palette, at, radius, life, o = {}) {
+  const m = vfxMesh(kind, palette, groundGeo, { opacity: o.opacity ?? 1, seed: o.seed ?? Math.floor(Math.random() * 6) });
+  const p = m.userData.fx;
+  m.rotation.x = -Math.PI / 2;
+  m.position.copy(at).setY(at.y + (o.y ?? 0.07));
+  return addFx(m, life, (e, dt, k) => {
+    if (o.follow) m.position.copy(o.follow.pos).setY(o.follow.pos.y + (o.y ?? 0.07));
+    if (o.active && !o.active()) { e.done = true; return; }
+    m.scale.setScalar(radius * (1 - (1 - Math.min(1, e.t / 0.25)) ** 3));
+    p.progress = k > 0.7 ? (k - 0.7) / 0.3 : 0;
+  }, o.delay);
+}
+
+// raios de luz subindo do chão (substitui a coluna lisa nos poderes de luz)
+function rays(at, palette, radius, height, life, o = {}) {
+  const m = vfxMesh('rays', palette, columnGeo, { opacity: o.opacity ?? 1 });
+  const p = m.userData.fx, o0 = p.opacity;
+  m.position.copy(at);
+  return addFx(m, life, (e, dt, k) => {
+    const pop = Math.min(1, e.t / 0.15);
+    const r = radius * (0.4 + 0.6 * pop) * (1 + k * 0.25);
+    m.scale.set(r, height * pop, r);
+    p.opacity = o0 * (1 - k) ** 1.3;
+    if (o.follow) m.position.copy(o.follow.pos);
+  }, o.delay);
+}
+
+// Piromante: chão em chamas — brasas no chão e línguas de fogo (uma malha só) enquanto a área queimar.
+// base = disco chamuscado de updateBolts; quando ele sai da cena, o fogo apaga junto.
+function fireField(base, radius) {
+  const n = lowQuality ? 6 : 11;
+  const points = Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * TAU * 2.618, r = i === 0 ? 0 : 0.35 + 0.55 * Math.sqrt(i / n);   // espiral: cobre o disco sem fila
+    return [Math.cos(a) * r, 0, Math.sin(a) * r, i === 0 ? 1.25 : 0.7 + (i % 3) * 0.18, i];
+  });
+  const g = new THREE.Group();
+  const coals = vfxMesh('embers', 'fire', groundGeo, { seed: Math.random() * 9 });
+  const tongues = vfxMesh('flame', 'fire', spriteGeometry(points, `fireField${n}`), { size: 1 });
+  coals.rotation.x = -Math.PI / 2;
+  g.add(coals, tongues);
+  addFx(g, 99, (e) => {
+    if (!base.parent) { e.done = true; return; }
+    const fade = Math.min(1, base.material.opacity / 0.45), pop = 1 - (1 - Math.min(1, e.t / 0.25)) ** 3;
+    g.position.copy(base.position).setY(base.position.y + 0.01);
+    g.scale.setScalar(radius * (0.4 + 0.6 * pop));
+    coals.userData.fx.opacity = fade;
+    tongues.userData.fx.size = 0.85 / (radius * (0.4 + 0.6 * pop));   // chamas do mesmo tamanho em qualquer raio
+    tongues.userData.fx.opacity = fade;
+    tongues.userData.fx.progress = (1 - fade) * 0.9;
+  });
+}
+
+// Piromante (Meteoro): rocha em chamas caindo do céu durante a preparação
+function meteorFall(h, life, active) {
+  const rock = vfxMesh('orb', 'fire', SPRITE, { size: 2.2 });
+  const from = V(4, 16, -6);
+  addFx(rock, life, (e, dt, k) => {
+    if (!active()) { e.done = true; return; }
+    const q = k * k;
+    rock.position.copy(h.pos).add(V(from.x * (1 - q), 0.6 + from.y * (1 - q), from.z * (1 - q)));
+    e.tr = (e.tr ?? 0) - dt;
+    if (e.tr <= 0) {   // cauda: bolas menores que ficam para trás e se desfazem
+      e.tr = lowQuality ? 0.06 : 0.03;
+      sprite('orb', 'fire', rock.position.clone().add(V(rnd(0.3), rnd(0.3), rnd(0.3))), V(rnd(0.5), 0.6, rnd(0.5)), 0.45, { size: 1.5, grow: -0.6 });
+    }
+  });
+}
+
+// Piromante (Meteoro): impacto com anel de fogo, explosão, pilar de chamas e fumaça
+function meteorImpact(at, reach) {
+  flameRing(at, reach * 1.05, 18, 1.0, 'fire', 1.6);
+  blast(at.clone().setY(at.y + 1.2), reach * 1.1, 0.75);
+  blast(at.clone().setY(at.y + 2.6), reach * 0.6, 0.6);
+  const pillar = vfxMesh('flame', 'fire', SPRITE, { size: 5 });
+  const p = pillar.userData.fx;
+  pillar.position.copy(at);
+  addFx(pillar, 0.9, (e, dt, k) => { p.size = 5.5 * Math.sin(Math.PI * Math.min(1, 0.25 + k)); p.progress = k * 0.9; });
+  puffs(at.clone().setY(at.y + 0.6), 8, 'smoke', { spread: reach * 0.5, size: 1.6, rise: 1.6, life: 1.6, speed: 1.5 });
 }
 
 // estouro de faíscas em todas as direções
@@ -2542,8 +2674,13 @@ function column(at, color, radius, height, life, o = {}) {
   }, o.delay);
 }
 
+// conjuradores ganham um círculo de runas em shader sob o selo enquanto preparam a habilidade
+const SIGIL_RUNES = { pyro: 'fire', arcane: 'arcane', chronist: 'chrono', necro: 'necro', druid: 'nature', paladin: 'holy', cleric: 'holy', angel: 'holy', cryo: 'frost' };
+
 // Um selo flutuante mostra qual energia está sendo reunida para cada herói.
 function skillSigil(h, life, art, active, ultimate = false) {
+  const runes = SIGIL_RUNES[h.cfg.id];
+  if (runes) shaderDisc('rune', runes, h.pos, ultimate ? 2.6 : 1.9, life, { follow: h, active, seed: Object.keys(SIGIL_RUNES).indexOf(h.cfg.id) });
   const seal = new THREE.Group();
   const ground = new THREE.Mesh(groundGeo, glow(art.color, 0.12, false));
   const outer = new THREE.Mesh(thinRingGeo, glow(art.color, 0.9));
@@ -2657,6 +2794,7 @@ function charge(h, duration) {
     targetLock(pending.target, life, art, active);
     castLink(h, pending.target, life, art, active);
   }
+  if (ultimate && h.cfg.id === 'pyro' && pending.skill?.effect === 'meteor') meteorFall(h, life, active);   // o meteoro cai até o disparo
   if (ultimate) {   // ultimate avisa: coluna da cor do herói que acende e aperta até o disparo
     const glowCol = new THREE.Mesh(columnGeo, glow(art.color, 0.4));
     addFx(glowCol, life, (e, dt, k) => {
@@ -2733,8 +2871,8 @@ function release(h, ultimate = false) {
 
 // Paladino: coluna de luz dourada, faíscas subindo e cura verde em quem foi curado
 function holyLight(h, friends, reach) {
-  column(h.pos, 0xffe27a, 1.1, 9, 1.4);
-  column(h.pos, 0xffffff, 0.45, 9, 1.0, { opacity: 0.8 });
+  rays(h.pos, 'holy', 1.1, 9, 1.4);   // raios de luz em shader
+  column(h.pos, 0xffffff, 0.4, 9, 1.0, { opacity: 0.5 });
   wave(h.pos, 0xfff0a0, 0.5, reach, 0.9);
   wave(h.pos, 0x8af5a8, 0.3, reach * 0.8, 1.1, { geo: ringGeo, opacity: 0.6, delay: 0.15 });
   for (let i = 0; i < 28; i++) {
@@ -2742,7 +2880,7 @@ function holyLight(h, friends, reach) {
     particle(sparkGeo, i % 3 ? 0xffe27a : 0xffffff, V(h.pos.x + Math.cos(a) * r, h.pos.y + 0.2, h.pos.z + Math.sin(a) * r), V(0, 2.5 + Math.random() * 3, 0), 1.3, { size: 1.4, delay: Math.random() * 0.5 });
   }
   for (const f of friends) if (f !== h) {
-    column(f.pos, 0x8af5a8, 0.55, 3.5, 0.9, { follow: f });
+    rays(f.pos, 'nature', 0.55, 3.5, 0.9, { follow: f });   // cura: raios verdes
     burst(f.pos.clone().setY(f.pos.y + 1), [0x8af5a8, 0xffffff], 8, 3, { gravity: -2 });
   }
 }
@@ -2817,9 +2955,9 @@ function fury(h) {
     aura.scale.set(0.75 * pulse, 2.4 + Math.sin(e.t * 10) * 0.2, 0.75 * pulse);
     aura.material.opacity = (0.3 + 0.12 * Math.sin(e.t * 10)) * Math.min(1, Math.max(0, h.furyT) / 0.4);
     e.smoke = (e.smoke ?? 0) - dt;
-    if (e.smoke <= 0) {
-      e.smoke = 0.1;
-      particle(puffGeo, 0x5a1a1a, V(h.pos.x + rnd(0.4), h.pos.y + 0.3, h.pos.z + rnd(0.4)), V(rnd(0.4), 1.4, rnd(0.4)), 0.9, { smoke: true, opacity: 0.45, size: 0.5, grow: 1.2, spin: 0 });
+    if (e.smoke <= 0) {   // labaredas rubras nos pés (shader) e faíscas
+      e.smoke = lowQuality ? 0.2 : 0.1;
+      sprite('flame', 'rage', V(h.pos.x + rnd(0.45), h.pos.y, h.pos.z + rnd(0.45)), V(rnd(0.2), 0.8, rnd(0.2)), 0.55, { size: 0.9, grow: -0.3, dissolve: 0.8 });
       particle(sparkGeo, 0xff6a3a, V(h.pos.x + rnd(0.5), h.pos.y + 0.5, h.pos.z + rnd(0.5)), V(0, 2.5, 0), 0.6);
     }
     if (h.dead || h.furyT <= 0 || !units.includes(h)) e.done = true;
@@ -2848,9 +2986,10 @@ function quake(h, reach) {
   }
   for (let i = 0; i < 14; i++)
     particle(rockGeo, i % 2 ? 0x8a6f55 : 0x6d5a48, V(c.x + rnd(1.5), c.y + 0.2, c.z + rnd(1.5)), V(rnd(3), 5 + Math.random() * 4, rnd(3)), 1, { solid: true, gravity: 18, size: 0.8 + Math.random() });
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * TAU;
-    particle(puffGeo, 0xc8b08a, V(c.x, c.y + 0.3, c.z), V(Math.cos(a) * 4, 0.6, Math.sin(a) * 4), 0.9, { smoke: true, opacity: 0.55, size: 0.6, grow: 1.5, drag: 3, spin: 0 });
+  const dust = fewer(10);
+  for (let i = 0; i < dust; i++) {   // poeira cartum em shader que rola para fora e se desfaz
+    const a = (i / dust) * TAU;
+    sprite('puff', 'dust', V(c.x, c.y + 0.4, c.z), V(Math.cos(a) * 4, 0.6, Math.sin(a) * 4), 0.9, { size: 1.1, grow: 1.2, drag: 3, opacity: 0.95 });
   }
   shake(0.55);
 }
@@ -2861,27 +3000,19 @@ function impact(kind, at, radius, lookId) {
   const p = at.clone().setY(at.y + 1);
   if (kind === 'basic') {   // tiro comum: estalo pequeno na cor do atirador
     const [a, c] = TRAIL[lookId] || [0xffffff, 0xffffff];
-    const m = new THREE.Mesh(shellGeo, glow(a, 0.95));
-    m.position.copy(p);
-    addFx(m, 0.3, (e, dt, k) => { m.scale.setScalar(1 + k * (lookId === 'pyro' ? 6 : 4)); m.material.opacity = e.base * (1 - k); });
-    burst(p, lookId === 'pyro' ? [0xff7a2a, 0xffe070, 0xff3a1a] : [a, c], 10, 4, { gravity: 6, geo: lookId === 'druid' ? leafGeo : sparkGeo });
-  } else if (kind === 'pyro') {
-    for (let i = 0; i < 12; i++) {   // anel de fogo correndo pelo chão
-      const a = (i / 12) * TAU, f = new THREE.Mesh(flameGeo, glow(i % 2 ? 0xff6a1a : 0xffc040, 0.95));
-      addFx(f, 0.75, (e, dt, k) => {
-        const r = radius * 1.6 * (1 - (1 - k) ** 2);
-        f.position.set(at.x + Math.cos(a) * r, at.y + 0.3, at.z + Math.sin(a) * r);
-        f.scale.set(1.4, 0.3 + 1.8 * (1 - k), 1.4);
-        f.material.opacity = e.base * (1 - k);
-      });
-    }
-    for (const [color, size, life] of [[0xff5a1a, 7, 0.5], [0xffa040, 5, 0.4], [0xfff0b0, 3, 0.3]]) {
-      const m = new THREE.Mesh(boltGeo, glow(color, 0.95));
+    if (lookId === 'pyro' || lookId === 'arcane' || lookId === 'necro') blast(p, lookId === 'pyro' ? 1.5 : 1.1, 0.32, lookId === 'pyro' ? 'fire' : lookId);   // estouro em shader
+    else {
+      const m = new THREE.Mesh(shellGeo, glow(a, 0.95));
       m.position.copy(p);
-      addFx(m, life, (e, dt, k) => { m.scale.setScalar(1 + size * radius * (1 - (1 - k) ** 2)); m.material.opacity = e.base * (1 - k); });
+      addFx(m, 0.3, (e, dt, k) => { m.scale.setScalar(1 + k * 4); m.material.opacity = e.base * (1 - k); });
     }
-    burst(p, [0xff7a2a, 0xffe070, 0xff3a1a], 34, 8, { gravity: 8, size: 1.6, life: 0.9 });
-    for (let i = 0; i < 6; i++) particle(puffGeo, 0x3a2a24, p, V(rnd(1.2), 1.5, rnd(1.2)), 1.1, { smoke: true, opacity: 0.5, size: 0.6, grow: 1.6, spin: 0 });
+    burst(p, lookId === 'pyro' ? [0xff7a2a, 0xffe070, 0xff3a1a] : [a, c], lookId === 'pyro' ? 6 : 10, 4, { gravity: 6, geo: lookId === 'druid' ? leafGeo : sparkGeo });
+  } else if (kind === 'pyro') {   // bola de fogo: explosão que se rasga, anel de chamas no chão e fumaça
+    flameRing(at, radius * 1.6, 12, 0.75, 'fire', 1.15);
+    blast(p, radius * 2.6, 0.55);
+    blast(p.clone().setY(p.y + 0.5), radius * 1.3, 0.4);
+    burst(p, [0xff7a2a, 0xffe070, 0xff3a1a], fewer(20), 8, { gravity: 8, size: 1.6, life: 0.9 });
+    puffs(p, 6, 'smoke', { spread: 0.6, size: 1.1, rise: 1.5, life: 1.2 });
     wave(at, 0xff9a40, 0.4, radius * 1.4, 0.5);
     audio.play('fire');
     shake(0.45);
@@ -2889,11 +3020,13 @@ function impact(kind, at, radius, lookId) {
     crystals(at, radius);
     burst(p, [0xbff6ff, 0xffffff], 18, 5);
     wave(at, 0x8be8ff, 0.4, radius * 1.3, 0.6);
+    puffs(at.clone().setY(at.y + 0.4), 4, 'frostMist', { spread: radius * 0.6, rise: 0.3, size: 1.2, opacity: 0.7, life: 1.3 });   // névoa fria
     audio.play('ice');
     if (kind === 'iceviking') shake(0.2);
   } else if (kind === 'viking') {
     burst(p, [0xffffff, 0xd6e9ef, 0xffd84a], 16, 6);
     wave(at, 0xd6e9ef, 0.3, 1.6, 0.4);
+    puffs(at.clone().setY(at.y + 0.3), 2, 'dust', { size: 0.7, rise: 0.6, life: 0.7 });
     audio.play('hit');
     shake(0.2);
   } else burst(p, TRAIL[kind] || 0xffffff, 8, 4);
@@ -2908,13 +3041,13 @@ function crystals(at, radius) {
   addFx(disc, 1.8, (e, dt, k) => (disc.material.opacity = e.base * (1 - k)));
   for (let i = 0; i < 8; i++) {
     const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * radius * 0.85, tall = 0.5 + Math.random() * 0.8;
-    const m = new THREE.Mesh(crystalGeo, glow(i % 3 ? 0xaef4ff : 0xffffff, 0.8));
+    const m = vfxMesh('ice', 'frost', crystalGeo, { seed: i });   // cristal facetado com borda clara (shader)
     m.position.set(at.x + Math.cos(a) * r, at.y, at.z + Math.sin(a) * r);
     m.rotation.set(rnd(0.4), Math.random() * TAU, rnd(0.4));
     addFx(m, 1.8, (e, dt, k) => {
       const s = Math.min(1, e.t / 0.12) * (k > 0.75 ? (1 - k) / 0.25 : 1);
-      m.scale.set(1, tall * s, 1);
-      m.material.opacity = e.base * (k > 0.75 ? (1 - k) / 0.25 : 1);
+      m.scale.set(1.2, tall * s, 1.2);
+      m.userData.fx.opacity = k > 0.75 ? (1 - k) / 0.25 : 1;
     }, Math.random() * 0.15);
   }
 }
@@ -2924,11 +3057,11 @@ function iceFan(h, target) {
   const base = Math.atan2(target.pos.x - h.pos.x, target.pos.z - h.pos.z);
   for (let i = -4; i <= 4; i++) {
     const a = base + i * 0.13, dir = V(Math.sin(a), 0, Math.cos(a));
-    const m = new THREE.Mesh(shardGeo, glow(i % 2 ? 0xbff6ff : 0xffffff, 0.95));
+    const m = vfxMesh('ice', 'frost', shardGeo, { seed: i });
     m.position.copy(h.pos).setY(h.pos.y + 1.2).addScaledVector(dir, 0.5);
     m.rotation.y = a;
-    m.scale.setScalar(1.4);
-    addFx(m, 0.45, (e, dt, k) => { m.position.addScaledVector(dir, dt * 13); m.material.opacity = e.base * (1 - k * k); });
+    m.scale.setScalar(1.6);
+    addFx(m, 0.45, (e, dt, k) => { m.position.addScaledVector(dir, dt * 13); m.userData.fx.opacity = 1 - k * k; });
   }
 }
 
@@ -2950,25 +3083,20 @@ function zigzag(a, b, delay = 0) {
       }, delay);
     }
   }
-  const orb = new THREE.Mesh(boltGeo, glow(0xe6d0ff, 0.95));
-  orb.position.copy(B);
-  addFx(orb, 0.3, (e, dt, k) => { orb.scale.setScalar(1 + k * 3); orb.material.opacity = e.base * (1 - k); }, delay);
+  blast(B, 1.3, 0.32, 'arcane', delay);   // estalo de energia arcana em shader
   burst(B, [0xc999ff, 0xffffff], 10, 4, { delay });
 }
 
 // Necromante: círculo de invocação verde girando e caveiras subindo
 function summon(h, minions) {
   const p = h.pos;
-  for (const [geo, color, size, spin] of [[thinRingGeo, 0x22e050, 2.4, 1.5], [hexGeo, 0x30c060, 1.9, -2], [hexGeo, 0x30c060, 1.9, 2], [groundGeo, 0x0f5a24, 2.4, 0]]) {
-    const m = new THREE.Mesh(geo, glow(color, geo === groundGeo ? 0.45 : 0.9, false));
-    m.rotation.set(-Math.PI / 2, 0, spin > 0 && geo === hexGeo ? Math.PI / 6 : 0);
-    m.position.copy(p).setY(p.y + 0.08);
-    addFx(m, 1.9, (e, dt, k) => {
-      m.scale.setScalar(size * Math.min(1, e.t / 0.2));
-      m.rotation.z += spin * dt;
-      m.material.opacity = e.base * (k > 0.7 ? (1 - k) / 0.3 : 1);
-    });
-  }
+  const shade = new THREE.Mesh(groundGeo, glow(0x0f5a24, 0.45, false));   // sombra verde sob o círculo
+  shade.rotation.x = -Math.PI / 2;
+  shade.position.copy(p).setY(p.y + 0.05);
+  addFx(shade, 1.9, (e, dt, k) => { shade.scale.setScalar(2.4 * Math.min(1, e.t / 0.2)); shade.material.opacity = e.base * (k > 0.7 ? (1 - k) / 0.3 : 1); });
+  shaderDisc('rune', 'necro', p, 2.5, 1.9, { y: 0.08 });   // círculo de runas girando
+  flameRing(p, 2.3, 10, 1.2, 'necro', 0.9);                // fogo-fátuo verde abrindo o círculo
+  puffs(p.clone().setY(p.y + 0.3), 4, 'gloom', { spread: 1.4, rise: 0.8, size: 1, life: 1.3 });
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * TAU;
     const skull = new THREE.Mesh(skullGeo, glow(0xc8ffd0, 0.95, false));
@@ -2995,7 +3123,7 @@ function summon(h, minions) {
 function shadowStep(from, to) {
   for (let i = 0; i <= 8; i++) {
     const p = from.clone().lerp(to, i / 8).setY(from.y + 0.6 + (to.y - from.y) * (i / 8));
-    particle(puffGeo, 0x2a1640, p, V(0, 0.4, 0), 0.7, { smoke: true, opacity: 0.6, size: 0.55, grow: 0.6, spin: 0, delay: i * 0.02 });
+    if (!lowQuality || i % 2 === 0) sprite('puff', 'shadow', p, V(0, 0.4, 0), 0.7, { size: 0.95, grow: 0.5, opacity: 0.9, delay: i * 0.02 });   // fumaça de sombra em shader
     particle(sparkGeo, 0xb48cff, p.clone().setY(p.y + 0.5), V(rnd(0.5), 1, rnd(0.5)), 0.5, { delay: i * 0.02 });
   }
   wave(from, 0x9974b5, 0.3, 1.4, 0.4);
@@ -3122,7 +3250,7 @@ function royal(h, party) {
   });
   for (let i = 0; i < 3; i++) wave(h.pos, 0xffd84a, 0.5, 7, 1, { delay: i * 0.18 });
   for (const f of party) {
-    column(f.pos, 0xffe27a, 0.5, 3, 0.8, { follow: f });
+    rays(f.pos, 'holy', 0.55, 3.2, 0.9, { follow: f });   // luz dourada em shader sobre cada herói
     burst(f.pos.clone().setY(f.pos.y + 1.2), [0xffd84a, 0xffffff], 8, 3, { gravity: -2 });
   }
 }
@@ -3170,17 +3298,19 @@ function roots(enemy) {
     g.scale.set(enemy.size, Math.max(0.001, grow) * enemy.size, enemy.size);
     if ((e.sink ?? 0) >= 1) e.done = true;
   });
-  burst(enemy.pos.clone().setY(enemy.pos.y + 0.4), [0x8fe05a, 0xc8f07a], 6, 2.5, { geo: leafGeo, gravity: 1 });
+  for (let i = 0; i < fewer(6); i++)   // folhas em shader soltando das raízes
+    sprite('leaf', 'nature', enemy.pos.clone().setY(enemy.pos.y + 0.4), V(rnd(2), 1 + Math.random() * 2, rnd(2)), 0.8, { size: 0.38, gravity: 1.5, drag: 1, dissolve: 0 });
   for (let i = 0; i < 5; i++) particle(rockGeo, 0x6d5a48, V(enemy.pos.x + rnd(0.5), enemy.pos.y + 0.1, enemy.pos.z + rnd(0.5)), V(rnd(1.5), 2.5 + Math.random() * 2, rnd(1.5)), 0.6, { solid: true, gravity: 14, size: 0.6 });
 }
 
 // Druida: folhas subindo em espiral e onda verde
 function leaves(h, radius) {
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < fewer(22); i++) {   // folhas em shader (giram, nervura e borda acesa)
     const a = Math.random() * TAU, r = 0.6 + Math.random() * 1.2;
     const at = V(h.pos.x + Math.cos(a) * r, h.pos.y + 0.2, h.pos.z + Math.sin(a) * r);
-    particle(leafGeo, i % 2 ? 0x8fe05a : 0xc8f07a, at, V(-Math.sin(a) * 2.5, 1.5 + Math.random() * 1.5, Math.cos(a) * 2.5), 1.4, { size: 1.5, gravity: 0.5, delay: Math.random() * 0.4 });
+    sprite('leaf', 'nature', at, V(-Math.sin(a) * 2.5, 1.5 + Math.random() * 1.5, Math.cos(a) * 2.5), 1.4, { size: 0.42, gravity: 0.5, delay: Math.random() * 0.4, dissolve: 0 });
   }
+  shaderDisc('rune', 'nature', h.pos, radius * 0.75, 1.2, { y: 0.06 });   // círculo da floresta no chão
   wave(h.pos, 0x8fe05a, 0.4, radius, 0.8);
   wave(h.pos, 0x3f8a2a, 0.3, radius * 0.9, 1, { geo: ringGeo, opacity: 0.5, delay: 0.1 });
 }
@@ -3198,6 +3328,8 @@ function look(b, skill) {
       shell.scale.setScalar(size);
       m.add(shell);
     }
+    if (L.orb) m.add(vfxMesh('orb', L.orb[0], SPRITE, { size: L.orb[1] }));
+    if (L.ice) m.add(vfxMesh('ice', 'frost', L.geo));
   }
   m.scale.setScalar(L.size[skill ? 1 : 0]);
   b.look = id;
@@ -3230,13 +3362,17 @@ function trail(b, dt) {
   }
   b.trailT = (b.trailT ?? 0) - dt;
   if (b.trailT > 0) return;
-  b.trailT = b.skill ? 0.025 : b.look ? 0.035 : 0.07;
+  b.trailT = (b.skill ? 0.025 : b.look ? 0.035 : 0.07) * (lowQuality ? 2 : 1);
   const [a, c] = TRAIL[b.look || b.kind] || [0xffffff, 0xffffff];
   const fire = b.look === 'pyro', size = fire ? (b.skill ? 2.6 : 1.5) : b.skill ? 1.5 : 1.1;
-  particle(b.look === 'druid' ? leafGeo : sparkGeo, Math.random() < 0.5 ? a : c, m.position.clone().add(V(rnd(0.1), rnd(0.1), rnd(0.1)).multiplyScalar(size)),
-    V(rnd(0.6), rnd(0.6) + (fire ? 0.8 : 0), rnd(0.6)), fire ? 0.5 : 0.35, { size, grow: -0.6 });
-  if (fire) particle(sparkGeo, 0xff3a1a, m.position.clone(), V(rnd(1), 0.5, rnd(1)), 0.6, { size: size * 0.5, gravity: 5 });   // brasas que caem
-  if (b.look === 'necro' && Math.random() < 0.4) particle(puffGeo, 0x14301c, m.position.clone(), V(0, 0.4, 0), 0.5, { smoke: true, opacity: 0.4, size: 0.3, grow: 1, spin: 0 });
+  const at = m.position.clone().add(V(rnd(0.1), rnd(0.1), rnd(0.1)).multiplyScalar(size));
+  if (fire) {   // cauda de fogo: bolinhas em shader que sobem, encolhem e se rasgam
+    sprite('orb', 'fire', at, V(rnd(0.5), 0.9 + Math.random() * 0.6, rnd(0.5)), b.skill ? 0.45 : 0.32, { size: b.skill ? 1.05 : 0.6, grow: -0.55 });
+    particle(sparkGeo, 0xff3a1a, m.position.clone(), V(rnd(1), 0.5, rnd(1)), 0.6, { size: size * 0.5, gravity: 5 });   // brasas que caem
+    if (b.skill && Math.random() < 0.2) puffs(m.position, 1, 'smoke', { size: 0.6, rise: 0.8, life: 0.8, speed: 0.3, spread: 0.1 });
+  } else if (b.look === 'druid') sprite('leaf', 'nature', at, V(rnd(0.6), rnd(0.6), rnd(0.6)), 0.45, { size: b.skill ? 0.42 : 0.32, grow: -0.4, dissolve: 0 });
+  else particle(sparkGeo, Math.random() < 0.5 ? a : c, at, V(rnd(0.6), rnd(0.6), rnd(0.6)), 0.35, { size, grow: -0.6 });
+  if (b.look === 'necro' && Math.random() < 0.4) sprite('puff', 'gloom', m.position.clone(), V(0, 0.4, 0), 0.55, { size: 0.45, grow: 0.8, opacity: 0.85 });
   if (b.kind === 'ninja' && b.skill) {   // faíscas nas pontas da shuriken desenham o giro no rastro
     const r = 0.32 * m.scale.x, ang = m.rotation.y;
     for (const s of [1, -1]) particle(sparkGeo, s > 0 ? 0xffffff : c, m.position.clone().add(V(Math.cos(ang) * r * s, 0, -Math.sin(ang) * r * s)), V(0, 0, 0), 0.22, { size: 0.8, grow: -0.8 });
@@ -3263,26 +3399,30 @@ function element(h, skill, target) {
   const area = !!skill.radius || !target, at = (area ? h.pos : target.pos).clone();
   const reach = area ? (skill.radius || 4.5) * 0.7 : 1.4;
   const spot = (y = 0.2) => { const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * reach; return V(at.x + Math.cos(a) * r, at.y + y, at.z + Math.sin(a) * r); };
-  if (id === 'pyro') {   // brasas subindo e fumaça escura
-    for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xff7a1a : 0xffe070, spot(), V(rnd(0.6), 2.5 + Math.random() * 2.5, rnd(0.6)), 0.9, { size: 1.3, gravity: -1, delay: Math.random() * 0.25 });
-    for (let i = 0; i < n / 3; i++) particle(puffGeo, 0x3a2a24, spot(0.4), V(rnd(0.4), 1.2, rnd(0.4)), 1, { smoke: true, opacity: 0.4, size: 0.5, grow: 1.4, spin: 0 });
-  } else if (id === 'cryo' || id === 'iceviking') {   // flocos caindo devagar
-    for (let i = 0; i < n; i++) particle(sparkGeo, i % 2 ? 0xe6fbff : 0x8be8ff, spot(2.6 + Math.random()), V(rnd(0.4), -1.2, rnd(0.4)), 1.2, { size: 1.1, delay: Math.random() * 0.4 });
-  } else if (id === 'arcane') {   // runas girando para dentro
+  if (id === 'pyro') {   // brasas subindo, anel de chamas (ou o meteoro) e fumaça em shader
+    for (let i = 0; i < fewer(n); i++) particle(sparkGeo, i % 3 ? 0xff7a1a : 0xffe070, spot(), V(rnd(0.6), 2.5 + Math.random() * 2.5, rnd(0.6)), 0.9, { size: 1.3, gravity: -1, delay: Math.random() * 0.25 });
+    if (ult) meteorImpact(at, reach);
+    else if (area) { flameRing(at, reach, 14, 0.8, 'fire', 1.3); puffs(at.clone().setY(at.y + 0.4), 4, 'smoke', { spread: reach * 0.5, size: 1.1 }); }
+  } else if (id === 'cryo' || id === 'iceviking') {   // flocos caindo devagar, cristais e névoa fria
+    for (let i = 0; i < fewer(n); i++) particle(sparkGeo, i % 2 ? 0xe6fbff : 0x8be8ff, spot(2.6 + Math.random()), V(rnd(0.4), -1.2, rnd(0.4)), 1.2, { size: 1.1, delay: Math.random() * 0.4 });
+    if (area) crystals(at, Math.min(reach, 3.5));
+    puffs(at.clone().setY(at.y + 0.4), ult ? 8 : 4, 'frostMist', { spread: reach * 0.6, rise: 0.25, size: 1.4, opacity: 0.65, life: 1.5 });
+  } else if (id === 'arcane') {   // círculo de runas e faíscas girando para dentro
+    shaderDisc('rune', 'arcane', at, reach + 0.5, ult ? 1.3 : 0.9, { seed: 1 });
     for (let i = 0; i < n; i++) {
       const a = i / n * TAU, p = V(at.x + Math.cos(a) * reach, at.y + 1, at.z + Math.sin(a) * reach);
       particle(sparkGeo, i % 2 ? 0x8a3cff : 0xe0c8ff, p, V(-Math.cos(a) * reach * 2.2 - Math.sin(a) * 2, 0.6, -Math.sin(a) * reach * 2.2 + Math.cos(a) * 2), 0.45, { size: 1.3 });
     }
   } else if (id === 'paladin' || id === 'cleric' || id === 'angel') {   // raios de luz e fagulhas douradas
-    for (let i = 0; i < (ult ? 5 : 3); i++) column(spot(0), i % 2 ? 0xffffff : 0xffe27a, 0.18, 6, 0.6, { opacity: 0.7, delay: i * 0.06 });
+    for (let i = 0; i < (ult ? 5 : 3); i++) rays(spot(0), 'holy', 0.3, 6, 0.7, { delay: i * 0.06 });   // raios de luz em shader
+    if (ult) shaderDisc('rune', 'holy', at, reach + 0.4, 1.1, { seed: 3 });
     for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xffe27a : 0xffffff, spot(), V(rnd(0.3), 3 + Math.random() * 2, rnd(0.3)), 1, { size: 1.2, delay: Math.random() * 0.3 });
   } else if (id === 'druid') {   // folhas rodando
-    for (let i = 0; i < n; i++) particle(leafGeo, i % 2 ? 0x8fe05a : 0xc8f07a, spot(), V(rnd(1.5), 1.5 + Math.random() * 1.5, rnd(1.5)), 1.2, { size: 1.4, gravity: 0.6, delay: Math.random() * 0.3 });
-  } else if (id === 'necro' || id === 'assassin' || id === 'ninja') {   // sombra: fumaça escura e fagulhas frias
+    for (let i = 0; i < fewer(n); i++) sprite('leaf', 'nature', spot(), V(rnd(1.5), 1.5 + Math.random() * 1.5, rnd(1.5)), 1.2, { size: 0.4, gravity: 0.6, delay: Math.random() * 0.3, dissolve: 0 });
+  } else if (id === 'necro' || id === 'assassin' || id === 'ninja') {   // sombra: fumaça em shader (verde no necro, roxa no assassino, cinza no ninja) e fagulhas frias
     const tint = id === 'necro' ? 0x6dff8a : 0xb48cff;
-    for (let i = 0; i < n / 2; i++) particle(puffGeo, id === 'necro' ? 0x14301c : 0x2a1640, spot(0.3), V(rnd(0.6), 0.8, rnd(0.6)), 0.9, { smoke: true, opacity: 0.5, size: 0.5, grow: 1.2, spin: 0 });
-    for (let i = 0; i < n / 2; i++) particle(sparkGeo, tint, spot(0.6), V(rnd(1), 1.6, rnd(1)), 0.6, { size: 1.1 });
-  } else if (id === 'duelist') {   // aço: faíscas prateadas e rubras cortando o ar
+    for (let i = 0; i < fewer(n / 2); i++) sprite('puff', id === 'necro' ? 'gloom' : id === 'assassin' ? 'shadow' : 'smoke', spot(0.4), V(rnd(0.6), 0.8, rnd(0.6)), 0.9, { size: 0.95, grow: 1, opacity: 0.9 });
+    for (let i = 0; i < n / 2; i++) particle(sparkGeo, tint, spot(0.6), V(rnd(1), 1.6, rnd(1)), 0.6, { size: 1.1 });  } else if (id === 'duelist') {   // aço: faíscas prateadas e rubras cortando o ar
     for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xdfe6ee : 0xff5a7a, spot(0.9), V(rnd(2.5), 1 + Math.random(), rnd(2.5)), 0.5, { size: 1.1, delay: Math.random() * 0.2 });
   } else if (id === 'chronist') {   // mostrador de relógio no chão, com os ponteiros voltando
     clockFace(at, reach + 0.6, ult ? 1.4 : 0.9);
@@ -3299,6 +3439,7 @@ function element(h, skill, target) {
 
 // Cronomante: relógio no chão com doze marcas e ponteiros girando ao contrário
 function clockFace(at, radius, life) {
+  shaderDisc('rune', 'chrono', at, radius * 1.05, life, { y: 0.06, seed: 4 });   // runas do tempo girando sob o mostrador
   const g = new THREE.Group(), mat = glow(0x8feaff, 0.85);
   const rim = new THREE.Mesh(thinRingGeo, mat);
   rim.rotation.x = -Math.PI / 2;
@@ -3344,7 +3485,7 @@ function stasis(enemy) {
   burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0x8feaff, 0xb6a4ff], 6, 2.5, { gravity: 0 });
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 
 class Hero extends Unit {
@@ -3850,7 +3991,7 @@ class Hero extends Unit {
           effect = () => { for (const enemy of enemies) { damageOne(enemy); FX.slashX(enemy, this); } FX.whirl(this, radius); burst(this.pos, color, 22, 4); };
         } else {
           effect = () => { damageAreaNow(skill.effect === 'meteor' ? 1 : 0.8);
-            if (skill.effect === 'meteor') { column(this.pos, color, radius * 0.55, 6, 0.9); FX.quake(this, radius * 0.35); }
+            if (skill.effect === 'meteor') FX.quake(this, radius * 0.35);   // pilar e explosão de fogo vêm de FX.element (shader)
             else if (skill.effect === 'blizzard' && this.cfg.id === 'chronist') for (const enemy of enemies) FX.stasis(enemy);
             else if (skill.effect === 'blizzard') FX.iceFan(this, target || this);
             else if (skill.effect === 'storm') FX.whirl(this, radius);

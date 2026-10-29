@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { vfxMesh, spriteGeometry } from './vfx-shaders.js';
 
 // receitas: base = modelo de partida; hide = peças da base que somem; add = peças de outros modelos;
 // paint = mudança de cor por peça (hue gira o tom, tint pinta por cima mantendo a sombra);
@@ -225,7 +226,7 @@ export function applyLook(root, assets, r) {
 
   for (const extra of r.extras || []) root.getObjectByName(clean(extra.bone))?.add(ACCESSORIES[extra.type](extra));
 
-  root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.material.userData?.vfx; o.frustumCulled = false; } });   // chama em shader não faz sombra
   return root;
 }
 
@@ -680,32 +681,21 @@ const ACCESSORIES = {
     return g;
   },
   // chaminhas saindo do chapéu
+  // chamas em shader (vfx-shaders.js): três línguas numa malha só, sempre voltadas à câmera
   flames({ y = 1.55, z = -0.05 } = {}) {
     const g = new THREE.Group();
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffb03a, emissive: 0xff5a1a, emissiveIntensity: 0.8, flatShading: true });
-    for (const [x, h] of [[-0.12, 0.25], [0, 0.35], [0.12, 0.22]]) {
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.07, h, 5), mat);
-      f.position.set(x, y + h / 2, z);
-      g.add(f);
-    }
+    const f = vfxMesh('flame', 'fire', spriteGeometry([[-0.12, 0, 0, 0.7, 1], [0.12, 0, 0, 0.62, 2], [0, 0.02, 0.01, 1, 3]], 'hatFlames'), { size: 0.42, seed: 1 });
+    f.position.set(0, y, z);
+    g.add(f);
     g.userData.flicker = true;
     return g;
   },
   // mão pegando fogo (no osso da mão): chamas em volta do punho
   handFire({ y = 0.05 } = {}) {
     const g = new THREE.Group();
-    const outer = new THREE.MeshLambertMaterial({ color: 0xff8a2a, emissive: 0xff4a10, emissiveIntensity: 0.9, flatShading: true });
-    const inner = new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xffb020, emissiveIntensity: 1, flatShading: true });
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2, h = 0.34 + (i % 2) * 0.18;
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.09, h, 5), outer);
-      f.position.set(Math.cos(a) * 0.11, y + h / 2, Math.sin(a) * 0.11);
-      f.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
-      g.add(f);
-    }
-    const core = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 5), inner);
-    core.position.y = y + 0.25;
-    g.add(core);
+    const f = vfxMesh('flame', 'fire', spriteGeometry([[-0.08, 0, 0, 0.72, 4], [0.08, 0, 0, 0.66, 5], [0, 0.03, 0.02, 1, 6]], 'handFlames'), { size: 0.62, seed: 4 });
+    f.position.y = y;
+    g.add(f);
     g.userData.flicker = true;
     return g;
   },
