@@ -99,6 +99,7 @@ vm.runInContext('t.world=world;',context);
 const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
 vm.runInContext('t.makeTargetContext=makeTargetContext;',context);
+vm.runInContext('t.allies=allies;t.canHeroReachTarget=canHeroReachTarget;',context);
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
 for(const n of ['Minion','Warrior','Rogue','Mage']) context.assets['Skeleton_'+n]={scene:{},animations:[]};
@@ -749,6 +750,34 @@ test('objetivos: sobreviver com ondas contínuas, totens e chefe',()=>{
   const boss=new t.Skeleton('Warrior',6,true);boss.spawning=false;new t.Skeleton('Minion',6);t.updateGame(.1);assert.equal(t.game.bossSeen,true);
   boss.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);assert.equal(t.skeletonsAlive().length,0);
   t.updateGame(.1);t.game.timer=0;t.updateGame(.1);assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.startsWith('Missão cumprida'));
+});
+test('resgate: prisioneiro longe e guardado, fora do alvo dos esqueletos e libertado só após segurar perto',()=>{
+  context.location={search:''};
+  begin('resgate',['paladin','pyro','berserker']);
+  const v=t.game.villager;assert.equal(v.captive,true);assert.equal(v.rescued,false);
+  assert.ok(t.heroes().every(h=>h.pos.distanceTo(v.pos)>10),'o prisioneiro nasce longe do grupo');
+  assert.ok(!t.allies().includes(v));assert.ok(!t.makeTargetContext().alliedUnits.includes(v));
+  t.startPhase();
+  assert.equal(t.skeletonsAlive().filter(s=>s.pos.distanceTo(v.pos)<3).length,2,'guardas ao lado do prisioneiro');
+  for(const u of t.skeletonsAlive())u.remove();t.game.toSpawn=0;
+  t.updateGame(.1);assert.equal(t.game.state,'fight','a fase espera o resgate');assert.equal(elements.get('left').textContent,'Liberte o prisioneiro');
+  const h=t.heroes()[0],before=h.pos.distanceTo(v.pos);h.busy=0;h.update(.2);h.update(.2);assert.ok(h.pos.distanceTo(v.pos)<before,'sem inimigos, o herói vai até o prisioneiro');
+  h.pos.set(v.pos.x+1,0,v.pos.z);t.updateGame(1);
+  assert.equal(v.rescued,false);assert.ok(Math.abs(t.missionProgress({type:'rescue'})-.4)<.01);assert.match(v.nameTag.textContent,/Libertando 40%/);
+  t.updateGame(1.6);assert.equal(v.rescued,true);assert.equal(t.game.rescueComplete,true);assert.equal(t.game.state,'cleared');
+  assert.ok(t.allies().includes(v),'depois de solto ele volta a ser protegido e alvo');
+});
+test('torre: segura a fase, o HUD avisa e o grupo vai até ela quando não há inimigos',()=>{
+  context.location={search:''};
+  begin('torre',['paladin','pyro','berserker','assassin']);t.startPhase();
+  const tower=t.skeletonsAlive().find(u=>u.tower);assert.ok(tower);tower.spawning=false;tower.spawnT=99;t.game.toSpawn=0;
+  const h=t.heroes()[0];h.post.copy(h.pos);tower.pos.set(h.pos.x+30,0,h.pos.z);
+  const guard=new t.Skeleton('Minion',t.game.phase);guard.spawning=false;guard.pos.copy(h.pos);
+  assert.equal(t.canHeroReachTarget(h,tower,t.makeTargetContext()),false,'com inimigos por perto, não persegue a torre longe');
+  guard.remove();assert.equal(t.canHeroReachTarget(h,tower,t.makeTargetContext()),true);
+  t.updateGame(.1);assert.equal(t.game.state,'fight');
+  assert.equal(elements.get('left').textContent,'Derrube a torre');assert.equal(elements.get('banner').textContent,'Derrube a torre!');
+  tower.takeDamage(99999,null,h);assert.equal(t.game.towersDown,1);t.updateGame(.1);assert.equal(t.game.state,'cleared');
 });
 test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   context.location={search:''};context.localStorage.data={};
