@@ -683,7 +683,7 @@
   object-fit: contain;
   background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--c, #8aa3c4) 46%, #fff), var(--cd, #2a3c58));
 }
-#pick:has(#pickList.grid) .pick-team-bar .party-members span.candidate img { border: 2px dashed #ffd96a; box-shadow: 0 0 0 3px rgba(255, 217, 106, .22); }
+#pick:has(#pickList.grid) .pick-team-bar .party-members span.candidate img { border: 2px solid #ffd96a; box-shadow: inset 0 0 0 2px rgba(255, 217, 106, .35); }   /* destaque por dentro: mesmo tamanho das vagas */
 #pick:has(#pickList.grid) .pick-team-bar .party-members .empty i {
   display: grid;
   place-items: center;
