@@ -94,7 +94,7 @@ vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,UPGRADES,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts};',context);
 vm.runInContext('t.world=world;',context);
 const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
@@ -224,12 +224,32 @@ test('evolução manual oculta rotas já escolhidas pelo herói',()=>{
   const second=t.pick.upgrades[0].id;assert.notEqual(second,first);t.confirmEvolution(0);
   assert.deepEqual(Object.keys(hero.evolutionBranches).sort(),[first,second].sort());
 });
-test('todas as melhorias acumulam sem perder os ganhos anteriores',()=>{
+test('todas as rotas acumulam sem perder os ganhos anteriores',()=>{
   clear();const h=new t.Hero(cfg('paladin'));const hp=h.maxHp,dmg=h.dmg;
-  for(const option of t.UPGRADES){t.evolutions.push({hero:h,level:2});t.pick.upgrades=[option];t.confirmEvolution(0)}
-  assert.equal(h.maxHp,hp*1.25);assert.equal(h.hp,h.maxHp);assert.equal(h.dmg,dmg*1.2);assert.equal(h.haste,1.2);
-  assert.equal(h.skillRate,.75);assert.equal(h.skillPower,1.25);assert.equal(h.damageTaken,.8);
-  h.gainXp(90);assert.ok(h.dmg>dmg*1.2);t.showEvolution();assert.ok(t.pick.upgrades.every(o=>o.id!=='range'));
+  for(const option of t.EVOLUTION_BRANCHES){t.evolutions.push({hero:h,level:2});t.pick.upgrades=[option];t.confirmEvolution(0)}
+  assert.deepEqual(Object.keys(h.evolutionBranches).sort(),['control','damage','support']);
+  assert.equal(h.maxHp,hp);assert.ok(Math.abs(h.dmg-dmg*1.12)<1e-9);assert.ok(Math.abs(h.haste-1.08)<1e-9);
+  assert.ok(Math.abs(h.controlPower-1.2)<1e-9);assert.ok(Math.abs(h.supportPower-1.2)<1e-9);
+  assert.equal(h.skillRate,1);assert.equal(h.skillPower,1);assert.equal(h.damageTaken,1);
+  h.gainXp(90);assert.ok(h.dmg>dmg*1.12);
+});
+test('missão que começa em nível alto aplica as rotas de evolução, sem sorteio',()=>{
+  const evolve=id=>{clear();const h=new t.Hero(cfg(id));const hp=h.maxHp,dmg=h.dmg;h.gainXp(350);t.autoUpgrade();
+    assert.equal(t.evolutions.length,0);assert.equal(t.pick.open,false);assert.equal(h.maxHp>hp*1.3,false,id);
+    assert.equal(Object.keys(h.evolutionBranches).length,2,id);assert.ok(h.dmg<=dmg*1.1**2*1.12+1e-9,id);return Object.keys(h.evolutionBranches).sort().join()};
+  for(const id of ['guardian','paladin','pyro','angel'])assert.equal(evolve(id),evolve(id),id);
+  assert.equal(evolve('guardian').includes('control'),true);assert.equal(evolve('cleric').includes('support'),true);
+  clear();
+});
+test('provocação do guardião e cura do paladino ferem de leve quem está colado',()=>{
+  clear();const g=new t.Hero(cfg('guardian')),p=new t.Hero(cfg('paladin'));
+  const enemy=new t.Skeleton('Warrior',1);enemy.spawning=false;enemy.pos.set(0,0,1.5);
+  for(const h of t.heroes())h.pos.set(0,0,0);
+  let hp=enemy.hp;assert.equal(g.useSkill(enemy),true);g.pendingHit.effect();g.pendingHit=null;
+  assert.equal(enemy.taunt,g);assert.ok(Math.abs(hp-enemy.hp-g.dmg*.6)<1e-6);
+  p.hp=p.maxHp*.4;hp=enemy.hp;assert.equal(p.useSkill(enemy),true);p.pendingHit.effect();p.pendingHit=null;
+  assert.ok(p.hp>p.maxHp*.4);assert.ok(Math.abs(hp-enemy.hp-p.dmg*.45)<1e-6);
+  clear();
 });
 test('brado, invocações, raízes e cura têm os efeitos previstos',()=>{
   clear();const king=new t.Hero(cfg('king')),necro=new t.Hero(cfg('necro')),druid=new t.Hero(cfg('druid'));
@@ -323,6 +343,11 @@ test('fase revive aliados, oferece reforço, gera chefe e termina em vitória',(
   t.game.timer=0;t.updateGame(.1);assert.equal(t.game.phase,2);assert.equal(t.pick.open,true);
   t.pick.open=false;t.game.paused=false;t.game.phase=6;t.startPhase();assert.equal(t.game.bossPending,true);
   t.game.toSpawn=1;t.spawnSkeleton();assert.ok(t.units.some(u=>u.boss));
+  for(const u of [...t.units])if(u.team==='skeleton')u.remove();
+  t.game.toSpawn=3;for(let k=0;k<5;k++)t.spawnSkeleton();   // onda ainda cheia: o chefe espera
+  Object.assign(t.game,{toSpawn:1,spawnTimer:0,state:'fight',bossPending:true});t.updateGame(.1);
+  assert.equal(t.game.toSpawn,1);assert.ok(!t.units.some(u=>u.phaseBoss));
+  t.skeletonsAlive()[0].remove();t.updateGame(.1);assert.equal(t.game.toSpawn,0);assert.ok(t.units.some(u=>u.phaseBoss));
   for(const u of [...t.units])if(u.team==='skeleton')u.remove();
   Object.assign(t.game,{phase:12,state:'cleared',timer:0});t.updateGame(.1);assert.equal(t.game.over,true);
   assert.ok(elements.get('overlayText').textContent.startsWith('Vitória'));

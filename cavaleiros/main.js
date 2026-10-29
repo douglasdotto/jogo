@@ -46,7 +46,7 @@ const VARIANTS = [
   { id: 'paladin', names: ['Paladino', 'Paladino Real', 'Santo Guerreiro'], desc: 'Cura os amigos próximos.', ability: 'Círculo de cura', color: ['#a9e9bc', '#55a77b'],
     use: ['1H_Sword', 'Round_Shield'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 }, classId: 0 },
   { id: 'guardian', names: ['Guardião', 'Guardião Real', 'Muralha Viva'], desc: 'Atrai inimigos e reduz o dano.', ability: 'Provocar', color: ['#9fcfff', '#568ccc'],
-    use: ['1H_Sword', 'Rectangle_Shield'], stats: { Vida: 5, Força: 2, Rapidez: 2, Alcance: 1 }, hp: 300, dmg: 24, classId: 0 },
+    use: ['1H_Sword', 'Rectangle_Shield'], stats: { Vida: 5, Força: 2, Rapidez: 2, Alcance: 1 }, hp: 300, dmg: 28, classId: 0 },
   { id: 'champion', names: ['Campeão', 'Campeão Real', 'Lâmina Solar'], desc: 'Gira e empurra os inimigos.', ability: 'Turbilhão', color: ['#ffe59b', '#c99a3e'],
     use: ['2H_Sword'], stats: { Vida: 4, Força: 5, Rapidez: 3, Alcance: 2 }, dmg: 32, cooldown: 1.05, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice'], classId: 0 },
   { id: 'berserker', names: ['Berserker', 'Fera Rubra', 'Fúria Titã'], desc: 'Pouca vida, golpes mais rápidos.', ability: 'Fúria', color: ['#ffb2b2', '#ce5f63'],
@@ -80,7 +80,7 @@ const VARIANTS = [
   { id: 'bard', names: ['Bardo', 'Mestre das Canções', 'Lenda Errante'], desc: 'Sua música acelera os ataques de todo o grupo.', ability: 'Acorde heroico', color: CHARACTERS[5].color,
     recipe: CHARACTERS[5], classId: 4, hp: 220, dmg: 22, range: 5, speed: 3, cooldown: 1.15, ranged: true, idle: '2H_Melee_Idle', attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 2, Rapidez: 4, Alcance: 4 } },
   { id: 'angel', names: ['Anjo', 'Arcanjo', 'Serafim'], desc: 'Paira acima da batalha e desce com impacto de luz para amparar o grupo.', ability: 'Descida celeste', color: CHARACTERS[6].color,
-    recipe: CHARACTERS[6], classId: 4, hp: 180, dmg: 24, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.8, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
+    recipe: CHARACTERS[6], classId: 4, hp: 180, dmg: 20, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.6, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
   { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
     recipe: CHARACTERS[7], classId: 6, hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 5 } },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
@@ -106,7 +106,7 @@ const DIFFICULTIES = [
   { id: 'facil', name: 'Fácil', icon: '❀', desc: 'Um passeio pelo reino.', color: ['#cdf0b4', '#6aa84f'],
     hp: 0.85, dmg: 0.8, count: 0.9, interval: 1.15, boss: 0.8, heal: 0.5, revive: 0.5, reviveDelay: 0, behind: 0.15, behindFrom: 5, shooters: 0 },
   { id: 'normal', name: 'Normal', icon: '⚔︎', desc: 'Os esqueletos vêm com tudo.', color: ['#bfe0ff', '#5a8fd0'],
-    hp: 1.08, dmg: 1.05, count: 1.1, interval: 0.95, boss: 1, heal: 0.3, revive: 0.35, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.06 },
+    hp: 1.08, dmg: 1.05, count: 1.1, interval: 0.95, boss: 1, heal: 0.4, revive: 0.35, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.06 },
   { id: 'dificil', name: 'Difícil', icon: '♜', desc: 'Escolha bem cada herói.', color: ['#ffd29e', '#d17a2a'],
     hp: 1.25, dmg: 1.2, count: 1.25, interval: 0.9, boss: 1.15, heal: 0.25, revive: 0.3, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.1 },
   { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
@@ -680,14 +680,6 @@ function confirmPick(i) {
 
 // Uma escolha por vez, inclusive quando vários heróis ganham XP no mesmo golpe.
 const evolutions = [];
-const UPGRADES = [
-  { id: 'hp', name: 'Vida', desc: '+25% de vida máxima e cura completa', icon: '♥' },
-  { id: 'dmg', name: 'Força', desc: '+20% de dano', icon: '◆' },
-  { id: 'haste', name: 'Rapidez', desc: '+20% de velocidade de ataque', icon: '◆' },
-  { id: 'range', name: 'Alcance', desc: '+20% de alcance', icon: '◆' },
-  { id: 'skill', name: 'Habilidade', desc: 'Recarga 25% menor e efeito 25% maior', icon: '✦' },
-  { id: 'shield', name: 'Escudo', desc: '20% de redução de dano', icon: '⬟' },
-];
 
 const RELICS = [
   { id: 'keen-edge', name: 'Lâmina afiada', icon: '⚔', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
@@ -840,30 +832,22 @@ function confirmEvolution(i) {
   showEvolution();
 }
 
-// no começo da missão as evoluções já vêm com uma melhoria sorteada, sem abrir a tela
+// no começo da missão as evoluções seguem as mesmas rotas da partida (escolha automática pelo perfil), sem abrir a tela
 function autoUpgrade() {
   while (evolutions.length) {
     const h = evolutions.shift().hero;
-    const pool = UPGRADES.filter((o) => (o.id !== 'range' || h.ranged) && (o.id !== 'skill' || h.cfg.id !== 'berserker'));
-    applyUpgrade(h, pool[Math.floor(Math.random() * pool.length)]);
+    const option = chooseAutoEvolution(h);
+    if (option) applyUpgrade(h, option);
   }
 }
 
 function applyUpgrade(h, option) {
   const branch = applyEvolutionBranch(h, option.id);
-  if (branch) {
-    if (branch.damage) h.dmg *= 1 + branch.damage;
-    if (branch.haste) h.haste *= 1 + branch.haste;
-    if (branch.control) h.controlPower *= 1 + branch.control;
-    if (branch.support) h.supportPower *= 1 + branch.support;
-    return;
-  }
-  if (option.id === 'hp') { h.maxHp = Math.round(h.maxHp * 1.25); h.hp = h.maxHp; }
-  if (option.id === 'dmg') h.dmg *= 1.2;
-  if (option.id === 'haste') h.haste *= 1.2;
-  if (option.id === 'range') h.range *= 1.2;
-  if (option.id === 'skill') { h.skillRate *= 0.75; h.skillPower *= 1.25; for (let slot = 0; slot < 3; slot++) { h.skillTimers[slot] *= 0.75; h.skillMaxes[slot] *= 0.75; } }
-  if (option.id === 'shield') h.damageTaken *= 0.8;
+  if (!branch) return;
+  if (branch.damage) h.dmg *= 1 + branch.damage;
+  if (branch.haste) h.haste *= 1 + branch.haste;
+  if (branch.control) h.controlPower *= 1 + branch.control;
+  if (branch.support) h.supportPower *= 1 + branch.support;
 }
 
 function arrangeParty() {
@@ -2824,6 +2808,7 @@ class Hero extends Unit {
           healed.push(h);
           popText(h.pos, '+' + Math.round(heal), 'heal');
         }
+        for (const s of nearby) if (!s.dead) heroHit(this, s, this.dmg * 0.45);   // a luz sagrada também fere quem está colado no paladino
         FX.holyLight(this, healed, reach);
       };
     } else if (id === 'cleric') {
@@ -2871,7 +2856,7 @@ class Hero extends Unit {
           if (heal > 0) { h.hp += heal; this.stats.cura += heal; healed.push(h); popText(h.pos, '+' + Math.round(heal), 'heal'); }
         }
         for (const enemy of skeletonsAlive()) if (!enemy.spawning && enemy.pos.distanceTo(center) <= radius + 1.6 * (enemy.size - 1)) {
-          heroHit(this, enemy, this.dmg * (1.05 + level * 0.08) * power, center);
+          heroHit(this, enemy, this.dmg * (0.9 + level * 0.08) * power, center);
           enemy.vel.add(new THREE.Vector3(0, 0.7, 0));
         }
         column(center, 0xffe27a, 1.1, 8, 1.1);
@@ -2899,6 +2884,7 @@ class Hero extends Unit {
       effect = () => {
         this.guardT = scaleBranchEffect(this, 'control', 4 + (level - 1)) * power;
         for (const s of nearby) if (!s.dead) { s.taunt = this; s.tauntT = this.guardT; s.pendingHit = null; popText(s.pos, '!', 'crit'); }
+        for (const s of nearby) if (!s.dead) heroHit(this, s, this.dmg * 0.6);   // pancada de escudo: dano moderado, o foco segue na provocação
         FX.dome(this, radius);
       };
     } else if (id === 'champion' || id === 'crusher') {
@@ -3980,7 +3966,8 @@ function updateGame(dt) {
   if (game.state === 'fight') {
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
-      if (game.spawnTimer <= 0) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
+      const bossWaits = game.bossPending && game.toSpawn === 1 && skeletons.length > 4;   // o chefe só entra quando a onda diminui, sem chegar junto com ela
+      if (game.spawnTimer <= 0 && !bossWaits) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
     } else if (!skeletons.length) {
       if (game.mission && game.phase >= game.last) {
         const party = heroes();
