@@ -46,7 +46,7 @@ console.log(checkTerrain(world,THREE));
 const main=readFileSync(new URL('../main.js',import.meta.url),'utf8');
 const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // anima a locomoção'));
 world.obstacles=[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2}));
-const Walker=runInNewContext('class Walker {'+move+'}; Walker',{THREE,world,tmp:new Vector3()});
+const Walker=runInNewContext('class Walker {'+move+'}; Walker',{THREE,world,tmp:new Vector3(),moveDir:new Vector3()});
 function walk(from,to) {
   const u=new Walker();Object.assign(u,{pos:from.clone(),vel:new Vector3(),speed:3.2,size:1,face:()=>{}});
   let maxY=u.pos.y;
@@ -93,7 +93,7 @@ console.log('Movimento real: subida, descida, contorno de platôs e lagos OK');
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
 const Unit=runInNewContext(main.slice(main.indexOf('class Unit {'),main.indexOf('const skeletonsAlive ='))+';Unit',{
-  THREE,world,tmp:new Vector3(),game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
+  THREE,world,tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
 });
 function unit(team='hero') {
   const u=Object.create(Unit.prototype);
@@ -147,7 +147,7 @@ living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não termin
 const removed=[],enemyBolts=[{mesh:{id:'tiro'}}],resetGame={};let chose=false;
 const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.indexOf('function startPhase()'))+';startGame',{
   clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
-  closeHeroPanel:()=>{},clearMonsterFx:()=>{},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
+  closeHeroPanel:()=>{},clearMonsterFx:()=>{},document:{body:{classList:{add:()=>{}}}},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
   enemyBolts,bolts:[],blasts:[],flames:[],fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
   follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;}
 });

@@ -348,6 +348,7 @@ test('cada variante oferece três habilidades e a ultimate tem recarga maior',()
   for(const v of t.VARIANTS){
     const skills=t.skillSetFor(v);
     assert.equal(skills.length,3,v.id);
+    assert.equal(t.skillSetFor(v),skills,v.id+' lista fica em cache por variante');
     assert.equal(skills.filter(s=>s.ultimate).length,1,v.id);
     assert.ok(t.cooldownForSkill(v,2)>t.cooldownForSkill(v,1),v.id+' ultimate vs técnica');
     assert.ok(t.cooldownForSkill(v,2)>t.cooldownForSkill(v,0),v.id+' ultimate vs assinatura');

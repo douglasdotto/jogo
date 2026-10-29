@@ -395,6 +395,9 @@
     #mute.off .on, #mute:not(.off) .off { display: none; }
     #mute.off { background: linear-gradient(#c8ced9, #8a93a6 45%, #5d6578); }
     #autoEvolve[aria-pressed="true"] { background: linear-gradient(#85df70, #4da53b 55%, #2e7428); }
+    #quality { padding: 4px 10px 5px; font-size: 13px; opacity: .8; }
+    /* carregamento, menu e mapa: o HUD da batalha não aparece por trás */
+    body.no-battle #hud, body.no-battle #skills { visibility: hidden; }
     /* HUD de habilidades: grupos claros, ícones legíveis e recarga em anel. */
     #skills { position: absolute; left: 50%; bottom: 18px; translate: -50% 0; display: flex; align-items: stretch; gap: 10px; padding: 12px 14px 10px; max-width: min(96vw, 1500px); box-sizing: border-box; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: #e8bd55 #263755;
       background: linear-gradient(155deg, rgba(54, 82, 132, .97), rgba(31, 51, 91, .98) 58%, rgba(19, 34, 64, .98)); backdrop-filter: blur(10px); border: 2px solid rgba(184, 212, 255, .62); border-radius: 21px;
@@ -494,7 +497,7 @@
     } }
   </script>
 </head>
-<body>
+<body class="no-battle">
   <div id="bars"></div>
   <div id="hud">
     <span class="chip" id="level">Normal</span>
@@ -506,6 +509,7 @@
     <button id="speed">Velocidade 1x</button>
     <button id="autoEvolve" type="button" aria-pressed="false">Autoevoluir: não</button>
     <button id="restart">Reiniciar</button>
+    <button id="quality" type="button" aria-pressed="false">Gráficos: alta</button>
     <button id="mute" title="Som (liga/desliga)" aria-label="Desligar o som"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
       <path class="spk" d="M3 9h4l5-4v14l-5-4H3z"/><path class="on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="off" d="M16 9l6 6M22 9l-6 6"/></svg></button>
   </div>
