@@ -424,14 +424,14 @@ function saveAutoEvolve() {
 }
 function paintAutoEvolve() {
   const button = $('autoEvolve');
-  button.textContent = autoEvolve ? 'Autoevoluir: sim' : 'Autoevoluir: não';
+  button.textContent = autoEvolve ? 'Evolução: automática' : 'Evolução: você escolhe';
   button.setAttribute('aria-pressed', String(autoEvolve));
   button.setAttribute('aria-label', autoEvolve
-    ? 'Autoevolução ligada. Clique para escolher as melhorias manualmente.'
-    : 'Autoevolução desligada. Clique para permitir escolhas automáticas.');
-  button.title = autoEvolve
-    ? 'Escolhe automaticamente as rotas de evolução dos heróis.'
-    : 'Quando ligada, escolhe automaticamente as rotas de evolução dos heróis.';
+    ? 'Evolução automática ligada. Clique para escolher as melhorias você mesmo.'
+    : 'Você escolhe as evoluções. Clique para o jogo escolher sozinho.');
+  button.setAttribute('data-tip', autoEvolve
+    ? 'Quando um herói sobe de nível, o jogo escolhe a melhoria que combina com ele e segue sem pausar. Clique para escolher você mesmo.'
+    : 'Quando um herói sobe de nível, o jogo pausa e você escolhe a melhoria (dano, controle ou suporte). Clique para o jogo escolher sozinho.');
 }
 function setAutoEvolve(enabled) {
   autoEvolve = !!enabled;
@@ -845,6 +845,7 @@ function showEvolution() {
       if (!option) continue;
       applyUpgrade(entry.hero, option);
       popText(entry.hero.pos, option.name + '!', 'evolve');
+      showBanner(`${entry.hero.cfg.names[entry.level - 1]} evoluiu: ${option.icon} ${option.name}`, 2.2);   // escolha automática visível
     }
     return;
   }

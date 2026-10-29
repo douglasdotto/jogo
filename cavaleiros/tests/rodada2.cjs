@@ -228,13 +228,13 @@ test('evoluções simultâneas pausam em fila e oferecem três opções distinta
 });
 test('autoevolução só liga com permissão e resolve as escolhas automaticamente',()=>{
   clear();const key='cavaleiros-auto-evoluir',saved=context.localStorage.data[key];delete context.localStorage.data[key];
-  const button=elements.get('autoEvolve');assert.equal(button.textContent,'Autoevoluir: não');
+  const button=elements.get('autoEvolve');assert.equal(button.textContent,'Evolução: você escolhe');
   button.onclick();assert.equal(context.localStorage.data[key],'true');
   const healer=new t.Hero(cfg('cleric')),tank=new t.Hero(cfg('guardian'));
   t.evolutions.push({hero:healer,level:2},{hero:healer,level:3},{hero:tank,level:2});t.showEvolution();
   assert.equal(t.evolutions.length,0);assert.equal(t.pick.open,false);assert.equal(t.game.paused,false);
   assert.equal(healer.evolutionBranches.support,1);assert.equal(Object.keys(healer.evolutionBranches).length,2);assert.equal(tank.evolutionBranches.control,1);
-  button.onclick();assert.equal(context.localStorage.data[key],'false');assert.equal(button.textContent,'Autoevoluir: não');
+  button.onclick();assert.equal(context.localStorage.data[key],'false');assert.equal(button.textContent,'Evolução: você escolhe');
   if(saved===undefined)delete context.localStorage.data[key];else context.localStorage.data[key]=saved;
   clear();
 });
