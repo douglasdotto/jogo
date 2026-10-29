@@ -16,6 +16,7 @@ import * as audio from './audio.js';
 import { initTooltips, registerTooltip } from './tooltip.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
+import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -336,7 +337,9 @@ function showPick(title, sub) {
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 30}ms`);
     const signatureSkill = skillSetFor(cfg)[0]?.name || cfg.ability;
-    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill"><i aria-hidden="true">✦</i> ${signatureSkill}</small></div>${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
+    const mastery = progress.mastery(cfg.id).level;
+    if (mastery > 1) b.classList.add(`mastery-${mastery}`);
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><small class="pick-card-skill"><i aria-hidden="true">✦</i> ${signatureSkill}</small></div>${mastery > 1 ? `<span class="mastery-badge" aria-hidden="true">✦${mastery}</span>` : ''}${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock">🔒 ★ ${starsToUnlock(cfg.id)} para liberar</span>`}`;
     b.onclick = () => selectCard(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i);
@@ -412,6 +415,9 @@ function saveRecord(won) {
   return true;
 }
 
+// progressão entre partidas (ouro, maestria, oficina, conquistas); sem localStorage fica só na memória, zerada
+const progress = createProgression(typeof localStorage === 'undefined' ? null : localStorage);
+
 // habilidade automática ou manual, lembrada por variante quando der
 const AUTO_KEY = 'cavaleiros-auto';
 const AUTO_EVOLVE_KEY = 'cavaleiros-auto-evoluir';
@@ -470,11 +476,13 @@ function saveAuto(id, on, slot = null) {
 const MODES = [
   { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
   { name: 'Jornada completa', icon: '♛', desc: 'As 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
+  { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
 ];
 function showMenu() {
   pick.mode = 'mode';
   $('banner').style.opacity = 0;
   $('campaign').classList.add('hidden');
+  $('camp').classList.add('hidden');
   pick.options = MODES;
   $('pickTitle').textContent = 'Cavaleiros vs Esqueletos';
   $('pickSub').textContent = 'Escolha o modo de jogo';
@@ -484,7 +492,8 @@ function showMenu() {
   list.classList.remove('grid');
   const records = Object.values(loadRecords());
   const lines = [`★ ${totalStars()} / ${MISSIONS.length * 3} estrelas`,
-    records.some((r) => r.won) ? '♛ Jornada vencida!' : records.length ? `Recorde: fase ${Math.max(...records.map((r) => r.phase))}` : 'Sem recorde ainda'];
+    records.some((r) => r.won) ? '♛ Jornada vencida!' : records.length ? `Recorde: fase ${Math.max(...records.map((r) => r.phase))}` : 'Sem recorde ainda',
+    `${GOLD.icon} ${progress.gold} · ${progress.achievements().filter((a) => a.unlocked).length} conquistas`];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = 'card diff mode';
@@ -510,7 +519,18 @@ function showMenu() {
 function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : (game.mission = null, showDifficulty())), 450);
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : (game.mission = null, showDifficulty())), 450);
+}
+
+// acampamento: gasta o ouro na oficina e mostra maestria e conquistas
+function showCamp() {
+  pick.open = false;
+  game.paused = true;
+  $('pick').classList.add('hidden');
+  toastAchievements(progress.refresh(totalStars()));   // estrelas de antes da progressão também contam
+  renderCamp($('camp'), progress, { variants: VARIANTS, onBack: showMenu });
+  $('camp').classList.remove('hidden');
+  $('camp').querySelector('.camp-back')?.focus?.();
 }
 
 // mapa da campanha; escolher uma missão leva à dificuldade
@@ -639,11 +659,14 @@ function renderInfo(cfg) {
     + Array.from({ length: Math.max(0, teamLimit - projectedTeam.length) }, () => '<span class="empty"><i aria-hidden="true">+</i><em>Vaga livre</em></span>').join('');
   const stats = Object.entries(cfg.stats).map(([label, n]) =>
     `<span>${label}</span><div class="pips${label === 'Vida' ? ' hearts' : ''}">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`).join('');
+  const mastery = progress.mastery(cfg.id);
+  const masteryPerks = MASTERY_PERKS.slice(1, mastery.level).map((perk) => perk.text).join(' · ') || 'Jogue com este herói para ganhar maestria.';
+  const masteryLine = `<div class="hero-mastery mastery-${mastery.level}" tabindex="0" data-tip="${masteryPerks}"><b>✦ Maestria ${mastery.level}</b><span class="mastery-track" aria-hidden="true"><i style="width:${mastery.next ? Math.round((mastery.xp - mastery.from) / (mastery.next - mastery.from) * 100) : 100}%"></i></span><small>${mastery.next ? `${mastery.xp}/${mastery.next} XP` : 'máxima'}</small></div>`;
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="hero-profile"><div class="crest"><img src="${cfg.portrait}" alt=""></div>
       <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? 'À distância' : 'Corpo a corpo'}</small><div class="ribbon">${cfg.name}</div>
-        <span class="hero-role-pill">${info.role}</span></div></div>
+        <span class="hero-role-pill">${info.role}</span></div></div>${masteryLine}
     <div class="hero-overview"><p>${CLASSES[cfg.classId].summary}</p></div>
     <section class="ability skill-list" aria-label="Habilidades do herói"><header><b>Habilidades</b><span>passe o mouse para detalhes</span></header>${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><span class="skill-kind">${skill.ultimate ? 'ULTIMATE' : skill.slot === 1 ? 'TÉCNICA' : 'BÁSICA'}</span><strong>${skill.name}</strong><span class="skill-copy">${skill.description}</span><span class="skill-meta">Recarga · ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info">\u{1F512}︎ Ganhe ★ ${starsToUnlock(cfg.id)} na campanha para liberar</div>`}
@@ -790,13 +813,14 @@ function showRelicPick() {
   const pool = RELICS.filter((relic) => relic.id !== 'giant-bane' || bigFoeAhead());
   pick.mode = 'relic';
   pick.options = [];
-  while (pick.options.length < 3 && pool.length) pick.options.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  const choices = game.test ? 3 : progress.relicChoices();
+  while (pick.options.length < choices && pool.length) pick.options.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   $('banner').style.opacity = 0;
   pick.open = true;
   game.paused = true;
   $('pickTitle').textContent = 'Relíquia encontrada!';
   $('pickSub').textContent = `Fase ${game.phase} · escolha um bônus para o restante da jornada`;
-  $('pickHint').textContent = 'Uma escolha · bônus acumulam · 1–3 escolher';
+  $('pickHint').textContent = `Uma escolha · bônus acumulam · 1–${pick.options.length} escolher`;
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
@@ -815,6 +839,14 @@ function showRelicPick() {
     list.appendChild(card);
     return card;
   });
+  if (game.rerolls > 0) {   // Dados do mascate (oficina): sorteia outras relíquias
+    const reroll = document.createElement('button');
+    reroll.type = 'button';
+    reroll.className = 'relic-reroll';
+    reroll.textContent = `↻ Trocar relíquias (${game.rerolls})`;
+    reroll.onclick = () => { game.rerolls--; showRelicPick(); };
+    list.appendChild(reroll);
+  }
   selectCard(0);
   $('pick').classList.remove('hidden');
 }
@@ -3198,6 +3230,7 @@ class Hero extends Unit {
     this.age = 0;
     this.hover = cfg.id === 'angel' ? 0.52 : 0;
     for (const relic of game.relics || []) applyRelicToHero(this, relic);
+    if (!game.test) this.applyProgress(progress.heroBonus(cfg.id));
     this.aura = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: cfg.color[1], side: THREE.DoubleSide, transparent: true, opacity: 0.6, depthWrite: false }));
     this.aura.rotation.x = -Math.PI / 2;
     this.aura.position.y = 0.05;
@@ -3227,6 +3260,18 @@ class Hero extends Unit {
     this.root.rotation.order = 'YXZ';   // a inclinação das habilidades (x) segue a direção do herói
     this.popT = 0;
     this.loop(cfg.idle);
+  }
+
+  // maestria e oficina: bônus pequenos de vida/dano e, na maestria máxima, uma aura dourada no chão
+  applyProgress(bonus) {
+    this.maxHp = this.hp = Math.round(this.maxHp * (1 + bonus.hp));
+    this.dmg *= 1 + bonus.dmg;
+    if (!bonus.aura) return;
+    this.masteryAura = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffd44a, side: THREE.DoubleSide, transparent: true, opacity: 0.32, depthWrite: false }));
+    this.masteryAura.rotation.x = -Math.PI / 2;
+    this.masteryAura.position.y = 0.03;
+    this.masteryAura.scale.setScalar(1.35);
+    this.root.add(this.masteryAura);
   }
 
   gainXp(n) {
@@ -3712,6 +3757,7 @@ class Hero extends Unit {
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
     this.stats.habilidades++;
+    if (skill.ultimate) game.ultimates = (game.ultimates || 0) + 1;
     return true;
   }
 
@@ -4417,7 +4463,8 @@ function placeParty(first) {
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null,
-    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null });
+    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0 });
+  game.rerolls = game.test ? 0 : progress.rerolls();
   const start = world.pointAt(game.guideS);
   follow.set(start.x, 0, start.z - 3);
   controls.target.copy(follow);
@@ -4876,6 +4923,17 @@ function objectiveHint(skeletons) {
   return captivePrisoner() ? 'Liberte o prisioneiro' : null;
 }
 
+// resumo da partida para a progressão entre partidas
+function matchSummary(won, stars) {
+  return {
+    mode: game.mission ? 'mission' : 'journey', missionId: game.mission?.id || null, won, difficultyId: difficulty.id,
+    kills: game.kills, start: game.start, last: game.last, phase: game.phase,
+    phasesCleared: won ? game.last - game.start + 1 : Math.max(0, game.phase - game.start),
+    stars: stars || 0, totalStars: totalStars(), falls: game.falls, partySize: heroes().length,
+    heroes: (game.roster || []).map((h) => ({ id: h.cfg.id, kills: h.stats.abates })), ultimates: game.ultimates || 0, relics: game.relics?.length || 0,
+  };
+}
+
 function endGame(text, won = false) {
   game.over = true;
   closeHeroPanel();
@@ -4920,6 +4978,11 @@ function endGame(text, won = false) {
     } : null,
   });
   $('overlayStats').innerHTML = summaryHTML(party, report);
+  if (!game.test) {   // ouro, maestria e conquistas (atalhos de teste não contam)
+    const reward = progress.recordMatch(matchSummary(won, missionStars));
+    $('overlayStars').innerHTML += rewardHTML(reward, VARIANTS);
+    toastAchievements(reward.unlocked);
+  }
   $('overlayBtn').textContent = game.mission ? 'Voltar ao mapa' : 'Jogar de novo';
   $('overlayBtn').hidden = false;
   $('overlay').classList.add('results');
@@ -5254,6 +5317,7 @@ addEventListener('keydown', (e) => {
   if (aiming) { cancelAim(); return; }
   closeHeroPanel();
   if (!$('campaign').classList.contains('hidden')) { campaignMapSession.reset(); showMenu(); }   // Esc no mapa volta ao menu
+  if (!$('camp').classList.contains('hidden')) showMenu();   // e no acampamento também
 });
 
 addEventListener('resize', () => {
