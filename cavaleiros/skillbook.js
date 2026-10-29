@@ -87,6 +87,18 @@ const EXTRA_SKILLS = {
     { name: 'Fagulha do Instante', description: 'Um raio temporal salta entre vários inimigos.', effect: 'chain', cooldown: 21, power: 1.3, jumps: 4, color: 0x8feaff },
     { name: 'Parada do Tempo', description: 'Prende e fere os inimigos em uma ampla área.', effect: 'blizzard', cooldown: 74, radius: 7, power: 1.9, duration: 3.5, control: 'root', color: 0x8feaff },
   ],
+  archer: [
+    { name: 'Chuva de Flechas', description: 'Marca uma área no grupo de inimigos e faz chover flechas sobre ela.', effect: 'arrow-storm', cooldown: 18, radius: 3, range: 9, power: 1.5, color: 0x3fe0b0 },
+    { name: 'Flecha do Caçador', description: 'Fere e marca o inimigo mais forte: ele recebe mais dano de todos por alguns segundos.', effect: 'hunter-mark', cooldown: 60, range: 11, power: 2.6, duration: 8, bonus: 0.3, control: 'mark', color: 0x3fe0b0 },
+  ],
+  monk: [
+    { name: 'Palma do Vento', description: 'Uma rajada em cone fere, interrompe e empurra os inimigos à frente.', effect: 'wind-palm', cooldown: 17, radius: 5, range: 5, power: 1.8, control: 'push', color: 0xfff2c8 },
+    { name: 'Meditação', description: 'Medita imune a dano e cura o grupo próximo por alguns segundos.', effect: 'meditate', cooldown: 64, radius: 6.5, duration: 4, color: 0xffd27a },
+  ],
+  alchemist: [
+    { name: 'Frasco Volátil', description: 'Um frasco explode no grupo de inimigos, empurra e deixa uma poça de veneno.', effect: 'volatile', cooldown: 19, radius: 2.6, range: 7.5, power: 1.4, color: 0x9cff3a },
+    { name: 'Grande Transmutação', description: 'Inimigos comuns próximos viram ovelhas por alguns segundos; chefes ficam lentos.', effect: 'transmute', cooldown: 70, radius: 6, duration: 4, control: 'sheep', color: 0xff8ad8 },
+  ],
 };
 
 export function cooldownForSkill(cfg, slot = 0, level = 1, rate = 1) {

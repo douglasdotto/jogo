@@ -62,9 +62,10 @@
     await Promise.all(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded'].map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
     assets.Skeleton_Quiver = await loader.loadAsync('assets/Skeleton_Quiver.gltf');
 
-    // 4 colunas (classes) x 3 linhas (variantes); o Duelista abre uma 4ª linha na coluna dos Ladinos
+    // uma coluna por modelo (Cavaleiro, Bárbaro, Mago, Ladino); cada herói a mais abre uma linha na coluna do seu modelo
+    const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', ''));
     const units = LOOK_PREVIEW.map((v, i) => {
-      const col = Math.min(3, Math.floor(i / 3)), row = i - col * 3;
+      const col = colOf(v), row = LOOK_PREVIEW.slice(0, i).filter((o) => colOf(o) === col).length;
       const model = SkeletonUtils.clone(assets[v.model].scene);
       model.traverse((o) => { if (WEAPONS[v.model].includes(o.name) && !v.use.includes(o.name)) o.visible = false; });
       applyLook(model, assets, LOOKS[v.id]);

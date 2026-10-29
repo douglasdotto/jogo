@@ -247,6 +247,48 @@ export const LOOKS = {
       { type: 'mustache', bone: 'head', color: 0xe8e2d4, curl: 0.5 }, { type: 'scar', bone: 'head', color: 0xc0605a, side: -1 },
     ],
   },
+  archer: {   // caçadora encapuzada: capuz e túnica verde-água com creme, couro castanho, arco longo, aljava e olhos âmbar
+    shape: silhouette('Rogue', { torso: 0.92, arms: 0.94, legs: 1.02, height: 1.06, depth: 0.92 }),
+    paint: {
+      ...rogueOutfit({ cloth: '#2f9a86', trim: '#f2e2b0', leather: '#6a3a22', pants: '#3e5a40', boots: '#3a2214', gloves: '#8a5a2e', sleeves: '#e8dcb8' }),
+      ...face('Rogue', { skin: '#f2d0b0', hood: '#1f7a6a', eyes: '#ffb030' }, 'Rogue_Head_Hooded'),
+      Rogue_Cape: { tint: '#1a5a50', amount: 0.85 },
+    },
+    extras: [
+      { type: 'bow', bone: 'handslotl' }, { type: 'quiver', bone: 'chest' },
+      { type: 'armWraps', bone: 'lowerarm.l', color: 0x8a5a2e, n: 2 },
+      { type: 'brows', bone: 'head', color: 0x8a4a1e, angle: 0.1, y: 0.47 },
+    ],
+  },
+  // ---------- Bárbaro (cont.) ----------
+  monk: {   // monge de manto açafrão: cabeça raspada, contas de madeira, faixa vermelha, punhos enfaixados e sem armas
+    shape: silhouette('Barbarian', { torso: 0.98, arms: 1.02, legs: 1, height: 1.02, depth: 0.98 }),
+    hide: ['Barbarian_Hat', 'Barbarian_Cape'],
+    paint: {
+      ...outfit('Barbarian', '#f2a23a', '#a8461e', 0.7), ...face('Barbarian', { skin: '#e2a878', hair: '#c88c5c', eyes: '#3a2414' }),
+    },
+    extras: [
+      { type: 'beads', bone: 'chest' }, { type: 'sash', bone: 'chest' },
+      { type: 'armWraps', bone: 'lowerarm.l', color: 0xf4ecdc, radius: 0.14, n: 4 }, { type: 'armWraps', bone: 'lowerarm.r', color: 0xf4ecdc, radius: 0.14, n: 4 },
+      { type: 'facePaint', bone: 'head', style: 'dots', color: 0xd8343a, y: 0.6 },
+      { type: 'brows', bone: 'head', color: 0x3a2414, angle: -0.15 },
+    ],
+  },
+  // ---------- Suporte ----------
+  alchemist: {   // alquimista de jaleco oliva e avental de couro: óculos de latão na testa, cabelo ruivo, cinto de frascos e frasco na mão
+    shape: silhouette('Mage', { torso: 1.04, arms: 1, legs: 0.98, height: 0.98, depth: 1.06 }),
+    hide: ['Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    paint: {
+      ...outfit('Mage', '#7a8a3a', '#4a3a28', 0.7), ...face('Mage', { skin: '#f0c8a4', hair: '#c8501e', eyes: '#9cff3a' }),
+      Mage_Cape: { tint: '#7a4a26', amount: 0.85 },
+    },
+    extras: [
+      { type: 'goggles', bone: 'head' }, { type: 'flaskBelt', bone: 'hips' },
+      { type: 'flask', bone: 'handslotr', liquid: 0x9cff3a, size: 1.2 },
+      { type: 'mustache', bone: 'head', color: 0xc8501e, curl: 0.6 },
+      { type: 'brows', bone: 'head', color: 0xc8501e, angle: -0.2, size: 1.2 },
+    ],
+  },
 };
 
 // para a vitrine: modelo e armas visíveis de cada variante (o jogo usa a lista de VARIANTS em main.js)
@@ -264,6 +306,9 @@ export const LOOK_PREVIEW = [
   { id: 'crossbow', name: 'Besteiro', model: 'Rogue', use: ['2H_Crossbow'] },
   { id: 'ninja', name: 'Ninja', model: 'Rogue_Hooded', use: ['Knife', 'Throwable'] },
   { id: 'duelist', name: 'Duelista', model: 'Rogue', use: [] },
+  { id: 'archer', name: 'Arqueira', model: 'Rogue_Hooded', use: [] },
+  { id: 'monk', name: 'Monge', model: 'Barbarian', use: [] },
+  { id: 'alchemist', name: 'Alquimista', model: 'Mage', use: [] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],
