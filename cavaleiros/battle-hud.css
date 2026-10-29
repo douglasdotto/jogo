@@ -9,7 +9,7 @@
   background: linear-gradient(rgba(16, 26, 48, .72), rgba(10, 17, 33, .66)); backdrop-filter: blur(6px);
   border: 1px solid rgba(184, 212, 255, .22); border-radius: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, .28); }
 .hud-left, .hud-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.hud-right { position: relative; justify-self: end; }
+.hud-right { position: relative; grid-column: 3; justify-self: end; }
 #hud .chip { gap: 5px; padding: 2px 6px; font: 400 18px/1 'Lilita One', sans-serif; color: #fff; background: none; border: 0; box-shadow: none; cursor: default;
   -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; text-shadow: 0 2px 0 var(--outline); font-variant-numeric: tabular-nums; }
 #hud .chip::before { font-size: 15px; color: var(--gold); -webkit-text-stroke: 2px var(--outline); }
