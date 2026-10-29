@@ -103,6 +103,7 @@ const t=context.t;
 vm.runInContext('t.missionProgress=missionProgress;',context);
 vm.runInContext('t.makeTargetContext=makeTargetContext;',context);
 vm.runInContext('t.allies=allies;t.canHeroReachTarget=canHeroReachTarget;',context);
+vm.runInContext('t.Militia=Militia;t.musterMilitia=musterMilitia;t.militiaAlive=militiaAlive;t.placeParty=placeParty;t.progress=progress;',context);
 const cfg=id=>t.VARIANTS.find(v=>v.id===id);
 // a composição da equipe fica numa faixa fixa (pick.team) ao lado da ficha (pick.info)
 const pickText=()=>t.pick.info.innerHTML+t.pick.team.innerHTML;
@@ -117,7 +118,7 @@ for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skele
 const results=[];
 const failures=[];
 function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.message.split('\n')[0])}}
-function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,test:false});}
+function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,test:false});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.pos.set(0,0,-4);t.updateBars();
   const transform=hero.bar.style.transform,width=hero.bar.firstChild.style.width;
@@ -1437,6 +1438,82 @@ test('na escolha de herói o mouse passando não troca a ficha; só o clique',()
   assert.equal(t.pick.cards[j].onmouseenter,undefined,'hover não seleciona herói');
   t.pick.cards[j].onclick();assert.equal(t.pick.sel,j,'clique seleciona');assert.equal(t.pick.open,true,'clique não confirma');
   t.pick.open=false;clear();
+});
+// ---------- milícia da vila ----------
+const militiaUnits=()=>t.units.filter(u=>u.militia&&!u.dead);
+test('milícia da vila surge só nas missões da vila e dos campos e, na Jornada, volta para casa depois da fase 4',()=>{
+  const expected={vila:3,ponte:2,santuario:2,fazendas:2};
+  for(const m of t.MISSIONS){
+    clear();Object.assign(t.game,{mission:m,start:m.from,phase:m.from,test:true});t.musterMilitia();
+    assert.equal(militiaUnits().length,expected[m.id]||0,m.id);
+    assert.equal(t.game.militia.size,expected[m.id]||0);
+  }
+  clear();Object.assign(t.game,{mission:null,start:5,phase:5,test:true});t.musterMilitia();assert.equal(militiaUnits().length,0,'Jornada começando além dos campos: sem milícia');
+  clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:true});t.musterMilitia();
+  const ms=militiaUnits();assert.equal(ms.length,2,'Jornada pela vila: dois aldeões');
+  assert.equal(ms.map(m=>m.weapon).join(),'forcado,tocha','armas de camponês');
+  assert.ok(ms.every(m=>m.bar.classList.contains('militia')),'barra menor própria');
+  t.game.phase=4;t.startPhase();assert.equal(militiaUnits().length,2,'ainda nos campos');
+  for(const s of t.skeletonsAlive())s.remove();
+  t.game.phase=5;t.startPhase();assert.equal(militiaUnits().length,0,'depois dos campos voltam para a vila');
+  clear();Object.assign(t.game,{mission:t.MISSIONS.find(m=>m.id==='fazendas'),start:4,phase:5,test:true});t.musterMilitia();
+  t.startPhase();assert.equal(militiaUnits().length,2,'na missão ficam até o fim');
+  clear();
+});
+test('milícia: é fraca, luta perto do posto, recua ferida e o dano vai para o relatório',()=>{
+  clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:true});t.musterMilitia();
+  const [m,w]=militiaUnits();const knight=cfg('paladin');
+  assert.ok(m.maxHp<=knight.hp*0.5&&m.dmg<=knight.dmg*0.35,'vida e dano bem abaixo de um herói');
+  assert.ok(!t.heroes().includes(m)&&t.allies().includes(m),'não é herói, mas os esqueletos podem atacá-lo');
+  w.pos.x+=40;w.post.x+=40;   // o segundo fica longe desta briga
+  const e=foe('Minion',m.pos.x,m.pos.z-1.2);e.hp=e.maxHp=1000;e.busy=99;
+  const far=foe('Minion',m.pos.x,m.pos.z-20);far.hp=far.maxHp=1000;far.busy=99;
+  tick(.05,60);
+  assert.ok(e.hp<1000,'golpeia o esqueleto próximo');assert.equal(far.hp,1000,'não persegue quem está longe do posto');
+  assert.ok(t.game.militia.damage>0&&t.game.militia.damage===1000-e.hp,'dano creditado à milícia');
+  e.hp=1;m.attackTimer=0;tick(.05,40);assert.equal(t.game.militia.kills,1,'abate creditado à milícia');
+  clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:true});t.musterMilitia();
+  const [hurt]=militiaUnits();hurt.hp=hurt.maxHp*.2;const z0=hurt.pos.z;
+  const e2=foe('Minion',hurt.pos.x,hurt.pos.z-1.2);e2.hp=e2.maxHp=1000;e2.busy=99;
+  for(const other of militiaUnits())if(other!==hurt)other.remove();
+  tick(.05,40);assert.equal(e2.hp,1000,'ferido não briga');assert.ok(hurt.pos.z>z0+2,'recua para trás dos heróis');
+  const report=context.buildBattleReport({won:true,heroes:[{name:'A',damage:10}],militia:{size:2,damage:123.4,kills:3,fallen:1}});
+  const item=report.find(r=>r.id==='militia');assert.equal(item.title,'Milícia');assert.match(item.text,/123 de dano · 3 abates · 1 caiu/);
+  assert.equal(report.find(r=>r.id==='top-hero').text,'A','destaque continua sendo herói');
+  assert.equal(context.buildBattleReport({won:true,heroes:[]}).some(r=>r.id==='militia'),false,'sem milícia, sem item');
+  clear();
+});
+test('milícia: esqueletos a atacam; quem cai não volta e não pesa em derrota, quedas ou estrelas',()=>{
+  clear();Object.assign(t.game,{mission:t.MISSIONS.find(m=>m.id==='vila'),start:1,phase:1,last:2,test:true});
+  const h=hero('paladin',30,0);t.musterMilitia();const [m]=militiaUnits();
+  const s=foe('Warrior',m.pos.x,m.pos.z-1);
+  tick(.05,80);assert.ok(m.hp<m.maxHp,'o esqueleto ao lado bate no miliciano');
+  m.takeDamage(1e5,null,s);assert.equal(m.dead,true);
+  assert.equal(t.game.falls,0);assert.equal(t.game.fallLog.length,0,'não entra como queda de herói');assert.equal(t.game.militia.fallen,1);
+  s.remove();tick(.05,60);assert.ok(!t.units.includes(m),'corpo some e não volta');
+  assert.equal(militiaUnits().length,2);
+  t.game.state='fight';t.game.toSpawn=0;t.updateGame(.05);assert.equal(t.game.over,false,'herói de pé: partida segue');
+  assert.equal(elements.get('militia').hidden,false);assert.match(elements.get('militia').textContent,/Milícia: 2/);
+  const rest=militiaUnits()[0];rest.hp=10;t.game.state='fight';t.updateGame(.05);assert.ok(rest.hp>10,'cura entre fases como o aldeão');
+  h.die();t.game.state='fight';t.updateGame(.05);assert.equal(t.game.over,true,'sem heróis é derrota, mesmo com milícia de pé');
+  clear();hero('paladin',30,0);t.game.toSpawn=1;t.updateGame(.01);assert.equal(elements.get('militia').hidden,true,'contador some sem milícia');clear();
+});
+test('acampamento: melhoria Milícia traz 1 ou 2 aldeões a qualquer partida, mas não no modo de teste',()=>{
+  const real=t.progress.militia;
+  const fake=n=>vm.runInContext('createProgression',context)({getItem:()=>JSON.stringify({version:2,upgrades:{militia:n}}),setItem(){}}).militia;
+  try{
+    for(const n of [1,2]){
+      t.progress.militia=fake(n);
+      clear();Object.assign(t.game,{mission:t.MISSIONS.find(m=>m.id==='castelo'),start:11,phase:11,test:false});t.musterMilitia();
+      assert.equal(militiaUnits().length,n,'missão longe da vila: só os do acampamento');assert.ok(militiaUnits().every(m=>!m.local));
+      clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:false});t.musterMilitia();
+      assert.equal(militiaUnits().length,2+n,'Jornada: vila + acampamento');
+      t.game.phase=5;t.startPhase();assert.equal(militiaUnits().length,n,'os do acampamento seguem depois dos campos');
+    }
+    const previous=context.location;context.location={search:'?tudo=1'};
+    try{clear();t.game.mission=t.MISSIONS.find(m=>m.id==='castelo');t.placeParty(11);assert.equal(t.game.test,true);t.musterMilitia();assert.equal(militiaUnits().length,0,'?tudo=1 não aplica a melhoria');}
+    finally{context.location=previous;}
+  }finally{t.progress.militia=real;clear();}
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

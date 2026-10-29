@@ -4,7 +4,8 @@
 // Esquema:
 // buildBattleReport({ won, heroes: [{ name, damage, received, kills }],
 //   falls: [{ name, phase, time }],
-//   damageSources: [{ name, damage, hits }] })
+//   damageSources: [{ name, damage, hits }],
+//   militia: { size, damage, kills, fallen } | null })
 // `phase` e `time` ordenam as quedas. `time` é o tempo da partida em segundos.
 // Os campos numéricos são opcionais; os valores ausentes contam como zero.
 
@@ -155,7 +156,7 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
 }
 
 /** Produz destaques curtos sem ler ou modificar o estado da partida. */
-export function buildBattleReport({ won = false, heroes = [], falls = [], damageSources = [], mission = null } = {}) {
+export function buildBattleReport({ won = false, heroes = [], falls = [], damageSources = [], mission = null, militia = null } = {}) {
   const party = Array.isArray(heroes) ? heroes.filter((hero) => hero && typeof hero === 'object') : [];
   const recordedFalls = Array.isArray(falls) ? falls : [];
   const danger = mostDangerous(damageSources);
@@ -186,6 +187,15 @@ export function buildBattleReport({ won = false, heroes = [], falls = [], damage
       id: 'top-hero',
       title: 'Herói em destaque',
       text: label(bestHero.name, 'Herói sem nome'),
+    });
+  }
+  if (militia && number(militia.size)) {   // aldeões armados: crédito à parte, fora do destaque dos heróis
+    const fallen = Math.min(number(militia.fallen), number(militia.size));
+    highlights.push({
+      id: 'militia',
+      title: 'Milícia',
+      text: `${Math.round(number(militia.damage)).toLocaleString('pt-BR')} de dano · ${Math.round(number(militia.kills))} ${number(militia.kills) === 1 ? 'abate' : 'abates'}`
+        + (fallen ? ` · ${fallen} ${fallen === 1 ? 'caiu' : 'caíram'}` : ''),
     });
   }
   highlights.push({ id: 'next-try', title: won ? (mission?.stars != null ? 'Progresso da campanha' : 'Próxima jornada') : 'Dica para a próxima tentativa', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls, mission }) });

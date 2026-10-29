@@ -307,6 +307,9 @@
     .hp { border: 2px solid var(--outline); border-radius: 5px; background: #1b223a; box-shadow: 0 1px 0 var(--outline); }
     .hp > i { border-radius: 3px; background: linear-gradient(#ff7a7a, #e0303a); } .hp.ally > i { background: linear-gradient(#8ef07a, #3fb83a); }
     .hp.ally > span { font-family: 'Lilita One', sans-serif; font-size: 13px; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
+    /* milícia: barra menor e cor de terra; o contador do HUD some quando não há milicianos */
+    .hp.militia { width: 28px; height: 5px; margin-left: -16px; } .hp.militia > i { background: linear-gradient(#e9c27a, #b07a35); }
+    #militia[hidden] { display: none; } #militia { font-size: 14px; opacity: .9; }
     /* tela de escolha: painel azul-marinho, fita azul no título, cartões com arte cheia e moldura brilhante */
     #pick { background: radial-gradient(ellipse at center, rgba(16, 26, 52, .55), rgba(8, 12, 26, .88)); }
     #pick::before, #pick::after { display: none; }
@@ -575,6 +578,7 @@
     <span class="chip" id="left">Esqueletos: 0</span>
     <span class="chip" id="kills">Abates: 0</span>
     <span class="chip" id="party">Heróis: 0/4</span>
+    <span class="chip militia-chip" id="militia" hidden title="Aldeões armados lutando com o grupo">⚔ Milícia: 0</span>
     <span class="chip hidden" id="goal"></span>
     <span class="relic-tray hidden" id="relics" aria-label="Relíquias ativas"></span>
     <button id="pause" type="button" aria-pressed="false" title="Pausar (P ou Espaço)">Pausar</button>

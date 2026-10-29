@@ -765,6 +765,7 @@ function confirmPick(i) {
     }
     const begin = () => {
       if (heroes().length > 1) showBanner(`${cfg.name} entrou no grupo!`);
+      else if (!game.mission && !game.militia) musterMilitia();   // Jornada: a milícia sai junto com o primeiro herói
       document.body.classList.remove('no-battle');
       game.paused = false;
       audio.startMusic();   // a partida começa com o primeiro herói (não faz nada se já estiver tocando)
@@ -1684,6 +1685,7 @@ class Unit {
     const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
     if (this.stats) this.stats.recebido += real;
     if (owner?.stats) { owner.stats.dano += real; if (critical) owner.stats.criticos++; }
+    if (owner?.militia && game.militia) game.militia.damage += real;   // relatório: dano da milícia
     if (this.team === 'hero' && owner?.team === 'skeleton' && real > 0) {
       const name = owner.kind?.name || owner.enemyKind || 'Esqueleto';
       game.damageSources ||= {};
@@ -1723,6 +1725,7 @@ class Unit {
       audio.play('bones');
       game.kills++;
       if (this.lastHit?.stats) this.lastHit.stats.abates++;
+      if (this.lastHit?.militia && game.militia) game.militia.kills++;
       for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
       monsterDied(this);
       relicOnKill(this);
@@ -4760,7 +4763,7 @@ function placeParty(first) {
   const m = game.mission;
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
     shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0 });
   game.rerolls = game.test ? 0 : progress.rerolls();
@@ -4783,6 +4786,7 @@ function startMission() {
     if (m.goal.type === 'rescue') game.villager = new Villager(true);
     if (m.goal.type === 'defend') game.shrine = new Shrine(world.along(world.anchorS(m.from) - 5, 0));
     showBanner(`${m.name} · ${world.biome}`, 3);
+    musterMilitia();
     document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
   };
@@ -4792,6 +4796,7 @@ function startMission() {
 
 function startPhase() {
   game.state = 'fight';
+  if (!game.mission && game.phase > MILITIA_LAST_PHASE) dismissLocalMilitia();
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
@@ -4881,6 +4886,130 @@ class Villager extends Unit {
     this.pendingHit = null;
     this.once('Death_A');
     this.bar.style.display = 'none';
+  }
+}
+
+// milícia: aldeões armados (o bárbaro sem as armas dele, em cores de terra) que seguem atrás do grupo e brigam com quem chega perto.
+// Fracos de propósito, sem XP nem evolução; quem cai não volta na partida e não conta como queda de herói.
+// Os da vila entram nas missões da vila e dos campos (mission.militia) e, na Jornada, até a fase MILITIA_LAST_PHASE;
+// os do acampamento (melhoria Milícia) acompanham qualquer partida.
+const MILITIA_LAST_PHASE = 4;   // depois dos campos, a milícia da vila volta para casa
+const MILITIA_REACH = 6;        // quão longe do posto o aldeão vai brigar
+const MILITIA_WEAPONS = ['forcado', 'tocha', 'machadinha', 'clava'];
+const MILITIA_TINTS = [0x8a6a44, 0x6f7a45, 0x9a5a3a, 0x7d6b58];
+let militiaParts = null;
+function militiaWeapon(kind) {
+  militiaParts ||= { wood: new THREE.MeshLambertMaterial({ color: 0x7a5230 }), iron: new THREE.MeshLambertMaterial({ color: 0x9aa0a6 }),
+    fire: new THREE.MeshBasicMaterial({ color: 0xffa23a }), pole: new THREE.CylinderGeometry(0.035, 0.035, 1.5, 6),
+    haft: new THREE.CylinderGeometry(0.04, 0.045, 0.7, 6), tine: new THREE.CylinderGeometry(0.018, 0.018, 0.3, 4),
+    bar: new THREE.BoxGeometry(0.28, 0.04, 0.04), blade: new THREE.BoxGeometry(0.05, 0.2, 0.24),
+    knob: new THREE.CylinderGeometry(0.1, 0.06, 0.3, 6), flame: new THREE.ConeGeometry(0.1, 0.28, 6) };
+  const P = militiaParts, g = new THREE.Group();
+  const part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  if (kind === 'forcado') {   // cabo comprido, travessa e três dentes
+    part(P.pole, P.wood, 0, 0.45, 0);
+    part(P.bar, P.iron, 0, 1.2, 0);
+    for (const x of [-0.12, 0, 0.12]) part(P.tine, P.iron, x, 1.36, 0);
+  } else {
+    part(P.haft, P.wood, 0, 0.2, 0);
+    if (kind === 'tocha') part(P.flame, P.fire, 0, 0.66, 0);
+    else if (kind === 'machadinha') part(P.blade, P.iron, 0, 0.46, 0.13);
+    else part(P.knob, P.wood, 0, 0.6, 0);
+  }
+  return g;
+}
+
+class Militia extends Unit {
+  constructor(slot, local = true) {
+    super(assets.Barbarian, { hp: 90, dmg: 8, range: 1.5, speed: 3.1, cooldown: 1.3 }, 'ally');
+    this.militia = true;
+    this.local = local;   // da vila (fica para trás na Jornada) ou do acampamento
+    this.slot = slot;
+    this.cfg = { id: 'militia' };
+    this.level = 1;
+    this.size = 0.88;
+    this.weapon = MILITIA_WEAPONS[slot % MILITIA_WEAPONS.length];
+    this.attackAnim = this.weapon === 'forcado' ? '2H_Melee_Attack_Stab' : '1H_Melee_Attack_Chop';
+    if (this.weapon === 'forcado') this.range = 1.9;
+    const tint = new THREE.Color(MILITIA_TINTS[slot % MILITIA_TINTS.length]);
+    this.root.traverse((o) => { if (HEROES[1].weapons.includes(o.name)) o.visible = false; });
+    for (const m of this.mats) m.color?.lerp(tint, 0.55);
+    this.root.getObjectByName('handslotr')?.add(militiaWeapon(this.weapon));
+    this.bar.classList.add('ally', 'militia');
+    this.post = new THREE.Vector3();
+    this.retreat = new THREE.Vector3();
+    this.follow();
+    this.pos.copy(this.post);
+    this.popT = 0;
+    this.deadTime = 0;
+    this.loop('Idle');
+  }
+
+  // posto atrás da formação, abrindo para os lados conforme o número do aldeão
+  follow() {
+    const fwd = world.tangentAt(game.guideS), side = world.sideOf(fwd), row = Math.floor(this.slot / 2);
+    this.post.copy(world.pointAt(game.guideS)).addScaledVector(fwd, -2.6 - row * 0.6).addScaledVector(side, (this.slot % 2 ? 1 : -1) * (1.3 + row * 1.5));
+    return fwd;
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.updateCommon(dt);
+    if (this.dead) { if ((this.deadTime += dt) > 2.5) this.remove(); return; }
+    if (game.over || this.busy > 0) return;
+    const fwd = this.follow();
+    const wounded = this.hp < this.maxHp * 0.35;   // com pouca vida recua para trás dos heróis e não briga
+    const foes = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
+    const target = !wounded && game.state === 'fight' ? nearest(this.pos, foes) : null;
+    if (target && tacticalDistance(target.pos, this.post) <= MILITIA_REACH) {
+      if (target.pos.distanceTo(this.pos) > this.range) this.moveTo(target.pos, dt);
+      else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
+    } else {
+      const home = wounded ? this.retreat.copy(this.post).addScaledVector(fwd, -3.5) : this.post;
+      if (this.pos.distanceTo(home) > 0.3) this.moveTo(home, dt);
+      else this.face(tmp.copy(home).addScaledVector(fwd, 10), dt);
+    }
+    if (this.busy <= 0) this.locomote('Running_A', 'Walking_A', 'Idle');
+  }
+
+  die() {
+    this.dead = true;
+    this.hp = 0;
+    this.pendingHit = null;
+    this.deadTime = 0;
+    this.once('Death_A');
+    this.bar.style.display = 'none';
+    if (game.militia) game.militia.fallen++;
+  }
+}
+
+const militiaAlive = () => units.reduce((n, u) => n + (u.militia && !u.dead ? 1 : 0), 0);
+
+// a milícia entra com o grupo: os da vila (missão da vila/campos ou começo da Jornada) e os do acampamento
+function musterMilitia() {
+  const local = game.mission ? game.mission.militia || 0 : game.start <= MILITIA_LAST_PHASE ? 2 : 0;
+  const camp = game.test ? 0 : progress.militia();   // atalhos de teste não usam a oficina
+  const size = local + camp;
+  game.militia = { size, local, camp, damage: 0, kills: 0, fallen: 0 };
+  if (!size) return 0;
+  for (let k = 0; k < size; k++) new Militia(k, k < local);
+  const text = `A milícia chegou! ${size} ${size === 1 ? 'aldeão armado' : 'aldeões armados'}`;
+  if (!game.mission) showBanner(text, 2.5);
+  else {   // na missão a faixa já mostra o nome: o aviso entra embaixo
+    const note = document.createElement('small');
+    note.className = 'banner-story';
+    note.textContent = text;
+    $('banner').appendChild(note);
+  }
+  return size;
+}
+
+// Jornada: passados os campos, a milícia da vila volta para casa (a do acampamento segue)
+function dismissLocalMilitia() {
+  for (const u of [...units]) if (u.militia && u.local && !u.dead) {
+    popText(u.pos, 'De volta à vila', 'heal');
+    poof(u.pos, 0.8);
+    u.remove();
   }
 }
 
@@ -5356,6 +5485,7 @@ function updateGame(dt) {
       }
       const v = game.villager;
       if (v && !v.dead) v.hp = Math.min(v.maxHp, v.hp + v.maxHp * difficulty.heal);
+      for (const u of units) if (u.militia && !u.dead) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * difficulty.heal);
       game.state = 'cleared';
       game.timer = 2.2;
     }
@@ -5382,6 +5512,9 @@ function updateGame(dt) {
   if (objective && game.objectiveCall !== game.phase) { game.objectiveCall = game.phase; showBanner(`${objective}!`, 2.5); }
   setText('kills', `Abates: ${game.kills}`);
   setText('party', `Heróis: ${heroes().length}/${MAX_PARTY}`);
+  const militia = militiaAlive();
+  if ($('militia').hidden !== !militia) $('militia').hidden = !militia;   // contador discreto: some sem milícia de pé
+  if (militia) setText('militia', `⚔ Milícia: ${militia}`);
 }
 
 function objectiveHint(skeletons) {
@@ -5427,6 +5560,7 @@ function endGame(text, won = false) {
     heroes: party.map((h) => ({ name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
     falls: game.fallLog,
     damageSources: Object.values(game.damageSources),
+    militia: game.militia?.size ? { size: game.militia.size, damage: game.militia.damage, kills: game.militia.kills, fallen: game.militia.fallen } : null,
     mission: game.mission ? {
       goal: game.mission.goal,
       time: game.missionT,

@@ -1,6 +1,6 @@
 // Progressão entre partidas: ouro, maestria por herói, oficina do acampamento e conquistas.
 // Tudo fica num único save versionado no localStorage; sem storage (simulações), vive só na memória e começa zerado.
-// Os bônus são pequenos de propósito: maestria soma no máximo +4% de vida e +4% de dano, a oficina +6% de vida.
+// Os bônus são pequenos de propósito: maestria soma no máximo +4% de vida e +4% de dano, a oficina +6% de vida e até 2 milicianos fracos.
 
 export const PROGRESS_KEY = 'cavaleiros-progresso';
 export const PROGRESS_VERSION = 2;
@@ -31,6 +31,8 @@ export const UPGRADES = [
     desc: (n) => `+${n * 8}% de ouro ao fim de cada partida.` },
   { id: 'mentor', name: 'Mentor do acampamento', icon: '✎', per: 0.15, costs: [120, 260],
     desc: (n) => `+${n * 15}% de XP de maestria por partida.` },
+  { id: 'militia', name: 'Milícia', icon: '⚔', per: 1, costs: [200, 420],
+    desc: (n) => `${n} ${n === 1 ? 'aldeão armado luta' : 'aldeões armados lutam'} com o grupo em qualquer partida.` },
 ];
 const findUpgrade = (id) => UPGRADES.find((u) => u.id === id);
 
@@ -171,6 +173,7 @@ export function createProgression(storage = null) {
     },
     relicChoices: () => 3 + level('relic-choice'),
     rerolls: () => level('reroll'),
+    militia: () => level('militia') * findUpgrade('militia').per,
     mastery(id) {
       const xp = state.heroes[id]?.xp || 0, lvl = masteryLevel(xp);
       return { level: lvl, xp, from: MASTERY_XP[lvl - 1], next: lvl < MASTERY_MAX ? MASTERY_XP[lvl] : null, games: state.heroes[id]?.games || 0 };
