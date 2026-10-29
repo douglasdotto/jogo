@@ -613,7 +613,10 @@
 }
 #pick:has(#pickList.grid) .pick-row[hidden] { display: none !important; }
 #pick:has(#pickList.grid) .pick-row:has(> .card:only-child) { grid-template-columns: minmax(0, 420px); justify-content: center; }
-#pick:has(#pickList.grid) .pick-row > .card:nth-child(3):last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 7px); }
+#pick:has(#pickList.grid) .pick-row > .card:nth-child(3):last-child,
+#pick:has(#pickList.grid) .pick-row > .card:nth-child(5):last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 7px); }
+/* mais de 4 heróis: cartões do mesmo tamanho das outras classes e a área rola, em vez de espremer */
+#pick:has(#pickList.grid) .pick-row:has(> .card:nth-child(5)) { grid-auto-rows: calc((100% - 14px) / 2); }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card {
   position: relative;
   width: auto;
