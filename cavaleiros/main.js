@@ -17,7 +17,7 @@ import { initTooltips, registerTooltip } from './tooltip.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS } from './progression.js';
-import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats } from './monsters.js';
+import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -909,9 +909,9 @@ function relicBounce(b) {
   bolt.bounced = true;
 }
 
-// chefe (fases 6 e 12) ou golem ainda à frente no trecho: só então o Ferrão de gigante tem uso
+// chefe (fases 6, 9 e 12) ou golem ainda à frente no trecho: só então o Ferrão de gigante tem uso
 function bigFoeAhead() {
-  for (let p = game.phase; p <= game.last; p++) if (waveLeader(p, p % 6 === 0)) return true;
+  for (let p = game.phase; p <= game.last; p++) if (waveLeader(p, isBossPhase(p))) return true;
   return false;
 }
 
@@ -1649,6 +1649,7 @@ class Unit {
     if (this.dead || game.over) return;
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
+    if (this.ward) { n = absorbWard(this, n); if (!(n > 0)) return; }   // escudo de ossos do xamã
     if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
       if (this.oathUntil > game.runTime) return;   // Juramento final: invulnerável por instantes
@@ -1973,6 +1974,8 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   if (target.boss) score -= goal?.type === 'boss' ? 12 : 3.5;
   if (target.totem) score -= hasDestructionGoal(goal) ? 12 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
+  if (target.kind?.priority) score -= target.kind.priority; // xamã: derrubá-lo desfaz o escudo de ossos
+  if (target.ward) score += 1.5; // protegido pelo escudo: melhor atacar quem o sustenta
 
   if (target.enemyKind === 'Bomber') {
     let nearby = Infinity;
@@ -2005,7 +2008,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   // continuam concentrando o grupo.
   const healthRatio = target.maxHp > 0 ? Math.max(0, target.hp / target.maxHp) : 1;
   const urgentTarget = target.boss || target.totem || target.ranged
-    || target.enemyKind === 'Priest' || target.enemyKind === 'Bomber' || target.pendingHit
+    || target.enemyKind === 'Priest' || target.enemyKind === 'Bomber' || target.kind?.priority || target.pendingHit
     || (villager && distanceToVillager < 12)
     || (goal?.type === 'nofall' && distanceToVulnerable < 6);
   if (!urgentTarget && healthRatio < 0.55) {
@@ -2104,7 +2107,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
     if (!ally.dead && ally.hp / ally.maxHp <= 0.45 && tacticalDistance(ally.pos, best.pos) <= 4.5) { urgentNoFallTarget = true; break; }
   }
   const urgentAllyThreat = best.pendingHit?.target?.team === 'hero' || best.pendingHit?.target?.team === 'villager';
-  const urgentPriest = best.enemyKind === 'Priest';
+  const urgentPriest = best.enemyKind === 'Priest' || !!best.kind?.priority;
   const urgentBomber = best.enemyKind === 'Bomber'
     && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
   const urgentObjectiveTarget = (goal?.type === 'boss' && best.boss)
@@ -2124,7 +2127,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const supportedFocus = focused && (finishingHit && focusHealthRatio < 0.45
     || allyEngagedOnFocus && focusHealthRatio < 0.22)
     && !focused.boss && !focused.totem && !focused.ranged
-    && focused.enemyKind !== 'Priest' && focused.enemyKind !== 'Bomber' && !focused.pendingHit
+    && focused.enemyKind !== 'Priest' && focused.enemyKind !== 'Bomber' && !focused.kind?.priority && !focused.pendingHit
     && !(villager && tacticalDistance(villager.pos, focused.pos) < 12) && !criticalAllyNearFocus
     && party.some((ally) => ally !== hero && !ally.dead
       && (ally.pendingHit?.target === focused || ally.targetFocus === focused));
@@ -3559,7 +3562,7 @@ class Hero extends Unit {
     } else if (id === 'champion' || id === 'crusher') {
       if (manual && id === 'crusher') this.face(target.pos, 1);
       const skillTargets = nearby.filter((s) => id === 'champion' || inMeleeArc(this, s, 2.2 * power));
-      const urgent = skillTargets.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind)
+      const urgent = skillTargets.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
         || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
       if (!skillTargets.length || (!force && skillTargets.length < 2 && !urgent)) return false;
       if (id === 'crusher') this.vel.add(tmp.subVectors(target ? target.pos : this.pos, this.pos).setY(0).normalize().multiplyScalar(2.5));   // salta para a frente
@@ -3673,7 +3676,7 @@ class Hero extends Unit {
       const missing = friends.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
       const healAmount = scaleBranchEffect(this, 'support', 20) * power;
       const urgentHeal = friends.some((h) => h.hp / h.maxHp <= 0.6) || missing >= healAmount * 0.75;
-      const valuableControl = nearby.length >= 2 || nearby.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind)
+      const valuableControl = nearby.length >= 2 || nearby.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
         || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
       if (!friends.length && !nearby.length) return false;
       if (!force && !urgentHeal && !valuableControl) return false;
@@ -3717,7 +3720,7 @@ class Hero extends Unit {
     const wounded = friends.filter((h) => h.hp < h.maxHp);
     const missingHp = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
     const criticalAlly = friends.some((h) => h.hp / h.maxHp <= 0.42);
-    const urgentEnemy = enemies.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind)
+    const urgentEnemy = enemies.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
       || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
     const targetPool = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(this.pos) <= Math.max(9, this.range));
     target ||= highestPriorityHeroTarget(this, targetPool);
@@ -4653,7 +4656,7 @@ function startMission() {
 function startPhase() {
   game.state = 'fight';
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
-  game.bossPending = game.phase % 6 === 0;
+  game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
   if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
