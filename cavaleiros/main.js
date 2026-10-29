@@ -15,6 +15,7 @@ import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
 import { initTooltips, registerTooltip, hideTooltip } from './tooltip.js';
+import { logoSVG } from './logo.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { disposeSkeletons } from './scene-perf.js';
@@ -538,7 +539,7 @@ function showMenu() {
   $('campaign').classList.add('hidden');
   $('camp').classList.add('hidden');
   pick.options = MODES;
-  $('pickTitle').textContent = 'Age of Popozitos';
+  $('pickTitle').innerHTML = logoSVG();
   $('pickSub').textContent = '';
   $('pickHint').textContent = '← → · Enter';
   const list = $('pickList');

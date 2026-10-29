@@ -62,7 +62,7 @@ const THREE = new Proxy({ Vector3, Mesh:class {constructor(){Object.assign(this,
   MathUtils:{clamp:(v,a,b)=>Math.max(a,Math.min(v,b))}, LoopOnce:1, LoopRepeat:2, RingGeometry:class{}, DoubleSide:2,
   Color:class{}, CylinderGeometry:class{}, SphereGeometry:class{}, TorusGeometry:class{} }, { get:(o,k)=>k in o?o[k]:class{constructor(){Object.assign(this,root())}} });
 const context=vm.createContext({THREE,document:{createElement:el,body:el(),getElementById:(id)=>{if(!elements.has(id))elements.set(id,el());return elements.get(id)}},
-  addEventListener:noop,removeEventListener:noop,hideTooltip:noop,requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,aiming:null,battleGateId:0,battleLoadingVisible:false,
+  addEventListener:noop,removeEventListener:noop,hideTooltip:noop,logoSVG:()=>"<svg class=\"game-logo\"></svg>",requestAnimationFrame:noop,setTimeout:noop,clearTimeout:noop,innerWidth:1440,innerHeight:1000,aiming:null,battleGateId:0,battleLoadingVisible:false,
   URLSearchParams,location:{search:''},
   biomeForSeed:seed=>seed===11?'Pradaria':['Pradaria','Outono','Pântano','Crepúsculo'][Math.abs(Math.trunc(seed))%4],
   localStorage:{data:{},getItem(k){return this.data[k]??null},setItem(k,v){this.data[k]=String(v)}},
