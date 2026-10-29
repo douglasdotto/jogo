@@ -2,63 +2,70 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Montanhas KayKit</title>
+  <title>Platôs do mapa</title>
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #7cc6ff; font-family: sans-serif; }
-    #labels { position: absolute; inset: 0; pointer-events: none; }
-    .tag { position: absolute; transform: translate(-50%, 0); padding: 2px 8px; font-size: 12px; color: #fff; background: #1f3156; border-radius: 8px; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #a9d6f0; font-family: sans-serif; }
+    #bar { position: absolute; top: 8px; left: 8px; display: flex; gap: 6px; }
+    #bar button { padding: 4px 10px; border: 0; border-radius: 8px; background: #1f3156; color: #fff; cursor: pointer; }
+    #bar button.on { background: #c98d2c; }
   </style>
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
   </script>
 </head>
 <body>
-  <div id="labels"></div>
+  <div id="bar"></div>
   <script type="module">
-    // vitrine para ver o formato dos modelos de montanha/colina/pedra do KayKit Medieval Hexagon
+    // vitrine dos platôs (rochedos com rampa) do mapa real: ?seed=N escolhe o mapa, ?fase=3|7|10 o platô
     import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    const names = ['mountain_A', 'mountain_A_grass', 'mountain_A_grass_trees', 'mountain_B', 'mountain_B_grass', 'mountain_B_grass_trees', 'mountain_C', 'mountain_C_grass', 'mountain_C_grass_trees', 'hills_A_trees', 'hills_B_trees', 'hills_C_trees', 'hill_single_A', 'hill_single_B', 'rock_single_A', 'rock_single_E'];
+    import { createWorld } from './world.js';
+    const q = new URLSearchParams(location.search);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.prepend(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x7cc6ff);
-    const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 200);
-    camera.position.set(0, 9, 13);
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0.5, 0);
-    scene.add(new THREE.HemisphereLight(0xfff4dc, 0x7a6a4a, 1.4));
-    const sun = new THREE.DirectionalLight(0xffe2b8, 3);
-    sun.position.set(5, 10, 6);
+    scene.background = new THREE.Color(0xa9d6f0);
+    scene.fog = new THREE.Fog(0xa9d6f0, 45, 110);
+    scene.add(new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8));
+    const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
     sun.castShadow = true;
-    scene.add(sun);
-    const loader = new GLTFLoader();
-    const tags = [];
-    await Promise.all(names.map(async (n, i) => {
-      const g = await loader.loadAsync(`assets/hex/${n}.gltf`);
-      const col = i % 6, row = Math.floor(i / 6);
-      g.scene.position.set((col - 2.5) * 2.4, 0, (row - 1) * 2.6);
-      g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
-      scene.add(g.scene);
-      const t = document.createElement('div');
-      t.className = 'tag';
-      t.textContent = n;
-      document.getElementById('labels').appendChild(t);
-      tags.push([t, g.scene.position]);
-    }));
-    const v = new THREE.Vector3();
-    renderer.setAnimationLoop(() => {
-      controls.update();
-      renderer.render(scene, camera);
-      for (const [t, p] of tags) {
-        v.copy(p).setY(-0.2).project(camera);
-        t.style.left = `${(v.x * 0.5 + 0.5) * innerWidth}px`;
-        t.style.top = `${(-v.y * 0.5 + 0.5) * innerHeight}px`;
-      }
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.normalBias = 0.03;
+    Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 80 });
+    scene.add(sun, sun.target);
+    const world = createWorld(scene, 5, 12, +(q.get('seed') || 11));
+    window.__world = world;
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 300);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    const show = (phase) => {
+      const zone = world.zoneOf(phase);
+      if (!zone) return;
+      const c = zone.center;
+      controls.target.set(c.x, 1.5, c.z);
+      // de frente para a rampa, um pouco de lado e do alto, como a câmera do jogo costuma ver
+      camera.position.copy(c).addScaledVector(zone.fwd, -11).addScaledVector(zone.side, 6).setY(13);
+      sun.position.set(c.x + 10, 22, c.z + 8);
+      sun.target.position.set(c.x, 0, c.z);
+      for (const b of document.querySelectorAll('#bar button')) b.classList.toggle('on', +b.dataset.phase === phase);
+    };
+    for (const phase of [3, 7, 10]) {
+      const b = document.createElement('button');
+      b.textContent = `Fase ${phase}`;
+      b.dataset.phase = phase;
+      b.onclick = () => show(phase);
+      document.getElementById('bar').appendChild(b);
+    }
+    show(+(q.get('fase') || 3));
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
     });
+    renderer.setAnimationLoop(() => { controls.update(); world.update(1 / 60, controls.target.z); renderer.render(scene, camera); });
   </script>
 </body>
 </html>
