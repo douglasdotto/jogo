@@ -91,7 +91,7 @@ const VARIANTS = [
   { id: 'cleric', names: ['Clériga', 'Sacerdotisa', 'Santa Guardiã'], desc: 'Orações curam e fortalecem quem está na linha de frente.', ability: 'Oração restauradora', color: CHARACTERS[4].color,
     recipe: CHARACTERS[4], classId: 4, pickGroup: 'cleric', hp: 225, dmg: 27, range: 5, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 4 } },
   { id: 'bard', names: ['Bardo', 'Mestre das Canções', 'Lenda Errante'], desc: 'Sua música acelera os ataques de todo o grupo.', ability: 'Acorde heroico', color: CHARACTERS[5].color,
-    recipe: CHARACTERS[5], classId: 4, pickGroup: 'bard', hp: 220, dmg: 22, range: 5, speed: 3, cooldown: 1.15, ranged: true, idle: '2H_Melee_Idle', attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 2, Rapidez: 4, Alcance: 4 } },
+    recipe: CHARACTERS[5], classId: 4, pickGroup: 'bard', hp: 220, dmg: 22, range: 5, speed: 3, cooldown: 1.15, ranged: true, idle: 'Idle', attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 2, Rapidez: 4, Alcance: 4 } },
   { id: 'angel', names: ['Anjo', 'Arcanjo', 'Serafim'], desc: 'Paira acima da batalha e desce com impacto de luz para amparar o grupo.', ability: 'Descida celeste', color: CHARACTERS[6].color,
     recipe: CHARACTERS[6], classId: 4, pickGroup: 'angel', hp: 180, dmg: 20, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.6, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
   { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
@@ -173,7 +173,8 @@ const nightmareTeamIds = (mission) => {
     return ['paladin', 'guardian', 'pyro'];
   }
   if (goal === 'elite') return ['paladin', 'guardian', 'pyro', 'viking'];
-  if (goal === 'boss' || goal === 'twin' || goal === 'bosses') return ['paladin', 'guardian', 'viking', 'cleric'];
+  if (goal === 'twin') return ['paladin', 'guardian', 'archer', 'cleric'];
+  if (goal === 'boss' || goal === 'bosses') return ['paladin', 'guardian', 'viking', 'cleric'];
   return ['paladin', 'guardian', 'pyro', 'cleric'];
 };
 // Mantém uma sugestão para as escolhas iniciais e indica quem completar depois nas missões longas.
@@ -200,7 +201,7 @@ const shouldRecommendMissionTeam = (mission, difficultyId = difficulty.id) => di
 const difficultyTeamRecommendation = (option, mission) => {
   if (!shouldRecommendMissionTeam(mission, option.id)) return '';
   const nightmare = option.id === 'pesadelo';
-  const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', viking: 'Viking (dano a chefe)', cleric: 'Clériga (suporte/cura)', angel: 'Anjo (dano e cura)' };
+  const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', viking: 'Viking (dano a chefe)', archer: 'Arqueira (dano à distância)', cleric: 'Clériga (suporte/cura)', angel: 'Anjo (dano e cura)' };
   if (mission?.goal?.type === 'breach') labels.viking = 'Viking (machado à distância)';
   const initial = nightmareTeamIds(mission).map((id) => labels[id]);
   const plan = nightmareTeamPlanIds(mission).map((id) => labels[id]);
@@ -5829,7 +5830,7 @@ const SKILL_ANIMS = {
   ],
   bard: [
     { clip: 'Interact', f: 0.3, hop: 0.3 },
-    { clip: '2H_Melee_Attack_Slice', f: 0.5, arc: 'slash', kick: 0.8 },
+    { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -0.7 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
   ],
   angel: [

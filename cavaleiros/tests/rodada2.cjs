@@ -493,6 +493,8 @@ test('arquétipos de combate preservam os atributos enquanto o seletor mostra as
   assert.deepEqual([c.hp,c.dmg,c.range,c.speed,c.cooldown,c.splash],[165,21,6,3.5,1.05,0]);
   assert.equal(cfg('cleric').recipe.base,'Mage');assert.ok(cfg('cleric').recipe.add.some(a=>a.part==='2H_Staff'));
   assert.equal(cfg('bard').recipe.base,'Rogue');assert.ok(cfg('bard').recipe.extras.some(e=>e.type==='lute'));
+  assert.equal(cfg('bard').ranged,true);assert.equal(cfg('bard').range,5);assert.equal(cfg('bard').idle,'Idle');
+  assert.ok(t.SKILL_ANIMS.bard.every(a=>!a.clip.includes('Melee')),'Bardo não usa animações de combate corpo a corpo nas skills');
 });
 test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>{
   const balanced=t.teamCoverage(['paladin','guardian','pyro','cleric'].map(cfg));
@@ -514,7 +516,7 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   const expected={
     fazendas:['paladin','viking'],chamas:['paladin','viking'],caca:['paladin','guardian','viking'],ruinas:['paladin','pyro','cleric'],
     castelo:['paladin','guardian','viking','cleric'],cripta:['paladin','guardian','pyro','viking'],
-    trono:['paladin','guardian','viking','cleric'],resgate:['paladin','guardian','angel'],
+    trono:['paladin','guardian','archer','cleric'],resgate:['paladin','guardian','angel'],
   };
   for(const m of t.MISSIONS){
     const ids=Array.from(t.nightmareTeamIds(m));
@@ -540,6 +542,9 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   assert.equal(t.difficultyTeamRecommendation({id:'normal'},t.MISSIONS.find(m=>m.id==='coracao-do-castelo')),
     'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).',
     'o trio final também recomenda a composição fora do Pesadelo');
+  assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='trono')),
+    'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Arqueira (dano à distância) e Clériga (suporte/cura).',
+    'o Trono recomenda uma formação testada contra o Lich móvel');
   const bridge=t.MISSIONS.find(m=>m.id==='chamas');
   const bridgeRecommendation='Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).';
   const at=id=>t.pick.options.findIndex(hero=>hero.id===id);
