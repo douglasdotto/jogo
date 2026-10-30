@@ -77,6 +77,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
   loadKingdomRecords: () => ({}), kingdomRecordText: () => "",   // Reino fica fora da simulação
   newStats: stats, openHeroPanel: noop, closeHeroPanel: noop, panelHero: () => null, tickHeroPanel: noop, summaryHTML: () => '', LOOKS: {}, applyLook: noop, buildBeast: () => ({ root: root(), flash: [], materials: [] }), animateBeast: noop,
+  buildSummon: () => { const o = () => Object.assign(root(), { userData: { side: 1 }, visible: false, getWorldPosition: (v) => v }); return { core: o(), head: o(), jaw: o(), tail: o(), mouth: o(), aura: o(), shell: o(), wings: [o(), o()], legs: [o(), o()], arms: [o(), o()], hover: 1, shellR: 1, auraR: 1 }; },   // corpos das criaturas do Invocador (summon-models.js)
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
   blasts: simBlasts, sentries: [],
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
