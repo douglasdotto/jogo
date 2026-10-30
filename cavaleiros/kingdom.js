@@ -21,7 +21,7 @@ const REACH = 1.0;                 // distância da borda do alvo para coletar, 
 const QUEUE_MAX = 5;
 
 export const BUILDINGS = {
-  castle: { name: 'Castelo', glyph: '♜', size: 4, hp: 2400, cost: {}, time: 0, pop: 5, drop: true, height: 8.2, trains: ['worker', 'hero'],
+  castle: { name: 'Castelo', glyph: '♜', size: 4, hp: 2400, cost: {}, repair: { wood: 400, stone: 300 }, time: 0, pop: 5, drop: true, height: 8.2, trains: ['worker', 'hero'],
     attack: { range: 10, dmg: 9, cooldown: 1.6 }, tip: 'Recruta aldeões e heróis · recebe recursos · atira flechas' },
   house: { name: 'Casa', glyph: '⌂', size: 2, hp: 450, cost: { wood: 50 }, time: 16, pop: 5, height: 4.4, tip: '+5 de população' },
   farm: { name: 'Fazenda', glyph: '❀', size: 2, hp: 300, cost: { wood: 60 }, time: 14, height: 1.6, farm: true, tip: 'Comida sem fim · 1 aldeão' },
@@ -41,7 +41,7 @@ export const PORTAL = { hp: 3500, guardEvery: 20, guardRadius: 15 };
 
 // ondas: a primeira em 3 min, depois cada vez maiores e um pouco mais frequentes
 export const FIRST_WAVE = 180;
-export const waveInterval = (n) => Math.max(75, 110 - n * 2);
+export const waveInterval = (n, D = null) => Math.max(75, 110 - n * 2) * (D?.interval ?? 1);
 // de onde vem cada onda: -1 = Portal de Ossos; 0.. = covas da borda, alternando (uma, depois duas a partir da 6ª nas pares)
 export function waveSources(n, entries = 0) {
   if (n <= 1 || !entries) return [-1];
@@ -49,8 +49,10 @@ export function waveSources(n, entries = 0) {
   if (n >= 6 && n % 2 === 0 && entries > 1) out.push((a + 1) % entries);
   return out;
 }
-export const waveSize = (n, D = null) => Math.max(2, Math.round((3 + (n - 1) * 1.6) * (D?.count ?? 1.1) / 1.1));
+export const waveSize = (n, D = null) => Math.max(2, Math.round((3 + (n - 1) * 1.6) * (D?.count ?? 1)));
 export const wavePhase = (n) => Math.min(12, 1 + Math.floor((n - 1) * 0.7));
+// guarda do portal acompanha as ondas: mais esqueletos e mais fortes a cada onda que já saiu
+export const portalGuard = (waveN) => ({ want: Math.min(10, 3 + Math.floor(waveN * 2 / 3)), phase: wavePhase(Math.max(1, waveN)) });
 export const waveLeaderFor = (n) => n % 6 === 0 ? (n >= 18 ? 'Lich' : n >= 12 ? 'Executioner' : 'King') : n % 4 === 0 ? 'Golem' : null;
 
 const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -70,7 +72,7 @@ export function spend(K, cost) {
 }
 export function refund(K, cost) { for (const r of RES) K.res[r] += cost[r] || 0; }
 export const popCap = (K) => Math.min(POP_MAX, K.buildings.reduce((n, b) => n + (b.done && !b.dead ? b.def.pop || 0 : 0), 0));
-export const popUsed = (K) => K.units.reduce((n, u) => n + (UNITS[u.kKind]?.pop || 0), 0);
+export const popUsed = (K) => K.units.reduce((n, u) => n + (u.dead ? 0 : UNITS[u.kKind]?.pop || 0), 0);   // herói caído libera a vaga até voltar
 export const heroCount = (K) => K.units.filter((u) => u.kKind === 'hero').length
   + K.buildings.reduce((n, b) => n + (b.queue || []).filter((q) => q.kind === 'hero').length, 0);
 
@@ -106,14 +108,47 @@ export function removeBuilding(K, b) {
   K.arena.release(b.def.size, b.i0, b.j0);
   K.arena.removeSolid(b.solid);
 }
+// obra destruída ou prédio demolido devolve parte do custo
+export const SALVAGE = 0.5;
+export function salvage(K, b, share = SALVAGE) { for (const r of RES) K.res[r] += Math.floor((b.def.cost[r] || 0) * share); }
+// prédio derrubado: devolve a fila e libera a grade; obra derrubada ainda devolve metade do custo
+export function loseBuilding(K, b) {
+  if (!K.buildings.includes(b)) return;   // demolido: já devolveu
+  if (!b.done) salvage(K, b);
+  for (const q of b.queue) refund(K, UNITS[q.kind].cost);
+  b.queue.length = 0;
+  removeBuilding(K, b);
+}
+// demolir: o castelo não; devolve a fila e metade do custo e libera a grade
+export function demolish(K, b) {
+  if (!b || b.dead || b === K.castle || b.kType === 'castle' || !K.buildings.includes(b)) return false;
+  if (b.done) salvage(K, b);
+  loseBuilding(K, b);
+  return true;
+}
+// reparo: aldeão em prédio pronto e ferido; a vida toda custa REPAIR.share do custo (castelo usa def.repair)
+export const REPAIR = { share: 0.25 };
+const repairCost = (b) => b.def.repair || b.def.cost;
+const repairTime = (def) => Math.max(20, def.time || 60);
+export const canRepair = (K, b) => !!b && b.done && !b.dead && b.hp < b.maxHp - 1e-6
+  && RES.every((r) => !repairCost(b)[r] || K.res[r] > 0.01);
+function repairStep(K, b, dt, n) {
+  if (!canRepair(K, b)) return;
+  const cost = repairCost(b);
+  let dh = Math.min(b.maxHp - b.hp, dt * b.maxHp / repairTime(b.def) * constructionRate(n));
+  for (const r of RES) if (cost[r]) dh = Math.min(dh, K.res[r] / (cost[r] * REPAIR.share) * b.maxHp);
+  for (const r of RES) if (cost[r]) K.res[r] = Math.max(0, K.res[r] - cost[r] * REPAIR.share * dh / b.maxHp);
+  b.hp = Math.min(b.maxHp, b.hp + dh);
+}
 // vários aldeões aceleram, com retorno decrescente
 export const constructionRate = (n) => (n <= 0 ? 0 : 1 + (n - 1) * 0.6);
 export function tickConstruction(K, dt, onDone) {
   for (const b of K.buildings) {
-    if (b.done || b.dead) { b.builders = 0; continue; }
+    if (b.dead) { b.builders = 0; continue; }
     const n = b.builders;
     b.builders = 0;
     if (!n) continue;
+    if (b.done) { repairStep(K, b, dt, n); continue; }
     const dp = Math.min(1 - b.progress, dt / b.def.time * constructionRate(n));
     b.progress += dp;
     b.hp = Math.min(b.maxHp, b.hp + dp * b.maxHp * 0.9);
@@ -167,7 +202,8 @@ export function workerStep(K, w, dt) {
   }
   if (t.type === 'build') {
     const b = t.site;
-    if (!b || b.dead || b.done) { w.task = afterBuild(K, w, b); return 'idle'; }
+    if (!b || b.dead || (b.done && b.hp >= b.maxHp - 1e-6)) { w.task = afterBuild(K, w, b); return 'idle'; }
+    if (b.done && !canRepair(K, b)) { w.task = null; return 'idle'; }   // reparo sem recurso: para
     if (flat(w.pos, b.pos) - b.reach > REACH) { w.goTo(b.pos.x, b.pos.z, dt); return 'move'; }
     b.builders++;
     return 'build';
@@ -212,7 +248,7 @@ export function tickWaves(K, dt, spawn) {
     K.waveN++;
     K.pending += waveSize(K.waveN, K.D);
     K.leader = waveLeaderFor(K.waveN);
-    K.waveT += waveInterval(K.waveN);
+    K.waveT += waveInterval(K.waveN, K.D);
     const entries = K.arena.entries?.length || 0;
     K.sources = waveSources(K.waveN, entries);
     K.nextSources = waveSources(K.waveN + 1, entries);
@@ -246,6 +282,7 @@ export const ICONS = {
   time: svg('<circle cx="12" cy="13" r="8" fill="#e8f2ff" stroke="#14284a" stroke-width="1.7"/><path d="M12 8.5V13l3 2" fill="none" stroke="#14284a" stroke-width="1.8" stroke-linecap="round"/>'),
 };
 const costHTML = (cost) => RES.filter((r) => cost[r]).map((r) => `<span class="k-cost" data-res="${r}">${ICONS[r]}${cost[r]}</span>`).join('');
+const halfCost = (cost) => Object.fromEntries(RES.filter((r) => cost[r]).map((r) => [r, Math.floor(cost[r] * SALVAGE)]));
 const costText = (cost) => RES.filter((r) => cost[r]).map((r) => `${cost[r]} ${RES_NAME[r].toLowerCase()}`).join(' · ');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -322,9 +359,7 @@ function defineClasses() {
       G.ring(this.pos, this.reach + 1, 0xff7a4a, 1);
       G.audio?.play?.('bones');
       if (K) {
-        removeBuilding(K, this);
-        for (const q of this.queue) refund(K, UNITS[q.kind].cost);
-        this.queue.length = 0;
+        loseBuilding(K, this);
         if (this !== K.castle) G.showBanner(`${this.def.glyph} −1`, 1.6);
       }
       this.scaffold?.removeFromParent();
@@ -764,10 +799,9 @@ function guardPortal(dt) {
   K.portalGuardT -= dt;
   if (K.portalGuardT > 0) return;
   const guards = G.skeletonsAlive().filter((s) => s.kGuard);
-  const want = Math.min(10, 3 + Math.floor(K.time / 150));
+  const { want, phase: p } = portalGuard(K.waveN);
   if (guards.length >= want) return;
   K.portalGuardT = PORTAL.guardEvery;
-  const p = Math.min(12, 1 + Math.floor(K.time / 100));
   const pool = p >= 3 ? ['Warrior', 'Crossbow', 'Minion', 'Mage', 'Warrior'] : ['Minion', 'Warrior', 'Minion'];
   const s = spawnSkeletonAt(pool[guards.length % pool.length], p);
   s.kGuard = true;
@@ -924,6 +958,7 @@ function command(x, y, add = false) {
       if (node) u.task = { type: 'gather', node, res: node.res };
       else if (site && !site.done) u.task = { type: 'build', site };
       else if (site && site.def.drop && u.carry > 0) u.task = { type: 'gather', node: null, res: u.carryRes, drop: true };
+      else if (site && site.hp < site.maxHp) u.task = { type: 'build', site };   // reparo: a mesma tarefa da obra
       else u.task = { type: 'move', x: at.x + (Math.random() - 0.5) * 1.6, z: at.z + (Math.random() - 0.5) * 1.6 };
       continue;
     }
@@ -1000,7 +1035,7 @@ function buildUI() {
   hudLeft.prepend(R.ui);
   R.ui.querySelector('.k-idle').onclick = selectIdleWorker;
   R.waveChip = el('div', 'k-wave');
-  R.waveChip.innerHTML = `<span class="k-wave-n" data-tip="Próxima onda de esqueletos">☠<b>1</b></span><span class="k-wave-t">${ICONS.time}<b>2:00</b></span>`
+  R.waveChip.innerHTML = `<span class="k-wave-n" data-tip="Próxima onda de esqueletos">☠<b>1</b></span><span class="k-wave-t">${ICONS.time}<b>${clock(K.waveT)}</b></span>`
     + `<span class="k-portal-hp" data-tip="Portal de Ossos · destrua para vencer"><i></i></span>`;
   hudLeft.after(R.waveChip);
   R.panel = el('div', 'k-panel');
@@ -1165,12 +1200,17 @@ function renderCommands() {
   }
   if (sel.length === 1 && isBuilding(sel[0])) {
     const b = sel[0];
-    if (!b.done) return;
-    for (const kind of b.def.trains || []) {
+    if (b.done) for (const kind of b.def.trains || []) {
       const def = UNITS[kind];
       const btn = add(def.glyph, `${def.name} · ${def.tip} · ${costText(def.cost)}`, def.cost,
         () => kind === 'hero' ? (heroCount(K) < HERO_LIMIT ? (R.heroPick = true, R.selKey = '') : G.popText(b.pos, `♛ ${HERO_LIMIT}/${HERO_LIMIT}`, 'block')) : train(b, kind));
       btn.dataset.kind = kind;
+    }
+    if (b !== K.castle) {   // demolir: devolve metade do custo; tecla Delete
+      const btn = cmdButton('Del', '✕', `Demolir · devolve ${costText(halfCost(b.def.cost)) || 'nada'}`, null, () => { if (demolish(K, b)) { b.die(); G.audio?.play?.('click'); } });
+      btn.dataset.key = 'DELETE';
+      btn.classList.add('k-demolish');
+      box.appendChild(btn);
     }
     return;
   }
