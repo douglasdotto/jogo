@@ -136,6 +136,7 @@ const EXTRA_SKILLS = {
   summoner: [
     { name: 'Golem', description: 'Um golem de pedra provoca os inimigos próximos e dá pancadas que atordoam.', effect: 'stone-golem', cooldown: 22, radius: 4.5, duration: 15, control: 'stun', color: 0xd8c29a },
     { name: 'Dragãozinho', description: 'Um dragãozinho voa até os inimigos e cospe fogo em cone, deixando-os queimando.', effect: 'little-dragon', cooldown: 68, radius: 4.5, duration: 18, control: 'burn', color: 0xff7a3a },
+    { name: 'Fúria do Bestiário', description: 'As criaturas ativas atacam e usam seus poderes 50% mais rápido por 5 s; sem nenhuma, chama uma fada por 6 s.', effect: 'bestiary-fury', cooldown: 16, duration: 5, haste: 0.5, color: 0xff8ad8 },
   ],
   oracle: [
     { name: 'Passo Previsto', description: 'Durante os avisos de chefes, garante que os aliados tentem escapar das áreas anunciadas.', effect: 'oracle-dodge', cooldown: 22, radius: 12, color: 0xc6b4ff },
@@ -145,6 +146,7 @@ const EXTRA_SKILLS = {
   brute: [
     { name: 'Arremesso', description: 'Agarra o inimigo comum mais perto e o arremessa no grupo mais denso; a queda fere todos em volta.', effect: 'grab-throw', cooldown: 16, radius: 2.4, range: 8, splash: 2.6, power: 1, color: 0xc9bba2 },
     { name: 'Pele de Pedra', description: 'Cresce por 8 s: recebe 60% menos dano, devolve 30% dos golpes corpo a corpo e provoca quem está em volta.', effect: 'stone-skin', cooldown: 64, radius: 6, duration: 8, color: 0xb8a88a },
+    { name: 'Muralha', description: 'Finca-se no chão por 3 s: fica imóvel, recebe metade do dano e bloqueia os projéteis que passam por ele.', effect: 'stone-wall', cooldown: 17, radius: 1.4, range: 9, duration: 3, color: 0xc9bba2 },
   ],
 };
 
