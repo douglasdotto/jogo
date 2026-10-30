@@ -8,6 +8,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const assert = require('node:assert/strict');
 const { createNavigationWorld, seedRoadObstacles } = require('./navigation-world.cjs');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
@@ -103,12 +104,33 @@ vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), cont
 vm.runInContext(part(source, 'function releaseFxMaterial(material) {', 'function clearFx()'), context);
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
-const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts,
+const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts, chooseHeroTarget,
   DIFFICULTIES, MISSIONS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
   setWorld: (next) => { world = next; },
   setDifficulty: (d) => { difficulty = d; },
   setFrameTargetContext: () => { activeTargetContext = game.state === 'fight' && !game.paused && !game.over ? makeTargetContext(frameTargetContext) : null; },
   clearFrameTargetContext: () => { activeTargetContext = null; } })`, context);
+// Um interceptor pode perseguir o chefe móvel enquanto outro herói protege o posto.
+// O não designado deve continuar atacando uma ameaça local em vez de ficar sem alvo.
+{
+  const boss = { team: 'skeleton', pos: new Vector3(15, 0, 0), hp: 100, maxHp: 100, dead: false,
+    spawning: false, boss: true, phaseBoss: true, ranged: false, totem: false, enemyKind: 'Lich', pendingHit: null };
+  const localThreat = { team: 'skeleton', pos: new Vector3(52, 0, 1), hp: 30, maxHp: 30, dead: false,
+    spawning: false, boss: false, phaseBoss: false, ranged: false, totem: false, enemyKind: 'Minion', pendingHit: null };
+  const interceptor = { cfg: { id: 'paladin' }, pos: new Vector3(0, 0, 0), post: new Vector3(0, 0, 0),
+    range: 3, speed: 3, ranged: false, dead: false, targetFocus: null, targetFocusT: 0, engagedWith: null };
+  const localDefender = { cfg: { id: 'cleric' }, pos: new Vector3(52, 0, 0), post: new Vector3(50, 0, 0),
+    range: 3, speed: 3, ranged: true, dead: false, targetFocus: null, targetFocusT: 0, engagedWith: null };
+  const party = [interceptor, localDefender];
+  const targetContext = { goal: { type: 'bosses' }, party, friends: party, villager: null, plateauBonus: 0,
+    skeletons: [boss, localThreat], attackableSkeletons: [boss, localThreat],
+    twinFocus: null, twinFocusChecked: false, twinFocusWaiting: false };
+  const priorFocus = t.game.twinFocus;
+  t.game.twinFocus = null;
+  const chosen = t.chooseHeroTarget(localDefender, [boss, localThreat], 1 / 30, targetContext);
+  t.game.twinFocus = priorFocus;
+  assert.equal(chosen, localThreat, 'um herói fora do alcance do foco global ainda ataca sua ameaça local');
+}
 // Captura o resultado calculado pelo runtime no encerramento, sem duplicar as regras de estrelas.
 vm.runInContext(`
   globalThis.__campaignOutcome = null;

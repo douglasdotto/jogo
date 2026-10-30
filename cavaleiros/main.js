@@ -2755,10 +2755,16 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const { goal, villager, party, friends } = context;
   if (groupedBossGoal(goal)) {
     const focus = twinBossFocus(context);
-    if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus, context))) {
-      best = focus;
-      bestScore = heroTargetScore(hero, focus, hero.pos, context);
-    } else if (focus) { best = null; bestScore = Infinity; }
+    if (focus) {
+      if (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus, context)) {
+        best = focus;
+        bestScore = heroTargetScore(hero, focus, hero.pos, context);
+      } else if (best?.phaseBoss) {
+        // Sem acesso ao foco, não troca para outro chefe distante; mantém só uma ameaça local comum.
+        best = null;
+        bestScore = Infinity;
+      }
+    }
   } else if (game.twinFocus) game.twinFocus = null;
   if (bossGoal(goal) && urgentBossTarget) { best = urgentBossTarget; bestScore = urgentBossScore; }
   if (!best) {
