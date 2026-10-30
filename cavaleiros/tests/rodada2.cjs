@@ -275,6 +275,8 @@ test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>
   assert.deepEqual(Array.from(partial.missing),['Defesa','Cura','Controle']);
   assert.equal(partial.roles.find(role=>role.name==='Área').count,2);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'escort'})),['Defesa','Cura','Controle']);
+  assert.deepEqual(Array.from(t.missionRoleNeeds({type:'rescue'})),['Defesa','Cura','Área']);
+  for(const m of t.MISSIONS)assert.ok(t.missionRoleNeeds(m.goal).length>0,`${m.id} orienta os papéis prioritários`);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'boss'})),['Defesa','Cura','Dano a chefe']);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'totems'})),['À distância','Controle','Área']);
   const bossDamage=t.teamCoverage(['champion','assassin','viking'].map(cfg));
@@ -318,7 +320,17 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   assert.deepEqual(wantedRoles(true),['Defesa','Cura','Controle']);
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
   assert.ok(pickText().includes('Derrote o chefe')&&/class="covered priority" data-role="Dano a chefe"/.test(pickText()));
-  clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);
+
+  t.setMission(t.MISSIONS.find(m=>m.id==='resgate'));t.game.picksLeft=3;t.game.campaignSquadSuggestion=[];t.setDifficulty(3);t.showPick('','');
+  assert.equal(t.pick.sel,at('paladin'),'o primeiro herói sugerido fica em foco');
+  assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
+  assert.ok(elements.get('pickHint').textContent.includes('Sugestão Pesadelo: Paladino + Guardião + Piromante'));
+  assert.deepEqual(wantedRoles(true),['Área'],'com Paladino escolhido como candidato, a prioridade restante é dano em área');
+  new t.Hero(cfg('paladin'));t.showPick('','');
+  assert.equal(t.pick.sel,at('guardian'),'o segundo herói sugerido fica em foco');
+  assert.ok(t.pick.cards[at('guardian')].className.includes('recommended'));
+  assert.deepEqual(wantedRoles(true),['Área']);
+  clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);t.setDifficulty(1);
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
@@ -1047,6 +1059,11 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
   assert.ok(duelNightmare.attributes['aria-label'].includes(solo));
   assert.ok(!duelNightmare.attributes['aria-label'].includes('Guardião')&&!duelNightmare.attributes['aria-label'].includes('Clériga'),'não promete heróis que o Duelo não permite escolher');
 
+  clear();context.localStorage.data={};t.setMission(mission('vila'));t.showDifficulty();
+  const villageNightmare=t.pick.cards[idx('pesadelo')];villageNightmare.onfocus();
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 1 herói: Paladino (cura)'));
+  assert.ok(!villageNightmare.attributes['aria-label'].includes('Duelo'),'a primeira missão solo não recebe uma chamada de outro objetivo');
+
   clear();context.localStorage.data={};t.showDifficulty();
   const journeyNightmare=t.pick.cards[idx('pesadelo')];journeyNightmare.onfocus();
   assert.ok(elements.get('pickHint').textContent.includes('Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),'a recomendação completa continua disponível na Jornada');
@@ -1111,6 +1128,25 @@ test('estrelas da campanha são cumulativas e missão sem quedas usa vida como d
   const special=Array.from(context.starConditions({won:true,falls:0,hpRatio:.8,goal:nofall}),c=>c.achieved);
   assert.deepEqual(special,[true,true,false]);
 });
+test('rótulos de estrelas nunca arredondam uma meta não alcançada para cima',()=>{
+  const condition=(result,index)=>context.starConditions(result)[index];
+  let c=condition({won:true,falls:0,hpRatio:1,goal:{type:'rescue'},villagerRatio:.496},1);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('atual 49%'));
+  c=condition({won:true,falls:0,hpRatio:1,goal:{type:'rescue'},villagerRatio:.746},2);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('atual 74%'));
+  c=condition({won:true,falls:0,hpRatio:1,goal:{type:'escort'},villagerRatio:.496},1);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('atual 49%'));
+  c=condition({won:true,falls:0,hpRatio:.746,goal:{type:'nofall'}},1);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('atual 74%'));
+  c=condition({won:true,falls:0,hpRatio:.396,goal:{type:'duel',time:75},seconds:75.9},1);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('atual 39%'));
+  c=condition({won:true,falls:0,hpRatio:.4,goal:{type:'duel',time:75},seconds:75.9},2);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('1:16'));
+  c=condition({won:true,falls:0,goal:{type:'defend'},shrineRatio:.496},1);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('atual 49%'));
+  c=condition({won:true,falls:0,goal:{type:'hunt',time:60},timeLeft:29.6},2);
+  assert.equal(c.achieved,false);assert.ok(c.label.includes('29 s de 60 s'));
+});
 test('escolta pontua pela vida do aldeão e usa os mesmos critérios no mapa e no relatório',()=>{
   const goal={type:'escort'};
   assert.deepEqual(Array.from(context.starTargetsFor(goal)),[
@@ -1133,6 +1169,42 @@ test('escolta pontua pela vida do aldeão e usa os mesmos critérios no mapa e n
   assert.deepEqual(fallen,[true,true,false],'a terceira estrela também exige zero quedas');
   clear();
 });
+test('resgate pontua pela vida da pessoa resgatada e usa snapshot pré-cura no relatório',()=>{
+  const goal={type:'rescue'};
+  assert.deepEqual(Array.from(context.starTargetsFor(goal)),[
+    '1★ Concluir o resgate','2★ Pessoa resgatada com 50%+ de vida','3★ Pessoa resgatada com 75%+ de vida e sem quedas',
+  ]);
+  const expected=[[.49,1],[.5,2],[.74,2],[.75,3]];
+  for(const [ratio,stars] of expected){
+    const conditions=Array.from(context.starConditions({won:true,falls:0,hpRatio:1,goal,villagerRatio:ratio}));
+    assert.equal(context.starsFor({won:true,falls:0,hpRatio:1,goal,villagerRatio:ratio}),stars,`${Math.round(ratio*100)}% de vida da pessoa resgatada resulta em ${stars} estrelas`);
+    assert.deepEqual(
+      Array.from(context.starTargetsFor(goal),target=>target.replace(/^\d★ /,'')),
+      conditions.map(condition=>condition.label.replace(/\s+\([^)]*atual \d+%\)$/,'')),
+      'os critérios do mapa descrevem as mesmas faixas do relatório',
+    );
+  }
+  const fallen=Array.from(context.starConditions({won:true,falls:1,hpRatio:1,goal,villagerRatio:.9}),condition=>condition.achieved);
+  assert.deepEqual(fallen,[true,true,false],'a terceira estrela também exige zero quedas');
+
+  const finishAt=(ratio)=>{
+    context.location={search:''};context.localStorage.data={};
+    begin('resgate',['paladin','pyro','berserker']);t.game.test=true;
+    const villager=t.game.villager;villager.hp=villager.maxHp*ratio;villager.rescued=true;t.game.rescueComplete=true;
+    t.game.missionVillagerRatio=ratio; // snapshot feito ao limpar a última fase
+    villager.hp=Math.min(villager.maxHp,villager.hp+villager.maxHp*.4); // cura automática entre fases
+    t.game.falls=0;
+    t.endGame('Missão cumprida',true);
+    return elements.get('overlayStars').innerHTML;
+  };
+  const damaged=finishAt(.55);
+  assert.equal(t.game.villager.hp/t.game.villager.maxHp,.95,'o estado final já recebeu cura da fase');
+  assert.ok(damaged.includes('2 de 3 estrelas'),'55% pré-cura e zero quedas dão 2 estrelas');
+  assert.ok(damaged.includes('Pessoa resgatada com 50%+ de vida (atual 55%)'),'o relatório usa a vida pré-cura');
+  const intact=finishAt(1);
+  assert.ok(intact.includes('3 de 3 estrelas'),'pessoa intacta e zero quedas dão 3 estrelas');
+  assert.ok(intact.includes('Pessoa resgatada com 75%+ de vida e sem quedas (0 quedas; atual 100%)'));
+});
 test('progresso da missão acompanha o objetivo exibido no HUD',()=>{
   clear();t.game.mission={from:5,to:7};t.game.phase=5;t.game.state='fight';
   t.game.surviveT=90;
@@ -1153,7 +1225,12 @@ test('recordes de campanha guardam apenas a melhor vitória por missão e dificu
   assert.equal(save(true,75),false);
   assert.equal(save(true,68),true);
   assert.equal(save(true,82,'pesadelo'),true);
-  assert.deepEqual(Array.from(t.missionRecords('vila'),r=>[r.difficultyId,r.time]),[['normal','1:08'],['pesadelo','1:22']]);
+  assert.deepEqual(Array.from(t.missionRecords('vila'),r=>[r.difficultyId,r.time]),[['normal','1:08.0'],['pesadelo','1:22.0']]);
+  assert.equal(t.saveMissionRecord('ponte',{won:true,seconds:60,difficultyId:'normal'}),true);
+  assert.equal(t.saveMissionRecord('ponte',{won:true,seconds:59.96,difficultyId:'normal'}),false,'candidato que arredonda para o mesmo décimo não anuncia recorde');
+  assert.equal(t.missionRecords('ponte')[0].time,'1:00.0');
+  assert.equal(t.saveMissionRecord('ponte',{won:true,seconds:59.94,difficultyId:'normal'}),true,'melhora de um décimo atualiza o recorde');
+  assert.equal(t.missionRecords('ponte')[0].time,'0:59.9','a tela mostra a precisão que distingue os recordes');
 });
 test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   const previousAdd=context.addEventListener,previousLocation=context.location,previousStorage=context.localStorage.data;
@@ -1333,7 +1410,7 @@ test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   assert.equal(t.starsOf('vila'),3);const stars=elements.get('overlayStars').innerHTML;
   assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(!stars.includes('Nova variante liberada!'));
   assert.ok(stars.includes('Concluir a missão')&&stars.includes('Terminar sem quedas (0 quedas)')&&stars.includes('atual 100%'));
-  assert.ok(stars.includes('Novo recorde · Normal · 1:23'));
+  assert.ok(stars.includes('Novo recorde · Normal · 1:23.0'));
   assert.deepEqual(Array.from(t.missionRecords('vila'),r=>r.difficultyId),['normal']);
   assert.ok(t.variantOpen('viking'));assert.equal(elements.get('overlayBtn').textContent,'Mapa');
   t.game.paused=false;t.startGame('map');assert.equal(t.game.paused,true);t.updateGame(.1);assert.equal(t.game.over,false);   // o mapa segura a partida

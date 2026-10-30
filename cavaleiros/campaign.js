@@ -327,6 +327,12 @@ function sanitizeCampaignObject(key, data) {
 }
 const readMissionRecords = () => readCampaignObject(MISSION_RECORDS_KEY);
 const formatMissionTime = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+export function formatMissionRecordTime(seconds) {
+  const tenths = Math.max(0, Math.round(Number(seconds) * 10));
+  const minutes = Math.floor(tenths / 600);
+  const remainder = tenths % 600;
+  return `${minutes}:${String(Math.floor(remainder / 10)).padStart(2, '0')}.${remainder % 10}`;
+}
 
 // Recordes separados por dificuldade deixam a comparação justa ao rejogar uma missão.
 export function missionRecords(id) {
@@ -335,7 +341,7 @@ export function missionRecords(id) {
   return RECORD_DIFFICULTIES.flatMap(([difficultyId, difficultyName]) => {
     const seconds = Number(records[difficultyId]?.seconds);
     return Number.isFinite(seconds) && seconds > 0
-      ? [{ difficultyId, difficultyName, seconds, time: formatMissionTime(seconds) }]
+      ? [{ difficultyId, difficultyName, seconds, time: formatMissionRecordTime(seconds) }]
       : [];
   });
 }
@@ -345,13 +351,16 @@ export function saveMissionRecord(id, result) {
   if (!MISSIONS.some((mission) => mission.id === id) || result?.won !== true) return false;
   const difficultyId = result.difficultyId;
   if (!RECORD_DIFFICULTIES.some(([known]) => known === difficultyId)) return false;
-  const seconds = Number(result.seconds);
+  const rawSeconds = Number(result.seconds);
+  if (!Number.isFinite(rawSeconds) || rawSeconds <= 0) return false;
+  const seconds = Math.round(rawSeconds * 10) / 10;
   if (!Number.isFinite(seconds) || seconds <= 0) return false;
   const all = readMissionRecords();
   const records = all[id] && typeof all[id] === 'object' && !Array.isArray(all[id]) ? { ...all[id] } : {};
-  const previous = Number(records[difficultyId]?.seconds);
+  const rawPrevious = Number(records[difficultyId]?.seconds);
+  const previous = Number.isFinite(rawPrevious) ? Math.round(rawPrevious * 10) / 10 : rawPrevious;
   if (Number.isFinite(previous) && previous > 0 && seconds >= previous) return false;
-  records[difficultyId] = { seconds: Math.round(seconds * 10) / 10 };
+  records[difficultyId] = { seconds };
   all[id] = records;
   writeCampaignObject(MISSION_RECORDS_KEY, all);
   return true;
@@ -458,7 +467,7 @@ export const variantOpen = () => true;
 // explicar o resultado no fim da missão.
 export function starConditions({ won, falls, hpRatio, goal, shrineRatio, villagerRatio, timeLeft, endlessTime, leaks, seconds }) {
   const completed = Boolean(won);
-  const hpPercent = Math.round(Math.max(0, Math.min(1, Number(hpRatio) || 0)) * 100);
+  const hpPercent = Math.floor(Math.max(0, Math.min(1, Number(hpRatio) || 0)) * 100);
   const fallCount = Math.max(0, Number(falls) || 0);
   const noFalls = completed && fallCount === 0;
   if (goal?.type === 'endless') {
@@ -466,8 +475,9 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, village
     return goal.marks.map((mark) => ({ label: `Aguentar ${mark} s (atual ${seconds} s)`, achieved: seconds >= mark }));
   }
   if (goal?.type === 'defend') {
-    const shrinePercent = Math.round(Math.max(0, Math.min(1, Number(shrineRatio) || 0)) * 100);
-    const shrineSafe = completed && shrinePercent >= 50;
+    const shrineHp = Math.max(0, Math.min(1, Number(shrineRatio) || 0));
+    const shrinePercent = Math.floor(shrineHp * 100);
+    const shrineSafe = completed && shrineHp >= 0.5;
     return [
       { label: 'Defender o santuário até o fim', achieved: completed },
       { label: `Santuário com 50%+ de vida (atual ${shrinePercent}%)`, achieved: shrineSafe },
@@ -476,11 +486,20 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, village
   }
   if (goal?.type === 'escort') {
     const escortHp = Math.max(0, Math.min(1, Number(villagerRatio) || 0));
-    const escortPercent = Math.round(escortHp * 100);
+    const escortPercent = Math.floor(escortHp * 100);
     return [
       { label: 'Concluir a escolta', achieved: completed },
       { label: `Aldeão com 50%+ de vida (atual ${escortPercent}%)`, achieved: completed && escortHp >= 0.5 },
       { label: `Aldeão com 75%+ de vida e sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'}; atual ${escortPercent}%)`, achieved: completed && escortHp >= 0.75 && fallCount === 0 },
+    ];
+  }
+  if (goal?.type === 'rescue') {
+    const rescuedHp = Math.max(0, Math.min(1, Number(villagerRatio) || 0));
+    const rescuedPercent = Math.floor(rescuedHp * 100);
+    return [
+      { label: 'Concluir o resgate', achieved: completed },
+      { label: `Pessoa resgatada com 50%+ de vida (atual ${rescuedPercent}%)`, achieved: completed && rescuedHp >= 0.5 },
+      { label: `Pessoa resgatada com 75%+ de vida e sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'}; atual ${rescuedPercent}%)`, achieved: completed && rescuedHp >= 0.75 && fallCount === 0 },
     ];
   }
   if (goal?.type === 'hunt') {
@@ -488,7 +507,7 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, village
     return [
       { label: 'Abater o alvo marcado', achieved: completed },
       { label: `Sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: noFalls },
-      { label: `Sem quedas e com metade do tempo sobrando (${Math.ceil(left)} s de ${goal.time} s)`, achieved: noFalls && left >= goal.time / 2 },
+      { label: `Sem quedas e com metade do tempo sobrando (${Math.floor(left)} s de ${goal.time} s)`, achieved: noFalls && left >= goal.time / 2 },
     ];
   }
   if (goal?.type === 'breach') {
@@ -505,7 +524,7 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, village
     return [
       { label: 'Vencer o duelo', achieved: completed },
       { label: `Terminar com 40%+ de vida (atual ${hpPercent}%)`, achieved: healthy },
-      { label: `40%+ de vida e em até ${formatMissionTime(goal.time)} (${formatMissionTime(time)})`, achieved: healthy && time <= goal.time },
+      { label: `40%+ de vida e em até ${formatMissionTime(goal.time)} (${formatMissionTime(Math.ceil(time))})`, achieved: healthy && time <= goal.time },
     ];
   }
   if (goal?.type === 'nofall') return [
@@ -543,6 +562,7 @@ export function saveStars(id, stars) {
 export function starTargetsFor(goal) {
   if (goal.type === 'nofall') return ['1★ Concluir a missão', '2★ Sem quedas e 75%+ de vida', '3★ Sem quedas e 90%+ de vida'];
   if (goal.type === 'escort') return ['1★ Concluir a escolta', '2★ Aldeão com 50%+ de vida', '3★ Aldeão com 75%+ de vida e sem quedas'];
+  if (goal.type === 'rescue') return ['1★ Concluir o resgate', '2★ Pessoa resgatada com 50%+ de vida', '3★ Pessoa resgatada com 75%+ de vida e sem quedas'];
   if (goal.type === 'endless') return goal.marks.map((mark, i) => `${i + 1}★ Aguentar ${mark} s`);
   if (goal.type === 'defend') return ['1★ Defender o santuário', '2★ Santuário com 50%+ de vida', '3★ Santuário 50%+ e sem quedas'];
   if (goal.type === 'hunt') return ['1★ Abater o alvo', '2★ Sem quedas', '3★ Sem quedas e metade do tempo sobrando'];

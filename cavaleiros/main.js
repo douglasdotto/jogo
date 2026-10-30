@@ -17,7 +17,7 @@ import * as audio from './audio.js';
 import { initTooltips, registerTooltip, hideTooltip } from './tooltip.js';
 import { logoSVG } from './logo.js';
 import { tutorial } from './tutorial.js';
-import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen, campaignCosmetics, equippedCampaignCosmetic, equipCampaignCosmetic, campaignStorageIsVolatile, campaignStorageWasCorrupted, campaignCorruptBackupFailed } from './campaign.js';
+import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen, campaignCosmetics, equippedCampaignCosmetic, equipCampaignCosmetic, formatMissionRecordTime, campaignStorageIsVolatile, campaignStorageWasCorrupted, campaignCorruptBackupFailed } from './campaign.js';
 import { materialPool } from './fx-pool.js';
 import { createPopTextPool } from './pop-text-pool.js';
 import { createCampaignAura } from './campaign-aura.js';
@@ -130,14 +130,23 @@ const DIFFICULTIES = [
     hp: 1.28, dmg: 1.18, count: 1.18, interval: 0.86, boss: 1.15, heal: 0.2, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
 const DIFFICULTY_PICK_HINT = '← → · Enter · Esc';
+const nightmareTeamIds = (mission) => {
+  if (mission?.heroes === 1) return ['paladin'];
+  if (mission?.heroes === 2) return ['paladin', ['defend', 'breach', 'escort', 'rescue'].includes(mission.goal?.type) ? 'guardian' : 'pyro'];
+  if (mission?.heroes === 3) return ['paladin', 'guardian', 'pyro'];
+  return ['paladin', 'guardian', 'pyro', 'cleric'];
+};
 const difficultyTeamRecommendation = (option, mission) => {
   if (option.id !== 'pesadelo') return '';
-  if (mission?.heroes === 1) return 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.';
-  if (mission?.heroes === 2) return ['defend', 'breach', 'escort', 'rescue'].includes(mission.goal?.type)
-    ? 'Equipe para 2 heróis: Paladino (cura) e Guardião (proteção).'
-    : 'Equipe para 2 heróis: Paladino (cura) e Piromante (dano em área).';
-  if (mission?.heroes === 3) return 'Equipe para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área).';
-  return 'Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).';
+  const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', cleric: 'Clériga (suporte/cura)' };
+  const team = nightmareTeamIds(mission).map((id) => labels[id]);
+  if (team.length === 1) return mission?.goal?.type === 'duel'
+    ? 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.'
+    : 'Equipe para 1 herói: Paladino (cura) para sustentar a missão sozinho.';
+  const names = team.length === 2 ? `${team[0]} e ${team[1]}`
+    : team.length === 3 ? `${team[0]}, ${team[1]} e ${team[2]}`
+      : `${team.slice(0, -1).join(', ')} e ${team.at(-1)}`;
+  return `Equipe para ${team.length} heróis: ${names}.`;
 };
 let difficulty = DIFFICULTIES[1];
 
@@ -358,6 +367,9 @@ function showPick(title, sub) {
   const previousSuggestion = game.mission && game.picksLeft > 0 && !game.test
     ? game.campaignSquadSuggestion?.[heroes().length]
     : null;
+  const recommendedId = game.mission && difficulty.id === 'pesadelo'
+    ? nightmareTeamIds(game.mission)[heroes().length]
+    : null;
   pick.suggestedId = previousSuggestion;
   $('pickTitle').textContent = title;
   $('pickSub').textContent = sub;
@@ -401,19 +413,20 @@ function showPick(title, sub) {
     const owned = isOwned(cfg), open = variantOpen(cfg.id, total);
     const className = HEROES[cfg.classId]?.name || 'Herói';
     const suggested = cfg.id === previousSuggestion && !owned && open;
+    const recommended = cfg.id === recommendedId && !owned && open;
     const b = document.createElement('div');
-    b.className = `${owned ? 'card owned' : open ? 'card' : 'card locked'}${suggested ? ' suggested' : ''}`;
+    b.className = `${owned ? 'card owned' : open ? 'card' : 'card locked'}${suggested ? ' suggested' : ''}${recommended ? ' recommended' : ''}`;
     b.setAttribute('role', 'button');
     b.tabIndex = 0;
     b.setAttribute('aria-pressed', 'false');
-    b.setAttribute('aria-label', `${cfg.name}, classe ${className}${suggested ? ' (sugestão da equipe anterior)' : owned ? ' (já está no grupo)' : open ? '' : ` (★ ${starsToUnlock(cfg.id)} para liberar)`}`);
+    b.setAttribute('aria-label', `${cfg.name}, classe ${className}${suggested ? ' (sugestão da equipe anterior)' : owned ? ' (já está no grupo)' : open ? '' : ` (★ ${starsToUnlock(cfg.id)} para liberar)`}${recommended ? ' (recomendado para Pesadelo nesta missão)' : ''}`);
     b.setAttribute('aria-disabled', String(owned || !open));
     b.style.setProperty('--c', cfg.color[0]);
     b.style.setProperty('--cd', cfg.color[1]);
     b.style.setProperty('--d', `${i * 30}ms`);
     const mastery = progress.mastery(cfg.id).level;
     if (mastery > 1) b.classList.add(`mastery-${mastery}`);
-    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small></div>${mastery > 1 ? `<span class="mastery-badge" aria-hidden="true">✦${mastery}</span>` : ''}${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock" aria-hidden="true">🔒 ★ ${starsToUnlock(cfg.id)}</span>`}`;
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portrait}" alt=""></div><div class="pick-card-copy"><div class="ribbon">${cfg.name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small></div>${mastery > 1 ? `<span class="mastery-badge" aria-hidden="true">✦${mastery}</span>` : ''}${suggested ? '<span class="pick-suggestion">Equipe anterior</span>' : ''}${recommended ? '<span class="pick-recommendation">Recomendado</span>' : ''}${owned ? '<span class="seal">No grupo</span>' : ''}${open ? '' : `<span class="lock" aria-hidden="true">🔒 ★ ${starsToUnlock(cfg.id)}</span>`}`;
     b.onclick = () => selectCard(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i, false);   // herói só muda com clique: o mouse passando não troca a ficha
@@ -427,7 +440,8 @@ function showPick(title, sub) {
   pick.team.setAttribute('aria-label', 'Equipe e cobertura de papéis');
   list.append(filters, rows, pick.team, pick.info);
   const suggestedIndex = previousSuggestion ? pick.options.findIndex((cfg) => cfg.id === previousSuggestion && isFree(cfg)) : -1;
-  selectCard(suggestedIndex >= 0 ? suggestedIndex : pick.options.findIndex(isFree));
+  const recommendedIndex = recommendedId ? pick.options.findIndex((cfg) => cfg.id === recommendedId && isFree(cfg)) : -1;
+  selectCard(suggestedIndex >= 0 ? suggestedIndex : recommendedIndex >= 0 ? recommendedIndex : pick.options.findIndex(isFree));
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
@@ -907,7 +921,10 @@ function selectCard(i) {
   });
   if (pick.mode === 'hero') {
     setPickClass(pick.options[pick.sel].classId);
-    $('pickHint').textContent = PICK_HERO_HINT;
+    const recommendation = game.mission && difficulty.id === 'pesadelo'
+      ? `Sugestão Pesadelo: ${nightmareTeamIds(game.mission).map((id) => VARIANTS.find((cfg) => cfg.id === id)?.name || id).join(' + ')}`
+      : '';
+    $('pickHint').textContent = recommendation ? `${PICK_HERO_HINT} · ${recommendation}` : PICK_HERO_HINT;
     renderInfo(pick.options[pick.sel]);
   } else if (pick.mode === 'difficulty') {
     const selected = pick.options[pick.sel];
@@ -6408,7 +6425,7 @@ function missionEnd(won) {
   const shrine = game.shrine;
   const villager = game.villager;
   const currentVillagerRatio = villager && villager.maxHp > 0 ? Math.max(0, Math.min(1, villager.hp / villager.maxHp)) : 0;
-  const villagerRatio = game.mission.goal.type === 'escort'
+  const villagerRatio = ['escort', 'rescue'].includes(game.mission.goal.type)
     ? (game.missionVillagerRatio ?? currentVillagerRatio)
     : currentVillagerRatio;
   const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, villagerRatio, timeLeft: game.surviveT, endlessTime: game.endlessT, leaks: game.leaks, seconds: game.missionT };
@@ -6433,7 +6450,7 @@ function missionEnd(won) {
     `<i class="${k <= stars ? 'on' : ''}" data-tip="${escAttr(criterion(conditions[k - 1]))}">★</i>`).join('')}</span>`;
   const chips = [
     best && stars ? endChip('★', 'Melhor', 'Novo melhor resultado nesta missão!', 'star') : '',
-    bestTime ? endChip('⏱', clockText(game.missionT), `Novo recorde · ${difficulty.name} · ${clockText(game.missionT)}`) : '',
+    bestTime ? endChip('⏱', formatMissionRecordTime(game.missionT), `Novo recorde · ${difficulty.name} · ${formatMissionRecordTime(game.missionT)}`) : '',
     ...cosmeticUnlocks.map((cosmetic) => endChip('✦', 'Cosmético novo', `${cosmetic.name} desbloqueado em ${cosmetic.chapter}. Equipe no Acampamento.`, 'cosmetic')),
     ...fresh.map((cfg) => `<span class="end-chip unlock" tabindex="0" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="Nova variante liberada: ${escAttr(cfg.name)}" aria-label="Nova variante liberada: ${escAttr(cfg.name)}"><img src="${cfg.portrait}" alt="">Nova!</span>`),
   ].join('');

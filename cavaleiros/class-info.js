@@ -49,11 +49,20 @@ const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe'
 const MISSION_ROLE_NEEDS = {
   win: ['Defesa', 'Cura', 'Área'],
   escort: ['Defesa', 'Cura', 'Controle'],
+  defend: ['Defesa', 'Cura', 'Controle'],
+  breach: ['Defesa', 'Cura', 'Controle'],
   boss: ['Defesa', 'Cura', 'Dano a chefe'],
   survive: ['Defesa', 'Cura', 'Área', 'Controle'],
+  duel: ['Defesa', 'Cura'],
+  hunt: ['Defesa', 'Controle', 'Dano a chefe'],
+  rescue: ['Defesa', 'Cura', 'Área'],
   totems: ['À distância', 'Controle', 'Área'],
+  tower: ['À distância', 'Controle', 'Área'],
   nofall: ['Defesa', 'Cura', 'Controle'],
   timer: ['À distância', 'Área', 'Cura'],
+  endless: ['Defesa', 'Cura', 'Área', 'Controle'],
+  elite: ['Defesa', 'Cura', 'Área', 'Dano a chefe'],
+  twin: ['Defesa', 'Cura', 'Dano a chefe'],
 };
 
 export function missionRoleNeeds(goal) {

@@ -747,7 +747,8 @@
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card.locked { cursor: default; }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .seal,
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .lock,
-#pick:has(#pickList.grid) .pick-suggestion {
+#pick:has(#pickList.grid) .pick-suggestion,
+#pick:has(#pickList.grid) .pick-recommendation {
   position: absolute;
   z-index: 4;
   top: 16px;
@@ -767,6 +768,7 @@
 }
 #pick:has(#pickList.grid) #pickList.grid .pick-row .card .lock { color: #ffe27a; }
 #pick:has(#pickList.grid) .pick-suggestion { right: auto; left: 16px; color: #ffe6a0; border-color: rgba(255, 229, 154, .5); }
+#pick:has(#pickList.grid) .pick-recommendation { color: #d7f3ff; border-color: rgba(130, 209, 255, .58); background: rgba(11, 43, 65, .92); }
 
 /* equipe: lugar fixo abaixo dos cartões, com mini-retratos e cobertura de papéis */
 #pick:has(#pickList.grid) .pick-team-bar {
