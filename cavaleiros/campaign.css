@@ -1237,30 +1237,6 @@
   }
   #pick:has(#pickList.grid) .pick-team-bar { padding: 9px 10px; }
 }
-/* No desktop largo, a classe com cinco heróis usa 3+2 cards iguais e centralizados. */
-@media (min-width: 1500px) {
-  #pick:has(#pickList.grid) #pickList.grid .pick-row:has(> .card:nth-child(5):last-child) {
-    width: 75%;
-    flex: 0 0 75%;
-    margin-inline: auto;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-  #pick:has(#pickList.grid) #pickList.grid .pick-row:has(> .card:nth-child(5):last-child) > .card:nth-child(-n+3) {
-    grid-column: span 2;
-    width: auto;
-    justify-self: stretch;
-  }
-  #pick:has(#pickList.grid) #pickList.grid .pick-row:has(> .card:nth-child(5):last-child) > .card:nth-child(4) {
-    grid-column: 2 / span 2;
-    width: auto;
-    justify-self: stretch;
-  }
-  #pick:has(#pickList.grid) #pickList.grid .pick-row:has(> .card:nth-child(5):last-child) > .card:nth-child(5):last-child {
-    grid-column: 4 / span 2;
-    width: auto;
-    justify-self: stretch;
-  }
-}
 /* abas com 5 a 8 heróis: grade de 3 ou 4 colunas (--pick-cols vem do main.js) que cabe sem rolar */
 @media (min-width: 1001px) {
   #pick:has(#pickList.grid) #pickList.grid .pick-row:has(> .card:nth-child(5)) {
