@@ -24,6 +24,12 @@ function rogueOutfit({ cloth, trim = cloth, leather, metal, pants = leather, boo
   };
 }
 
+// Ranger (2.0): pano azul do atlas (0,1 e 1,2), acabamento claro (2,1 e 0,2), couro (7,0 / 3,2 / 7,2) e capa (1,1)
+function rangerOutfit({ cloth, trim, leather, cape = cloth, sleeves = cloth, pants = leather }, amount = 0.9) {
+  const p = (tint) => ({ tint, amount, base: 0.5, cells: { '0,1': tint, '1,2': tint, '2,1': trim, '0,2': trim, '7,0': leather, '3,2': leather, '7,2': leather } });
+  return { Ranger_Body: p(cloth), Ranger_ArmLeft: p(sleeves), Ranger_ArmRight: p(sleeves), Ranger_LegLeft: p(pants), Ranger_LegRight: p(pants), Ranger_Cape: { tint: cape, amount: 0.85 } };
+}
+
 // cores do rosto: { skin, hair (cabelo e barba do atlas), eyes, hood }
 function face(model, colors, head = `${model}_Head`) {
   return { [head]: { face: colors } };
@@ -194,22 +200,20 @@ export const LOOKS = {
       { type: 'brows', bone: 'head', color: 0x1a1420, angle: 0.4 },
     ],
   },
-  crossbow: {   // caçador: gibão marrom e mangas verde-floresta, manto curto, chapéu com pena (Robin Hood), aljava, bigode
-    shape: silhouette('Rogue', { torso: 1.03, arms: 1.02, legs: 1, height: 1.04, depth: 1.03 }),
-    hide: ['Rogue_Cape'],
+  crossbow: {   // caçador no modelo Ranger (Adventurers 2.0, bigode e aljava próprios): gibão marrom e mangas verde-floresta, chapéu com pena (Robin Hood)
+    shape: silhouette('Ranger', { torso: 1.03, arms: 1.02, legs: 1, height: 1.04, depth: 1.03 }),
     add: [
-      { from: 'Skeleton_Quiver', part: 'Skeleton_Quiver', bone: 'chest', pos: [0.15, 0.25, -0.47], rot: [0.2, 0, -0.5], scale: 0.9 },
+      { from: 'Rogue', part: '2H_Crossbow' },
       { from: 'Mage', part: 'Mage_Hat', scale: 0.72, pos: [0, -0.08, 0] },
     ],
     paint: {
-      ...rogueOutfit({ cloth: '#9a6434', trim: '#7cc860', sleeves: '#5aa84a', leather: '#5a3418', pants: '#6a4a2a', boots: '#4a2e18', gloves: '#5a3418' }),
-      ...face('Rogue', { skin: '#e8b890', hair: '#8a4a1e', eyes: '#4ac83a' }),
-      Mage_Hat: { tint: '#4f9a44', amount: 0.85 },
+      ...rangerOutfit({ cloth: '#9a6434', trim: '#7cc860', leather: '#5a3418', cape: '#4f9a44', sleeves: '#5aa84a', pants: '#6a4a2a' }),
+      ...face('Ranger', { skin: '#e8b890', hair: '#8a4a1e', eyes: '#4ac83a' }),
+      Mage_Hat: { tint: '#4f9a44', amount: 0.85 }, Ranger_Quiver: { tint: '#5a3418', amount: 0.5 },
       '2H_Crossbow': { tint: '#8a5a2e', amount: 0.5 },
     },
     extras: [
-      { type: 'feather', bone: 'head', color: 0xff3d3d }, { type: 'capelet', bone: 'chest' },
-      { type: 'mustache', bone: 'head', color: 0x8a4a1e, curl: 0.4 },
+      { type: 'feather', bone: 'head', color: 0xff3d3d },
       { type: 'brows', bone: 'head', color: 0x6a3a16, angle: 0.15 },
     ],
   },
@@ -247,15 +251,16 @@ export const LOOKS = {
       { type: 'mustache', bone: 'head', color: 0xe8e2d4, curl: 0.5 }, { type: 'scar', bone: 'head', color: 0xc0605a, side: -1 },
     ],
   },
-  archer: {   // caçadora encapuzada: capuz e túnica verde-água com creme, couro castanho, arco longo, aljava e olhos âmbar
+  archer: {   // caçadora encapuzada: capuz e túnica verde-água com creme, couro castanho, arco pronto (Fantasy Weapons), aljava e olhos âmbar
     shape: silhouette('Rogue', { torso: 0.92, arms: 0.94, legs: 1.02, height: 1.06, depth: 0.92 }),
+    add: [{ from: 'kaykit/weapons/Assets/gltf/bow_A_withString', part: 'bow_A_withString', bone: 'handslot.l', rot: [0, -Math.PI / 2, 0] }],   // o arco do pacote deita no eixo X: gira para ficar em pé com a corda para o corpo
     paint: {
       ...rogueOutfit({ cloth: '#2f9a86', trim: '#f2e2b0', leather: '#6a3a22', pants: '#3e5a40', boots: '#3a2214', gloves: '#8a5a2e', sleeves: '#e8dcb8' }),
       ...face('Rogue', { skin: '#f2d0b0', hood: '#1f7a6a', eyes: '#ffb030' }, 'Rogue_Head_Hooded'),
-      Rogue_Cape: { tint: '#1a5a50', amount: 0.85 },
+      Rogue_Cape: { tint: '#1a5a50', amount: 0.85 }, bow_A_withString: { tint: '#8a5a2e', amount: 0.35 },
     },
     extras: [
-      { type: 'bow', bone: 'handslotl' }, { type: 'quiver', bone: 'chest' },
+      { type: 'quiver', bone: 'chest' },
       { type: 'armWraps', bone: 'lowerarm.l', color: 0x8a5a2e, n: 2 },
       { type: 'brows', bone: 'head', color: 0x8a4a1e, angle: 0.1, y: 0.47 },
     ],
@@ -336,7 +341,7 @@ export const LOOK_PREVIEW = [
   { id: 'arcane', name: 'Arcano', model: 'Mage', use: ['Spellbook_open', '1H_Wand'] },
   { id: 'cryo', name: 'Criomante', model: 'Mage', use: ['1H_Wand'] },
   { id: 'assassin', name: 'Assassino', model: 'Rogue', use: ['Knife', 'Knife_Offhand'] },
-  { id: 'crossbow', name: 'Besteiro', model: 'Rogue', use: ['2H_Crossbow'] },
+  { id: 'crossbow', name: 'Besteiro', model: 'Ranger', use: ['2H_Crossbow'] },
   { id: 'ninja', name: 'Ninja', model: 'Rogue_Hooded', use: ['Knife', 'Throwable'] },
   { id: 'duelist', name: 'Duelista', model: 'Rogue', use: [] },
   { id: 'king', name: 'Rei Dourado', model: 'Knight', recipe: 'rei' },
@@ -363,3 +368,4 @@ export const WEAPONS = {
   Rogue: ['Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Knife', 'Throwable'],
 };
 WEAPONS.Rogue_Hooded = WEAPONS.Rogue;
+WEAPONS.Ranger = [];   // o Ranger 2.0 vem sem armas: a besta vem do Ladino (add)

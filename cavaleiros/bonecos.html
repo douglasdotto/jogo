@@ -40,6 +40,7 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { CHARACTERS, CHARACTER_ASSETS, buildCharacter } from './characters.js';
+    import { loadHeroAssets } from './hero-anims.js';
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -64,7 +65,7 @@
 
     const loader = new GLTFLoader();
     const assets = {};
-    await Promise.all(CHARACTER_ASSETS.map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+    await loadHeroAssets(loader, assets, CHARACTER_ASSETS);
     assets.Skeleton_Staff = await loader.loadAsync('assets/Skeleton_Staff.gltf');
 
     const units = CHARACTERS.map((r, i) => {

@@ -1068,19 +1068,6 @@ const ACCESSORIES = {
     g.add(new THREE.Mesh(merged(metal), lambert(buckle, { emissive: 0x6a4a00, emissiveIntensity: 0.3 })));
     return g;
   },
-  // arco longo de madeira com pontas claras e corda esticada (mão esquerda da arqueira; o eixo Y do osso aponta para cima)
-  bow({ wood = 0x7a4a26, tip = 0xe8f6ee, string = 0xf4ecd8 } = {}) {
-    const g = new THREE.Group();
-    // arco no plano YZ: a empunhadura fica na mão (origem), as pontas curvam para trás (-z) onde passa a corda
-    const limb = piece(new THREE.TorusGeometry(0.62, 0.035, 5, 18, Math.PI * 0.8).rotateZ(Math.PI * 0.6).rotateY(Math.PI / 2).translate(0, 0, -0.62));
-    g.add(new THREE.Mesh(merged([limb, piece(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 6))]), lambert(wood)));
-    const ends = [-1, 1].map((s) => piece(new THREE.ConeGeometry(0.04, 0.14, 4), [0, s * 0.62, -0.31], [s > 0 ? 0 : Math.PI, 0, 0]));
-    g.add(new THREE.Mesh(merged(ends), lambert(tip, { emissive: 0x1f6a5a, emissiveIntensity: 0.3 })));
-    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.18, 3).translate(0, 0, -0.31), lambert(string)));
-    g.rotation.set(0, 0, Math.PI / 2);   // de frente para a câmera, não de perfil
-    g.scale.setScalar(1.15);
-    return g;
-  },
   // aljava de couro nas costas com flechas de penas coloridas (osso do peito)
   quiver({ color = 0x6a3a22, band = 0xe8c060, fletch = 0x3fe0b0 } = {}) {
     const g = new THREE.Group(), tilt = [0.25, 0, -0.45];
