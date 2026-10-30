@@ -224,7 +224,7 @@ let difficulty = DIFFICULTIES[1];
 
 // ---------- cena ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));   // acima de 1,5 o custo de pixel cresce sem ganho visível
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -262,7 +262,7 @@ const QUALITY_KEY = 'cavaleiros-graficos';
 let lowQuality = false;
 try { lowQuality = localStorage.getItem(QUALITY_KEY) === 'baixa'; } catch {}
 function applyQuality() {
-  renderer.setPixelRatio(lowQuality ? 1 : Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(lowQuality ? 1 : Math.min(devicePixelRatio, 1.5));
   renderer.setSize(innerWidth, innerHeight);
   sun.castShadow = !lowQuality;
   setVfxQuality(lowQuality);   // ruído mais simples nos shaders de efeito
@@ -1869,8 +1869,38 @@ function setUnitEmissive(material, hex) {
   lastUnitEmissive.set(material, hex);
 }
 
+// esqueletos inimigos: corpo, braços e pernas usam o mesmo material e o mesmo esqueleto, então viram uma
+// malha só no modelo-base (uma vez por modelo). Cada inimigo desenha 4 peças a menos, na câmera e na sombra.
+// Cabeça, mandíbula, olhos, crânio e capa ficam soltos (a cabeça voa na morte; a capa é recolorida por nome).
+const mergedSkeletonModels = new WeakSet();
+function mergeSkeletonLimbs(model) {
+  if (!model?.traverse || mergedSkeletonModels.has(model)) return;
+  mergedSkeletonModels.add(model);
+  const groups = new Map();
+  model.traverse((o) => {
+    if (!o.isSkinnedMesh || !/^Skeleton_.*_(Body|ArmLeft|ArmRight|LegLeft|LegRight)$/.test(o.name)) return;
+    const key = `${o.parent.uuid}|${o.material.uuid}|${o.skeleton.bones.map((b) => b.uuid).join()}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  });
+  for (const parts of groups.values()) {
+    const base = parts.find((o) => o.name.endsWith('_Body')) || parts[0];
+    const same = parts.filter((o) => o.matrix.equals(base.matrix) && o.bindMatrix.equals(base.bindMatrix));
+    if (same.length < 2) continue;
+    const geometry = mergeGeometries(same.map((o) => o.geometry));
+    if (!geometry) continue;
+    const merged = new THREE.SkinnedMesh(geometry, base.material);
+    merged.name = base.name;
+    merged.position.copy(base.position); merged.quaternion.copy(base.quaternion); merged.scale.copy(base.scale);
+    base.parent.add(merged);
+    merged.bind(base.skeleton, base.bindMatrix);
+    for (const o of same) o.removeFromParent();
+  }
+}
+
 class Unit {
   constructor(gltf, stats, team) {
+    mergeSkeletonLimbs(gltf.scene);
     this.root = SkeletonUtils.clone(gltf.scene);
     this.mats = [];   // materiais próprios para piscar ao levar golpe sem afetar os outros
     const skinned = [];
@@ -1878,7 +1908,7 @@ class Unit {
     this.root.traverse((o) => {
       if (!o.isMesh) return;
       if (o.material.userData?.vfx) { o.castShadow = o.frustumCulled = false; return; }   // chama em shader: material compartilhado, sem sombra
-      o.castShadow = true;
+      o.castShadow = !/_Eyes$/.test(o.name);   // olhos ficam dentro da cabeça: a sombra seria a mesma, com uma chamada a mais
       o.frustumCulled = true;
       if (o.isSkinnedMesh) skinned.push(o);
       const sourceMaterial = o.material;
@@ -2875,11 +2905,11 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
     mesh.add(handle);
   }
   mesh.position.copy(from.pos).setY(from.pos.y + 1.3);
-  const dir = fireBoltDirectionScratch.subVectors(target.pos, from.pos).normalize().applyAxisAngle(fireBoltAxis, angle).clone();
+  const dir = fireBoltDirectionScratch.subVectors(target.pos, from.pos).normalize().applyAxisAngle(fireBoltAxis, angle);
   mesh.quaternion.setFromUnitVectors(fireBoltAxis, dir);
   scene.add(mesh);
   const piercing = kind === 'crossbow' || kind === 'ninja' || kind === 'archer';
-  const bolt = { mesh, target, owner: from, kind, dir, hit: piercing ? new Set() : null, life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
+  const bolt = { mesh, target, owner: from, kind, dir: piercing ? dir.clone() : null, hit: piercing ? new Set() : null, life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
   if (skill && (kind === 'pyro' || kind === 'flask' || kind === 'tonic')) {   // a bola grande e os frascos fazem um arco no ar até o alvo
     bolt.base = mesh.position.clone();
@@ -2934,7 +2964,7 @@ function updateBolts(dt) {
         relicBounce(b);
         if (b.kind === 'pyro') {
           // chão chamuscado; as brasas e as chamas em shader vêm de FX.fireField e apagam com ele
-          const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0x3a1608, side: THREE.DoubleSide, transparent: true, opacity: 0.45, depthWrite: false }));
+          const mesh = new THREE.Mesh(groundGeo, groundMarkMaterials.take(0x3a1608, 0.45));
           mesh.rotation.x = -Math.PI / 2;
           mesh.position.copy(b.target.pos).setY(b.target.pos.y + 0.06);
           mesh.scale.setScalar(radius);
@@ -3033,6 +3063,7 @@ function deploySentry(owner, at, duration = 10, power = owner.skillPower || 1) {
   return sentry;
 }
 
+const sentryShotFrom = new THREE.Vector3(), sentryShotTo = new THREE.Vector3();
 function updateSentries(dt) {
   for (let i = sentries.length - 1; i >= 0; i--) {
     const sentry = sentries[i], owner = sentry.owner;
@@ -3055,8 +3086,8 @@ function updateSentries(dt) {
     const boosted = sentry.boostT > 0;
     sentry.fireT = sentry.rate * (boosted ? 0.58 : 1);
     heroHit(owner, target, owner.dmg * 0.46 * sentry.power * (boosted ? 1.45 : 1));
-    FX.zigzag(sentry.root.position.clone().setY(sentry.root.position.y + 1.08), target.pos.clone().setY(target.pos.y + 0.95));
-    if (typeof particle === 'function') particle(sparkGeo, boosted ? 0xe6fffb : 0x6df4df, target.pos.clone().setY(target.pos.y + 0.9), V(rnd(0.35), 0.5, rnd(0.35)), 0.25, { size: 1.2 });
+    FX.zigzag(sentryShotFrom.copy(sentry.root.position).setY(sentry.root.position.y + 1.08), sentryShotTo.copy(target.pos).setY(target.pos.y + 0.95));   // zigzag e particle copiam os pontos
+    if (typeof particle === 'function') particle(sparkGeo, boosted ? 0xe6fffb : 0x6df4df, sentryShotTo.copy(target.pos).setY(target.pos.y + 0.9), V(rnd(0.35), 0.5, rnd(0.35)), 0.25, { size: 1.2 });
   }
 }
 
@@ -3104,12 +3135,13 @@ function arrowRain(owner, at, radius, total) {
 }
 
 // Alquimista: o frasco voa, explode empurrando o grupo e deixa uma poça de veneno menor
+const flaskPush = new THREE.Vector3();
 function volatileFlask(owner, at, radius, dmg) {
   const mesh = groundMark(at, radius, 0x9cff3a, 0.2);
   flames.push({ mesh, radius, owner, wait: 0.4, t: 0.05, tick: 0, every: 1, dmg, onTick: (f) => {
     const targets = activeTargetContext?.skeletons || (frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive());
     for (const s of targets) if (!s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1))
-      s.vel.add(new THREE.Vector3().subVectors(s.pos, f.mesh.position).setY(0).normalize().multiplyScalar(s.boss ? 1.5 : 4.5));
+      s.vel.add(flaskPush.subVectors(s.pos, f.mesh.position).setY(0).normalize().multiplyScalar(s.boss ? 1.5 : 4.5));
     FX.flaskBlast(f.mesh.position, f.radius);
     alchemyPool(owner, f.mesh.position, false, 0.6);
   } });
@@ -3143,13 +3175,14 @@ function updateEnemyBolts(dt) {
   }
   updateMonsterFx(dt);   // avisos no chão e golpes especiais dos monstros
 }
+const splashAt = new THREE.Vector3();
 function waterSplash(at, spawn = false) {
-  ring(at.clone().setY(at.y + 0.1), spawn ? 1 : 0.45, 0xc5f2f4, spawn ? 0.7 : 0.4);
+  ring(splashAt.copy(at).setY(at.y + 0.1), spawn ? 1 : 0.45, 0xc5f2f4, spawn ? 0.7 : 0.4);   // ring copia a posição
   blasts[blasts.length - 1].ripple = true;
   if (!spawn) return;
   for (let i = 0; i < 6; i++) {
-    const m = new THREE.Mesh(puffGeo, new THREE.MeshBasicMaterial({ color: 0xa3e4f3, transparent: true }));
-    m.position.copy(at).add(new THREE.Vector3(0, 0.15, 0)); m.scale.setScalar(0.3);
+    const m = new THREE.Mesh(puffGeo, poofStarMaterials.take(0xa3e4f3));   // mesmo MeshBasicMaterial transparente, do estoque; updateFx o devolve
+    m.position.copy(at).setY(at.y + 0.15); m.scale.setScalar(0.3);
     m.userData = { v: new THREE.Vector3((Math.random() - 0.5) * 3, 1 + Math.random(), (Math.random() - 0.5) * 3), t: 0, life: 0.6, grow: 0.3 };
     scene.add(m); fx.push(m);
   }
@@ -3270,18 +3303,18 @@ const hiddenCore = new THREE.MeshBasicMaterial({ visible: false });
 const BOLT_LOOKS = {
   // orb = bola de energia em shader (paleta, tamanho); ice = cristal facetado em shader; o corpo do tiro fica invisível
   pyro: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['fire', 0.5], size: [2, 3.2], spin: true },
-  arcane: { geo: boltGeo, core: hiddenCore, shells: [[glow(0xc999ff, 0.35), 2.1]], orb: ['arcane', 0.42], size: [1.6, 1.6], spin: true },
-  cryo: { geo: iceGeo, core: hiddenCore, shells: [[glow(0x5fd0ff, 0.45), 1.35]], ice: true, size: [1.7, 2.6], aim: true },
-  necro: { geo: boltGeo, core: hiddenCore, shells: [[glow(0x0f8a30, 0.4), 2.1]], orb: ['necro', 0.44], size: [1.7, 1.7], spin: true },
-  druid: { geo: thornGeo, core: basic(0x9be05a), shells: [[glow(0x5fbf2a, 0.5), 1.3]], size: [1.9, 1.9], aim: true, roll: true },
+  arcane: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xc999ff, 0.35), 2.1]], orb: ['arcane', 0.42], size: [1.6, 1.6], spin: true },
+  cryo: { geo: iceGeo, core: hiddenCore, shells: [[glowMaterial(0x5fd0ff, 0.45), 1.35]], ice: true, size: [1.7, 2.6], aim: true },
+  necro: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x0f8a30, 0.4), 2.1]], orb: ['necro', 0.44], size: [1.7, 1.7], spin: true },
+  druid: { geo: thornGeo, core: basic(0x9be05a), shells: [[glowMaterial(0x5fbf2a, 0.5), 1.3]], size: [1.9, 1.9], aim: true, roll: true },
   crossbow: { size: [1.4, 2] },
   archer: { size: [1.3, 2.2] },
   alchemist: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.4], size: [1.3, 1.3], spin: true },
-  oracle: { geo: boltGeo, core: hiddenCore, shells: [[glow(0xc6b4ff, 0.52), 1.8]], orb: ['arcane', 0.34], size: [1.35, 2], spin: true },
+  oracle: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xc6b4ff, 0.52), 1.8]], orb: ['arcane', 0.34], size: [1.35, 2], spin: true },
 };
 for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells || []).map((x) => x[0])]) if (m) m.userData.keep = true;
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
-const starGlowMat = glow(0x6f8cff, 0.55);
+const starGlowMat = glowMaterial(0x6f8cff, 0.55);
 for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat, flaskGlassMat, woolMat, sheepFaceMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
 const TRAIL = { arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb] };
 // Símbolo e paleta próprios aparecem enquanto cada habilidade é preparada.
@@ -3319,13 +3352,17 @@ let shakeK = 0, stopT = 0, slowT = 0;
 const jolt = new THREE.Vector3();
 const calmMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');   // sistema pede menos movimento: sem tremida nem hit-stop
 
-function glow(color, opacity = 0.85, additive = true) {
+function glowMaterial(color, opacity = 0.85, additive = true) {   // material próprio: compartilhado (keep) ou com outras propriedades mudadas
   return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+}
+// brilho de efeito: material exclusivo enquanto vive (pode animar a opacidade), devolvido ao estoque por dropFx
+function glow(color, opacity = 0.85, additive = true) {
+  return (additive ? particleMats.add : particleMats.soft).take(color, opacity);
 }
 // as partículas (faíscas, fumaça, pedrinhas) pegam o material destes estoques e o devolvem ao sumir
 const particleMats = {
-  add: materialPool(() => glow(0xffffff)),
-  soft: materialPool(() => glow(0xffffff, 0.85, false)),
+  add: materialPool(() => glowMaterial(0xffffff)),
+  soft: materialPool(() => glowMaterial(0xffffff, 0.85, false)),
   solid: materialPool(() => new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true })),
 };
 
@@ -4040,7 +4077,7 @@ function slashX(target, h) {
   const p = target.pos.clone().setY(target.pos.y + 1.1);
   [-1, 1].forEach((s, i) => {
     for (const [color, thick] of [[0xb48cff, 1], [0xffffff, 0.4]]) {
-      const m = new THREE.Mesh(slashGeo, glow(color, 1));
+      const m = new THREE.Mesh(slashGeo, glowMaterial(color, 1));
       m.material.depthTest = false;   // o corte aparece por cima do próprio assassino
       m.renderOrder = 5;
       m.position.copy(p);
@@ -4090,7 +4127,7 @@ function bladeCut(target, h, side = 0) {
   const p = target.pos.clone().setY(target.pos.y + 1);
   (side ? [side] : [-1, 1]).forEach((s, i) => {
     for (const [color, thick] of [[0xc9d4e2, 1], [0xffffff, 0.35]]) {
-      const m = new THREE.Mesh(slashGeo, glow(color, 1));
+      const m = new THREE.Mesh(slashGeo, glowMaterial(color, 1));
       m.material.depthTest = false;
       m.renderOrder = 5;
       m.position.copy(p);
@@ -8005,6 +8042,19 @@ const frameUnits = [], frameHeroes = [], frameFoes = [], frameNearFoes = [];
 const frameFoeCenter = new THREE.Vector3();
 const CAM_MIN_FIT = 17;   // mais perto que isso a briga sai da tela
 let frameSpread = 0;
+// o sol acompanha o grupo em passos de um texel do mapa de sombra (no plano da luz), senão as bordas das sombras tremem
+const SUN_OFFSET = new THREE.Vector3(14, 30, 12);
+// eixos da câmera de sombra (lookAt com "para cima" = y): direita = y × deslocamento, cima = deslocamento × direita
+const sunRight = new THREE.Vector3(SUN_OFFSET.z, 0, -SUN_OFFSET.x).normalize();
+const sunUp = new THREE.Vector3(-SUN_OFFSET.x * SUN_OFFSET.y, SUN_OFFSET.x ** 2 + SUN_OFFSET.z ** 2, -SUN_OFFSET.y * SUN_OFFSET.z).normalize();
+const sunAt = new THREE.Vector3();
+function placeSun(at) {
+  const texel = (sun.shadow.camera.right - sun.shadow.camera.left) / sun.shadow.mapSize.x;
+  const x = at.dot(sunRight), y = at.dot(sunUp);
+  sunAt.copy(at).addScaledVector(sunRight, Math.round(x / texel) * texel - x).addScaledVector(sunUp, Math.round(y / texel) * texel - y);
+  sun.target.position.copy(sunAt);
+  sun.position.copy(sunAt).add(SUN_OFFSET);
+}
 function frame() {
   requestAnimationFrame(frame);   // agenda antes: um erro no quadro não congela o jogo
   const real = Math.min(clock.getDelta(), 0.05);
@@ -8042,8 +8092,7 @@ function frame() {
     if (pick.open && pick.mode === 'mode') orbitMenu(real);
   }
   controls.update();
-  sun.position.set(follow.x + 14, 30, follow.z + 12);
-  sun.target.position.copy(follow);
+  placeSun(follow);
   world.update(real, follow.z, camera);
   const gloom = world.gloomAt(follow.z);
   scene.background.lerpColors(SKY[0], SKY[1], gloom);

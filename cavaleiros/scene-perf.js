@@ -41,6 +41,45 @@ export function isInstancedBandVisible(frustum, mesh) {
   return frustum.intersectsSphere(mesh.boundingSphere);
 }
 
+// Cenário estático montado com centenas de peças pequenas (caixas, cilindros) custa uma chamada de desenho
+// por peça, na câmera e de novo na sombra. Junta as peças paradas do mesmo material, mesma sombra e mesma
+// faixa de z numa malha só (a faixa mantém o culling por região). Fica de fora: o que anima (skip e
+// seus filhos), transparente, espelhado (escala negativa inverte as faces), instanciado e esquelético.
+// merge = mergeGeometries do three; makeMesh(geometria, material) cria a malha. Devolve { pieces, batches }.
+export function batchStaticMeshes(root, { merge, makeMesh, skip = [], band = 32 }) {
+  const skipped = new Set();
+  for (const object of skip) object?.traverse?.((o) => skipped.add(o));
+  root.updateMatrixWorld(true);
+  const toRoot = root.matrixWorld.clone().invert();
+  const groups = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || skipped.has(o) || !o.visible || Array.isArray(o.material)) return;
+    if (o.material.transparent || o.matrixWorld.determinant() <= 0) return;
+    const g = o.geometry, names = Object.keys(g.attributes).sort().join();
+    if (Object.keys(g.morphAttributes).length) return;
+    const key = `${o.material.id}|${o.castShadow}|${o.receiveShadow}|${g.index ? 1 : 0}|${names}|${Math.floor(o.matrixWorld.elements[14] / band)}`;
+    let list = groups.get(key);
+    if (!list) groups.set(key, (list = []));
+    list.push(o);
+  });
+  let pieces = 0, batches = 0;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const parts = list.map((o) => o.geometry.clone().applyMatrix4(o.matrixWorld.clone().premultiply(toRoot)));
+    const merged = merge(parts);
+    for (const part of parts) part.dispose();
+    if (!merged) continue;   // atributos incompatíveis: as peças ficam como estavam
+    const first = list[0], batch = makeMesh(merged, first.material);
+    batch.castShadow = first.castShadow;
+    batch.receiveShadow = first.receiveShadow;
+    for (const o of list) o.parent.remove(o);
+    root.add(batch);
+    pieces += list.length;
+    batches++;
+  }
+  return { pieces, batches };
+}
+
 // InstancedMesh mantém buffers próprios além da geometria e do material compartilhados.
 export function disposeInstancedMeshes(roots) {
   const meshes = new Set();
