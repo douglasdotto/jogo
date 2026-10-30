@@ -152,7 +152,8 @@ const nightmareTeamIds = (mission) => {
   const goal = mission?.goal?.type;
   if (mission?.heroes === 1) return ['paladin'];
   if (mission?.heroes === 2) {
-    if (['defend', 'breach', 'escort', 'rescue'].includes(goal)) return ['paladin', 'guardian'];
+    if (goal === 'breach') return ['paladin', 'viking'];
+    if (['defend', 'escort', 'rescue'].includes(goal)) return ['paladin', 'guardian'];
     if (goal === 'boss') return ['paladin', 'viking'];
     return ['paladin', 'pyro'];
   }
@@ -169,7 +170,8 @@ const nightmareTeamIds = (mission) => {
 // Mantém uma sugestão para as escolhas iniciais e indica quem completar depois nas missões longas.
 const nightmareTeamPlanIds = (mission) => {
   const initial = nightmareTeamIds(mission);
-  if (!mission || mission.heroes === 1 || initial.length >= MAX_PARTY) return initial;
+  if (!mission || mission.heroes === 1 || initial.length >= MAX_PARTY
+    || (mission.from != null && mission.to != null && mission.from === mission.to)) return initial;
   const goal = mission.goal?.type;
   const reserves = mission.heroes === 2
     ? goal === 'boss' ? ['guardian', 'cleric'] : ['cleric', 'pyro']
@@ -183,13 +185,14 @@ const nextNightmareTeamId = (mission) => {
   const selected = new Set(heroes().map((hero) => hero.cfg.id));
   return nightmareTeamPlanIds(mission).find((id) => !selected.has(id)) || null;
 };
-const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses', 'totems', 'defend', 'nofall']);
+const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses', 'totems', 'defend', 'breach', 'nofall']);
 const shouldRecommendMissionTeam = (mission, difficultyId = difficulty.id) => difficultyId === 'pesadelo'
   || Boolean(mission && TEAM_RECOMMENDATION_GOALS.has(mission.goal?.type));
 const difficultyTeamRecommendation = (option, mission) => {
   if (!shouldRecommendMissionTeam(mission, option.id)) return '';
   const nightmare = option.id === 'pesadelo';
   const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', viking: 'Viking (dano a chefe)', cleric: 'Clériga (suporte/cura)', angel: 'Anjo (dano e cura)' };
+  if (mission?.goal?.type === 'breach') labels.viking = 'Viking (machado à distância)';
   const initial = nightmareTeamIds(mission).map((id) => labels[id]);
   const plan = nightmareTeamPlanIds(mission).map((id) => labels[id]);
   const list = (team) => team.length === 1 ? team[0]
@@ -199,9 +202,9 @@ const difficultyTeamRecommendation = (option, mission) => {
   if (initial.length === 1) return mission?.goal?.type === 'duel'
     ? 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.'
     : 'Equipe para 1 herói: Paladino (cura) para sustentar a missão sozinho.';
-  const opening = mission ? `${nightmare ? 'Equipe inicial' : 'Equipe recomendada'} para ${initial.length} heróis: ${list(initial)}.`
-    : `Equipe para ${initial.length} heróis: ${list(initial)}.`;
   const reserves = plan.slice(initial.length);
+  const opening = mission ? `${nightmare && reserves.length ? 'Equipe inicial' : 'Equipe recomendada'} para ${initial.length} heróis: ${list(initial)}.`
+    : `Equipe para ${initial.length} heróis: ${list(initial)}.`;
   const reserveLabel = nightmare
     ? reserves.length === 1 ? 'Reforço sugerido' : 'Reforços sugeridos'
     : reserves.length === 1 ? 'Reforço recomendado' : 'Reforços recomendados';

@@ -462,6 +462,7 @@ test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>
   assert.equal(partial.roles.find(role=>role.name==='Área').count,2);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'win'})),['Defesa','Cura'],'Vila é solo: prioridades devem caber no Paladino recomendado');
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'escort'})),['Defesa','Cura','Controle']);
+  assert.deepEqual(Array.from(t.missionRoleNeeds({type:'breach'})),['Defesa','Cura','Dano a chefe']);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'rescue'})),['Defesa','Cura','Área']);
   for(const m of t.MISSIONS)assert.ok(t.missionRoleNeeds(m.goal).length>0,`${m.id} orienta os papéis prioritários`);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'boss'})),['Defesa','Cura','Dano a chefe']);
@@ -471,7 +472,7 @@ test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>
 });
 test('composições Pesadelo cobrem os papéis prioritários de todas as missões',()=>{
   const expected={
-    fazendas:['paladin','viking'],caca:['paladin','guardian','viking'],ruinas:['paladin','pyro','cleric'],
+    fazendas:['paladin','viking'],chamas:['paladin','viking'],caca:['paladin','guardian','viking'],ruinas:['paladin','pyro','cleric'],
     castelo:['paladin','guardian','viking','cleric'],cripta:['paladin','guardian','pyro','viking'],
     trono:['paladin','guardian','viking','cleric'],resgate:['paladin','guardian','angel'],
   };
@@ -485,11 +486,13 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   for(const [id,ids] of Object.entries(expected))
     assert.deepEqual(Array.from(t.nightmareTeamIds(t.MISSIONS.find(m=>m.id===id))),ids,`${id}: composição especializada`);
   for(const [id,ids] of Object.entries({
-    fazendas:['paladin','viking','guardian','cleric'],caca:['paladin','guardian','viking','cleric'],
+    fazendas:['paladin','viking','guardian','cleric'],caca:['paladin','guardian','viking'],
     ruinas:['paladin','pyro','cleric','guardian'],resgate:['paladin','guardian','angel','pyro'],
   })) assert.deepEqual(Array.from(t.nightmareTeamPlanIds(t.MISSIONS.find(m=>m.id===id))),ids,`${id}: plano inclui reforços`);
   for(const id of ['vila','duelo'])
     assert.deepEqual(Array.from(t.nightmareTeamPlanIds(t.MISSIONS.find(m=>m.id===id))),['paladin'],`${id}: não promete reforços em missão solo`);
+  for(const id of ['santuario','chamas'])
+    assert.deepEqual(Array.from(t.nightmareTeamPlanIds(t.MISSIONS.find(m=>m.id===id))),Array.from(t.nightmareTeamIds(t.MISSIONS.find(m=>m.id===id))),`${id}: missão de uma fase não promete reforços indisponíveis`);
   assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='fazendas')),
     'Equipe inicial para 2 heróis: Paladino (cura) e Viking (dano a chefe). Reforços sugeridos: Guardião (proteção) e Clériga (suporte/cura).');
   assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='ruinas')),
@@ -497,20 +500,29 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   assert.equal(t.difficultyTeamRecommendation({id:'normal'},t.MISSIONS.find(m=>m.id==='coracao-do-castelo')),
     'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).',
     'o trio final também recomenda a composição fora do Pesadelo');
+  const bridge=t.MISSIONS.find(m=>m.id==='chamas');
+  const bridgeRecommendation='Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).';
+  const at=id=>t.pick.options.findIndex(hero=>hero.id===id);
+  assert.equal(t.difficultyTeamRecommendation({id:'normal'},bridge),bridgeRecommendation,
+    'a Ponte em Chamas mostra a composição que mais protege contra vazamentos');
+  clear();t.setDifficulty(1);t.setMission(bridge);t.game.picksLeft=2;t.showPick('','');
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Viking'));
+  assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
+  new t.Hero(cfg('paladin'));t.showPick('','');
+  assert.ok(t.pick.cards[at('viking')].className.includes('recommended'));
   const ruins=t.MISSIONS.find(m=>m.id==='ruinas');
   const ruinsRecommendation='Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).';
   assert.equal(t.difficultyTeamRecommendation({id:'normal'},ruins),ruinsRecommendation,
     'a missão dos totens recomenda dano em área também no Normal');
   clear();t.setDifficulty(1);t.setMission(ruins);t.game.picksLeft=3;t.showPick('','');
-  const at=id=>t.pick.options.findIndex(hero=>hero.id===id);
   assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Piromante + Clériga + Guardião'));
   assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
   const sanctuary=t.MISSIONS.find(m=>m.id==='santuario');
-  const sanctuaryRecommendation='Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).';
+  const sanctuaryRecommendation='Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).';
   assert.equal(t.difficultyTeamRecommendation({id:'normal'},sanctuary),sanctuaryRecommendation,
     'a defesa do santuário recomenda cura e proteção também no Normal');
   clear();t.setDifficulty(1);t.setMission(sanctuary);t.game.picksLeft=2;t.showPick('','');
-  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Guardião + Clériga + Piromante'));
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Guardião'));
   assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
   const shadowLake=t.MISSIONS.find(m=>m.id==='lago-sombrio');
   const shadowLakeRecommendation='Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).';
@@ -1604,8 +1616,8 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
 test('Pesadelo recomenda Guardião para defender e mantém Piromante em metas ofensivas',()=>{
   clear();context.localStorage.data={};t.setMission(mission('santuario'));t.showDifficulty();
   let card=t.pick.cards[idx('pesadelo')];card.onfocus();
-  const defense='Equipe inicial para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços sugeridos: Clériga (suporte/cura) e Piromante (dano em área).';
-  assert.ok(elements.get('pickHint').textContent.includes(defense),'Santuário recomenda proteção para a composição de duas vagas');
+  const defense='Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).';
+  assert.ok(elements.get('pickHint').textContent.includes(defense),'Santuário recomenda proteção sem prometer reforços indisponíveis');
   assert.ok(card.attributes['data-tip'].includes(defense),'a sugestão defensiva também aparece na dica');
   assert.ok(card.attributes['aria-label'].includes(defense),'a sugestão defensiva também fica acessível');
 

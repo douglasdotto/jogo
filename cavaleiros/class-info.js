@@ -50,7 +50,7 @@ const MISSION_ROLE_NEEDS = {
   win: ['Defesa', 'Cura'],
   escort: ['Defesa', 'Cura', 'Controle'],
   defend: ['Defesa', 'Cura', 'Controle'],
-  breach: ['Defesa', 'Cura', 'Controle'],
+  breach: ['Defesa', 'Cura', 'Dano a chefe'], // dano focado elimina corredores antes que cruzem a ponte
   boss: ['Defesa', 'Cura', 'Dano a chefe'],
   survive: ['Defesa', 'Cura', 'Área', 'Controle'],
   duel: ['Defesa', 'Cura'],

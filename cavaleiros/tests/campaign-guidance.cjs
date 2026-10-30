@@ -64,7 +64,9 @@ function render(stars, visuals = null) {
     : mission.id === 'ruinas'
       ? 'Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'
       : mission.id === 'santuario'
-        ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).'
+        ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).'
+      : mission.id === 'chamas'
+        ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).'
         : mission.id === 'lago-sombrio'
           ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
       : '');
@@ -116,8 +118,12 @@ assert.ok(view.info.innerHTML.includes('Equipe recomendada para 3 heróis: Palad
   'o resumo de Ruínas explica a composição de área e o reforço recomendado');
 view.map.children[2].onclick();
 assert.ok(view.map.children[2].classList.contains('sel'), 'O Santuário continua selecionável após concluir a campanha');
-assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).'),
-  'o resumo do Santuário destaca cura e proteção para defender o cristal');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).'),
+  'o resumo do Santuário não promete reforços numa missão de uma fase');
+view.map.children[3].onclick();
+assert.ok(view.map.children[3].classList.contains('sel'), 'Ponte em Chamas continua selecionável após concluir a campanha');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).'),
+  'o resumo da Ponte em Chamas mostra a dupla com melhor taxa de três estrelas');
 view.map.children[11].onclick();
 assert.ok(view.map.children[11].classList.contains('sel'), 'Lago Sombrio continua selecionável após concluir a campanha');
 assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),
