@@ -2835,8 +2835,8 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
     mesh.add(handle);
   }
   mesh.position.copy(from.pos).setY(from.pos.y + 1.3);
-  const dir = new THREE.Vector3().subVectors(target.pos, from.pos).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  const dir = fireBoltDirectionScratch.subVectors(target.pos, from.pos).normalize().applyAxisAngle(fireBoltAxis, angle).clone();
+  mesh.quaternion.setFromUnitVectors(fireBoltAxis, dir);
   scene.add(mesh);
   const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
@@ -2849,6 +2849,7 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
 }
 
 const boltGoalScratch = new THREE.Vector3();
+const fireBoltDirectionScratch = new THREE.Vector3(), fireBoltAxis = new THREE.Vector3(0, 1, 0);
 const piercingStartScratch = new THREE.Vector3();
 const piercingOffsetScratch = new THREE.Vector3();
 const piercingHeightOffset = new THREE.Vector3(0, 1.3, 0);

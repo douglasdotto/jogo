@@ -896,6 +896,28 @@ test('virotes perfurantes reutilizam vetores e acertam vários inimigos no quadr
   assert.equal(skeletonScans,0,'o quadro com snapshot pronto não deve reconstruir a lista de inimigos');
   t.bolts.length=0;clear();t.frameTargetContext.skeletons.length=0;
 });
+test('criar projéteis só copia a direção que precisa persistir e não aloca vetores de apoio',()=>{
+  clear();t.bolts.length=0;
+  const shooter=new t.Hero(cfg('crossbow')),target=new t.Skeleton('Minion',1);
+  shooter.pos.set(0,0,0);target.pos.set(0,0,5);target.spawning=false;
+  const Vector=context.THREE.Vector3,originalClone=Vector.prototype.clone;
+  let constructors=0,clones=0;
+  Vector.prototype.clone=function(){clones++;return originalClone.call(this);};
+  context.THREE.Vector3=class CountedVector3 extends Vector { constructor(...args){super(...args);constructors++;} };
+  try {
+    t.fireBolt(shooter,target,'crossbow',0,false);
+    const first=t.bolts.at(-1).dir,firstZ=first.z;
+    t.fireBolt(shooter,target,'crossbow',Math.PI/2,false);
+    const second=t.bolts.at(-1).dir;
+    assert.equal(constructors,0,'a direção compartilhada substitui os vetores de apoio por disparo');
+    assert.equal(clones,2,'cada projétil mantém apenas a própria cópia da direção');
+    assert.notStrictEqual(first,second,'direções de projéteis ativos não são compartilhadas');
+    assert.equal(first.z,firstZ,'reutilizar o vetor de trabalho não muda um projétil já voando');
+    assert.ok(second.x>0.99,'o ângulo do segundo disparo continua correto');
+  } finally {
+    Vector.prototype.clone=originalClone;context.THREE.Vector3=Vector;t.bolts.length=0;
+  }
+});
 test('Duelista: rajada alterna as lâminas, Corte em X atravessa a fila e a Dança de lâminas corta todos ao redor',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Warrior',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e};
   clear();let d=new t.Hero(cfg('duelist'));d.pos.set(0,0,0);
