@@ -173,7 +173,7 @@ const nightmareTeamIds = (mission) => {
     return ['paladin', 'guardian', 'pyro'];
   }
   if (goal === 'elite') return ['paladin', 'guardian', 'pyro', 'viking'];
-  if (goal === 'twin') return ['paladin', 'guardian', 'archer', 'cleric'];
+  if (goal === 'twin' || mission?.id === 'castelo') return ['paladin', 'guardian', 'archer', 'cleric'];
   if (goal === 'boss' || goal === 'bosses') return ['paladin', 'guardian', 'viking', 'cleric'];
   return ['paladin', 'guardian', 'pyro', 'cleric'];
 };
