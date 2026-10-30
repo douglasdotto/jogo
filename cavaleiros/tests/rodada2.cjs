@@ -73,6 +73,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
+  loadKingdomRecords:()=>context.kingdomRecords||{},kingdomRecordText:r=>r?.bestTime!=null?`♛ ${r.bestTime}`:r?.maxWave?`☠ ${r.maxWave}`:'',
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop,
   renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
@@ -859,6 +860,14 @@ test('recorde guarda a melhor fase por dificuldade e marca vitória',()=>{
   Object.assign(t.game,{over:false,phase:12,kills:200});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.won,true);
   Object.assign(t.game,{over:false,start:6,phase:12,kills:999});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.kills,200);
   t.showDifficulty();assert.ok(t.pick.cards[1].innerHTML.includes('Vitória!'));assert.ok(t.pick.cards[0].innerHTML.includes('Sem recorde'));
+});
+test('Reino: escolhe dificuldade própria, mostra o recorde do Reino e entra no modo',()=>{
+  clear();context.kingdomRecords={dificil:{bestTime:null,maxWave:6}};t.showDifficulty(true);
+  assert.equal(t.pick.reino,true);assert.equal(elements.get('pickTitle').textContent,'Reino');
+  assert.ok(t.pick.cards[2].innerHTML.includes('☠ 6'));assert.ok(t.pick.cards[0].innerHTML.includes('Sem recorde'));
+  let go;context.setTimeout=(fn)=>{go=fn};
+  t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.ok(go);
+  context.kingdomRecords=null;context.setTimeout=noop;t.showDifficulty();assert.equal(t.pick.reino,false,'Jornada não herda o Reino');
 });
 test('entrada tardia recebe metade da média de XP e respeita limite de quatro',()=>{
   clear();const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('berserker'));a.xp=300;b.xp=100;

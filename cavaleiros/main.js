@@ -24,7 +24,7 @@ import { createCampaignAura } from './campaign-aura.js';
 import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
-import { startKingdom, linkKingdom } from './kingdom.js';
+import { startKingdom, linkKingdom, loadKingdomRecords, kingdomRecordText } from './kingdom.js';
 import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -744,6 +744,8 @@ function showMenu() {
     records.some((r) => r.won) ? 'Jornada vencida' : best ? `Recorde: fase ${best}` : 'Sem recorde ainda',
     `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`,
     'Estratégia: vila, recursos e ondas'];
+  const realmRecords = loadKingdomRecords();
+  const realmBest = DIFFICULTIES.map((d) => (kingdomRecordText(realmRecords[d.id]) ? `${d.icon} ${kingdomRecordText(realmRecords[d.id])}` : '')).filter(Boolean).join(' · ');
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = `menu-btn ${i === 0 ? 'menu-battle' : 'menu-side'}`;
@@ -751,7 +753,7 @@ function showMenu() {
     b.setAttribute('role', 'button');
     b.setAttribute('aria-keyshortcuts', String(i + 1));
     b.setAttribute('aria-label', `${m.name}: ${m.desc} ${spoken[i]}.`);
-    b.setAttribute('data-tip', i === 0 ? `${m.name} · ${m.desc}` : m.desc);
+    b.setAttribute('data-tip', i === 0 ? `${m.name} · ${m.desc}` : i === 3 && realmBest ? `${m.desc} · ${realmBest}` : m.desc);
     b.style.setProperty('--c', m.color[0]);
     b.style.setProperty('--cd', m.color[1]);
     b.style.setProperty('--d', `${i === 0 ? 160 : 260 + i * 80}ms`);
@@ -774,7 +776,7 @@ function showMenu() {
 function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : i === 3 ? startGame('reino') : (game.mission = null, showDifficulty())), 450);
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : i === 3 ? (game.mission = null, showDifficulty(true)) : (game.mission = null, showDifficulty())), 450);
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
@@ -833,14 +835,15 @@ function showCampaign(autoPlay = null) {
   if (autoPlay) play(autoPlay);
 }
 
-// dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão
-function showDifficulty() {
+// dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão; no Reino, o recorde do Reino
+function showDifficulty(reino = false) {
   if (typeof preloadBattleAssets === 'function') preloadBattleAssets();
   pick.mode = 'difficulty';
+  pick.reino = reino;
   $('banner').style.opacity = 0;
   pick.options = DIFFICULTIES;
-  const records = loadRecords(), m = game.mission;
-  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada';
+  const records = loadRecords(), m = game.mission, realm = reino ? loadKingdomRecords() : null;
+  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : reino ? 'Reino' : 'Jornada';
   $('pickSub').textContent = m ? `⚑ ${goalText(m.goal)}` : '';
   $('pickHint').textContent = DIFFICULTY_PICK_HINT;
   const list = $('pickList');
@@ -848,9 +851,9 @@ function showDifficulty() {
   list.classList.remove('grid');
   // cartão: ícone, nome e o recorde da jornada; a descrição da dificuldade vai para a dica
   pick.cards = DIFFICULTIES.map((d, i) => {
-    const r = m ? null : records[d.id];
-    const record = m ? '' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
-    const spoken = m ? `Fases ${m.from}–${m.to}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
+    const r = m || reino ? null : records[d.id];
+    const record = m ? '' : reino ? kingdomRecordText(realm[d.id]) || 'Sem recorde' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
+    const spoken = m ? `Fases ${m.from}–${m.to}.` : reino ? `${kingdomRecordText(realm[d.id]) ? `Recorde: ${record}` : 'Sem recorde ainda'}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
     const recommendation = difficultyTeamRecommendation(d, m);
     const tip = [d.desc, recommendation].filter(Boolean).join(' ');
     const b = document.createElement('div');
@@ -881,6 +884,7 @@ function confirmDifficulty(i) {
   paintDifficulty();
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
+  if (pick.reino) { pick.timer = setTimeout(() => startGame('reino'), 450); return; }   // o Reino usa a dificuldade escolhida aqui
   const m = game.mission;
   if (m) campaignMapSession.reset();   // a próxima visita à campanha começa uma nova combinação de mapas
   if (!m && world.seed != null && world.seed !== 11) {

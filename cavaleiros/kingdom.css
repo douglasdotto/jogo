@@ -103,6 +103,12 @@ body.kingdom #soundHint { bottom: 200px; }
 
 .k-end { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .k-end .end-chip svg { width: 18px; height: 18px; vertical-align: -3px; }
+.k-end .end-chip.medal { border-color: var(--gold); box-shadow: 0 0 10px rgba(255, 210, 58, .55); }
+
+/* mercado e ordens: ícone do que se recebe com o ganho no canto; mira de ataque-movendo/patrulha */
+.k-cmd .k-glyph svg { width: 30px; height: 30px; display: block; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .55)); }
+.k-cmd .k-gain { position: absolute; top: 4px; right: 4px; font: 400 12px/1 'Lilita One', sans-serif; color: #b9f0a8; -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill; pointer-events: none; }
+body.k-aiming canvas { cursor: crosshair; }
 
 /* aviso de onda: caveira pulsando na borda da tela, seta apontando para a origem */
 .k-alert { position: fixed; left: 0; top: 0; z-index: 30; width: 0; height: 0; pointer-events: none; }

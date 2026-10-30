@@ -18,7 +18,7 @@ const THREE = new Proxy({ Vector3 }, { get: (o, k) => (k in o ? o[k] : Dummy) })
 const context = vm.createContext({ THREE, Math, Uint8Array, Uint32Array, Int32Array, Float32Array, Map, Set, JSON, performance: { now: () => 0 } });
 vm.runInContext(strip('kingdom-world.js'), context);
 vm.runInContext(strip('kingdom.js'), context);
-vm.runInContext('globalThis.k={ARENA,NODE_TYPES,TERRAIN,waveSources,createArena,createKingdomState,canAfford,spend,refund,popCap,popUsed,heroCount,addBuilding,canPlaceBuilding,placeBuilding,removeBuilding,constructionRate,tickConstruction,enqueue,cancelQueue,tickProduction,nearestDrop,workerStep,tickWaves,kingdomResult,waveSize,wavePhase,waveInterval,waveLeaderFor,portalGuard,salvage,demolish,loseBuilding,canRepair,SALVAGE,REPAIR,BUILDINGS,UNITS,START,GATHER,FIRST_WAVE,HERO_LIMIT,POP_MAX};', context);
+vm.runInContext('globalThis.k={ARENA,NODE_TYPES,TERRAIN,waveSources,createArena,createKingdomState,canAfford,spend,refund,popCap,popUsed,heroCount,addBuilding,canPlaceBuilding,placeBuilding,removeBuilding,constructionRate,tickConstruction,enqueue,cancelQueue,tickProduction,nearestDrop,workerStep,tickWaves,kingdomResult,waveSize,wavePhase,waveInterval,waveLeaderFor,portalGuard,salvage,demolish,loseBuilding,canRepair,SALVAGE,REPAIR,MARKET,TRADE_RES,trade,tickMarket,buyPrice,sellPrice,hasMarket,orderLeg,nearestFoe,mergeKingdomRecord,saveKingdomRecord,loadKingdomRecords,kingdomRecordText,BUILD_MENU,BUILDINGS,UNITS,START,GATHER,FIRST_WAVE,HERO_LIMIT,POP_MAX};', context);
 const k = context.k;
 
 let failed = 0;
@@ -473,6 +473,65 @@ test('demolir: devolve metade, libera a grade e o castelo não sai', () => {
   assert.equal(K.res.wood, wood, 'não devolve duas vezes');
   assert.equal(k.demolish(K, K.castle), false);
   assert.ok(K.buildings.includes(K.castle));
+});
+
+test('mercado: só com o prédio pronto; preço piora a cada troca e volta com o tempo', () => {
+  const K = fresh();
+  K.res.wood = 1000; K.res.gold = 1000;
+  assert.ok(k.BUILD_MENU.includes('market'));
+  assert.equal(k.BUILDINGS.market.cost.gold || 0, 0, 'não custa ouro (o ouro é o que falta)');
+  assert.equal(k.trade(K, 'wood', false), false, 'sem mercado não troca');
+  const spot = K.arena.snap(3, K.castle.pos.x + 10, K.castle.pos.z + 10);
+  const site = k.addBuilding(K, 'market', spot.i0, spot.j0, make, false);
+  assert.equal(k.trade(K, 'wood', false), false, 'obra não troca');
+  site.done = true;
+  const sell1 = k.sellPrice(K, 'wood');
+  assert.equal(k.trade(K, 'wood', false), true);
+  assert.equal(K.res.wood, 1000 - k.MARKET.lot);
+  assert.equal(K.res.gold, 1000 + sell1);
+  assert.ok(k.sellPrice(K, 'wood') < sell1, 'vender de novo rende menos');
+  const buy1 = k.buyPrice(K, 'stone');
+  assert.equal(k.trade(K, 'stone', true), true);
+  assert.equal(K.res.stone, k.START.stone + k.MARKET.lot);
+  assert.ok(k.buyPrice(K, 'stone') > buy1, 'comprar de novo custa mais');
+  assert.ok(k.buyPrice(K, 'wood') > k.sellPrice(K, 'wood'), 'comprar e vender de volta dá prejuízo');
+  K.res.gold = 0;
+  assert.equal(k.trade(K, 'food', true), false, 'sem ouro não compra');
+  assert.equal(k.trade(K, 'gold', false), false, 'ouro não é mercadoria');
+  for (let i = 0; i < 60; i++) k.trade(K, 'wood', false), (K.res.wood = 1000);
+  assert.equal(K.market.wood, k.MARKET.min, 'preço tem piso');
+  run(400, (dt) => k.tickMarket(K, dt));
+  for (const r of k.TRADE_RES) assert.ok(Math.abs(K.market[r] - k.MARKET.base) < 1e-9, `${r} volta ao normal`);
+});
+
+test('ordens: ataque-movendo termina no destino; patrulha troca de ponta; inimigo mais perto', () => {
+  const o = { type: 'amove', x: 10, z: 0, bx: 0, bz: 0 };
+  assert.equal(k.orderLeg(o, new Vector3(0, 0, 0)), 'go');
+  assert.equal(k.orderLeg(o, new Vector3(10, 0, 0.3)), 'done');
+  const p = { type: 'patrol', x: 10, z: 0, bx: 0, bz: 0 };
+  assert.equal(k.orderLeg(p, new Vector3(10, 0, 0)), 'turn');
+  assert.deepEqual([p.x, p.z, p.bx, p.bz], [0, 0, 10, 0], 'volta para o começo');
+  assert.equal(k.orderLeg(p, new Vector3(10, 0, 0)), 'go');
+  const foes = [{ pos: new Vector3(5, 0, 0) }, { pos: new Vector3(2, 0, 0), spawning: true }, { pos: new Vector3(3, 0, 0), dead: true }, { pos: new Vector3(4, 0, 0) }];
+  assert.equal(k.nearestFoe(foes, new Vector3(0, 0, 0), 8), foes[3]);
+  assert.equal(k.nearestFoe(foes, new Vector3(0, 0, 0), 3), null, 'fora do raio');
+});
+
+test('recordes do Reino: por dificuldade, melhor vitória e onda máxima', () => {
+  const recs = {};
+  assert.deepEqual({ ...k.mergeKingdomRecord(recs, 'normal', { won: false, time: 500, wave: 4 }) }, { time: false, wave: true });
+  assert.equal(recs.normal.bestTime, null, 'derrota não marca tempo');
+  assert.equal(k.kingdomRecordText(recs.normal), '☠ 4');
+  assert.deepEqual({ ...k.mergeKingdomRecord(recs, 'normal', { won: true, time: 900.4, wave: 7 }) }, { time: true, wave: true });
+  assert.deepEqual({ ...k.mergeKingdomRecord(recs, 'normal', { won: true, time: 1000, wave: 5 }) }, { time: false, wave: false });
+  assert.deepEqual({ ...recs.normal }, { bestTime: 900, maxWave: 7 });
+  assert.equal(k.kingdomRecordText(recs.normal), '♛ 15:00');
+  assert.equal(recs.facil, undefined, 'cada dificuldade separada');
+  const mem = { data: {}, getItem(key) { return this.data[key] ?? null; }, setItem(key, v) { this.data[key] = v; } };
+  k.saveKingdomRecord('dificil', { won: true, time: 600, wave: 9 }, mem);
+  assert.ok(mem.data['cavaleiros-reino-recordes']);
+  assert.deepEqual({ ...k.loadKingdomRecords(mem).dificil }, { bestTime: 600, maxWave: 9 });
+  assert.deepEqual({ ...k.loadKingdomRecords(undefined) }, {}, 'sem localStorage não quebra');
 });
 
 if (failed) { console.log(`${failed} teste(s) falharam`); process.exit(1); }
