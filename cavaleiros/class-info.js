@@ -34,6 +34,7 @@ const VARIANT_INFO = {
   alchemist: ['Poções e controle', 'Arremessa um frasco: o tônico cura quem pisa na poça; sem feridos, o veneno fere os inimigos aos poucos.', 'Deixe as poças onde a briga acontece. A transmutação desarma hordas de inimigos comuns.'],
   engineer: ['Construção e controle', 'Monta uma torre por alguns segundos. Ela escolhe ameaças próximas e dispara automaticamente; o pulso eletromagnético interrompe inimigos agrupados.', 'Posicione a torre perto da frente sem deixá-la exposta. A ultimate acelera e fortalece uma torre ativa; sem uma, ergue outra.'],
   beast_tamer: ['Invocação e proteção', 'Chama uma fera temporária que luta perto do grupo e prioriza inimigos que ameaçam os aliados.', 'O rugido da fera atrai a atenção dos inimigos; a ultimate a fortalece e ampara aliados ao redor. A fera não ocupa uma vaga de herói.'],
+  summoner: ['Invocação e cura', 'Invoca uma fada que segue o aliado mais ferido e o cura em pulsos por alguns segundos.', 'O golem provoca e atordoa quem chega perto; o dragãozinho cospe fogo em cone. Uma criatura de cada tipo; chamar de novo renova.'],
   oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Passo Previsto durante um aviso para garantir que os heróis tentem escapar. Destino Reescrito interrompe ameaças próximas.'],
   brute: ['Tanque pesado', 'Soca o chão: atordoa por instantes e provoca quem está em volta. Golpes fracos quase não o ferem (−3 por golpe).', 'Deixe-o na frente contra hordas. Mais lento e com menos dano que o Guardião, mas aguenta mais.'],
 };
@@ -49,6 +50,7 @@ const TEAM_ROLE_RULES = {
   archer: ['À distância', 'Área', 'Dano a chefe'], monk: ['Defesa', 'Controle', 'Cura'], alchemist: ['À distância', 'Cura', 'Controle'],
   engineer: ['À distância', 'Área', 'Controle'], beast_tamer: ['Defesa', 'Controle', 'Dano a chefe'], oracle: ['À distância', 'Controle', 'Dano a chefe'],
   brute: ['Defesa', 'Controle'],
+  summoner: ['À distância', 'Cura', 'Controle'],
 };
 const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];
 const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe');
@@ -96,5 +98,5 @@ export function heroInfo(cfg) {
 }
 
 export function skillCooldown(id, level = 1, rate = 1) {
-  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 9, bard: 10, angel: 10, chronist: 8, brute: 8 }[id] ?? 6) - (level - 1) * 0.7) * rate;
+  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 9, bard: 10, angel: 10, chronist: 8, brute: 8, summoner: 14 }[id] ?? 6) - (level - 1) * 0.7) * rate;
 }

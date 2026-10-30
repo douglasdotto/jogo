@@ -267,6 +267,7 @@ const profiles = {
   sustentacao: ['guardian', 'cleric', 'druid', 'pyro'],
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
+  invocador: ['summoner', 'guardian', 'pyro', 'cleric'],
   fazendas: ['paladin', 'viking', 'guardian', 'cleric'],
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],

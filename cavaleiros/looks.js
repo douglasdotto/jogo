@@ -306,6 +306,21 @@ export const LOOKS = {
       { type: 'brows', bone: 'head', color: 0x5a2a12, angle: 0.35, size: 1.4 },
     ],
   },
+  // ---------- Invocador ----------
+  summoner: {   // mestre dos pactos: manto ameixa com capa rosada, cabelo verde-água, cajado de gema e sininhos
+    shape: silhouette('Mage', { torso: 0.97, arms: 0.97, legs: 0.98, height: 1.03, depth: 0.97 }),
+    hide: ['Spellbook', 'Spellbook_open', '1H_Wand'],
+    paint: {
+      ...outfit('Mage', '#8a3a6e', '#4a2a48', 0.8), ...face('Mage', { skin: '#f2c9a8', hair: '#3ab0a0', eyes: '#ffd23a' }),
+      Mage_Cape: { tint: '#f0a8d0', amount: 0.8 }, Mage_Hat: { tint: '#6a2a5a', amount: 0.75 }, '2H_Staff': { tint: '#c89a5a', amount: 0.55 },
+    },
+    extras: [
+      { type: 'bellStaff', bone: 'handslotr', gem: 0xff8ad8, metal: 0xf0c040 },
+      { type: 'robeSkirt', bone: 'hips', color: 0x8a3a6e, trim: 0xf0c040, height: 0.5, flare: 0.44 },
+      { type: 'brows', bone: 'head', color: 0x3ab0a0, angle: -0.1 },
+      { type: 'motes', bone: 'root', color: 0xffb8dc, n: 4, size: 0.04, y: 1.1 },
+    ],
+  },
 };
 
 // para a vitrine: modelo e armas visíveis de cada variante, na ordem de VARIANTS em main.js (o jogo usa aquela lista);
@@ -339,6 +354,7 @@ export const LOOK_PREVIEW = [
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
   { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [] },   // luta de punhos (manoplas de pedra)
+  { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],
