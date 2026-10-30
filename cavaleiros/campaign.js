@@ -460,6 +460,8 @@ export function campaignCosmetics() {
     const maxStars = missions.length * 3;
     const stars = missions.reduce((sum, mission) => sum + boundedStarsOf(mission), 0);
     const completedArenas = missions.filter((mission) => Number(starsByMission.get(mission.id)) > 0).length;
+    const pendingMissions = missions.filter((mission) => !(Number(starsByMission.get(mission.id)) > 0))
+      .map(({ id, name }) => ({ id, name }));
     const requiredArenas = missions.length;
     const requiredStars = requiredArenas; // compatibilidade: uma estrela mínima por arena
     const currentChapterComplete = requiredArenas > 0 && completedArenas === requiredArenas;
@@ -468,7 +470,7 @@ export function campaignCosmetics() {
       writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
     }
     const stickyUnlock = legacyUnlocked.includes(cosmetic.id);
-    return { ...cosmetic, stars, maxStars, completedArenas, requiredArenas, requiredStars,
+    return { ...cosmetic, stars, maxStars, completedArenas, requiredArenas, requiredStars, pendingMissions,
       legacyEntitlement: stickyUnlock && !currentChapterComplete, unlocked: stickyUnlock || currentChapterComplete };
   });
   const challenges = CHALLENGE_COSMETICS.map((cosmetic) => {

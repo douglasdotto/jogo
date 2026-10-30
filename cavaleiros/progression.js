@@ -400,7 +400,7 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
         const challenge = cosmetic.track === 'challenge';
         const requiredArenas = Math.max(1, Number(cosmetic.requiredArenas) || 1);
         const completedArenas = Math.min(requiredArenas, Math.max(0, Number(cosmetic.completedArenas) || 0));
-        const pendingMissions = challenge && Array.isArray(cosmetic.pendingMissions)
+        const pendingMissions = Array.isArray(cosmetic.pendingMissions)
           ? cosmetic.pendingMissions.filter((mission) => mission && typeof mission.name === 'string').slice(0, requiredArenas)
           : [];
         const stars = Math.max(0, Number(cosmetic.stars) || 0);
@@ -412,12 +412,16 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
         const requirement = challenge
           ? cosmetic.legacyEntitlement ? `Recompensa anterior preservada · ${challengeProgress}`
             : cosmetic.unlocked ? `Desafio completo · ${challengeProgress}` : challengeProgress
-          : cosmetic.unlocked ? starProgress : arenaProgress;
+          : cosmetic.legacyEntitlement ? `Recompensa anterior preservada · ${starProgress}`
+            : cosmetic.unlocked ? starProgress : arenaProgress;
+        const progressDetail = challenge
+          ? `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada · ' : ''}${challengeProgress}`
+          : `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada · ' : ''}${starProgress} · ${arenaProgress}`;
         const tip = cosmetic.unlocked
-          ? `${cosmetic.chapter} · visual desbloqueado · ${challenge ? `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada · ' : ''}${challengeProgress}` : `${starProgress} · ${arenaProgress}`}`
+          ? `${cosmetic.chapter} · visual desbloqueado · ${progressDetail}`
           : `${cosmetic.chapter} · ${challenge ? challengeProgress : `${arenaProgress} · faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear`}`;
         const progressLabel = cosmetic.unlocked
-          ? `${cosmetic.name}: visual desbloqueado. ${challenge ? `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada. ' : ''}${challengeProgress}` : `${starProgress}; ${arenaProgress}`}.`
+          ? `${cosmetic.name}: visual desbloqueado. ${progressDetail}.`
           : `${cosmetic.name}: ${challenge ? challengeProgress : `${arenaProgress}; faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear`}.`;
         const showPendingMissions = (!cosmetic.unlocked || cosmetic.legacyEntitlement) && pendingMissions.length;
         const pendingSummary = cosmetic.legacyEntitlement ? `Ver arenas adicionais (${pendingMissions.length})` : `Ver missões pendentes (${pendingMissions.length})`;

@@ -296,6 +296,7 @@ test('recompensa de capítulo fica liberada após novas arenas serem adicionadas
     reward=context.campaignCosmetics().find(item=>item.id==='vila');
     assert.equal(reward.unlocked,true,'uma arena futura não revoga a recompensa');
     assert.equal(reward.legacyEntitlement,true,'o catálogo informa que a recompensa antiga foi preservada');
+    assert.deepEqual(Array.from(reward.pendingMissions,mission=>mission.id),['nova-arena-vila'],'a arena que falta fica identificada');
     assert.equal(context.equippedCampaignCosmetic([reward])?.id,'vila','o visual continua equipado após a expansão');
   }finally{
     t.MISSIONS.length=missionsLength;

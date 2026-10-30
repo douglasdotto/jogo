@@ -284,6 +284,13 @@ test('acampamento mostra o progresso por arenas e o domínio em estrelas dos cos
   assert.equal(equipped, 'vila');
   assert.match(root.innerHTML, /cosmetic-item unlocked equipped/);
   assert.match(root.innerHTML, />Equipado</);
+
+  const preservedChapter = { ...cosmeticBase, stars: 41, maxStars: 54, requiredArenas: 18, completedArenas: 17,
+    unlocked: true, legacyEntitlement: true, pendingMissions: [{ id: 'nova-arena', name: 'Arena adicional' }] };
+  renderCosmetic(preservedChapter);
+  assert.match(root.innerHTML, /Recompensa anterior preservada · 41\/54 estrelas do capítulo/);
+  assert.match(root.innerHTML, /Ver arenas adicionais \(1\)/);
+  assert.match(root.innerHTML, /<li>Arena adicional<\/li>/, 'o acampamento identifica a nova arena sem revogar o visual legado');
 });
 
 test('acampamento explica e acompanha os cosméticos opcionais de domínio 3★', () => {
