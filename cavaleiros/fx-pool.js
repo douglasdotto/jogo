@@ -5,15 +5,16 @@ export function materialPool(create, max = 300) {
   const pool = {
     take(color, opacity = 1) {
       const m = free.pop() || create();
+      m.userData.freePool = null;
       m.userData.pool = pool;
       m.color.setHex(color);
       m.opacity = opacity;
       return m;
     },
     give(m) {
-      if (free.includes(m)) return;   // devolvido duas vezes: ignora para não entregar o mesmo material a dois efeitos
-      if (free.length < max) free.push(m);
-      else { m.userData.pool = null; m.dispose(); }
+      if (m.userData.freePool || m.userData.poolDisposed) return;   // O(1), sem varrer o estoque
+      if (free.length < max) { free.push(m); m.userData.freePool = pool; }
+      else { m.userData.pool = null; m.userData.poolDisposed = true; m.dispose(); }
     },
     get free() { return free.length; },
   };
