@@ -1049,13 +1049,7 @@ const RELIC_RARITY = {
 const partyHas = (test) => heroes().some((h) => !h.dead && test(h));
 const RELICS = [
   { id: 'keen-edge', short: '+12% de dano', name: 'Lâmina afiada', icon: '⚔', rarity: 'comum', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
-  { id: 'swift-boots', short: '+10% de velocidade', name: 'Botas velozes', icon: '➤', rarity: 'comum', desc: 'Heróis se movem 10% mais rápido pelo resto da jornada.' },
-  { id: 'oak-charm', short: '−12% de dano recebido', name: 'Amuleto de carvalho', icon: '⬟', rarity: 'comum', desc: 'Heróis recebem 12% menos dano pelo resto da jornada.' },
   { id: 'vital-medallion', short: '+15% de vida máxima', name: 'Medalhão vital', icon: '♥', rarity: 'comum', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
-  { id: 'arcane-focus', short: 'Habilidades 15% mais fortes', name: 'Foco arcano', icon: '✦', rarity: 'comum', desc: 'Habilidades ficam 15% mais fortes pelo resto da jornada.' },
-  { id: 'giant-bane', short: '+20% de dano em chefes', name: 'Ferrão de gigante', icon: '✹', rarity: 'rara', desc: 'Heróis causam 20% mais dano contra chefes.', needs: () => bigFoeAhead() },
-  { id: 'healing-vial', short: 'Cura 35% da vida', name: 'Frasco curativo', icon: '⚗', rarity: 'comum', desc: 'Heróis de pé recuperam 35% da vida máxima.' },
-  { id: 'wind-chime', short: 'Ataques 10% mais rápidos', name: 'Sino do vento', icon: '♫', rarity: 'comum', desc: 'Heróis atacam 10% mais rápido pelo resto da jornada.' },
   { id: 'ember-heart', short: 'Abates podem explodir', name: 'Coração de brasa', icon: '✺', rarity: 'comum', unique: true, desc: 'Ao abater um inimigo, 25% de chance de ele explodir e ferir quem estiver por perto.' },
   { id: 'dawn-ward', short: 'Escudo a cada fase', name: 'Égide da aurora', icon: '◈', rarity: 'comum', unique: true, desc: 'No início de cada fase, cada herói ganha um escudo de 20% da vida máxima.' },
   { id: 'thorn-mail', short: 'Espinhos devolvem dano', name: 'Cota de espinhos', icon: '✶', rarity: 'comum', unique: true, desc: 'Inimigos corpo a corpo levam de volta 35% do dano que causam aos heróis.' },
@@ -1073,16 +1067,11 @@ const canBlock = (h) => h.cfg.classId === 0 || h.cfg.id === 'viking' || h.cfg.id
 
 function applyRelicToHero(hero, id) {
   if (id === 'keen-edge') hero.dmg *= 1.12;
-  else if (id === 'swift-boots') hero.speed *= 1.1;
-  else if (id === 'oak-charm') hero.damageTaken *= 0.88;
   else if (id === 'vital-medallion') {
     const extra = Math.round(hero.maxHp * 0.15);
     hero.maxHp += extra;
     hero.hp = Math.min(hero.maxHp, hero.hp + extra);
-  } else if (id === 'arcane-focus') hero.skillPower *= 1.15;
-  else if (id === 'giant-bane') hero.bossBonus = (hero.bossBonus || 0) + 0.2;
-  else if (id === 'wind-chime') hero.haste *= 1.1;
-  else if (id === 'archmage-prism' && hero.cfg.classId === 2) hero.extraTargets = (hero.extraTargets || 0) + 1;
+  } else if (id === 'archmage-prism' && hero.cfg.classId === 2) hero.extraTargets = (hero.extraTargets || 0) + 1;
 }
 
 // ganchos das relíquias que mudam o jogo; cada um só age se a relíquia estiver na jornada
@@ -1187,12 +1176,6 @@ function relicBounce(b) {
   bolt.bounced = true;
 }
 
-// chefe (fases 6, 9 e 12) ou golem ainda à frente no trecho: só então o Ferrão de gigante tem uso
-function bigFoeAhead() {
-  for (let p = game.phase; p <= game.last; p++) if (waveLeader(p, isBossPhase(p))) return true;
-  return false;
-}
-
 // oferta contextual: tira únicas já pegas e o que não serve à equipe; a raridade pesa no sorteio
 function relicPool() {
   return RELICS.filter((relic) => !(relic.unique && hasRelic(relic.id)) && (!relic.needs || relic.needs()));
@@ -1278,11 +1261,7 @@ function confirmRelic(i) {
   const relic = pick.options[i];
   if (!relic) return;
   game.relics.push(relic.id);
-  if (relic.id === 'healing-vial') {
-    for (const hero of heroes()) if (!hero.dead) hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * 0.35);
-  } else {
-    for (const hero of heroes()) applyRelicToHero(hero, relic.id);
-  }
+  for (const hero of heroes()) applyRelicToHero(hero, relic.id);
   renderRelicTray();
   if (heroes()[0]) popText(heroes()[0].pos, `${relic.name}!`, 'evolve');
   pick.open = false;
@@ -2327,8 +2306,7 @@ function heroHit(owner, target, dmg, center = owner.pos) {
   const attack = ['crossbow', 'ninja', 'archer'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
   if (attack) dmg = applySynergy(attack, owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
-  const bossBonus = target.boss ? 1 + (owner.bossBonus || 0) : 1;
-  target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1) * bossBonus, center, owner.summoner || owner, critical);
+  target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1), center, owner.summoner || owner, critical);
 }
 
 
@@ -4398,7 +4376,6 @@ class Hero extends Unit {
     this.skillPower = 1;
     this.controlPower = 1;
     this.supportPower = 1;
-    this.bossBonus = 0;
     this.damageTaken = 1;
     this.royalT = 0;
     this.royalBonus = 0;

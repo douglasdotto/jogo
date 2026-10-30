@@ -1847,18 +1847,6 @@ test('primeira fase da missão abre com faixa curta, sem a história',()=>{
   assert.equal(banner.children.length,0,'capítulo e história ficam no mapa, não na faixa da luta');
   banner.children.length=0;t.game.phase=3;t.startPhase();assert.equal(banner.textContent,'Fase 3');assert.equal(banner.children.length,0);
 });
-test('Ferrão de gigante só aparece com chefe ou golem pela frente',()=>{
-  const offered=(id,phase,last)=>{
-    clear();t.game.mission=mission(id);Object.assign(t.game,{phase,last});const seen=new Set();
-    for(let i=0;i<120;i++){context.showRelicPick();for(const r of t.pick.options)seen.add(r.id);}
-    clear();return seen.has('giant-bane');
-  };
-  assert.equal(offered('lago-sombrio',10,11),false);
-  assert.equal(offered('cemiterio',11,11),false);
-  assert.equal(offered('resgate',8,8),true);   // golem fecha a fase 8
-  assert.equal(offered('fazendas',5,6),true);  // Rei na fase 6
-  t.game.paused=false;context.document.getElementById('pick').classList.add('hidden');
-});
 const cMath=vm.runInContext('Math',context);   // o sorteio do jogo é o Math do contexto
 const foe=(type,x,z,boss=false)=>{const u=new t.Skeleton(type,6,boss);u.spawning=false;u.busy=0;u.pos.set(x,0,z);return u};
 const hero=(id,x,z)=>{const h=new t.Hero(cfg(id));h.pos.set(x,0,z);h.post.copy(h.pos);return h};   // posto no lugar: não volta à formação
@@ -2145,7 +2133,7 @@ test('progressão: ultimates usadas entram na contagem da partida',()=>{
 });
 test('progressão: fim de partida credita ouro, maestria e contadores e mostra a recompensa',()=>withLiveGame(()=>{
   const before=prog.snapshot();const h=new t.Hero(cfg('ninja'));h.stats.abates=40;
-  Object.assign(t.game,{test:false,roster:[h],mission:null,start:1,phase:12,last:12,kills:150,relics:['keen-edge','oak-charm'],ultimates:3});
+  Object.assign(t.game,{test:false,roster:[h],mission:null,start:1,phase:12,last:12,kills:150,relics:['keen-edge','vital-medallion'],ultimates:3});
   elements.get('overlayStars').innerHTML='';
   t.endGame('Vitória',true);
   const after=prog.snapshot();
@@ -2219,9 +2207,10 @@ vm.runInContext('t.RELICS=RELICS;t.RELIC_RARITY=RELIC_RARITY;',context);
 const R=id=>t.RELICS.find(r=>r.id===id);
 const withRandom=(value,fn)=>{const old=cMath.random;cMath.random=()=>value;try{return fn()}finally{cMath.random=old}};
 const relics=(...ids)=>{t.game.relics=[...ids]};
-test('relíquias têm raridade, dez novas são únicas e a oferta respeita a equipe',()=>{
+test('catálogo de 12 relíquias mantém raridades, únicas e ofertas adequadas à equipe',()=>{
   clear();relics();
-  const ids=new Set(t.RELICS.map(r=>r.id));assert.equal(ids.size,t.RELICS.length);
+  const ids=new Set(t.RELICS.map(r=>r.id));assert.equal(t.RELICS.length,12);assert.equal(ids.size,t.RELICS.length);
+  for(const retired of ['swift-boots','oak-charm','arcane-focus','giant-bane','healing-vial','wind-chime'])assert.ok(!R(retired),`${retired} foi removida do catálogo`);
   for(const r of t.RELICS)assert.ok(t.RELIC_RARITY[r.rarity],r.id);
   const fresh=['ember-heart','dawn-ward','thorn-mail','bulwark-banner','first-spark','phoenix-feather','ricochet-sling','shadow-mark','archmage-prism','last-oath'];
   for(const id of fresh)assert.ok(R(id)?.unique,id);
