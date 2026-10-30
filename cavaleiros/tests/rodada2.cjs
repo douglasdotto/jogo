@@ -942,7 +942,7 @@ test('heróis distribuem ataques contra alvos quase derrotados sem perder priori
   priest.hp=priest.maxHp*.1;focused.targetFocus=priest;
   assert.equal(t.chooseHeroTarget(teammate,[alternative,nearby,priest],.016,team),priest);
 });
-test('Trono de Ossos concentra no chefe com menos vida relativa e retém o foco',()=>{
+test('Trono de Ossos concentra no chefe com menos vida relativa sem filtrar lista temporária',()=>{
   clear();
   const first=new t.Hero(cfg('paladin')),second=new t.Hero(cfg('berserker'));
   first.pos.set(0,0,0);first.post.copy(first.pos);second.pos.set(0,0,0);second.post.copy(second.pos);
@@ -954,14 +954,14 @@ test('Trono de Ossos concentra no chefe com menos vida relativa e retém o foco'
   let focusScans=0;const filter=team.skeletons.filter.bind(team.skeletons);
   team.skeletons.filter=(...args)=>{focusScans++;return filter(...args)};
   assert.equal(t.chooseHeroTarget(first,[executioner,lich],.016,team),lich,'a vida relativa mais baixa define o foco inicial');
-  assert.equal(focusScans,1,'calcula o foco dos chefes uma vez no quadro');
+  assert.equal(focusScans,0,'compara os chefes diretamente, sem criar uma lista filtrada');
   assert.equal(t.chooseHeroTarget(second,[lich,executioner],.016,team),lich,'todos os heróis usam o mesmo chefe');
-  assert.equal(focusScans,1,'os outros heróis reutilizam a busca do mesmo quadro');
+  assert.equal(focusScans,0,'os outros heróis reutilizam o foco do mesmo quadro');
   lich.hp=lich.maxHp*.9;executioner.hp=executioner.maxHp*.1;
   assert.equal(t.chooseHeroTarget(first,[executioner,lich],.016,team),lich,'mudanças de vida não dividem o grupo enquanto o foco estiver atacável');
   lich.dead=true;lich.hp=0;
   assert.equal(t.chooseHeroTarget(second,[executioner,lich],.016,team),executioner,'o grupo troca quando o chefe focado morre');
-  assert.equal(focusScans,2,'um chefe caído invalida o cache e procura o próximo no mesmo quadro');
+  assert.equal(focusScans,0,'um chefe caído invalida o cache sem criar listas temporárias');
   clear();
 });
 test('Trono de Ossos desempata com ordem determinística e troca foco inacessível',()=>{

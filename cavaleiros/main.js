@@ -2620,6 +2620,12 @@ function bestSkillTarget(hero, candidates, context = targetContext()) {
   return best;
 }
 
+function partyCanReachBoss(boss, context) {
+  for (const member of context.party) if (!member.dead
+    && (canHeroReachTarget(member, boss, context) || stillEngaged(member, boss, context))) return true;
+  return false;
+}
+
 // No trono, todo o grupo concentra o mesmo chefe. Só troca quando o foco morre
 // ou nenhum herói vivo consegue mais alcançá-lo; ameaças imediatas ainda furam a fila.
 function twinBossFocus(context) {
@@ -2627,36 +2633,41 @@ function twinBossFocus(context) {
   if (context.twinFocusChecked) {
     if (context.twinFocusWaiting) return null;
     const focus = context.twinFocus;
-    if (focus && !focus.dead && !focus.spawning
-      && context.party.some((member) => !member.dead
-        && (canHeroReachTarget(member, focus, context) || stillEngaged(member, focus, context)))) return focus;
+    if (focus && !focus.dead && !focus.spawning && partyCanReachBoss(focus, context)) return focus;
   }
-  const attackable = context.skeletons.filter((boss) => boss.phaseBoss && !boss.dead && !boss.spawning
-    && context.party.some((member) => !member.dead
-      && (canHeroReachTarget(member, boss, context) || stillEngaged(member, boss, context))));
-  if (game.twinFocus && attackable.includes(game.twinFocus)) {
+  let selected = null, selectedHp = Infinity, selectedKey = '', selectedIndex = Infinity;
+  let currentFocus = null, spawningBoss = false;
+  for (let i = 0; i < context.skeletons.length; i++) {
+    const boss = context.skeletons[i];
+    if (!boss.phaseBoss || boss.dead) continue;
+    if (boss.spawning) { spawningBoss = true; continue; }
+    if (!partyCanReachBoss(boss, context)) continue;
+    if (boss === game.twinFocus) { currentFocus = boss; break; }
+    const hp = boss.maxHp > 0 ? Math.max(0, boss.hp) / boss.maxHp : 1;
+    const key = String(boss.enemyKind || boss.kind?.name || '');
+    if (hp < selectedHp || (hp === selectedHp
+      && (key < selectedKey || (key === selectedKey && i < selectedIndex)))) {
+      selected = boss;
+      selectedHp = hp;
+      selectedKey = key;
+      selectedIndex = i;
+    }
+  }
+  if (currentFocus) {
     context.twinFocusChecked = true;
-    context.twinFocus = game.twinFocus;
+    context.twinFocus = currentFocus;
     context.twinFocusWaiting = false;
-    return game.twinFocus;
+    return currentFocus;
   }
   // Lich e Carrasco usam animações de surgimento com durações diferentes; não fixe
   // o foco no primeiro que fica atacável antes de o outro chefe terminar de surgir.
-  if (context.skeletons.some((boss) => boss.phaseBoss && !boss.dead && boss.spawning)) {
+  if (spawningBoss) {
     context.twinFocusChecked = true;
     context.twinFocus = null;
     context.twinFocusWaiting = true;
     return null;
   }
-  attackable.sort((a, b) => {
-    const aHp = a.maxHp > 0 ? Math.max(0, a.hp) / a.maxHp : 1;
-    const bHp = b.maxHp > 0 ? Math.max(0, b.hp) / b.maxHp : 1;
-    if (aHp !== bHp) return aHp - bHp;
-    const aKey = String(a.enemyKind || a.kind?.name || '');
-    const bKey = String(b.enemyKind || b.kind?.name || '');
-    return aKey < bKey ? -1 : aKey > bKey ? 1 : context.skeletons.indexOf(a) - context.skeletons.indexOf(b);
-  });
-  game.twinFocus = context.twinFocus = attackable[0] || null;
+  game.twinFocus = context.twinFocus = selected;
   context.twinFocusChecked = true;
   context.twinFocusWaiting = false;
   return game.twinFocus;
