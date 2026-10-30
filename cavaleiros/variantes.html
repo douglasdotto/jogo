@@ -66,8 +66,12 @@
 
     // uma coluna por modelo (Cavaleiro, Bárbaro, Mago, Ladino); cada herói a mais abre uma linha na coluna do seu modelo
     const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', '').replace('Skeleton_', '').replace('Ranger', 'Rogue'));
-    const units = LOOK_PREVIEW.map((v, i) => {
-      const col = colOf(v), row = LOOK_PREVIEW.slice(0, i).filter((o) => colOf(o) === col).length;
+    // ?only=brute,crusher mostra só esses heróis, de perto (comparar um herói com os parecidos)
+    const only = new URLSearchParams(location.search).get('only')?.split(',');
+    const list = only ? LOOK_PREVIEW.filter((v) => only.includes(v.id)) : LOOK_PREVIEW;
+    if (only) { camera.position.set(0, 4, 6 + 4 * list.length); controls.target.set(0, 1.4, 0); }
+    const units = list.map((v, i) => {
+      const col = only ? i + 2 - list.length / 2 : colOf(v), row = only ? 2.3 : list.slice(0, i).filter((o) => colOf(o) === col).length;
       // variante por receita (characters.js): a receita já esconde e troca as peças
       const recipe = v.recipe && CHARACTERS.find((r) => r.id === v.recipe);
       const model = recipe ? buildCharacter(assets, recipe).scene : SkeletonUtils.clone(assets[v.model].scene);
@@ -87,6 +91,7 @@
     });
 
     function play(u, name) {
+      if (u.v.clips?.[name]) name = u.v.clips[name];   // clipes próprios da variante (gigante)
       if (name === 'Idle' && u.v.model === 'Barbarian') name = '2H_Melee_Idle';
       const a = u.mixer.clipAction(THREE.AnimationClip.findByName(u.anims, name));
       a.reset().play();

@@ -6,8 +6,19 @@
 
 const ANIM_DIR = 'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_';
 // só os arquivos que os heróis usam (Special = esqueletos, Tools = ofícios ficam de fora)
-export const HERO_ANIM_FILES = ['General', 'MovementBasic', 'MovementAdvanced', 'CombatMelee', 'CombatRanged', 'Simulation']
+const MEDIUM_ANIM_FILES = ['General', 'MovementBasic', 'MovementAdvanced', 'CombatMelee', 'CombatRanged', 'Simulation']
   .map((name) => `${ANIM_DIR}${name}.glb`);
+// gigante (Brutamontes): andar, guarda e socos do Rig_Large, com peso de verdade. Arquivos enxutos (só esses clipes,
+// sem o manequim) feitos com tools/strip-glb-anims.cjs; os dois rigs têm a mesma orientação de repouso nos ossos,
+// então só as rotações (e a altura do quadril, na escala do Rig_Medium) passam para o modelo de herói
+const LARGE_DIR = 'kaykit/animations/Animations/gltf/Rig_Large/Rig_Large_Brute_';
+const LARGE_ANIM_FILES = ['Combat', 'Move'].map((name) => `${LARGE_DIR}${name}.glb`);
+export const LARGE_CLIPS = {
+  Brute_Idle: 'Melee_Unarmed_Idle', Brute_Walk: 'Walking_A', Brute_Run: 'Running_A',
+  Brute_Punch: 'Melee_Unarmed_Punch', Brute_Smash: 'Melee_Unarmed_Smash', Brute_Kick: 'Melee_Unarmed_Kick',
+};
+const LARGE_HIPS = 0.4057 / 1.041;   // altura do quadril em repouso: Rig_Medium / Rig_Large
+export const HERO_ANIM_FILES = [...MEDIUM_ANIM_FILES, ...LARGE_ANIM_FILES];
 
 // modelos que recebem os clipes; o Ranger vem do Adventurers 2.0 (o 1.0 não tinha arqueiro)
 export const HERO_MODELS = ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger'];
@@ -71,12 +82,20 @@ let heroClipCache = null;
 export function heroClips(assets) {
   if (heroClipCache) return heroClipCache;
   const byName = new Map();
-  for (const file of HERO_ANIM_FILES) {
+  for (const file of MEDIUM_ANIM_FILES) {
     for (const clip of assets[file.replace(/\.glb$/, '')]?.animations || []) if (!byName.has(clip.name)) byName.set(clip.name, clip);
   }
   for (const [old, now] of Object.entries(LEGACY_CLIPS)) {
     const clip = byName.get(now);
     if (clip && !byName.has(old)) byName.set(old, new clip.constructor(old, clip.duration, clip.tracks));
+  }
+  const large = LARGE_ANIM_FILES.flatMap((file) => assets[file.replace(/\.glb$/, '')]?.animations || []);
+  for (const [name, src] of Object.entries(LARGE_CLIPS)) {
+    const clip = large.find((c) => c.name === src);
+    if (!clip) continue;
+    const tracks = clip.tracks.filter((t) => t.name.endsWith('.quaternion') || t.name === 'hips.position')
+      .map((t) => (t.name.endsWith('.quaternion') ? t : new t.constructor(t.name, t.times, t.values.map((v) => v * LARGE_HIPS))));
+    byName.set(name, new clip.constructor(name, clip.duration, tracks));
   }
   heroClipCache = [...byName.values()];
   return heroClipCache;

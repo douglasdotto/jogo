@@ -296,19 +296,35 @@ export const LOOKS = {
     ],
   },
   // ---------- Bárbaro (tanque) ----------
-  brute: {   // gigante de punhos: tronco e braços enormes, ombreiras de pedra, manoplas de pedra, careca de barba ruiva
+  // gigante de punhos (como o Barbarian large): ombros, braços e punhos enormes, cabeça pequena, pernas curtas e grossas,
+  // costas curvadas; pele curtida, tanga de pele com cinto largo, ombreira de pedra de um lado só e corrente no peito
+  brute: {
     shape: silhouette('Barbarian', { torso: 1.3, arms: 1.28, legs: 1.14, height: 1.02, depth: 1.26 }),
-    hide: ['Barbarian_Hat'],
+    // por osso (characters.js): a pose do clipe continua, com estas proporções por cima
+    bones: {
+      hips: { pos: [0, -0.045, 0] },   // pernas mais curtas: o quadril desce para os pés não flutuarem
+      spine: { scale: [1.14, 1, 1.18], rot: [0.16, 0, 0] },   // barriga e costas curvadas para a frente
+      chest: { scale: [1.3, 1.02, 1.14], rot: [0.1, 0, 0] },   // peito e ombros largos
+      head: { scale: 0.44, rot: [-0.3, 0, 0] },   // cabeça pequena, erguida para olhar à frente
+      'upperarm.l': { scale: 1.3 }, 'upperarm.r': { scale: 1.3 },   // braços longos e grossos
+      'hand.l': { scale: 1.3 }, 'hand.r': { scale: 1.3 },   // punhos enormes
+      'upperleg.l': { scale: [1.3, 0.86, 1.3] }, 'upperleg.r': { scale: [1.3, 0.86, 1.3] },   // pernas curtas e grossas
+    },
+    hide: ['Barbarian_Hat', 'Barbarian_Cape'],
     paint: {
-      ...outfit('Barbarian', '#566a78', '#3a3a40', 0.65), ...face('Barbarian', { skin: '#d8a07a', hair: '#7a3a1a', eyes: '#7affd8' }),
-      Barbarian_Cape: { tint: '#4a4038', amount: 0.8 },
+      ...outfit('Barbarian', '#3c4652', '#3a2a20', 0.75), ...face('Barbarian', { skin: '#c88a5e', hair: '#5a1e0e', eyes: '#7affd8' }),
+      Barbarian_ArmLeft: { tint: '#c88a5e', amount: 0.4 }, Barbarian_ArmRight: { tint: '#c88a5e', amount: 0.4 },   // braços nus, cor de pele
     },
     extras: [
-      { type: 'pauldrons', bone: 'chest', color: 0x9a948a, trim: 0x5a554e, size: 1.7 },
-      { type: 'armWraps', bone: 'lowerarm.l', color: 0x8a847a, radius: 0.2, n: 5 },
-      { type: 'armWraps', bone: 'lowerarm.r', color: 0x8a847a, radius: 0.2, n: 5 },
-      { type: 'beard', bone: 'head', color: 0x7a3a1a },
-      { type: 'brows', bone: 'head', color: 0x5a2a12, angle: 0.35, size: 1.4 },
+      { type: 'pauldrons', bone: 'chest', color: 0x8e887c, trim: 0x4a4440, size: 1.16, spikes: true, sides: [1] },
+      { type: 'chain', bone: 'chest', side: 1 },
+      { type: 'furLoincloth', bone: 'hips', fur: 0x6e5034, belt: 0x2e1c12, buckle: 0xc08a3a },
+      { type: 'armWraps', bone: 'lowerarm.l', color: 0x5a3a24, radius: 0.13, n: 3 },
+      { type: 'armWraps', bone: 'lowerarm.r', color: 0x5a3a24, radius: 0.13, n: 3 },
+      { type: 'stoneFist', bone: 'hand.l' }, { type: 'stoneFist', bone: 'hand.r' },
+      { type: 'beard', bone: 'head', color: 0x5a1e0e },
+      { type: 'brows', bone: 'head', color: 0x3a140a, angle: 0.4, size: 1.5 },
+      { type: 'scar', bone: 'head', side: 1, color: 0xe0907a },
     ],
   },
   // ---------- Invocador ----------
@@ -359,7 +375,7 @@ export const LOOK_PREVIEW = [
   { id: 'engineer', name: 'Engenheira', model: 'Rogue', recipe: 'engineer' },
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
-  { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6 },   // luta de punhos (manoplas de pedra)
+  { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6, clips: { Idle: 'Brute_Idle', Running_A: 'Brute_Run' } },   // luta de punhos; anda e respira como gigante (Rig_Large)
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
 ];
 export const WEAPONS = {

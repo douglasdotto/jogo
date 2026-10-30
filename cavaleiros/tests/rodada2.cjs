@@ -426,9 +426,9 @@ test('poof reutiliza materiais só depois que as partículas expiram',()=>{
   }
 });
 // heróis: clipes do pacote Character Animations (hero-anims.js) + apelidos antigos; demais modelos: clipes do próprio GLB
-const heroAnims=(()=>{const c={};vm.runInNewContext(fs.readFileSync(path.join(dir,'hero-anims.js'),'utf8').replace(/^export /gm,'')+';globalThis.r={HERO_ANIM_FILES,HERO_MODELS,HERO_MODEL_FILES,LEGACY_CLIPS};',c);return c.r})();
+const heroAnims=(()=>{const c={};vm.runInNewContext(fs.readFileSync(path.join(dir,'hero-anims.js'),'utf8').replace(/^export /gm,'')+';globalThis.r={HERO_ANIM_FILES,HERO_MODELS,HERO_MODEL_FILES,LEGACY_CLIPS,LARGE_CLIPS};',c);return c.r})();
 const readGltf=f=>{if(f.endsWith('.gltf'))return JSON.parse(fs.readFileSync(f,'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
-const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS)];
+const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS),...Object.keys(heroAnims.LARGE_CLIPS)];
 const modelGltf=n=>{const f=path.join(dir,'assets',heroAnims.HERO_MODEL_FILES[n]||n+'.glb');return readGltf(fs.existsSync(f)?f:path.join(dir,'assets',n+'.gltf'))};
 const clipsOf=n=>heroAnims.HERO_MODELS.includes(n)?heroClipNames:modelGltf(n).animations.map(a=>a.name);
 test('29 variantes, receitas e animações existentes nos GLB',()=>{

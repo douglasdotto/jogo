@@ -93,7 +93,10 @@ assert.ok(['Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'].every((w) => LO
 const bodyWidth = (id) => LOOKS[id].shape.Barbarian_Body?.[0] || 0;
 for (const id of Object.keys(LOOKS)) if (id !== 'brute') assert.ok(bodyWidth('brute') > (LOOKS[id].shape[Object.keys(LOOKS[id].shape)[0]]?.[0] || 0), `Brutamontes mais largo que ${id}`);
 assert.deepEqual(Array.from(LOOK_PREVIEW.find((hero) => hero.id === 'brute').use), [], 'Brutamontes luta de punhos');
-assert.ok(LOOKS.brute.extras.some((extra) => extra.type === 'pauldrons' && extra.size >= 1.5), 'Brutamontes com ombreiras enormes');
+// a ombreira cresce junto com o peito alargado no osso (bones.chest), então o tamanho que vale é o dos dois somados
+const bruteChest = LOOKS.brute.bones?.chest?.scale?.[0] || 1;
+assert.ok(LOOKS.brute.extras.some((extra) => extra.type === 'pauldrons' && extra.size * bruteChest >= 1.5), 'Brutamontes com ombreiras enormes');
+assert.ok(LOOKS.brute.bones['hand.l'].scale > 1.2 && LOOKS.brute.bones.head.scale < 0.8, 'Brutamontes gigante: punhos enormes e cabeça pequena');
 assert.ok(has('brute', 'armWraps', 'lowerarm.l') && has('brute', 'armWraps', 'lowerarm.r'), 'Brutamontes com manoplas nos dois braços');
 for (const id of ['archer', 'monk', 'alchemist', 'brute']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
 
