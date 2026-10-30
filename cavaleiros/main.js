@@ -125,24 +125,17 @@ const VARIANTS = [
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
 const variantsOf = (classId) => VARIANTS.filter((v) => v.classId === classId);
+// abas temáticas do seletor (o classId de combate não muda); a ordem dos ids é a ordem dos cartões
 const PICK_GROUPS = [
-  { id: 'class-0', name: 'Cavaleiro', icon: '♜', classId: 0 },
-  { id: 'class-1', name: 'Bárbaro', icon: '⚒', classId: 1 },
-  { id: 'class-2', name: 'Mago', icon: '✦', classId: 2 },
-  { id: 'class-3', name: 'Ladino', icon: '☾', classId: 3 },
-  { id: 'monk', name: 'Monge', icon: '☯', classId: 1 },
-  { id: 'druida', name: 'Druida', icon: '❀', classId: 4 },
-  { id: 'cleric', name: 'Clérigo', icon: '✚', classId: 4 },
-  { id: 'bard', name: 'Bardo', icon: '♫', classId: 4 },
-  { id: 'angel', name: 'Anjo', icon: '✧', classId: 4 },
-  { id: 'alchemist', name: 'Alquimista', icon: '⚗', classId: 4 },
-  { id: 'engineer', name: 'Engenheira', icon: '⚙', classId: 2 },
-  { id: 'beast-tamer', name: 'Domador', icon: '♞', classId: 1 },
-  { id: 'oracle', name: 'Oráculo', icon: '☼', classId: 2 },
-  { id: 'summoner', name: 'Invocador', icon: '✿', classId: 4 },
+  { id: 'guerreiros', name: 'Guerreiros', icon: '♜', heroes: ['paladin', 'guardian', 'champion', 'king', 'brute'] },
+  { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
+  { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner'] },
+  { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
+  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist'] },
 ];
-const pickGroupId = (cfg) => cfg.pickGroup || `class-${cfg.classId}`;
-const variantsInPickGroup = (groupId) => VARIANTS.filter((cfg) => pickGroupId(cfg) === groupId);
+const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
+const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id === groupId)?.heroes || [])
+  .map((id) => VARIANTS.find((cfg) => cfg.id === id)).filter(Boolean);
 const pickGroupIndex = (cfg) => PICK_GROUPS.findIndex((group) => group.id === pickGroupId(cfg));
 const POSTS = [[0, -1.2], [-1.7, 0], [1.7, 0], [0, 1.7]];
 const XP_LEVELS = [0, 90, 350];   // XP acumulado para Nv2 e Nv3
@@ -454,7 +447,7 @@ const STAT_GLYPHS = { Vida: '♥', Força: '⚔', Rapidez: '➤', Alcance: '◎'
 function showPick(title, sub) {
   pick.mode = 'hero';
   $('banner').style.opacity = 0;   // a faixa não pode ficar embaixo do título da escolha
-  pick.options = PICK_GROUPS.flatMap((group) => variantsInPickGroup(group.id));   // cada arquétipo ocupa sua própria linha
+  pick.options = PICK_GROUPS.flatMap((group) => variantsInPickGroup(group.id));   // cada aba temática ocupa sua própria grade
   $('pickHint').textContent = PICK_HERO_HINT;
   const previousSuggestion = game.mission && game.picksLeft > 0 && !game.test
     ? game.campaignSquadSuggestion?.[heroes().length]
@@ -479,14 +472,15 @@ function showPick(title, sub) {
   for (const [groupIndex, group] of PICK_GROUPS.entries()) {
     const variants = variantsInPickGroup(group.id);
     const count = variants.length;
-    const color = variants[0]?.color?.[0] || HEROES[group.classId]?.color?.[0] || '#8bb9e7';
+    const color = variants[0]?.color?.[0] || '#8bb9e7';
+    const inParty = variants.filter(isOwned).length;   // contador de quem já está no grupo nesta aba
     const filter = document.createElement('button');
     filter.type = 'button';
     filter.className = 'pick-filter';
-    filter.setAttribute('aria-label', `${group.name}: ${count} herói${count === 1 ? '' : 's'}`);
+    filter.setAttribute('aria-label', `${group.name}: ${count} herói${count === 1 ? '' : 's'}${inParty ? `, ${inParty} no grupo` : ''}`);
     filter.setAttribute('aria-pressed', 'false');
     filter.style.setProperty('--class-color', color);
-    filter.innerHTML = `<i aria-hidden="true">${group.icon}</i><span>${group.name}</span>`;
+    filter.innerHTML = `<i aria-hidden="true">${group.icon}</i><span>${group.name}</span>${inParty ? `<b class="pick-filter-count" aria-hidden="true">${inParty}</b>` : ''}`;
     filter.onclick = () => focusClass(groupIndex);
     filter.onfocus = () => focusClass(groupIndex);
     filters.appendChild(filter);
@@ -499,6 +493,7 @@ function showPick(title, sub) {
     row.setAttribute('aria-label', `Heróis da categoria ${group.name}`);
     row.hidden = true;
     row.style.setProperty('--class-color', color);
+    row.style.setProperty('--pick-cols', String(pickGridColumns(count)));
     rows.appendChild(row);
     pick.classRows.push(row);
   }
@@ -1042,7 +1037,10 @@ function renderInfo(cfg) {
   pick.info.appendChild(selectButton);
 }
 
-// setas na grade: ← → dentro da linha, ↑ ↓ entre linhas (coluna mais próxima), pulando quem já está no grupo
+// colunas da grade de cada aba (o CSS usa o mesmo número via --pick-cols): 5–6 heróis em 3, 7–8 em 4
+const pickGridColumns = (count) => count > 6 ? 4 : 3;
+
+// setas na grade: ← → dentro da aba, ↑ ↓ entre as linhas da aba e depois para a aba vizinha, pulando quem já está no grupo
 function moveGrid(dx, dy) {
   const free = (i) => isFree(pick.options[i]);
   const rows = PICK_GROUPS.map((group) => pick.options
@@ -1050,6 +1048,14 @@ function moveGrid(dx, dy) {
   const r0 = rows.findIndex((row) => row.includes(pick.sel));
   const c0 = rows[r0]?.indexOf(pick.sel) ?? 0;
   if (r0 < 0) return;
+  const cols = pickGridColumns(rows[r0].length);
+  if (dy) {
+    for (let line = Math.floor(c0 / cols) + dy; line >= 0 && line * cols < rows[r0].length; line += dy) {
+      const candidates = rows[r0].slice(line * cols, (line + 1) * cols).filter(free);
+      const i = candidates.sort((a, b) => Math.abs(rows[r0].indexOf(a) % cols - c0 % cols) - Math.abs(rows[r0].indexOf(b) % cols - c0 % cols))[0];
+      if (i !== undefined) return selectCard(i);
+    }
+  }
   if (dx) {
     const row = rows[r0];
     for (let n = 1; n < row.length; n++) {
@@ -1061,7 +1067,10 @@ function moveGrid(dx, dy) {
   for (let n = 1; n < rows.length; n++) {
     const r = (r0 + dy * n + rows.length) % rows.length;
     const candidates = rows[r].filter(free);
-    const i = candidates.sort((a, b) => Math.abs(rows[r].indexOf(a) - c0) - Math.abs(rows[r].indexOf(b) - c0))[0];
+    // subindo, entra pela última linha da aba; descendo, pela primeira
+    const cr = pickGridColumns(rows[r].length);
+    const i = candidates.sort((a, b) => Math.abs(rows[r].indexOf(a) % cr - c0 % cols) - Math.abs(rows[r].indexOf(b) % cr - c0 % cols)
+      || (dy < 0 ? b - a : a - b))[0];
     if (i !== undefined) return selectCard(i);
   }
 }

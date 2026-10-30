@@ -496,8 +496,8 @@ test('mira no chão reduz amostras e ainda encontra o primeiro cruzamento na ram
 test('arquétipos de combate preservam os atributos enquanto o seletor mostra as categorias próprias',()=>{
   assert.equal(t.HEROES.length,5);assert.equal(t.CLASSES.length,5);
   for(const [id,classId] of [['cleric',4],['bard',4],['angel',4],['druid',4],['chronist',2]])assert.equal(cfg(id).classId,classId,id);
-  assert.equal(t.pickGroupId(cfg('druid')),'druida');assert.equal(t.pickGroupId(cfg('cleric')),'cleric');
-  assert.equal(t.pickGroupId(cfg('monk')),'monk');assert.equal(t.pickGroupId(cfg('chronist')),'class-2');
+  assert.equal(t.pickGroupId(cfg('druid')),'suporte');assert.equal(t.pickGroupId(cfg('cleric')),'suporte');
+  assert.equal(t.pickGroupId(cfg('monk')),'barbaros');assert.equal(t.pickGroupId(cfg('chronist')),'magos');
   const d=cfg('druid'),c=cfg('chronist');
   assert.deepEqual([d.hp,d.dmg,d.range,d.speed,d.cooldown],[180,21,6,3,1]);
   assert.deepEqual([c.hp,c.dmg,c.range,c.speed,c.cooldown,c.splash],[165,21,6,3.5,1.05,0]);
@@ -611,26 +611,31 @@ test('Anjo tem asas animadas e paira acima do chão',()=>{
   assert.ok(t.CHARACTERS.find(c=>c.id==='angel').extras.some(e=>e.type==='wings'));
   assert.match(recipes,/wing\.userData\.wingFlap/);
 });
-test('seletor separa as classes especiais sem alterar os arquétipos de combate',()=>{
-  clear();t.showPick('','');
+test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos de combate',()=>{
+  clear();new t.Hero(cfg('pyro'));t.showPick('','');
   assert.equal(t.pick.classRows.filter(row=>!row.hidden).length,1,'só a categoria selecionada aparece ao abrir o seletor');
   assert.deepEqual(Array.from(t.pick.classFilters,filter=>filter.innerHTML.match(/<span>(.*?)<\/span>/)?.[1]),
-    ['Cavaleiro','Bárbaro','Mago','Ladino','Monge','Druida','Clérigo','Bardo','Anjo','Alquimista','Engenheira','Domador','Oráculo','Invocador']);
+    ['Guerreiros','Bárbaros','Magos','Ladinos','Suporte']);
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
-  assert.deepEqual(Array.from(rowFor('Bárbaro').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','brute']);
-  assert.deepEqual(Array.from(rowFor('Monge').children,card=>card.attributes['data-hero-id']),['monk']);
-  assert.deepEqual(Array.from(rowFor('Clérigo').children,card=>card.attributes['data-hero-id']),['cleric']);
+  assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute']);
+  assert.deepEqual(Array.from(rowFor('Bárbaros').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','monk','beast_tamer']);
+  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist']);
+  for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=8,'cada aba tem de 5 a 8 heróis');
+  assert.equal(t.pick.classRows.reduce((sum,row)=>sum+row.children.length,0),t.VARIANTS.length,'todo herói está em exatamente uma aba');
+  const filterFor=name=>t.pick.classFilters[t.PICK_GROUPS.findIndex(group=>group.name===name)];
+  assert.match(filterFor('Magos').innerHTML,/pick-filter-count[^>]*>1</,'a aba mostra quantos do grupo já estão nela');
+  assert.doesNotMatch(filterFor('Suporte').innerHTML,/pick-filter-count/);
   assert.equal(cfg('monk').classId,1,'o arquétipo de combate do Monge continua separado da categoria visual');
   assert.equal(cfg('druid').classId,4,'a categoria Druida não altera as regras de combate');
-  const monkGroup=t.PICK_GROUPS.findIndex(group=>group.name==='Monge');
-  t.pick.classFilters[monkGroup].onclick();
-  assert.equal(t.pick.activeClass,monkGroup,'clicar na categoria seleciona o grupo correto');
-  assert.equal(t.pick.options[t.pick.sel].id,'monk','o foco salta para o único herói do grupo');
-  assert.equal(t.pick.classRows[monkGroup].hidden,false);
+  const supportGroup=t.PICK_GROUPS.findIndex(group=>group.name==='Suporte');
+  t.pick.classFilters[supportGroup].onclick();
+  assert.equal(t.pick.activeClass,supportGroup,'clicar na categoria seleciona o grupo correto');
+  assert.equal(t.pick.options[t.pick.sel].id,'druid','o foco salta para o primeiro herói livre da aba');
+  assert.equal(t.pick.classRows[supportGroup].hidden,false);
   assert.equal(t.pick.classRows.filter(row=>!row.hidden).length,1,'trocar de categoria esconde a anterior');
-  assert.match(t.pick.cards[t.pick.sel].attributes['aria-label'],/categoria Monge/);
+  assert.match(t.pick.cards[t.pick.sel].attributes['aria-label'],/categoria Suporte/);
 });
-test('navegação respeita as linhas de classe, pula ocupadas e usa postos distintos',()=>{
+test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
   assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,29);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
@@ -648,9 +653,15 @@ test('navegação respeita as linhas de classe, pula ocupadas e usa postos disti
   assert.ok(pickText().includes('Sua equipe com ')&&pickText().includes('class="candidate"')
     &&pickText().includes('data-role="Controle"')&&wantedRoles(false).length>0,'fora da missão, os papéis que faltam aparecem como ícones');
   t.confirmPick(at('pyro'));assert.equal(t.pick.open,true);
-  t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'));
-  t.moveGrid(0,1);assert.equal(t.pick.sel,at('cryo'));t.moveGrid(-1,0);assert.equal(t.pick.sel,at('chronist'));
+  // grade de 3 colunas (5–6 heróis) ou 4 (7–8): ↑ ↓ andam entre as linhas da aba antes de trocar de aba
+  t.selectCard(at('paladin'));t.moveGrid(0,1);assert.equal(t.pick.sel,at('king'));
+  t.moveGrid(0,1);assert.equal(t.pick.sel,at('berserker'),'da última linha, ↓ passa para a aba seguinte');
+  t.moveGrid(0,1);assert.equal(t.pick.sel,at('iceviking'));
+  t.moveGrid(0,1);assert.equal(t.pick.sel,at('chronist'),'na aba seguinte, pula os ocupados da mesma coluna');
+  t.moveGrid(0,-1);assert.equal(t.pick.sel,at('cryo'));
+  t.moveGrid(-1,0);assert.equal(t.pick.sel,at('summoner'),'← volta pela aba e pula os ocupados');
   t.moveGrid(1,0);assert.equal(t.pick.sel,at('cryo'));
+  t.moveGrid(0,-1);assert.equal(t.pick.sel,at('beast_tamer'),'↑ entra pela última linha da aba anterior');
 });
 test('escolha na campanha mostra objetivo e papéis prioritários projetados',()=>{
   const previousLocation=context.location,previousStorage=context.localStorage.data,previousMission=t.game.mission;
