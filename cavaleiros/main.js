@@ -2395,7 +2395,8 @@ function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
 function anotherDefenseHeroCanIntercept(hero, target, context) {
   const { party, villager, plateauBonus = 0 } = context;
   for (const ally of party) {
-    if (ally === hero || ally.dead) continue;
+    // Busy e recuo ativo impedem o Hero.update de chegar à seleção de alvo neste quadro.
+    if (ally === hero || ally.dead || ally.busy > 0 || ally.kiteT > 0) continue;
     const fromPost = tacticalDistance(ally.post, target.pos);
     if (fromPost <= LEASH + ally.range + plateauBonus
       || tacticalDistance(ally.pos, target.pos) <= ally.range + 1.5) return true;
@@ -5744,7 +5745,9 @@ class Skeleton extends Unit {
 // them back at their original, overlapping positions.
 const collisionFrom = { x: 0, z: 0 }, collisionTo = { x: 0, z: 0 };
 const separationSideA = { x: 0, z: 0 }, separationSideB = { x: 0, z: 0 };
-const UNIT_SEPARATION_FACTOR = 0.65;
+// Mantém espaço entre aliados da mesma facção, mas deixa os adversários entrar no alcance de combate.
+const UNIT_SEPARATION_FACTOR = 0.86;
+const UNIT_COMBAT_SEPARATION_FACTOR = 0.68;
 function collisionMove(unit, dx, dz) {
   const pos = unit.pos, fromX = pos.x, fromZ = pos.z;
   let fraction = 1;
@@ -5763,7 +5766,8 @@ function collisionMove(unit, dx, dz) {
 
 function separatePair(a, b, ia, ib) {
   if (Math.abs(a.pos.y - b.pos.y) >= 0.85) return false;
-  const min = UNIT_SEPARATION_FACTOR * (a.size + b.size);
+  const sameFaction = (a.team === 'skeleton') === (b.team === 'skeleton');
+  const min = (sameFaction ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR) * (a.size + b.size);
   let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
   let distance = Math.hypot(dx, dz);
   if (distance >= min) return false;
@@ -5813,10 +5817,12 @@ function separatePair(a, b, ia, ib) {
 
 const SEPARATION_CELL_SIZE = 3;
 const OBSTACLE_GRID_QUERY_THRESHOLD = 512;
+const OBSTACLE_QUERY_CACHE_LIMIT = 1024;
 const separationAlive = [], separationCandidates = [], separationCellX = [], separationCellZ = [];
 const separationGrid = new Map(), separationGridPool = [];
 const obstacleGrid = new Map(), obstacleGridPool = [];
-const obstacleQueryIndexes = [], obstacleQueryCandidates = [], obstacleQuerySeen = new Set();
+const obstacleQueryIndexes = [], obstacleQuerySeen = new Set();
+const obstacleQueryCache = new Map();
 const obstacleOrder = new Map(), compareObstacleIndexes = (a, b) => a - b;
 let obstacleGridWorld = null, obstacleGridSource = null, obstacleGridLength = -1, obstacleGridMargin = -1;
 
@@ -5835,6 +5841,7 @@ function addToGrid(grid, pool, x, z, value) {
 function indexObstacles(margin) {
   if (obstacleGridWorld === world && obstacleGridSource === world.obstacles
       && obstacleGridLength === world.obstacles.length && obstacleGridMargin >= margin) return;
+  obstacleQueryCache.clear();
   recycleGrid(obstacleGrid, obstacleGridPool);
   obstacleOrder.clear();
   obstacleGridWorld = world;
@@ -5856,10 +5863,17 @@ function indexObstacles(margin) {
 function queryObstacleCandidates(minX, maxX, minZ, maxZ, margin = 0) {
   if (world.obstacles.length <= OBSTACLE_GRID_QUERY_THRESHOLD) return world.obstacles;
   indexObstacles(Math.max(0, margin));
-  obstacleQueryIndexes.length = 0;
-  obstacleQuerySeen.clear();
   const minCellX = Math.floor(minX / SEPARATION_CELL_SIZE), maxCellX = Math.floor(maxX / SEPARATION_CELL_SIZE);
   const minCellZ = Math.floor(minZ / SEPARATION_CELL_SIZE), maxCellZ = Math.floor(maxZ / SEPARATION_CELL_SIZE);
+  const cacheKey = `${minCellX},${maxCellX},${minCellZ},${maxCellZ}`;
+  const cached = obstacleQueryCache.get(cacheKey);
+  if (cached !== undefined) {
+    obstacleQueryCache.delete(cacheKey);
+    obstacleQueryCache.set(cacheKey, cached); // LRU: a consulta mais recente fica por último
+    return cached;
+  }
+  obstacleQueryIndexes.length = 0;
+  obstacleQuerySeen.clear();
   for (let x = minCellX; x <= maxCellX; x++) for (let z = minCellZ; z <= maxCellZ; z++) {
     const bucket = obstacleGrid.get(gridCellKey(x, z));
     if (!bucket) continue;
@@ -5869,9 +5883,13 @@ function queryObstacleCandidates(minX, maxX, minZ, maxZ, margin = 0) {
     }
   }
   if (obstacleQueryIndexes.length > 1) obstacleQueryIndexes.sort(compareObstacleIndexes);
-  obstacleQueryCandidates.length = 0;
-  for (const obstacleIndex of obstacleQueryIndexes) obstacleQueryCandidates.push(world.obstacles[obstacleIndex]);
-  return obstacleQueryCandidates;
+  // O array fica imutável e nunca volta ao pool de scratch; consumidores podem terminar a iteração sem sobrescrita.
+  const candidates = Object.freeze(obstacleQueryIndexes.map((obstacleIndex) => world.obstacles[obstacleIndex]));
+  if (obstacleQueryCache.size >= OBSTACLE_QUERY_CACHE_LIMIT) {
+    obstacleQueryCache.delete(obstacleQueryCache.keys().next().value);
+  }
+  obstacleQueryCache.set(cacheKey, candidates);
+  return candidates;
 }
 
 function separate() {
@@ -5980,7 +5998,7 @@ function startGame(view = 'menu') {
   clearMonsterFx();   // avisos, covas e barra do chefe
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   placeParty(THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES));
-  $('overlay').classList.remove('results', 'lost');
+  $('overlay').classList.remove('results', 'lost', 'won', 'test-run');
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
   else if (view?.goal) showCampaign(view);   // "Próxima missão" / "Tentar de novo" vão direto à dificuldade
@@ -7101,9 +7119,12 @@ function endGame(text, won = false) {
   $('overlayBtn').textContent = game.mission ? 'Mapa' : 'Jogar de novo';
   $('overlayBtn').setAttribute('aria-label', game.mission ? 'Voltar ao mapa' : 'Jogar de novo');
   $('overlayBtn').hidden = false;
-  $('overlay').classList.add('results');
-  $('overlay').classList.toggle('lost', !won);
-  $('overlay').classList.remove('hidden');
+  const resultOverlay = $('overlay');
+  resultOverlay.classList.add('results');
+  resultOverlay.classList.toggle('won', Boolean(won));
+  resultOverlay.classList.toggle('lost', !won);
+  resultOverlay.classList.toggle('test-run', Boolean(game.test));
+  resultOverlay.classList.remove('hidden');
 }
 
 function updateBars() {

@@ -584,6 +584,70 @@
       #aimCancel { bottom: 170px; }
       #banner { font-size: 28px; padding: 6px 28px 10px; -webkit-text-stroke-width: 5px; }
     }
+    /* Seletor desktop: cards de herói quadrados e com espaço próprio para imagem, nome e função. */
+    @media (min-width: 1001px) and (min-height: 821px) {
+      #pick:has(#pickList.grid) #pickList.grid .pick-rows .pick-row > .card {
+        --hero-card-size: clamp(176px, 22vh, 232px);
+        width: min(var(--hero-card-size), 100%);
+        height: auto;
+        aspect-ratio: 1 / 1;
+        min-height: 0;
+        align-self: center;
+        justify-self: center;
+        padding: 9px;
+        gap: 5px;
+      }
+      #pick:has(#pickList.grid) #pickList.grid .pick-rows .pick-row > .card .portrait {
+        width: min(100%, clamp(80px, calc(var(--hero-card-size) - 96px), 120px));
+        height: auto;
+        max-width: 100%;
+        aspect-ratio: 1 / 1;
+        flex: 0 0 auto;
+        justify-self: center;
+      }
+      #pick:has(#pickList.grid) #pickList.grid .pick-rows .pick-card-copy {
+        min-width: 0;
+        width: 100%;
+        padding: 2px 3px;
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        justify-items: center;
+        align-content: center;
+        gap: 2px;
+        text-align: center;
+      }
+      #pick:has(#pickList.grid) #pickList.grid .pick-rows .pick-row > .card .pick-card-copy .ribbon {
+        display: -webkit-box;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 2.2em;
+        max-height: 2.2em;
+        margin: 0;
+        padding: 0 2px;
+        overflow: hidden;
+        font-size: clamp(18px, 1.3vw, 21px);
+        line-height: 1.1;
+        text-align: center;
+        text-overflow: clip;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+      }
+      #pick:has(#pickList.grid) #pickList.grid .pick-rows .pick-card-copy .pick-card-role {
+        display: block;
+        width: 100%;
+        max-height: 1.2em;
+        overflow: hidden;
+        font-size: clamp(12px, .9vw, 14px);
+        line-height: 1.2;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
   </style>
   <link rel="stylesheet" href="campaign.css?v=20261030-picker-groups-layout-3">
   <link rel="stylesheet" href="battle-hud.css">

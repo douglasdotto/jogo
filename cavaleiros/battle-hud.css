@@ -89,20 +89,40 @@
 #heroPanel .stat-cell b { font: 400 14px 'Lilita One', sans-serif; color: #fff; white-space: nowrap; }
 #heroPanel .hero-role p { font-size: 14px; }
 
-/* ---------- fim de partida: cartão central compacto ---------- */
+/* ---------- resultado: resumo amplo, hierarquia clara e estado explícito ---------- */
 .overlay-card { display: flex; flex-direction: column; gap: 18px; align-items: center; }
 #overlayTitle { display: none; }
-#overlay.results { justify-content: safe center; padding: 20px 16px; }
-#overlay.results .overlay-card { width: min(560px, calc(100vw - 32px)); box-sizing: border-box; gap: 12px; padding: 22px 26px 24px;
-  background: linear-gradient(160deg, #2f4a7a, #1c2d50 70%); border: 4px solid var(--navy-edge); border-radius: 22px;
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .14), 0 6px 0 var(--navy-edge), 0 18px 40px rgba(0, 0, 0, .55); }
-#overlay.results #overlayTitle { display: block; font: 400 52px/1 'Lilita One', sans-serif; color: var(--gold); -webkit-text-stroke: 7px var(--outline); paint-order: stroke fill; text-shadow: 0 4px 0 var(--outline); }
-#overlay.results.lost #overlayTitle { color: #ff9a8a; }
-#overlay.results #overlayText { width: auto; max-width: 100%; padding: 0; font: 500 16px/1.3 'Fredoka', sans-serif; color: #d3e3f8; text-align: center;
-  -webkit-text-stroke: 0; background: none; border: 0; box-shadow: none; }
-#overlay.results #overlayStars:not(:empty) { width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
-#overlay.results #overlayStars .stars.big { order: -2; flex-basis: 100%; justify-content: center; }
-#overlay.results #overlayStars .stars.big i { font-size: 64px; cursor: help; }
+#overlay.results { justify-content: safe center; padding: clamp(20px, 3vh, 34px) 24px; background:
+  radial-gradient(ellipse at 50% 32%, rgba(25, 45, 77, .92), rgba(6, 12, 26, .96)); }
+#overlay.results .overlay-card { width: min(1240px, calc(100vw - 48px)); box-sizing: border-box; display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); grid-template-areas: "title title" "message message" "rewards stats" "actions actions";
+  align-items: stretch; justify-items: stretch; gap: 14px; padding: clamp(22px, 2.4vw, 34px);
+  background: linear-gradient(145deg, rgba(39, 61, 98, .98), rgba(18, 31, 55, .99)); border: 2px solid rgba(159, 190, 237, .38); border-radius: 24px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .11), 0 8px 0 rgba(8, 17, 36, .9), 0 24px 64px rgba(0, 0, 0, .55); }
+#overlay.results.won .overlay-card { border-color: rgba(124, 220, 152, .68); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .13), 0 8px 0 rgba(8, 38, 37, .9), 0 0 34px rgba(70, 202, 120, .14), 0 24px 64px rgba(0, 0, 0, .55); }
+#overlay.results.lost .overlay-card { border-color: rgba(241, 123, 125, .64); background: linear-gradient(145deg, rgba(58, 48, 72, .99), rgba(30, 27, 49, .99)); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .1), 0 8px 0 rgba(39, 14, 31, .9), 0 0 30px rgba(220, 78, 94, .12), 0 24px 64px rgba(0, 0, 0, .55); }
+#overlay.results #overlayTitle { grid-area: title; display: block; justify-self: stretch; text-align: center; font: 400 clamp(42px, 4.2vw, 58px)/1.05 'Lilita One', sans-serif;
+  color: #a9efab; -webkit-text-stroke: 7px var(--outline); paint-order: stroke fill; text-shadow: 0 4px 0 var(--outline); }
+#overlay.results #overlayTitle::before { content: '✓'; display: inline-grid; place-items: center; width: .82em; height: .82em; margin-right: 14px; border: 3px solid currentColor; border-radius: 50%; font: 700 .48em/1 'Fredoka', sans-serif; vertical-align: .12em; -webkit-text-stroke: 0; text-shadow: none; }
+#overlay.results.lost #overlayTitle { color: #ff9a9a; }
+#overlay.results.lost #overlayTitle::before { content: '×'; }
+#overlay.results #overlayText { grid-area: message; justify-self: stretch; width: 100%; max-width: none; box-sizing: border-box; margin: 0; padding: 14px 20px;
+  border: 1px solid rgba(172, 197, 231, .2); border-left: 4px solid #76ce90; border-radius: 14px; background: rgba(6, 16, 34, .34);
+  font: 500 clamp(17px, 1.55vw, 21px)/1.35 'Fredoka', sans-serif; color: #e2ecfa; text-align: center; -webkit-text-stroke: 0; box-shadow: none; }
+#overlay.results.lost #overlayText { border-left-color: #ef828b; background: rgba(60, 22, 42, .24); }
+#overlay.results #overlayStars:not(:empty) { grid-area: rewards; align-self: start; justify-self: stretch; width: 100%; min-width: 0; box-sizing: border-box; display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); justify-items: center; align-items: start; gap: 10px; padding: 16px;
+  border: 1px solid rgba(255, 212, 74, .24); border-radius: 16px; background: linear-gradient(145deg, rgba(87, 69, 37, .24), rgba(12, 24, 43, .46)); }
+#overlay.results #overlayStars .stars.big { grid-column: 1 / -1; justify-content: center; }
+#overlay.results #overlayStars .stars.big i { font-size: 56px; cursor: help; }
+#overlay.results #overlayStars .star-criteria { width: 100%; grid-column: 1 / -1; }
+#overlay.results #overlayStars .mission-reward, #overlay.results #overlayStars .progress-reward { grid-column: 1 / -1; width: 100%; }
+#overlay.results #overlayStars .mission-reward { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; padding: 10px; box-sizing: border-box;
+  border: 1px solid rgba(255, 212, 112, .28); border-radius: 12px; background: rgba(92, 68, 29, .25); }
+#overlay.results #overlayStars .progress-reward { display: grid; justify-items: center; gap: 8px; padding: 10px; box-sizing: border-box;
+  border: 1px solid rgba(255, 212, 112, .2); border-radius: 12px; background: rgba(92, 68, 29, .18); }
+#overlay.results #overlayStars .star-best { grid-column: 1 / -1; width: 100%; text-align: center; font: 600 13px/1.35 'Fredoka', sans-serif; color: #d6e5f7; -webkit-text-stroke: 0; }
+#overlay.results.test-run #overlayStars .star-best { padding: 8px 12px; box-sizing: border-box; border: 1px dashed rgba(170, 198, 235, .36); border-radius: 10px; background: rgba(8, 18, 34, .42); color: #c3d1e4; }
 #overlayStars .end-chips, #overlayStars .mission-reward, #overlayStars .progress-reward { display: contents; }
 .end-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 99px; cursor: help;
   font: 400 17px 'Lilita One', sans-serif; color: #fff; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 212, 74, .35); }
@@ -121,7 +141,8 @@
 #overlayStars .prog-hero .crown { position: absolute; top: -12px; font-style: normal; font-size: 15px; color: var(--gold); -webkit-text-stroke: 2px var(--outline); paint-order: stroke fill; }
 #overlayStars .prog-hero b { position: absolute; top: 26px; right: -6px; font-size: 12px; color: var(--gold); }
 
-#overlay.results #overlayStats { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+#overlay.results #overlayStats { grid-area: stats; width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr); align-items: start; gap: 10px; padding: 16px;
+  box-sizing: border-box; border: 1px solid rgba(151, 184, 229, .23); border-radius: 16px; background: rgba(7, 17, 35, .34); }
 .end-keys { display: flex; justify-content: center; gap: 24px; }
 .end-key { display: inline-flex; align-items: center; gap: 6px; cursor: help; font: 400 22px 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
 .end-key i { font-style: normal; font-size: 17px; color: var(--gold); }
@@ -134,17 +155,26 @@
 .end-details[open] summary::before { content: '\25BE  '; }
 .end-details summary:hover { color: #fff; background: rgba(255, 255, 255, .06); }
 .end-details summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.end-details-body { display: grid; gap: 8px; margin-top: 8px; }
-#overlay.results #overlayStats .battle-report { width: 100%; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
-#overlay.results #overlayStats .report-item { padding: 7px 10px; font-size: 12px; }
-#overlay.results #overlayStats .report-item b { font-size: 12px; }
+.end-details-body { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); align-items: start; gap: 10px; margin-top: 8px; }
+#overlay.results #overlayStats .end-keys, #overlay.results #overlayStats .end-tip, #overlay.results #overlayStats .end-details { grid-column: 1 / -1; }
+#overlay.results #overlayStats .battle-report { width: 100%; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+#overlay.results #overlayStats .report-item { min-width: 0; padding: 10px 12px; font-size: 13px; }
+#overlay.results #overlayStats .report-item b { font-size: 14px; }
 #overlay.results #overlayStats table { width: 100%; height: auto; font-size: 13px; }
-#overlay.results #overlayStats img { width: 26px; height: 26px; flex-basis: 26px; }
+#overlay.results #overlayStats img { width: 30px; height: 30px; flex-basis: 30px; }
+#overlay.results #overlayStats .end-keys { justify-content: stretch; gap: 8px; }
+#overlay.results #overlayStats .end-key { flex: 1; justify-content: center; min-width: 0; padding: 8px; border: 1px solid rgba(156, 186, 229, .18); border-radius: 11px; background: rgba(41, 63, 99, .48); font-size: 19px; }
+#overlay.results #overlayStats .end-tip { text-align: left; max-width: none; padding: 10px 12px; box-sizing: border-box; border-radius: 10px; background: rgba(239, 130, 139, .1); }
+#overlay.results #overlayStats:has(.k-end) { grid-template-columns: minmax(0, 1fr); }
+#overlay.results #overlayStats .k-end { grid-column: 1 / -1; }
+#overlay.results .overlay-card:has(#overlayStars:empty) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "message" "stats" "actions"; }
+#overlay.results .overlay-card:has(#overlayStats:empty) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "message" "rewards" "actions"; }
 
-#overlayActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+#overlayActions { grid-area: actions; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; padding-top: 2px; }
 #overlayNext { display: contents; }
-#overlay.results #overlayBtn { min-width: 0; margin: 0; padding: 10px 24px 12px; font-size: 18px; }
+#overlay.results #overlayBtn { min-width: 190px; margin: 0; padding: 12px 28px 14px; font-size: 20px; }
 #overlay .mission-next-btn { padding: 10px 26px 12px; font-size: 20px; background: linear-gradient(#ffe995, #f2b32a 55%, #c98a12); }
+#overlay.results.lost .mission-next-btn { background: linear-gradient(#89cbff, #3988d2 55%, #1d5ba2); }
 /* esqueleto de elite (Cripta Sombria): contorno dourado na barra de vida */
 .hp.elite { outline: 2px solid #f2c94c; outline-offset: 1px; }
 

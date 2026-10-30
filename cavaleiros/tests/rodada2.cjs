@@ -104,7 +104,7 @@ vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
@@ -1358,6 +1358,18 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': um interceptador vivo responde ao golpe e mantém a âncora no posto');
     assert.equal(t.chooseHeroTarget(guards[1],[shooter],.016,team),shooter,goalType+': golpe preparado contra o objetivo continua interceptável');
 
+    for(const h of guards.slice(1)){h.busy=5;h.targetFocus=null;h.targetFocusT=0;}
+    guards[0].targetFocus=null;guards[0].targetFocusT=0;team=t.makeTargetContext();
+    assert.equal(t.canHeroReachTarget(guards[0],shooter,team),true,goalType+': a âncora assume a ameaça se todos os interceptadores estão ocupados');
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': a âncora sai do posto para impedir o golpe iminente');
+    for(const h of guards.slice(1))h.busy=0;
+
+    guards[1].busy=5;guards[2].kiteT=.5;guards[3].busy=5;
+    guards[0].targetFocus=null;guards[0].targetFocusT=0;team=t.makeTargetContext();
+    assert.equal(t.canHeroReachTarget(guards[0],shooter,team),true,goalType+': a âncora responde quando os outros só estão ocupados ou recuando');
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': um herói recuando não conta como interceptador disponível');
+    guards[1].busy=0;guards[2].kiteT=0;guards[3].busy=0;
+
     shooter.pos.set(0,0,8);shooter.pendingHit={target:guards[0]};team=t.makeTargetContext();
     assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': a âncora mantém o posto enquanto ainda há outros defensores vivos');
 
@@ -1574,6 +1586,24 @@ test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
     assert.equal(progress.title,'Progresso da campanha');assert.match(progress.text,/Próxima missão liberada: A Ponte do Rio\./);
     assert.equal(t.starsOf('vila'),2);
   } finally { context.summaryHTML=previousSummary;context.location=previousLocation;context.localStorage.data=previousStorage;clear(); }
+});
+test('overlay distingue vitória de derrota e identifica resultado em modo de teste',()=>{
+  const previousLocation=context.location,previousStorage={...context.localStorage.data},previousRecordMatch=t.progress.recordMatch,overlay=elements.get('overlay');
+  try {
+    context.location={search:'?tudo=1'};context.localStorage.data={};t.progress.recordMatch=()=>({gold:{lines:[],mult:1,total:0},heroes:[],unlocked:[],total:0});clear();Object.assign(t.game,{test:true,start:2,roster:[]});
+    t.endGame('Os esqueletos venceram.',false);
+    assert.equal(elements.get('overlayTitle').textContent,'Derrota');
+    assert.equal(overlay.classList.contains('lost'),true);
+    assert.equal(overlay.classList.contains('won'),false,'uma derrota nunca recebe o estado visual de vitória');
+    assert.equal(overlay.classList.contains('test-run'),true);
+
+    context.location={search:''};clear();Object.assign(t.game,{test:false,start:2,roster:[]});
+    t.endGame('Missão cumprida.',true);
+    assert.equal(elements.get('overlayTitle').textContent,'Vitória!');
+    assert.equal(overlay.classList.contains('won'),true);
+    assert.equal(overlay.classList.contains('lost'),false);
+    assert.equal(overlay.classList.contains('test-run'),false);
+  } finally { context.location=previousLocation;context.localStorage.data=previousStorage;t.progress.recordMatch=previousRecordMatch;clear(); }
 });
 // ---------- campanha ----------
 const mission=id=>t.MISSIONS.find(m=>m.id===id);
@@ -2164,14 +2194,27 @@ test('Jornada envia à progressão a mesma contagem de quedas do relatório',()=
   assert.equal(recorded?.mode,'journey');assert.equal(recorded?.falls,reportFalls,'a progressão usa a mesma contagem do relatório');
   clear();
 });
-test('grade espacial mantém distância entre heróis e inimigos grandes e conserva colisão com obstáculos',()=>{
+test('unidades grandes mantêm folga visual entre heróis e inimigos e conservam colisão com obstáculos',()=>{
   clear();const obstacles=t.world.obstacles;
   try{
     t.world.obstacles=[];
     const a=hero('paladin',2.99,0),b=foe('Golem',5.01,0,true);a.size=b.size=2.2;t.separate();
-    assert.ok(a.pos.distanceTo(b.pos)>=2.86-.01,'o par que atravessa o limite da célula mantém uma folga visível');
+    assert.ok(a.pos.distanceTo(b.pos)>=t.UNIT_COMBAT_SEPARATION_FACTOR*(a.size+b.size)-.01,'adversários grandes mantêm espaço sem impedir o alcance de combate');
     clear();t.world.obstacles=[{x:10,z:0,r:1}];const unit=foe('Minion',10,0);t.separate();
     assert.ok(Math.hypot(unit.pos.x-10,unit.pos.z)>=1.53-.01,'a unidade deve sair do centro do obstáculo');
+  }finally{clear();t.world.obstacles=obstacles}
+});
+test('grupo misto não amontoa heróis e inimigos quando chegam ao mesmo ponto',()=>{
+  clear();const obstacles=t.world.obstacles;
+  try{
+    t.world.obstacles=[];
+    const group=[hero('paladin',0,0),hero('pyro',.1,0),foe('Minion',0,.1),foe('Warrior',-.1,0)];
+    for(let i=0;i<5;i++)t.separate();
+    for(let a=0;a<group.length;a++)for(let b=a+1;b<group.length;b++){
+      const sameFaction=(group[a].team==='skeleton')===(group[b].team==='skeleton');
+      const minimum=(sameFaction?t.UNIT_SEPARATION_FACTOR:t.UNIT_COMBAT_SEPARATION_FACTOR)*(group[a].size+group[b].size);
+      assert.ok(group[a].pos.distanceTo(group[b].pos)>=minimum-.02,`grupo mantém ${minimum.toFixed(2)}m entre as unidades ${a+1} e ${b+1}`);
+    }
   }finally{clear();t.world.obstacles=obstacles}
 });
 test('separação física encerra cedo quando a cena não tem colisões',()=>{
@@ -2190,7 +2233,7 @@ test('separação repete a passada quando um empurrão cria uma colisão em cade
   try{
     t.world.obstacles=[];
     const a=foe('Minion',0,0),b=foe('Minion',1.07,0),c=foe('Minion',2,0);
-    const min=0.65*(a.size+b.size);
+    const min=t.UNIT_SEPARATION_FACTOR*(a.size+b.size); // ambos são inimigos da mesma facção
     t.separate();
     assert.ok(a.pos.distanceTo(b.pos)>=min-.01,'a nova colisão entre os dois primeiros também é resolvida');
     assert.ok(b.pos.distanceTo(c.pos)>=min-.01,'o par que iniciou o empurrão continua separado');
