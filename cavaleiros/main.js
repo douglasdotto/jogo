@@ -4439,11 +4439,12 @@ function pactCall(h, creature, color) {
 }
 const petalGeo = new THREE.IcosahedronGeometry(0.11, 0).scale(1, 0.22, 0.7);   // pétala achatada que gira ao cair
 const FAIRY_SPARKS = [0xffb8dc, 0xb8fff0, 0xfff6a0];
-// fada: rastro de brilhos que caem devagar (em fúria, faíscas rosa-choque)
+// fada: rastro de brilhos que caem devagar e piscam, com bolinhas de luz rosa (em fúria, faíscas rosa-choque)
 function fairyTrail(at, fury) {
   if (lowQuality && Math.random() < 0.5) return;   // Gráficos: baixa corta metade
-  particle(sparkGeo, fury ? 0xff5ab0 : FAIRY_SPARKS[Math.floor(Math.random() * 3)], V(at.x + rnd(0.12), at.y + rnd(0.12), at.z + rnd(0.12)),
-    V(rnd(0.25), -0.35, rnd(0.25)), 0.7, { size: 0.45 + Math.random() * 0.4 });
+  particle(sparkGeo, fury ? 0xff5ab0 : FAIRY_SPARKS[Math.floor(Math.random() * 3)], V(at.x + rnd(0.2), at.y + rnd(0.15), at.z + rnd(0.2)),
+    V(rnd(0.3), -0.3, rnd(0.3)), 0.9, { size: 0.7 + Math.random() * 0.5, grow: -0.6 });
+  if (Math.random() < 0.4) sprite('orb', 'tonic', V(at.x + rnd(0.1), at.y + rnd(0.1), at.z + rnd(0.1)), V(rnd(0.15), -0.15, rnd(0.15)), 0.55, { size: 0.32, grow: -0.7 });
 }
 // fada: fio de brilho até o aliado, anel duplo, raios rosados e pétalas caindo sobre ele
 function fairyPulse(fairy, target) {
@@ -7391,9 +7392,9 @@ class BeastCompanion extends Unit {
 // vida e dano base (crescem 10% por nível e com o poder de habilidade); life = duração em segundos;
 // every = recarga da habilidade própria (cura, pancada, baforada); bar = altura da barra de vida
 const SUMMON_RULES = {
-  fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 1.75, color: 0xffb8dc },
-  golem: { hp: 240, dmg: 14, range: 1.6, speed: 2.7, cooldown: 1.5, every: 6, life: 15, size: 1.05, bar: 2.5, color: 0xd8c29a },
-  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 2.55, color: 0xff7a3a },
+  fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 2.15, color: 0xffb8dc },
+  golem: { hp: 240, dmg: 14, range: 1.6, speed: 2.7, cooldown: 1.5, every: 6, life: 15, size: 1.05, bar: 2.95, color: 0xd8c29a },
+  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 2.75, color: 0xff7a3a },
 };
 const SUMMON_TAUNT = 3, SUMMON_SLAM_RADIUS = 2.4, SUMMON_STUN = 0.9, SUMMON_BOSS_CONTROL = 0.35;   // chefes: controle mais curto
 const EMPTY_GLTF = { scene: new THREE.Group(), animations: [] };
@@ -7511,27 +7512,31 @@ class SummonedCreature extends Unit {
     }
   }
 
-  // fada: voa em oito, inclina nas curvas e gira ao curar; quatro asas batendo rápido
+  // fada: voa em oito, inclina nas curvas e gira ao curar; asas de borboleta batendo (sobe um pouco a cada batida)
   poseFairy(p, t, act, speed, fury) {
-    const v = this.visual;
-    v.position.set(Math.sin(t * 1.7) * 0.22, p.hover + Math.sin(t * 3.4) * 0.1, 0);
+    const v = this.visual, beat = t * (fury ? 22 : 15), flap = Math.sin(beat), lift = Math.sin(beat - 0.9);
+    v.position.set(Math.sin(t * 1.7) * 0.22, p.hover + Math.sin(t * 3.4) * 0.08 + lift * 0.035, 0);
     v.rotation.set(Math.min(0.35, speed * 0.08), act >= 0 ? (1 - (1 - act) ** 3) * Math.PI * 2 : 0, -Math.cos(t * 1.7) * 0.18);
-    const flap = Math.sin(t * (fury ? 42 : 32));
-    for (const w of p.wings) w.rotation.y = w.userData.side * (0.55 + flap * 0.5);
+    for (const w of p.wings) w.rotation.set(-0.3, w.userData.side * (0.62 + flap * 0.5), 0);
+    if (p.glow) p.glow.scale.setScalar(p.glow.userData.size * (1 + Math.sin(t * 4) * 0.08 + (act >= 0 ? Math.sin(act * Math.PI) * 0.5 : 0)));
+    if (p.groundGlow) p.groundGlow.scale.setScalar(1.5 + Math.sin(t * 3.4) * 0.1);
   }
 
   // golem: passos pesados com balanço, soco alternado, pulo antes da pancada e queda com braços no chão; brota da terra
   poseGolem(p, t, act, speed, dt) {
     const { core, legs, arms } = p;
-    let lift = 0, bob = Math.sin(t * 2.2) * 0.015, roll = 0, lean = 0, twist = 0;
-    const legX = [0, 0], armX = [Math.sin(t * 2.2) * 0.05, -Math.sin(t * 2.2) * 0.05];
-    if (speed > 0.3) {
-      const w = this.walkPhase = (this.walkPhase || 0) + dt * (2.4 + speed * 1.4), sw = Math.sin(w);
+    const breath = Math.sin(t * 2.2);
+    let lift = 0, bob = breath * 0.015, roll = 0, lean = 0.06, twist = 0, squash = breath * 0.012;
+    const legX = [0, 0], armX = [breath * 0.05, -breath * 0.05];
+    if (speed > 0.3) {   // passo pesado: o tronco balança para o lado do pé que pisa e afunda (amassa) na pisada
+      const w = this.walkPhase = (this.walkPhase || 0) + dt * (2.4 + speed * 1.4), sw = Math.sin(w), plant = 1 - Math.abs(Math.sin(w));
       legX[0] = sw * 0.55; legX[1] = -sw * 0.55;
-      armX[0] = -sw * 0.45; armX[1] = sw * 0.45;
-      bob = -Math.abs(Math.cos(w)) * 0.07;
-      roll = sw * 0.09;
-      lean = 0.12;
+      armX[0] = -sw * 0.4; armX[1] = sw * 0.4;
+      bob = -plant * 0.09;
+      squash = -plant * 0.05;
+      roll = sw * 0.11;
+      twist = sw * 0.14;
+      lean = 0.16;
       if (Math.sign(sw) !== this.stepSign) { this.stepSign = Math.sign(sw); if (dt > 0) FX.golemStep(this.pos); }
     }
     if (this.actKind === 'punch' && act >= 0) {   // recua o braço, soca à frente (o golpe acerta em ~55%) e volta
@@ -7543,6 +7548,7 @@ class SummonedCreature extends Unit {
     } else if (this.actKind === 'slam' && act >= 0) {   // aterrissa: punhos no chão e volta devagar
       const k = Math.min(1, act / 0.15), back = act < 0.4 ? 0 : (act - 0.4) / 0.6;
       lift = 0.14 * (1 - k);
+      squash = -0.14 * Math.sin(Math.min(1, act / 0.35) * Math.PI);
       armX[0] = armX[1] = -2.7 + 1.8 * k + 0.9 * back;
       lean = 0.35 * (1 - back);
     } else if (this.slamReady && this.abilityT < 0.45 && this.busy <= 0 && game.state === 'fight') {   // pula erguendo os braços
@@ -7551,15 +7557,18 @@ class SummonedCreature extends Unit {
       armX[0] = armX[1] = -2.7 * k;
       legX[0] = legX[1] = -0.3 * k;
       lean = -0.15 * k;
+      squash = 0.06 * k;
     }
     if (this.spawnT < 0.8) {   // brota do chão chacoalhando
       const e = this.spawnT / 0.8;
-      lift -= 2.3 * (1 - e) ** 2;
+      lift -= 2.8 * (1 - e) ** 2;
       roll += Math.sin(this.spawnT * 30) * 0.12 * (1 - e);
     }
     this.visual.position.y = lift;
-    core.position.y = 0.5 + bob;
+    core.position.y = (p.hip ?? 0.5) + bob;
     core.rotation.set(lean, twist, roll);
+    core.scale.set(1 - squash * 0.6, 1 + squash, 1 - squash * 0.6);
+    if (p.glow) p.glow.scale.setScalar(p.glow.userData.size * (1 + Math.sin(t * 3) * 0.12));
     for (let i = 0; i < 2; i++) {
       legs[i].rotation.x = legX[i];
       arms[i].rotation.set(armX[i], 0, (i ? 1 : -1) * 0.08);
