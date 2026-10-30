@@ -976,6 +976,30 @@ test('Trono de Ossos concentra no chefe com menos vida relativa sem filtrar list
   assert.equal(focusScans,0,'um chefe caído invalida o cache sem criar listas temporárias');
   clear();
 });
+test('Coração do Castelo mantém foco coletivo nos três chefes, troca ao cair e interrompe ameaças urgentes',()=>{
+  clear();
+  const party=['paladin','berserker','pyro','cleric'].map(id=>{
+    const hero=new t.Hero(cfg(id));hero.pos.set(0,0,0);hero.post.copy(hero.pos);return hero;
+  });
+  const lich=new t.Skeleton('Lich',13,true),executioner=new t.Skeleton('Executioner',13,true),darkKnight=new t.Skeleton('DarkKnight',13,true);
+  const bosses=[lich,executioner,darkKnight];
+  bosses.forEach((boss,index)=>{boss.spawning=false;boss.pos.set(0,0,3+index);});
+  lich.hp=lich.maxHp*.25;executioner.hp=executioner.maxHp*.55;darkKnight.hp=darkKnight.maxHp*.75;
+  t.game.mission={goal:t.MISSIONS.find(item=>item.id==='coracao-do-castelo').goal};
+  let team=t.makeTargetContext();
+  for(const hero of party)assert.equal(t.chooseHeroTarget(hero,[darkKnight,executioner,lich],.016,team),lich,'todos começam no chefe com menor vida relativa');
+  lich.hp=lich.maxHp*.9;executioner.hp=executioner.maxHp*.1;
+  team=t.makeTargetContext();
+  for(const hero of party)assert.equal(t.chooseHeroTarget(hero,[darkKnight,executioner,lich],.016,team),lich,'o grupo mantém o foco mesmo quando outro chefe fica mais ferido');
+  lich.dead=true;lich.hp=0;team=t.makeTargetContext();
+  for(const hero of party)assert.equal(t.chooseHeroTarget(hero,[darkKnight,executioner],.016,team),executioner,'o grupo troca para o próximo chefe mais vulnerável quando o foco cai');
+  const threat=new t.Skeleton('Warrior',13);threat.spawning=false;threat.pos.set(0,0,1);threat.pendingHit={target:party[0]};
+  team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),threat,'um ataque prestes a atingir o grupo interrompe o foco');
+  threat.pendingHit=null;team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),executioner,'depois do perigo, a equipe retoma o chefe escolhido');
+  clear();
+});
 test('Trono de Ossos desempata com ordem determinística e troca foco inacessível',()=>{
   clear();
   const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);
@@ -1513,6 +1537,16 @@ test('escolta pontua pela vida do aldeão e usa os mesmos critérios no mapa e n
   const fallen=Array.from(context.starConditions({won:true,falls:1,hpRatio:1,goal,villagerRatio:.9}),c=>c.achieved);
   assert.deepEqual(fallen,[true,true,false],'a terceira estrela também exige zero quedas');
   clear();
+});
+test('estrelas do Trono e do trio explicam o objetivo e mantêm critérios cumulativos',()=>{
+  for(const goal of [{type:'twin'},t.MISSIONS.find(item=>item.id==='coracao-do-castelo').goal]){
+    const targets=Array.from(context.starTargetsFor(goal),target=>target.replace(/^\d★ /,''));
+    const conditions=Array.from(context.starConditions({won:true,falls:0,hpRatio:.8,goal}),condition=>condition.label.replace(/\s+\([^)]*\)$/,''));
+    assert.deepEqual(targets,conditions,'o mapa e o relatório mostram os mesmos critérios da missão');
+    assert.equal(context.starsFor({won:true,falls:0,hpRatio:.8,goal}),3,'vitória limpa e com vida suficiente rende três estrelas');
+    assert.equal(context.starsFor({won:true,falls:1,hpRatio:.8,goal}),1,'uma queda impede as estrelas seguintes');
+    assert.equal(context.starsFor({won:true,falls:0,hpRatio:.49,goal}),2,'menos de metade da vida impede a terceira estrela');
+  }
 });
 test('resgate pontua pela vida da pessoa resgatada e usa snapshot pré-cura no relatório',()=>{
   const goal={type:'rescue'};

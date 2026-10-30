@@ -560,6 +560,15 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, village
       { label: `40%+ de vida e em até ${formatMissionTime(goal.time)} (${formatMissionTime(Math.ceil(time))})`, achieved: healthy && time <= goal.time },
     ];
   }
+  if (goal?.type === 'twin' || goal?.type === 'bosses') {
+    const bossCount = Math.max(1, Math.floor(Number(goal.bosses?.length) || 3));
+    const objective = goal.type === 'twin' ? 'Derrotar o Lich e o Carrasco' : `Derrotar os ${bossCount} chefes`;
+    return [
+      { label: objective, achieved: completed },
+      { label: `Terminar sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: noFalls },
+      { label: `Sem quedas e com 50%+ de vida (atual ${hpPercent}%)`, achieved: noFalls && hpRatio >= 0.5 },
+    ];
+  }
   if (goal?.type === 'nofall') return [
     { label: 'Concluir a missão', achieved: completed },
     { label: `Sem quedas e com 75%+ de vida (atual ${hpPercent}%)`, achieved: noFalls && hpRatio >= 0.75 },
@@ -601,6 +610,11 @@ export function starTargetsFor(goal) {
   if (goal.type === 'hunt') return ['1★ Abater o alvo', '2★ Sem quedas', '3★ Sem quedas e metade do tempo sobrando'];
   if (goal.type === 'breach') return ['1★ Segurar a ponte', '2★ No máximo 2 passam', '3★ Ninguém passa'];
   if (goal.type === 'duel') return ['1★ Vencer o duelo', '2★ 40%+ de vida', `3★ 40%+ de vida em até ${formatMissionTime(goal.time)}`];
+  if (goal.type === 'twin') return ['1★ Derrotar o Lich e o Carrasco', '2★ Terminar sem quedas', '3★ Sem quedas e com 50%+ de vida'];
+  if (goal.type === 'bosses') {
+    const bossCount = Math.max(1, Math.floor(Number(goal.bosses?.length) || 3));
+    return [`1★ Derrotar os ${bossCount} chefes`, '2★ Terminar sem quedas', '3★ Sem quedas e com 50%+ de vida'];
+  }
   return ['1★ Concluir a missão', '2★ Sem quedas', '3★ Sem quedas e 50%+ de vida'];
 }
 
