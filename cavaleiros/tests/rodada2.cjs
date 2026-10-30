@@ -2150,12 +2150,12 @@ test('Jornada envia à progressão a mesma contagem de quedas do relatório',()=
   assert.equal(recorded?.mode,'journey');assert.equal(recorded?.falls,reportFalls,'a progressão usa a mesma contagem do relatório');
   clear();
 });
-test('grade espacial separa unidades grandes nas células vizinhas e mantém colisão com obstáculos',()=>{
+test('grade espacial mantém distância entre heróis e inimigos grandes e conserva colisão com obstáculos',()=>{
   clear();const obstacles=t.world.obstacles;
   try{
     t.world.obstacles=[];
     const a=hero('paladin',2.99,0),b=foe('Golem',5.01,0,true);a.size=b.size=2.2;t.separate();
-    assert.ok(a.pos.distanceTo(b.pos)>=2.332-.01,'o par que atravessa o limite da célula deve se separar');
+    assert.ok(a.pos.distanceTo(b.pos)>=2.86-.01,'o par que atravessa o limite da célula mantém uma folga visível');
     clear();t.world.obstacles=[{x:10,z:0,r:1}];const unit=foe('Minion',10,0);t.separate();
     assert.ok(Math.hypot(unit.pos.x-10,unit.pos.z)>=1.53-.01,'a unidade deve sair do centro do obstáculo');
   }finally{clear();t.world.obstacles=obstacles}
@@ -2176,7 +2176,7 @@ test('separação repete a passada quando um empurrão cria uma colisão em cade
   try{
     t.world.obstacles=[];
     const a=foe('Minion',0,0),b=foe('Minion',1.07,0),c=foe('Minion',2,0);
-    const min=0.53*(a.size+b.size);
+    const min=0.65*(a.size+b.size);
     t.separate();
     assert.ok(a.pos.distanceTo(b.pos)>=min-.01,'a nova colisão entre os dois primeiros também é resolvida');
     assert.ok(b.pos.distanceTo(c.pos)>=min-.01,'o par que iniciou o empurrão continua separado');

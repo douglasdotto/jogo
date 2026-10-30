@@ -5741,6 +5741,7 @@ class Skeleton extends Unit {
 // them back at their original, overlapping positions.
 const collisionFrom = { x: 0, z: 0 }, collisionTo = { x: 0, z: 0 };
 const separationSideA = { x: 0, z: 0 }, separationSideB = { x: 0, z: 0 };
+const UNIT_SEPARATION_FACTOR = 0.65;
 function collisionMove(unit, dx, dz) {
   const pos = unit.pos, fromX = pos.x, fromZ = pos.z;
   let fraction = 1;
@@ -5759,7 +5760,7 @@ function collisionMove(unit, dx, dz) {
 
 function separatePair(a, b, ia, ib) {
   if (Math.abs(a.pos.y - b.pos.y) >= 0.85) return false;
-  const min = 0.53 * (a.size + b.size);
+  const min = UNIT_SEPARATION_FACTOR * (a.size + b.size);
   let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
   let distance = Math.hypot(dx, dz);
   if (distance >= min) return false;
