@@ -18,7 +18,7 @@ const THREE = new Proxy({ Vector3 }, { get: (o, k) => (k in o ? o[k] : Dummy) })
 const context = vm.createContext({ THREE, Math, Uint8Array, Uint32Array, Int32Array, Float32Array, Map, Set, JSON, performance: { now: () => 0 } });
 vm.runInContext(strip('kingdom-world.js'), context);
 vm.runInContext(strip('kingdom.js'), context);
-vm.runInContext('globalThis.k={ARENA,NODE_TYPES,TERRAIN,waveSources,createArena,createKingdomState,canAfford,spend,refund,popCap,popUsed,heroCount,addBuilding,canPlaceBuilding,placeBuilding,removeBuilding,constructionRate,tickConstruction,enqueue,cancelQueue,tickProduction,nearestDrop,workerStep,tickWaves,kingdomResult,waveSize,wavePhase,waveInterval,waveLeaderFor,BUILDINGS,UNITS,START,GATHER,FIRST_WAVE,HERO_LIMIT,POP_MAX};', context);
+vm.runInContext('globalThis.k={ARENA,NODE_TYPES,TERRAIN,waveSources,createArena,createKingdomState,canAfford,spend,refund,popCap,popUsed,heroCount,addBuilding,canPlaceBuilding,placeBuilding,removeBuilding,constructionRate,tickConstruction,enqueue,cancelQueue,tickProduction,nearestDrop,workerStep,tickWaves,kingdomResult,waveSize,wavePhase,waveInterval,waveLeaderFor,portalGuard,salvage,demolish,loseBuilding,canRepair,SALVAGE,REPAIR,BUILDINGS,UNITS,START,GATHER,FIRST_WAVE,HERO_LIMIT,POP_MAX};', context);
 const k = context.k;
 
 let failed = 0;
@@ -28,7 +28,7 @@ function test(name, fn) {
 const make = () => ({ pos: new Vector3(), queue: [] });
 function fresh() {
   const arena = k.createArena(7);
-  const K = k.createKingdomState(arena, { count: 1.1, hp: 1 });
+  const K = k.createKingdomState(arena, { count: 1, interval: 1, hp: 1 });
   K.castle = k.addBuilding(K, 'castle', arena.castleCell.i0, arena.castleCell.j0, make, true);
   return K;
 }
@@ -391,6 +391,88 @@ test('custos: aldeão pede comida, soldados comida e ouro; sem comida não trein
   K.res.food = k.UNITS.worker.cost.food;
   assert.equal(k.enqueue(K, K.castle, 'worker'), 'ok');
   assert.equal(K.res.food, 0);
+});
+
+test('ondas: dificuldade muda intervalo e tamanho; Normal sem encolher; guarda do portal segue as ondas', () => {
+  assert.equal(k.waveInterval(1, { interval: 1.15 }), k.waveInterval(1) * 1.15, 'Fácil espaça mais');
+  assert.ok(k.waveInterval(5, { interval: 0.86 }) < k.waveInterval(5), 'Pesadelo encurta');
+  assert.equal(k.waveSize(10, { count: 1 }), k.waveSize(10), 'Normal = base');
+  assert.equal(k.waveSize(10), Math.round(3 + 9 * 1.6), 'sem o /1.1 que encolhia');
+  assert.ok(k.waveSize(10, { count: 1.18 }) > k.waveSize(10));
+  const K = fresh();
+  K.D = { count: 1, interval: 1.15 };
+  K.waveT = 0.01;
+  k.tickWaves(K, 0.1, () => {});
+  assert.ok(Math.abs(K.waveT - (k.waveInterval(1) * 1.15 - 0.09)) < 1e-6, 'tickWaves usa D.interval');
+  assert.deepEqual({ ...k.portalGuard(0) }, { want: 3, phase: 1 });
+  assert.ok(k.portalGuard(6).want > k.portalGuard(1).want && k.portalGuard(6).phase > k.portalGuard(1).phase, 'cresce com a onda');
+  assert.equal(k.portalGuard(40).want, 10);
+  assert.equal(k.portalGuard(40).phase, 12);
+});
+
+test('população: herói caído não ocupa vaga; obra derrubada devolve metade', () => {
+  const K = fresh();
+  K.units.push({ kKind: 'hero', dead: false }, { kKind: 'worker' });
+  assert.equal(k.popUsed(K), 3);
+  K.units[0].dead = true;
+  assert.equal(k.popUsed(K), 1, 'herói caído libera 2');
+  assert.equal(k.heroCount(K), 1, 'mas segue contando no limite');
+  K.res.wood = 500; K.res.stone = 500;
+  const spot = K.arena.snap(2, K.castle.pos.x + 8, K.castle.pos.z + 8);
+  const tower = k.placeBuilding(K, 'tower', spot.i0, spot.j0, make);
+  const wood = K.res.wood, stone = K.res.stone;
+  k.loseBuilding(K, tower);
+  assert.equal(K.res.wood, wood + Math.floor(k.BUILDINGS.tower.cost.wood * k.SALVAGE));
+  assert.equal(K.res.stone, stone + Math.floor(k.BUILDINGS.tower.cost.stone * k.SALVAGE));
+  assert.equal(K.arena.canPlace(2, spot.i0, spot.j0), true, 'grade livre');
+  const house = k.addBuilding(K, 'house', spot.i0, spot.j0, make, true);
+  const w2 = K.res.wood;
+  k.loseBuilding(K, house);
+  assert.equal(K.res.wood, w2, 'prédio pronto destruído não devolve');
+});
+
+test('reparo: aldeão conserta prédio pronto ferido gastando pouco; para cheio ou sem recurso', () => {
+  const K = fresh();
+  const spot = K.arena.snap(2, K.castle.pos.x + 9, K.castle.pos.z);
+  const tower = k.addBuilding(K, 'tower', spot.i0, spot.j0, make, true);
+  tower.hp = tower.maxHp / 2;
+  K.res.wood = 1000; K.res.stone = 1000;
+  const w = worker(K.castle.pos.x + 4, K.castle.pos.z);
+  w.task = { type: 'build', site: tower };
+  run(120, (dt) => { k.workerStep(K, w, dt); k.tickConstruction(K, dt); });
+  assert.equal(tower.hp, tower.maxHp, 'cheio');
+  assert.ok(Math.abs(K.res.stone - (1000 - k.BUILDINGS.tower.cost.stone * k.REPAIR.share / 2)) < 1e-6, 'custo proporcional à vida');
+  assert.ok(Math.abs(K.res.wood - (1000 - k.BUILDINGS.tower.cost.wood * k.REPAIR.share / 2)) < 1e-6);
+  assert.notEqual(w.task?.type, 'build', 'larga a tarefa quando cheio');
+  // castelo também, com custo próprio; sem pedra para
+  K.castle.hp = 1000;
+  K.res.stone = 3;
+  w.task = { type: 'build', site: K.castle };
+  run(60, (dt) => { k.workerStep(K, w, dt); k.tickConstruction(K, dt); });
+  assert.ok(K.castle.hp > 1000 && K.castle.hp < K.castle.maxHp, 'reparou só o que deu');
+  assert.ok(K.res.stone >= 0 && K.res.stone < 0.02);
+  assert.equal(k.canRepair(K, K.castle), false);
+  assert.equal(w.task, null, 'sem recurso: para');
+});
+
+test('demolir: devolve metade, libera a grade e o castelo não sai', () => {
+  const K = fresh();
+  const spot = K.arena.snap(3, K.castle.pos.x + 10, K.castle.pos.z + 10);
+  const barracks = k.addBuilding(K, 'barracks', spot.i0, spot.j0, make, true);
+  K.res.food = 1000; K.res.gold = 1000;
+  k.enqueue(K, barracks, 'soldier');
+  const before = { ...K.res };
+  assert.equal(k.demolish(K, barracks), true);
+  assert.equal(K.res.wood, before.wood + k.BUILDINGS.barracks.cost.wood / 2);
+  assert.equal(K.res.stone, before.stone + k.BUILDINGS.barracks.cost.stone / 2);
+  assert.equal(K.res.gold, before.gold + k.UNITS.soldier.cost.gold, 'fila devolvida');
+  assert.equal(K.buildings.includes(barracks), false);
+  assert.equal(K.arena.canPlace(3, spot.i0, spot.j0), true);
+  const wood = K.res.wood;
+  k.loseBuilding(K, barracks);
+  assert.equal(K.res.wood, wood, 'não devolve duas vezes');
+  assert.equal(k.demolish(K, K.castle), false);
+  assert.ok(K.buildings.includes(K.castle));
 });
 
 if (failed) { console.log(`${failed} teste(s) falharam`); process.exit(1); }

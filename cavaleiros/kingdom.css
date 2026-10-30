@@ -76,6 +76,8 @@ body.no-battle .k-panel, .k-panel[hidden] { visibility: hidden; }
 .k-cost svg { width: 14px; height: 14px; }
 .k-cmd.poor { filter: saturate(.35) brightness(.75); }
 .k-cmd.limit { filter: grayscale(1) brightness(.6); }
+.k-cmd.k-demolish { background: linear-gradient(#c0504a, #7a2420); justify-content: center; }
+.k-cmd.k-demolish .k-glyph { margin-top: 0; }
 .k-skill.ready { box-shadow: inset 0 2px 0 #ffffff33, 0 4px 0 var(--outline), 0 0 12px rgba(255, 224, 102, .7); }
 .k-skill .k-cd { position: absolute; inset: 0; display: grid; place-items: center; font: 400 22px/1 'Lilita One', sans-serif; color: #fff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; border-radius: 12px; pointer-events: none; }
 .k-skill:not(.ready) .k-cd { background: rgba(6, 12, 27, .55); }
