@@ -106,6 +106,7 @@ vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
 vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
 vm.runInContext('t.world=world;',context);
+vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
@@ -2214,6 +2215,26 @@ test('grupo misto não amontoa heróis e inimigos quando chegam ao mesmo ponto',
       const sameFaction=(group[a].team==='skeleton')===(group[b].team==='skeleton');
       const minimum=(sameFaction?t.UNIT_SEPARATION_FACTOR:t.UNIT_COMBAT_SEPARATION_FACTOR)*(group[a].size+group[b].size);
       assert.ok(group[a].pos.distanceTo(group[b].pos)>=minimum-.02,`grupo mantém ${minimum.toFixed(2)}m entre as unidades ${a+1} e ${b+1}`);
+    }
+  }finally{clear();t.world.obstacles=obstacles}
+});
+test('separação afasta unidades sem deslocar totem, santuário ou marco da ponte',()=>{
+  clear();const obstacles=t.world.obstacles;
+  try{
+    t.world.obstacles=[];
+    const fixed=[
+      ['totem',()=>new t.Totem(new Vector3(0,0,0))],
+      ['santuário',()=>new t.Shrine(new Vector3(0,0,0))],
+      ['marco da ponte',()=>new t.Gate(new Vector3(0,0,0))],
+    ];
+    for(const [name,create] of fixed){
+      clear();const h=hero('paladin',0,0),objective=create(),anchor=objective.pos.clone();
+      t.separate();
+      assert.equal(objective.pos.distanceTo(anchor),0,`${name} conserva sua posição ao colidir`);
+      const sameFaction=(h.team==='skeleton')===(objective.team==='skeleton');
+      const separationFactor=sameFaction?t.UNIT_SEPARATION_FACTOR:t.UNIT_COMBAT_SEPARATION_FACTOR;
+      assert.ok(h.pos.distanceTo(objective.pos)>=separationFactor*(h.size+objective.size)-.02,
+        `herói cede espaço ao redor do ${name}`);
     }
   }finally{clear();t.world.obstacles=obstacles}
 });

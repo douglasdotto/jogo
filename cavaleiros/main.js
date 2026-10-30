@@ -5766,6 +5766,8 @@ function collisionMove(unit, dx, dz) {
 
 function separatePair(a, b, ia, ib) {
   if (Math.abs(a.pos.y - b.pos.y) >= 0.85) return false;
+  const movableA = !(a.structure || a.totem), movableB = !(b.structure || b.totem);
+  if (!movableA && !movableB) return false;
   const sameFaction = (a.team === 'skeleton') === (b.team === 'skeleton');
   const min = (sameFaction ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR) * (a.size + b.size);
   let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
@@ -5778,13 +5780,16 @@ function separatePair(a, b, ia, ib) {
   } else { dx /= distance; dz /= distance; }
 
   const overlap = min - distance, half = overlap * 0.5;
-  let movedA = collisionMove(a, -dx * half, -dz * half);
-  let movedB = collisionMove(b, dx * half, dz * half);
+  let movedA = movableA ? collisionMove(a, -dx * half, -dz * half) : 0;
+  let movedB = movableB ? collisionMove(b, dx * half, dz * half) : 0;
   let remaining = overlap - movedA - movedB;
   if (remaining > 0.002) {
-    const extraA = collisionMove(a, -dx * remaining, -dz * remaining);
-    remaining -= extraA;
-    if (remaining > 0.002) collisionMove(b, dx * remaining, dz * remaining);
+    if (movableA && movableB) {
+      const extraA = collisionMove(a, -dx * remaining, -dz * remaining);
+      remaining -= extraA;
+      if (remaining > 0.002) collisionMove(b, dx * remaining, dz * remaining);
+    } else if (movableA) collisionMove(a, -dx * remaining, -dz * remaining);
+    else collisionMove(b, dx * remaining, dz * remaining);
   }
 
   // When a wall or height boundary blocks the direct push, let the pair slide
@@ -5794,23 +5799,37 @@ function separatePair(a, b, ia, ib) {
   if (slideDistance < min) {
     if (slideDistance > 0.001) { slideX /= slideDistance; slideZ /= slideDistance; }
     else { slideX = dx; slideZ = dz; }
-    separationSideA.x = a.pos.x; separationSideA.z = a.pos.z;
-    separationSideB.x = b.pos.x; separationSideB.z = b.pos.z;
-    const sideDistance = Math.sqrt(Math.max(0, min * min - slideDistance * slideDistance)) * 0.5;
+    const sideDistance = Math.sqrt(Math.max(0, min * min - slideDistance * slideDistance))
+      * (movableA && movableB ? 0.5 : 1);
     const sideDx = -slideZ, sideDz = slideX;
-    collisionMove(a, -sideDx * sideDistance, -sideDz * sideDistance);
-    collisionMove(b, sideDx * sideDistance, sideDz * sideDistance);
-    if (Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) <= slideDistance + 0.002) {
-      a.pos.x = separationSideA.x; a.pos.z = separationSideA.z;
-      b.pos.x = separationSideB.x; b.pos.z = separationSideB.z;
+    if (movableA && movableB) {
+      separationSideA.x = a.pos.x; separationSideA.z = a.pos.z;
+      separationSideB.x = b.pos.x; separationSideB.z = b.pos.z;
+      collisionMove(a, -sideDx * sideDistance, -sideDz * sideDistance);
+      collisionMove(b, sideDx * sideDistance, sideDz * sideDistance);
+      if (Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) <= slideDistance + 0.002) {
+        a.pos.x = separationSideA.x; a.pos.z = separationSideA.z;
+        b.pos.x = separationSideB.x; b.pos.z = separationSideB.z;
+      }
+    } else {
+      const moving = movableA ? a : b;
+      separationSideA.x = moving.pos.x; separationSideA.z = moving.pos.z;
+      for (const direction of [1, -1]) {
+        collisionMove(moving, sideDx * sideDistance * direction, sideDz * sideDistance * direction);
+        if (Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z) > slideDistance + 0.002) break;
+        moving.pos.x = separationSideA.x; moving.pos.z = separationSideA.z;
+      }
     }
   }
 
   // Remove inward velocity at contact so units stop pushing through one another.
   const closing = (a.vel.x - b.vel.x) * dx + (a.vel.z - b.vel.z) * dz;
   if (closing > 0) {
-    a.vel.x -= dx * closing * 0.5; a.vel.z -= dz * closing * 0.5;
-    b.vel.x += dx * closing * 0.5; b.vel.z += dz * closing * 0.5;
+    if (movableA && movableB) {
+      a.vel.x -= dx * closing * 0.5; a.vel.z -= dz * closing * 0.5;
+      b.vel.x += dx * closing * 0.5; b.vel.z += dz * closing * 0.5;
+    } else if (movableA) { a.vel.x -= dx * closing; a.vel.z -= dz * closing; }
+    else { b.vel.x += dx * closing; b.vel.z += dz * closing; }
   }
   return true;
 }
@@ -5928,6 +5947,7 @@ function separate() {
     }
     for (let i = 0; i < separationAlive.length; i++) {
       const u = separationAlive[i];
+      if (u.structure || u.totem) continue; // objetivos imóveis só afastam unidades móveis
       const candidates = obstacleGrid.get(gridCellKey(
         Math.floor(u.pos.x / SEPARATION_CELL_SIZE),
         Math.floor(u.pos.z / SEPARATION_CELL_SIZE),
