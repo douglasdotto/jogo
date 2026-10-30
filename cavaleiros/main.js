@@ -163,7 +163,7 @@ const nightmareTeamIds = (mission) => {
     return ['paladin', 'guardian', 'pyro'];
   }
   if (goal === 'elite') return ['paladin', 'guardian', 'pyro', 'viking'];
-  if (goal === 'boss' || goal === 'twin') return ['paladin', 'guardian', 'viking', 'cleric'];
+  if (goal === 'boss' || goal === 'twin' || goal === 'bosses') return ['paladin', 'guardian', 'viking', 'cleric'];
   return ['paladin', 'guardian', 'pyro', 'cleric'];
 };
 // Mantém uma sugestão para as escolhas iniciais e indica quem completar depois nas missões longas.
@@ -362,7 +362,7 @@ function paintDifficulty() {
   setTip('level', `Dificuldade: ${difficulty.name}`);
 }
 // objetivo compacto: ícone por tipo + barra + valor curto (o texto inteiro vai na dica)
-const GOAL_ICONS = { escort: '⛨', rescue: '⚿', boss: '♛', survive: '⌛', totems: '♜', tower: '♜', nofall: '♥', timer: '⏱', defend: '✧', hunt: '◎', endless: '☾', win: '⚑', breach: '♨', duel: '⚔', elite: '✠', twin: '♛' };
+const GOAL_ICONS = { escort: '⛨', rescue: '⚿', boss: '♛', bosses: '☼', survive: '⌛', totems: '♜', tower: '♜', nofall: '♥', timer: '⏱', defend: '✧', hunt: '◎', endless: '☾', win: '⚑', breach: '♨', duel: '⚔', elite: '✠', twin: '♛' };
 function goalShort(text, percent) {
   if (/!$/.test(text) && !/\d/.test(text)) return '✓';
   const nofall = text.match(/^De pé\s+(\d+)\/(\d+)\s+·\s+quedas\s+(\d+)$/i);
@@ -794,11 +794,12 @@ function showCampaign(autoPlay = null) {
     game.mission = m;
     // Cada missão da campanha recebe seu próprio cenário; a jornada completa mantém o mapa-base.
     world.dispose?.();
-    world = createWorld(scene, ROAD, PHASES, mapSeeds.get(m.id));
+    const castleInterior = m.id === 'coracao-do-castelo';
+    world = createWorld(scene, ROAD, castleInterior ? 13 : PHASES, mapSeeds.get(m.id), { castleInterior });
     root.classList.add('hidden');
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning());
+  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning());
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
@@ -2425,7 +2426,8 @@ function kiteFrom(h, dt) {
 
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
 // objetivos que terminam com o chefe da fase: chefe, duelo e o par Lich + Carrasco
-const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goal?.type === 'twin';
+const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goal?.type === 'twin' || goal?.type === 'bosses';
+const groupedBossGoal = (goal) => goal?.type === 'twin' || goal?.type === 'bosses';
 
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
@@ -2456,7 +2458,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   }
   // No Trono, o Lich móvel pode parar fora do alcance normal enquanto ataca
   // o grupo. Dois heróis o interceptam por uma distância curta e o resto guarda posição.
-  if (goal?.type === 'twin' && target.phaseBoss && !normalReach) {
+  if (groupedBossGoal(goal) && target.phaseBoss && !normalReach) {
     return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
   }
   if (normalReach) return true;
@@ -2636,7 +2638,7 @@ function partyCanReachBoss(boss, context) {
 // No trono, todo o grupo concentra o mesmo chefe. Só troca quando o foco morre
 // ou nenhum herói vivo consegue mais alcançá-lo; ameaças imediatas ainda furam a fila.
 function twinBossFocus(context) {
-  if (context.goal?.type !== 'twin') { game.twinFocus = null; return null; }
+  if (!groupedBossGoal(context.goal)) { game.twinFocus = null; return null; }
   if (context.twinFocusChecked) {
     if (context.twinFocusWaiting) return null;
     const focus = context.twinFocus;
@@ -2666,8 +2668,8 @@ function twinBossFocus(context) {
     context.twinFocusWaiting = false;
     return currentFocus;
   }
-  // Lich e Carrasco usam animações de surgimento com durações diferentes; não fixe
-  // o foco no primeiro que fica atacável antes de o outro chefe terminar de surgir.
+  // Chefes usam animações de surgimento diferentes; espere o grupo inteiro aparecer
+  // para que os heróis não mudem de alvo no meio da entrada.
   if (spawningBoss) {
     context.twinFocusChecked = true;
     context.twinFocus = null;
@@ -2695,13 +2697,13 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
     const score = heroTargetScore(hero, target, hero.pos, context);
     if (target === hero.targetFocus) { focused = target; focusedScore = score; }
     if (score < bestScore) { best = target; bestScore = score; }
-    if (context.goal?.type === 'twin' && isUrgentTwinThreat(target, context) && score < urgentTwinScore) {
+    if (groupedBossGoal(context.goal) && isUrgentTwinThreat(target, context) && score < urgentTwinScore) {
       urgentTwinTarget = target;
       urgentTwinScore = score;
     }
   }
   const { goal, villager, party, friends } = context;
-  if (goal?.type === 'twin') {
+  if (groupedBossGoal(goal)) {
     const focus = twinBossFocus(context);
     if (urgentTwinTarget) { best = urgentTwinTarget; bestScore = urgentTwinScore; }
     else if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus, context))) {
@@ -6003,7 +6005,7 @@ function startPhase() {
   game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
-  const waveScale = goal?.type === 'duel' ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin') ? goal.scale : 0;   // duelo, cripta e trono: menos inimigos comuns; chefes continuam garantidos
+  const waveScale = goal?.type === 'duel' ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // encontros especiais reduzem a onda comum; os chefes continuam garantidos
   if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
   if (goal?.type === 'elite') { game.eliteWave = 1; game.eliteSize = game.toSpawn; }
   if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
@@ -6029,6 +6031,7 @@ function startPhase() {
             : goal?.type === 'duel' ? '1 contra 1!'
               : goal?.type === 'elite' ? `Elite 1/${goal.waves}`
                 : goal?.type === 'twin' ? 'Dois chefes!'
+                  : goal?.type === 'bosses' ? 'Três chefes!'
                   : game.bossPending ? 'Chefe!' : `Fase ${game.phase}`;
   // faixa curta; na primeira fase da missão leva só o nome dela (a história fica no mapa)
   if (!game.mission || game.phase !== game.start) return showBanner(text);
@@ -6460,6 +6463,35 @@ function spawnTwinBoss(lich) {
   return s;
 }
 
+// No coração do castelo, os três guardiões entram em posições separadas e
+// com atributos reduzidos para que o perigo venha da combinação de golpes.
+function prepareCastleBoss(boss, hpScale, dmgScale, title) {
+  boss.maxHp = boss.hp = Math.round(boss.maxHp * hpScale);
+  boss.dmg = Math.round(boss.dmg * dmgScale);
+  boss.kind = { ...boss.kind, title };
+  boss.emissiveDirty = true;
+  return boss;
+}
+function spawnCastleBosses(lich) {
+  const s0 = world.anchorS(game.phase), anchor = world.pointAt(s0);
+  const faceCenter = (boss) => { boss.root.rotation.y = Math.atan2(anchor.x - boss.pos.x, anchor.z - boss.pos.z); };
+  lich.pos.copy(world.along(s0 + 8, 0));
+  lich.pos.y = world.groundHeight(lich.pos.x, lich.pos.z);
+  prepareCastleBoss(lich, 0.72, 0.82, 'Coração sombrio');
+  faceCenter(lich);
+  const guardians = [
+    { kind: 'Executioner', forward: 11, lateral: -6, hp: 0.42, dmg: 0.58, title: 'Carrasco do trono' },
+    { kind: 'DarkKnight', forward: 15, lateral: 6, hp: 0.46, dmg: 0.56, title: 'Cavaleiro do Eclipse' },
+  ];
+  for (const entry of guardians) {
+    const boss = new Skeleton(entry.kind, game.phase, true);
+    boss.pos.copy(world.along(s0 + entry.forward, entry.lateral));
+    boss.pos.y = world.groundHeight(boss.pos.x, boss.pos.z);
+    prepareCastleBoss(boss, entry.hp, entry.dmg, entry.title);
+    faceCenter(boss);
+  }
+}
+
 // alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
 const HUNT_FLEE = 4.5, HUNT_EDGE = 20, HUNT_PURSUIT_LIMIT = 25, HUNT_INTERCEPTORS = 2;
 const huntDest = new THREE.Vector3();
@@ -6528,7 +6560,7 @@ function missionProgress(goal, villager = game.villager, skeletons = skeletonsAl
   if (goal.type === 'endless') return THREE.MathUtils.clamp(game.endlessT / goal.dawn, 0, 1);
   if (goal.type === 'breach') return THREE.MathUtils.clamp(1 - game.surviveT / goal.time, 0, 1);
   if (goal.type === 'elite') return game.state === 'cleared' ? 1 : THREE.MathUtils.clamp((game.eliteWave - 1) / goal.waves, 0, 1);
-  if (goal.type === 'duel' || goal.type === 'twin') {   // vida que falta tirar dos chefes à vista
+  if (goal.type === 'duel' || goal.type === 'twin' || goal.type === 'bosses') {   // vida que falta tirar dos chefes à vista
     if (game.bossDown) return 1;
     let hp = 0, max = 0;
     for (const u of units) if (u.phaseBoss) { hp += u.dead ? 0 : Math.max(0, u.hp); max += u.maxHp; }
@@ -6681,6 +6713,13 @@ function campaignTick(dt, skeletons, party = heroes()) {
       text = game.bossDown ? 'Trono derrubado!' : `Chefes ${game.bossSeen ? 2 - standing : 0}/2`;
       break;
     }
+    case 'bosses': {
+      let standing = 0;
+      for (const unit of units) if (unit.phaseBoss && !unit.dead) standing++;
+      const total = goal.bosses?.length || 3;
+      text = game.bossDown ? 'Coração destruído!' : `Chefes ${game.bossSeen ? total - standing : 0}/${total}`;
+      break;
+    }
     case 'nofall': text = `De pé ${standingHeroes}/${party.length} · quedas ${game.falls}`; break;
     case 'timer': left = goal.time - game.missionT; text = `Tempo ${clockText(Math.max(0, left))}`; break;
     case 'defend': {
@@ -6816,6 +6855,7 @@ function spawnSkeleton() {
   if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.3) s.raider = true;   // corredores vão direto à ponte
   if (game.mission?.goal.type === 'elite' && !lead) makeElite(s);
   if (game.mission?.goal.type === 'twin' && lead && boss) spawnTwinBoss(s);
+  if (game.mission?.goal.type === 'bosses' && lead && boss) spawnCastleBosses(s);
   if (game.mission?.goal.type === 'duel' && lead && boss) {   // o Rei do duelo é feito para um herói só
     s.maxHp = s.hp = Math.round(s.hp * game.mission.goal.bossHp);
     s.dmg = Math.round(s.dmg * game.mission.goal.bossDmg);

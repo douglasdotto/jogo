@@ -41,7 +41,13 @@ const tangentAt=s=>new Vector3(Math.cos(s*0.03)*0.15,0,-1).normalize();
 const sideOf=t=>new Vector3(-t.z,0,t.x);
 const along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
 const anchorS=p=>12+(p-1)*23;
-const world=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,obstacles:[]});
+const world=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:false,obstacles:[]});
+const castleWorld=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,nextWaypoint,along})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:true,obstacles:[]});
+const castleArena=castleWorld.zoneOf(13),castleCenter=castleWorld.along(350,0);
+if(castleArena?.type!=='castle'||castleArena.halfWidth!==17||castleArena.halfLength!==23)throw Error('A fase 13 não recebeu a arena interna do castelo');
+if(castleWorld.groundHeight(castleCenter.x,castleCenter.z)!==0)throw Error('O piso da câmara final não está nivelado');
+if(castleWorld.nextWaypoint(castleWorld.along(330,0),castleCenter)!==castleCenter)throw Error('A rota desvia desnecessariamente da arena aberta do castelo');
+console.log('Terreno: arena final interna, piso nivelado e rota direta OK');
 const clearFrom=new Vector3(1000,0,1000),clearTo=new Vector3(1010,0,1000);
 Vector3.allocations=0;
 if(world.nextWaypoint(clearFrom,clearTo)!==clearTo)throw Error('Rota livre substituiu o destino');
@@ -74,7 +80,7 @@ function makeSeededTerrain(seed) {
   const pointAt=s=>new Vector3(Math.sin(s*0.03+seed)*5+Math.sin(s*0.08+seed*0.4)*1.5,0,-s+Math.sin(s*0.025+seed)*1.5);
   const tangentAt=s=>new Vector3(0.15*Math.cos(s*0.03+seed)+0.12*Math.cos(s*0.08+seed*0.4),0,-1+0.0375*Math.cos(s*0.025+seed)).normalize();
   const sideOf=t=>new Vector3(-t.z,0,t.x),along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
-  return runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,obstacles:[]});
+  return runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:false,obstacles:[]});
 }
 for(let seed=0;seed<8;seed++) {
   const sampleWorld=makeSeededTerrain(seed),zones=[3,5,7,9,10].map(p=>sampleWorld.zoneOf(p));

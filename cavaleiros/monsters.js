@@ -872,7 +872,7 @@ export function clearMonsterFx() {
 // estreia gradual: cada tipo entra numa fase e fica mais comum depois; dificuldades maiores trazem mais variedade
 const ROSTER = [['Shieldbearer', 2, 0.11, 0.025], ['Bomber', 3, 0.1, 0.025], ['Ghost', 4, 0.12, 0.03], ['Priest', 5, 0.07, 0.07],
   ['Skull', 7, 0.05, 0.02], ['Shaman', 8, 0.05, 0.03], ['DarkKnight', 10, 0.05, 0.025]];   // o enxame já traz 3 crânios por sorteio
-const BOSS_PHASES = [6, 9, 12];
+const BOSS_PHASES = [6, 9, 12, 13];
 export const isBossPhase = (p) => BOSS_PHASES.includes(p);
 const GOLEM_PHASES = [4, 8];
 export function pickMonster(p, type) {
@@ -911,7 +911,7 @@ const CAMPAIGN_TACTICS = {
   Lich: ['☠', 'Chefe final com escudo, invocações e ataques marcados no chão.'],
   Skull: ['❂', 'Bando de crânios voadores e frágeis; cada mergulho marca um círculo laranja. Golpes em área limpam o enxame.'],
   Shaman: ['❖', 'Cobre aliados com escudo de ossos; derrube ou atordoe o xamã e o escudo some.'],
-  DarkKnight: ['⚔', 'Marca uma linha vermelha e investe com a lança; saia da linha e revide enquanto ele fica exausto.'],
+  DarkKnight: ['⚔', 'Marca uma linha vermelha e investe com a lança; saia da linha e revide enquanto ele fica exausto. Na câmara do coração, ele guarda a fonte da maldição.'],
   Executioner: ['⚒', 'Chefe da fase 9: machadada em linha, corrente que puxa quem está longe e giro em fúria abaixo de 50%.'],
 };
 
@@ -931,6 +931,7 @@ export function campaignThreats(from, to, goal = null) {
   if (last >= 9 && !found.has('Golem')) add('Golem', 9, true); // só pode surgir aleatoriamente nas dificuldades altas
   for (const phase of BOSS_PHASES) if (phase >= first && phase <= last) add(waveLeader(phase, true), phase);
   if (goal?.type === 'twin') add('Executioner', last);   // trono: o Carrasco volta ao lado do Lich
+  if (goal?.type === 'bosses') for (const id of goal.bosses || []) add(id, last);
 
   return [...found.values()].sort((a, b) => a.phase - b.phase || a.name.localeCompare(b.name, 'pt-BR'));
 }
@@ -948,11 +949,12 @@ function updateBossBar() {
   const el = mBarElement;
   if (!el) return;
   const units = G.units;
+  const groupedGoal = G.game?.mission?.goal?.type === 'bosses';
   const unitCount = units?.length ?? 0;
   const firstUnit = unitCount ? units[0] : null, lastUnit = unitCount ? units[unitCount - 1] : null;
   if (!bossCacheValid || units !== bossCacheUnits || bossCacheUnit?.dead || bossCacheUnit?.root?.parent === null
     || !bossCacheUnit && (unitCount !== bossCacheLength || firstUnit !== bossCacheFirstUnit || lastUnit !== bossCacheLastUnit)) {
-    bossCacheUnit = units?.find((u) => u.team === 'skeleton' && !u.dead && u.kind?.title) || null;
+    bossCacheUnit = units?.find((u) => u.team === 'skeleton' && !u.dead && (groupedGoal ? u.phaseBoss : u.kind?.title)) || null;
     bossCacheUnits = units;
     bossCacheLength = unitCount;
     bossCacheFirstUnit = firstUnit;
@@ -961,21 +963,33 @@ function updateBossBar() {
   }
   const b = bossCacheUnit;
   if (!b) { if (!el.hidden) el.hidden = true; mBar = null; return; }
-  if (mBar?.unit !== b) {
-    el.innerHTML = `<span class="boss-name">${b.kind.name} <small>${b.kind.title}</small></span><div class="boss-track"><i class="boss-fill"></i><i class="boss-shield"></i></div><div class="boss-telegraph" role="status" aria-live="polite" hidden><span class="boss-warning-text"></span><span class="warning-countdown"></span><i class="warning-progress"></i></div>`;
+  if (mBar?.unit !== b || mBar.grouped !== groupedGoal) {
+    el.innerHTML = `<span class="boss-name">${groupedGoal ? 'Guardiões do coração' : b.kind.name} <small>${groupedGoal ? '' : b.kind.title}</small></span><div class="boss-track"><i class="boss-fill"></i><i class="boss-shield"></i></div><div class="boss-telegraph" role="status" aria-live="polite" hidden><span class="boss-warning-text"></span><span class="warning-countdown"></span><i class="warning-progress"></i></div>`;
     mBar = { unit: b, fill: el.querySelector('.boss-fill'), shield: el.querySelector('.boss-shield'), hp: -1, sh: -1,
       telegraph: el.querySelector('.boss-telegraph'), warningText: el.querySelector('.boss-warning-text'), countdown: el.querySelector('.warning-countdown'), progress: el.querySelector('.warning-progress'), second: -1,
-      enraged: null, warningVisible: null };
+      name: el.querySelector('.boss-name'), subtitle: el.querySelector('.boss-name small'), grouped: groupedGoal, enraged: null, warningVisible: null };
     el.hidden = false;
   }
-  const hp = Math.round((Math.max(0, b.hp) / b.maxHp) * 1000) / 10, sh = Math.round((((b.shieldHp || 0) + (b.ward?.hp || 0)) / b.maxHp) * 1000) / 10;
+  let currentHp = Math.max(0, b.hp), maxHp = b.maxHp, shieldHp = (b.shieldHp || 0) + (b.ward?.hp || 0), standing = b.dead ? 0 : 1;
+  if (groupedGoal) {
+    currentHp = maxHp = shieldHp = standing = 0;
+    for (const unit of units || []) if (unit.phaseBoss) {
+      maxHp += unit.maxHp;
+      if (!unit.dead) { standing++; currentHp += Math.max(0, unit.hp); shieldHp += (unit.shieldHp || 0) + (unit.ward?.hp || 0); }
+    }
+    const total = G.game?.mission?.goal?.bosses?.length || 3;
+    mBar.name.firstChild.textContent = 'Guardiões do coração ';
+    mBar.subtitle.textContent = `${standing}/${total} chefes`;
+  }
+  const hp = maxHp ? Math.round((currentHp / maxHp) * 1000) / 10 : 0, sh = maxHp ? Math.round((shieldHp / maxHp) * 1000) / 10 : 0;
   if (hp !== mBar.hp) { mBar.fill.style.width = hp + '%'; mBar.hp = hp; }
   if (sh !== mBar.sh) { mBar.shield.style.width = sh + '%'; mBar.sh = sh; }
-  const enraged = !!b.enraged;
+  let enraged = !!b.enraged;
+  if (groupedGoal) for (const unit of units || []) if (unit.phaseBoss && !unit.dead && unit.enraged) { enraged = true; break; }
   if (mBar.enraged !== enraged) { el.classList.toggle('enraged', enraged); mBar.enraged = enraged; }
   let warning = null;
   for (const fx of mBossWarnings) {
-    if (fx.alive && fx.warning && fx.owner === b && fx.announce && fx.t > 0 && (!warning || fx.t < warning.t)) warning = fx;
+    if (fx.alive && fx.warning && (fx.owner === b || groupedGoal && fx.owner?.phaseBoss && !fx.owner.dead) && fx.announce && fx.t > 0 && (!warning || fx.t < warning.t)) warning = fx;
   }
   const warningVisible = !!warning;
   if (mBar.warningVisible !== warningVisible) { mBar.telegraph.hidden = !warningVisible; mBar.warningVisible = warningVisible; }

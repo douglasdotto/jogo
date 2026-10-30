@@ -12,7 +12,7 @@
 // breach = segurar a ponte por `time` s; a missão cai se `leaks` esqueletos passarem
 // duel = um herói só contra o chefe da fase (o herói tem vida × `heroHp`; ondas × `waves`; chefe com vida × `bossHp` e dano × `bossDmg`); 3★ pede vencer em até `time` s
 // elite = `waves` ondas de elite seguidas (mais vida e dano; cada onda × `scale`)
-// twin = o Lich e o Carrasco juntos na fase 12 · ending = frase de encerramento na vitória
+// twin = Lich e Carrasco juntos na fase 12 · bosses = grupo de chefes da arena final · ending = frase de encerramento na vitória
 export const MISSIONS = [
   { id: 'vila', name: 'A Vila', desc: 'Os primeiros esqueletos chegaram à praça.', chapter: 'Capítulo I · Sinais na estrada', story: 'A patrulha cai na praça. No estandarte inimigo, uma marca de ossos aponta para a ponte ao norte.', tip: 'Aprenda o ritmo de ataque dos inimigos e preserve a vida do herói para buscar as três estrelas.', icon: '⌂', from: 1, to: 2, heroes: 1, level: 1, goal: { type: 'win' } },
   { id: 'ponte', name: 'A Ponte do Rio', desc: 'Atiradores no rochedo vigiam a ponte.', chapter: 'Capítulo I · Sinais na estrada', story: 'Os arqueiros fecharam a travessia. Do outro lado, tochas acendem rumo às fazendas.', tip: 'Inimigos perto do aldeão são uma ameaça imediata. Cura, provocação e empurrões ajudam a mantê-lo protegido.', icon: '≈', from: 2, to: 4, heroes: 2, level: 1, militia: 4, goal: { type: 'escort' } },
@@ -30,7 +30,8 @@ export const MISSIONS = [
   { id: 'horda', name: 'Noite sem Fim', desc: 'A horda não para de chegar.', chapter: 'Capítulo IV · A marcha final', story: 'Antes do castelo, o necromante solta a horda inteira. Segure a estrada o máximo que puder até o amanhecer.', tip: 'Não há cura entre fases: cada minuto vale uma estrela. Guarde as ultimates para quando a horda engrossar.', icon: '❂', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'endless', marks: [60, 120, 180], dawn: 300 } },
   { id: 'castelo', name: 'Castelo do Necromante', desc: 'A batalha final contra o chefe.', chapter: 'Capítulo IV · A marcha final', story: 'A fonte da invasão espera atrás dos portões. Derrote o necromante e encerre a marcha dos ossos.', tip: 'Observe os círculos de perigo, saia deles antes do impacto e concentre o dano no chefe quando houver abertura.', icon: '♜', from: 11, to: 12, heroes: 4, level: 3, goal: { type: 'boss' } },
   { id: 'cripta', name: 'Cripta Sombria', desc: 'A guarda de elite desperta.', chapter: 'Capítulo V · Além do Castelo', story: 'Sob o castelo, a guarda de elite do necromante ainda marcha.', tip: 'Três ondas de elite com uma breve pausa para se recuperar. Concentre o dano num alvo por vez e aproveite a cura entre as ondas.', icon: '⚰', from: 11, to: 11, heroes: 4, level: 3, goal: { type: 'elite', waves: 3, scale: 0.4 } },
-  { id: 'trono', name: 'Trono de Ossos', desc: 'Dois chefes, uma última luta.', chapter: 'Capítulo V · Além do Castelo', story: 'No trono, o Lich ergue o Carrasco para a última luta.', tip: 'O Lich e o Carrasco chegam juntos. Derrube um de cada vez e fuja das áreas marcadas.', icon: '♔', from: 12, to: 12, heroes: 4, level: 3, goal: { type: 'twin', scale: 0.8 }, ending: 'O trono ruiu. O reino amanhece livre.' },
+  { id: 'trono', name: 'Trono de Ossos', desc: 'O Lich guarda o trono.', chapter: 'Capítulo V · Além do Castelo', story: 'O Lich ergue o Carrasco. Atrás do trono, uma porta revela o coração da maldição.', tip: 'O Lich e o Carrasco chegam juntos. Derrube um de cada vez e fuja das áreas marcadas.', icon: '♔', from: 12, to: 12, heroes: 4, level: 3, goal: { type: 'twin', scale: 0.8 }, ending: 'O Lich cai, mas uma presença desperta atrás do trono.' },
+  { id: 'coracao-do-castelo', name: 'Coração do Castelo', desc: 'Três guardiões protegem o coração sombrio.', chapter: 'Capítulo VI · O coração sombrio', story: 'Além do trono, a maldição pulsa numa câmara sem luz. O Lich, o Carrasco e o Cavaleiro do Eclipse protegem sua fonte.', tip: 'Os três chefes atacam juntos. Concentre o grupo em um por vez, interrompa os golpes marcados e guarde a cura para a investida final.', icon: '☼', from: 13, to: 13, heroes: 4, level: 3, goal: { type: 'bosses', bosses: ['Lich', 'Executioner', 'DarkKnight'], scale: 0.18 }, ending: 'O coração sombrio se parte. A maldição enfim termina.' },
 ];
 
 // Mantém as arenas estáveis enquanto o jogador navega entre mapa e dificuldade;
@@ -74,6 +75,7 @@ export function goalText(goal) {
     duel: 'Vença o duelo contra o chefe',
     elite: `Vença ${goal.waves} ondas de elite`,
     twin: 'Derrote o Lich e o Carrasco',
+    bosses: `Derrote os ${goal.bosses?.length || 3} guardiões do castelo`,
   }[goal.type];
 }
 
@@ -416,17 +418,20 @@ export const CHAPTER_COSMETICS = [
   { id: 'veu', chapter: 'Capítulo III · O véu da morte', name: 'Halo do Véu', icon: '☽', auraStyle: 'crescent', color: 0xc798ff },
   { id: 'marcha', chapter: 'Capítulo IV · A marcha final', name: 'Brasão da Marcha', icon: '♜', auraStyle: 'crest', color: 0x65e1b0 },
   { id: 'trono', chapter: 'Capítulo V · Além do Castelo', name: 'Auréola do Trono', icon: '♛', auraStyle: 'crown', color: 0xffd66e },
+  { id: 'coracao', chapter: 'Capítulo VI · O coração sombrio', name: 'Espiral do Eclipse', icon: '☼', auraStyle: 'nightmare', color: 0xb451d6 },
 ];
 export const CHALLENGE_COSMETICS = [
   { id: 'vanguarda', chapter: 'Desafio 3★ · Difícil', name: 'Halo da Vanguarda', icon: '✹', auraStyle: 'vanguard', color: 0xffd36b, difficultyId: 'dificil', difficultyName: 'Difícil', track: 'challenge' },
   { id: 'pesadelo', chapter: 'Desafio 3★ · Pesadelo', name: 'Espiral do Pesadelo', icon: '☾', auraStyle: 'nightmare', color: 0xb882ff, difficultyId: 'pesadelo', difficultyName: 'Pesadelo', track: 'challenge' },
 ];
 const CHAPTER_COSMETIC_RULE_VERSION = 2;
+const LEGACY_CHALLENGE_MISSIONS = ['vila', 'ponte', 'santuario', 'chamas', 'fazendas', 'lago', 'duelo', 'caca', 'resgate', 'ruinas', 'torre', 'lago-sombrio', 'cemiterio', 'horda', 'castelo', 'cripta', 'trono'];
 export function campaignCosmetics() {
   const starsByMission = new Map(MISSIONS.map((mission) => [mission.id, starsOf(mission.id)]));
   const boundedStarsOf = (mission) => Math.max(0, Math.min(3, Number(starsByMission.get(mission.id)) || 0));
   const storedVisuals = readCampaignObject(CAMPAIGN_COSMETIC_KEY);
-  let legacyUnlocked = Array.isArray(storedVisuals.legacyUnlocked) ? storedVisuals.legacyUnlocked.filter((id) => CHAPTER_COSMETICS.some((cosmetic) => cosmetic.id === id)) : [];
+  const cosmeticIds = new Set([...CHAPTER_COSMETICS, ...CHALLENGE_COSMETICS].map((cosmetic) => cosmetic.id));
+  let legacyUnlocked = Array.isArray(storedVisuals.legacyUnlocked) ? storedVisuals.legacyUnlocked.filter((id) => cosmeticIds.has(id)) : [];
   if (!(Number(storedVisuals.rulesVersion) >= CHAPTER_COSMETIC_RULE_VERSION)) {
     const previouslyUnlocked = CHAPTER_COSMETICS.filter((cosmetic) => {
       const missions = MISSIONS.filter((mission) => mission.chapter === cosmetic.chapter);
@@ -450,13 +455,24 @@ export function campaignCosmetics() {
   });
   const savedMedals = readMissionMedals();
   const challenges = CHALLENGE_COSMETICS.map((cosmetic) => {
-    const completedMissions = MISSIONS.filter((mission) => savedMedals[mission.id]?.challenges?.[cosmetic.difficultyId] === true);
+    // Os visuais de desafio mantêm o requisito das 17 arenas originais, para
+    // que o capítulo extra não retire uma recompensa já conquistada.
+    const challengeMissions = LEGACY_CHALLENGE_MISSIONS.map((id) => MISSIONS.find((mission) => mission.id === id)).filter(Boolean);
+    const completedMissions = challengeMissions.filter((mission) => savedMedals[mission.id]?.challenges?.[cosmetic.difficultyId] === true);
     const completedArenas = completedMissions.length;
     const completedIds = new Set(completedMissions.map((mission) => mission.id));
-    const pendingMissions = MISSIONS.filter((mission) => !completedIds.has(mission.id)).map(({ id, name }) => ({ id, name }));
-    const requiredArenas = MISSIONS.length;
+    const pendingMissions = challengeMissions.filter((mission) => !completedIds.has(mission.id)).map(({ id, name }) => ({ id, name }));
+    const requiredArenas = challengeMissions.length;
+    // Cosméticos de desafio já conquistados nas 17 arenas originais continuam liberados
+    // depois que novos capítulos são adicionados à campanha.
+    const legacyChallengeComplete = completedArenas === requiredArenas;
+    if (legacyChallengeComplete && !legacyUnlocked.includes(cosmetic.id)) {
+      legacyUnlocked.push(cosmetic.id);
+      writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
+    }
+    const stickyUnlock = legacyUnlocked.includes(cosmetic.id);
     return { ...cosmetic, stars: completedArenas, maxStars: requiredArenas, completedArenas, requiredArenas,
-      requiredStars: requiredArenas, pendingMissions, unlocked: requiredArenas > 0 && completedArenas === requiredArenas };
+      requiredStars: requiredArenas, pendingMissions, unlocked: stickyUnlock || requiredArenas > 0 && completedArenas === requiredArenas };
   });
   return [...chapters, ...challenges];
 }
@@ -617,7 +633,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     </div>
     ${storageWarning ? `<div class="storage-warning" role="status">${attr(storageWarning)}</div>` : ''}
     <div class="camp-body">
-      <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 50 91 C 43 89, 40 86, 44 82 C 48 78, 54 75, 56 72 C 53 68, 45 65, 36 65 C 42 64, 50 59, 55 56 C 61 53, 67 45, 72 40 C 68 43, 62 45, 58 44 C 50 42, 39 39, 30 39 C 36 35, 48 29, 62 31 C 72 33, 81 44, 86 57 C 82 45, 70 36, 60 31 C 55 27, 50 22, 47 20 C 54 15, 62 10, 67 9 C 73 9, 79 14, 82 20 C 87 16, 89 11, 90 7" /></svg></div>
+      <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 50 91 C 43 89, 40 86, 44 82 C 48 78, 54 75, 56 72 C 53 68, 45 65, 36 65 C 42 64, 50 59, 55 56 C 61 53, 67 45, 72 40 C 68 43, 62 45, 58 44 C 50 42, 39 39, 30 39 C 36 35, 48 29, 62 31 C 72 33, 81 44, 86 57 C 82 45, 70 36, 60 31 C 55 27, 50 22, 47 20 C 54 15, 62 10, 67 9 C 73 9, 79 14, 82 20 C 87 16, 89 11, 90 7 C 85 5, 81 5, 77 5" /></svg></div>
       <aside class="camp-info" role="region" aria-label="Detalhes da missão selecionada"></aside>
     </div>`;
   const map = root.querySelector('.camp-map'), info = root.querySelector('.camp-info');
@@ -629,7 +645,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
   root.appendChild(announcement);
   // Marcos seguem a estrada e as referências visuais da ilustração.
   // Ponte em Chamas fica à beira do rio; o Duelo, na curva da estrada; o capítulo final passa do castelo, no topo.
-  const spots = [[50, 91], [56, 72], [46, 68], [68, 66], [36, 65], [55, 56], [42, 50], [64, 48], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [58, 13], [67, 9], [82, 20], [90, 7]];
+  const spots = [[50, 91], [56, 72], [46, 68], [68, 66], [36, 65], [55, 56], [42, 50], [64, 48], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [58, 13], [67, 9], [82, 20], [90, 7], [77, 5]];
   const nodes = MISSIONS.map((m, i) => {
     const b = document.createElement('button');
     const open = unlocked(i), stars = starsOf(m.id), medal = missionMedal(m.id);

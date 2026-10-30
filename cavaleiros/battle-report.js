@@ -90,6 +90,11 @@ function objectiveTip(mission) {
   if (goal.type === 'twin' && !mission.bossDown) {
     return number(mission.bossesLeft) === 1 ? 'Faltou um chefe: guarde a ultimate para o segundo.' : 'Os dois chefes seguem de pé: derrube um de cada vez.';
   }
+  if (goal.type === 'bosses' && !mission.bossDown) {
+    const left = number(mission.bossesLeft);
+    return left === 1 ? 'Falta um guardião: desvie das marcas e guarde a cura para o último.'
+      : `${left || goal.bosses?.length || 3} guardiões seguem no salão: foque um por vez e interrompa as investidas.`;
+  }
   if (goal.type === 'endless') {
     const seconds = Math.floor(number(mission.endlessTime));
     return `A horda venceu após ${seconds} s; a 1ª estrela pede ${number(goal.marks?.[0]) || 60} s.`;
@@ -116,6 +121,7 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
                   : mission.goal?.type === 'duel' ? 'Duelo vencido! '
                     : mission.goal?.type === 'elite' ? 'Cripta limpa! '
                       : mission.goal?.type === 'twin' ? 'O trono caiu! '
+                        : mission.goal?.type === 'bosses' ? 'Os guardiões foram vencidos! '
                         : '';
       if (mission.nextMission) {
         const nextMission = label(mission.nextMission, 'a próxima missão');

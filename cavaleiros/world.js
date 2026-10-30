@@ -31,7 +31,8 @@ function mapStyleForSeed(seedValue = 11) {
 }
 export function biomeForSeed(seedValue = 11) { return mapStyleForSeed(seedValue).name; }
 
-export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
+export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options = {}) {
+  const castleInterior = options.castleInterior === true;
   const scene = new THREE.Group();
   parentScene.add(scene);
   let disposed = false, modelScenes = [];
@@ -71,6 +72,8 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     const end = i === 0 || i === ROUTE.length - 1;
     return [x + (end ? 0 : range(-2.6, 2.6)), z + (end ? 0 : range(-1.4, 1.4))];
   });
+  const baseRouteLength = new THREE.CatmullRomCurve3(route.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal').getLength();
+  if (castleInterior) route.push([-1.5, -278], [-1, -292], [0, -306], [0, -320]);
   const curve = new THREE.CatmullRomCurve3(route.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
   const L = curve.getLength();
   const clampU = (s) => THREE.MathUtils.clamp(s / L, 0, 1);
@@ -78,12 +81,15 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   const tangentAt = (s) => curve.getTangentAt(clampU(s));
   const sideOf = (t) => new THREE.Vector3(-t.z, 0, t.x);   // lado direito de quem anda para a frente
   const along = (s, lateral) => pointAt(s).addScaledVector(sideOf(tangentAt(s)), lateral);
-  const firstS = 12, lastS = L - 30;
-  const anchorS = (p) => firstS + ((p - 1) * (lastS - firstS)) / (PHASES - 1);
+  const firstS = 12, lastS = castleInterior ? baseRouteLength - 30 : L - 30;
+  const interiorArenaS = baseRouteLength + 12;
+  const anchorS = (p) => castleInterior && p === 13
+    ? interiorArenaS
+    : firstS + ((p - 1) * (lastS - firstS)) / (castleInterior ? 11 : PHASES - 1);
   const roadPts = curve.getSpacedPoints(600);
   // "trevas" (0 a 1): o mundo vai morrendo conforme o caminho sobe para o castelo do necromante
   const zStart = pointAt(anchorS(3)).z, zEnd = pointAt(L - 10).z;
-  const gloomAt = (z) => THREE.MathUtils.smoothstep((zStart - z) / (zStart - zEnd), 0, 0.85);
+  const gloomAt = castleInterior ? () => 1 : (z) => THREE.MathUtils.smoothstep((zStart - z) / (zStart - zEnd), 0, 0.85);
 
 
   // ---------- desafios por fase ----------
@@ -113,6 +119,13 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     zone.bounds = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
     zones.set(phase, zone);
   }
+  if (castleInterior) {
+    const center = pointAt(interiorArenaS), fwd = tangentAt(interiorArenaS), side = sideOf(fwd);
+    const zone = { type: 'castle', center, fwd, side, radius: 22, halfWidth: 17, halfLength: 23,
+      ground: [-5, 0, 5].map((off) => along(interiorArenaS + 10, off)) };
+    zone.bounds = { minX: center.x - 26, maxX: center.x + 26, minZ: center.z - 26, maxZ: center.z + 26 };
+    zones.set(13, zone);
+  }
   const zoneOf = (phase) => zones.get(phase) || null;
   const inRamp = (x, z) => Math.abs(x) <= 1.5 && z >= -9 && z <= -3;
   // fundo do lago: margem irregular, rasa na borda e funda no meio
@@ -140,6 +153,10 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
         const pz = dx * zone.fwd.x + dz * zone.fwd.z;
         if (Math.abs(px) <= 1.5 && pz >= -9 && pz <= -3) return (pz + 9) / 2;
         if (Math.hypot(px, pz) < zone.radius) return 3;
+      } else if (zone.type === 'castle') {
+        const dx = x - zone.center.x, dz = z - zone.center.z;
+        if (Math.abs(dx * zone.side.x + dz * zone.side.z) <= zone.halfWidth
+          && Math.abs(dx * zone.fwd.x + dz * zone.fwd.z) <= zone.halfLength) return 0;
       } else if (Math.hypot(x - zone.center.x, z - zone.center.z) < zone.radius) {
         return Math.max(-0.38, lakeDepth(zone, x, z));   // na parte rasa afunda até a canela
       }
@@ -178,6 +195,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   }
   function terrainWaypoint(from, to) {
     for (const zone of zones.values()) {
+      if (zone.type === 'castle') continue;   // o salão é uma arena aberta; não desvie do chão plano
       if (zone.type === 'plateau') {
         const fromX = from.x - zone.center.x, fromZ = from.z - zone.center.z;
         const toX = to.x - zone.center.x, toZ = to.z - zone.center.z;
@@ -373,7 +391,8 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   const riverDist = (x, z) => distTo(riverPts, x, z);
 
   // ---------- locais dos marcos de cada região (fixos, longe da área de luta) ----------
-  const castleAt = pointAt(L - 10);
+  const castleS = castleInterior ? baseRouteLength - 10 : L - 10;
+  const castleAt = pointAt(castleS);
   const sites = {};
   const siteList = [];
   // procura perto da fase um ponto a ≥ gap m do caminho, fora do rio, das zonas e de outros marcos
@@ -418,6 +437,12 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     let h = hill * (1.5 + 9 * noise(x, z) ** 1.5);
     for (const zone of zones.values()) {
       const dz = Math.hypot(x - zone.center.x, z - zone.center.z);
+      if (zone.type === 'castle') {
+        const dx = x - zone.center.x, localX = dx * zone.side.x + (z - zone.center.z) * zone.side.z;
+        const localZ = dx * zone.fwd.x + (z - zone.center.z) * zone.fwd.z;
+        if (Math.abs(localX) <= zone.halfWidth && Math.abs(localZ) <= zone.halfLength) h = 0;
+        continue;
+      }
       if (dz < 12) h = 0;
       if (zone.type === 'lake' && dz < zone.radius + 2) h = Math.min(h, lakeDepth(zone, x, z));
     }
@@ -457,7 +482,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   const isFree = (x, z, r = 0) => !blocked.some((b) => Math.hypot(b.x - x, b.z - z) < b.r + r);
 
   // ---------- chão ----------
-  const zTop = ROUTE.at(-1)[1] - 45, zBot = ROUTE[0][1] + 35;
+  const zTop = route.at(-1)[1] - 45, zBot = ROUTE[0][1] + 35;
   const ground = new THREE.PlaneGeometry(180, zBot - zTop, 160, Math.round((zBot - zTop) / 1.1));
   ground.rotateX(-Math.PI / 2);
   ground.translate(0, 0, (zTop + zBot) / 2);
@@ -1000,7 +1025,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   }
 
   // ---------- castelo no topo ----------
-  const endS = L - 10;
+  const endS = castleS;
   const castle = new THREE.Group();
   castle.position.copy(pointAt(endS));
   const et = tangentAt(endS);
@@ -1019,12 +1044,22 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     mesh(new THREE.ConeGeometry(2, 2.6, 10), red, sx * (ROAD + 19), 7.3, 0, castle);
   }
   mesh(new THREE.BoxGeometry(ROAD * 2 + 0.8, 1.8, 1.6), cstone, 0, 6.1, 0, castle);
-  mesh(new THREE.BoxGeometry(10, 9, 8), cstone, 0, 4.5, -12, castle);
-  for (const sx of [-1, 1]) {
-    mesh(new THREE.CylinderGeometry(1.5, 1.6, 12, 10), cstone, sx * 5, 6, -12, castle);
-    mesh(new THREE.ConeGeometry(1.9, 3.2, 10), red, sx * 5, 13.6, -12, castle);
+  if (castleInterior) {
+    // O portão central fica aberto para a câmera e para a entrada da formação.
+    for (const sx of [-1, 1]) mesh(new THREE.BoxGeometry(9.5, 5, 1.6), cstone, sx * 7.25, 2.5, 0, castle);
+    mesh(new THREE.BoxGeometry(5, 1.2, 1.6), cstone, 0, 5.6, 0, castle);
+    for (const sx of [-1, 1]) {
+      mesh(new THREE.BoxGeometry(1.1, 5.2, 1.7), 0x4d4253, sx * 4.2, 2.6, 0, castle);
+      mesh(new THREE.ConeGeometry(1.2, 1.6, 4), 0x4d4253, sx * 4.2, 6, 0, castle).rotation.y = Math.PI / 4;
+    }
+  } else {
+    mesh(new THREE.BoxGeometry(10, 9, 8), cstone, 0, 4.5, -12, castle);
+    for (const sx of [-1, 1]) {
+      mesh(new THREE.CylinderGeometry(1.5, 1.6, 12, 10), cstone, sx * 5, 6, -12, castle);
+      mesh(new THREE.ConeGeometry(1.9, 3.2, 10), red, sx * 5, 13.6, -12, castle);
+    }
+    mesh(new THREE.ConeGeometry(5.5, 4, 4), 0x4a2342, 0, 11, -12, castle).rotation.y = Math.PI / 4;
   }
-  mesh(new THREE.ConeGeometry(5.5, 4, 4), 0x4a2342, 0, 11, -12, castle).rotation.y = Math.PI / 4;
   // castelo do necromante: janelas com brilho roxo, estandartes e cristais
   const crystalMat = mat(0xc89cff, { emissive: 0x8a3ff0, emissiveIntensity: 0.9 });
   const winGlow = mat(0x9b6bff, { emissive: 0x7a3fd1, emissiveIntensity: 1 });
@@ -1034,8 +1069,10 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   for (const sx of [-1, 1]) {
     win(sx * (ROAD + 1.4), 4.8, 1.85); win(sx * (ROAD + 1.4), 2.6, 1.95);
     win(sx * (ROAD + 19), 4, 1.7);
-    win(sx * 5, 9, -10.45); win(sx * 5, 6, -10.45);
-    for (const x of [1.5, 3]) win(sx * x, 6.5, -7.95);
+    if (!castleInterior) {
+      win(sx * 5, 9, -10.45); win(sx * 5, 6, -10.45);
+      for (const x of [1.5, 3]) win(sx * x, 6.5, -7.95);
+    }
     for (const x of [ROAD + 6, ROAD + 14]) {   // estandartes roxos pendurados no muro
       mesh(new THREE.BoxGeometry(1.1, 2.6, 0.06), 0x4b2470, sx * x, 3.4, 0.83, castle);
       mesh(new THREE.BoxGeometry(0.4, 0.4, 0.04), crystalMat, sx * x, 3.6, 0.88, castle).rotation.z = Math.PI / 4;
@@ -1056,6 +1093,50 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   bigCrystal.castShadow = false;
   floaters.push({ m: bigCrystal, y: 15, ph: 0 });
   blocked.push({ x: castle.position.x, z: castle.position.z, r: 26 });
+
+  if (castleInterior) {
+    const hall = new THREE.Group();
+    const hallCenter = pointAt(interiorArenaS), hallTangent = tangentAt(interiorArenaS);
+    hall.position.copy(hallCenter);
+    hall.rotation.y = Math.atan2(-hallTangent.x, -hallTangent.z);
+    scene.add(hall);
+    const obsidian = mat(0x252331), ashStone = mat(0x3a3448), wornStone = mat(0x574052), rune = mat(0xb83b83, { emissive: 0x761c5d, emissiveIntensity: 0.75 });
+    mesh(new THREE.BoxGeometry(34, 0.5, 46), obsidian, 0, -0.27, 0, hall).receiveShadow = true;
+    // Costuras de pedra e veios da maldição dão escala à sala sem encher o caminho de colisões.
+    for (let x = -14; x <= 14; x += 4) mesh(new THREE.BoxGeometry(0.12, 0.025, 43), x % 8 ? wornStone : rune, x, 0.0, 0, hall).castShadow = false;
+    for (let z = -18; z <= 18; z += 4) mesh(new THREE.BoxGeometry(32, 0.025, 0.12), z % 8 ? wornStone : rune, 0, 0.01, z, hall).castShadow = false;
+    // Paredes laterais, fundo fechado e entrada aberta ao lado do portão exterior.
+    for (const sx of [-1, 1]) {
+      mesh(new THREE.BoxGeometry(1.4, 10, 46), ashStone, sx * 17, 5, 0, hall);
+      for (const z of [-17, -7, 3, 13]) {
+        mesh(new THREE.BoxGeometry(2.2, 12, 2.2), wornStone, sx * 15.2, 6, z, hall);
+        mesh(new THREE.ConeGeometry(1.55, 2.4, 4), ashStone, sx * 15.2, 13.1, z, hall).rotation.y = Math.PI / 4;
+      }
+    }
+    mesh(new THREE.BoxGeometry(34, 10, 1.5), ashStone, 0, 5, -23, hall);
+    for (const sx of [-1, 1]) {
+      mesh(new THREE.BoxGeometry(10, 8, 1.5), ashStone, sx * 12, 4, 23, hall);
+      mesh(new THREE.BoxGeometry(1.3, 8.5, 1.8), wornStone, sx * 6.5, 4.25, 23, hall);
+      mesh(new THREE.ConeGeometry(1.1, 1.8, 4), wornStone, sx * 6.5, 9.3, 23, hall).rotation.y = Math.PI / 4;
+    }
+    // Colunas rachadas, estandartes rasgados e braseiros enquadram a luta sem bloquear a arena.
+    for (const sx of [-1, 1]) for (const z of [-12, 1, 14]) {
+      const x = sx * 11.5;
+      mesh(new THREE.CylinderGeometry(0.7, 1, 8, 8), wornStone, x, 4, z, hall);
+      mesh(new THREE.CylinderGeometry(1.1, 0.85, 0.6, 8), ashStone, x, 7.8, z, hall);
+      mesh(new THREE.BoxGeometry(1.9, 2.7, 0.12), 0x321628, x - sx * 1.5, 5.7, z, hall).rotation.z = 0.12 * sx;
+      const brazier = mesh(new THREE.ConeGeometry(0.8, 1.2, 6), rune, x - sx * 1.5, 1.7, z, hall);
+      brazier.castShadow = brazier.receiveShadow = false;
+    }
+    const heartMat = mat(0xc0297d, { emissive: 0x8c155c, emissiveIntensity: 1.5 });
+    const heart = mesh(new THREE.OctahedronGeometry(2.1, 1), heartMat, 0, 6, 0, hall);
+    heart.castShadow = heart.receiveShadow = false;
+    const seal = mesh(new THREE.TorusGeometry(3.4, 0.16, 8, 48), rune, 0, 6, 0, hall);
+    seal.rotation.set(Math.PI / 3, 0, Math.PI / 5);
+    seal.castShadow = seal.receiveShadow = false;
+    floaters.push({ m: heart, y: 6, ph: 1.4 }, { m: seal, y: 6, ph: 0.3 });
+    blocked.push({ x: hallCenter.x, z: hallCenter.z, r: 24 });
+  }
 
   // ---------- natureza instanciada (muitas cópias baratas) ----------
   const dummy = new THREE.Object3D();

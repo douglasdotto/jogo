@@ -63,6 +63,7 @@ const MISSION_ROLE_NEEDS = {
   endless: ['Defesa', 'Cura', 'Área', 'Controle'],
   elite: ['Defesa', 'Cura', 'Área', 'Dano a chefe'],
   twin: ['Defesa', 'Cura', 'Dano a chefe'],
+  bosses: ['Defesa', 'Cura', 'Dano a chefe', 'Controle'],
 };
 
 export function missionRoleNeeds(goal) {
