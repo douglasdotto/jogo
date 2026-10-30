@@ -1,4 +1,4 @@
-﻿// node cavaleiros/tests/rodada2.cjs â€” lÃ³gica real, sem rede e sem dependÃªncias.
+// node cavaleiros/tests/rodada2.cjs â€” lÃ³gica real, sem rede e sem dependÃªncias.
 // Cena e DOM sÃ£o duplos; peÃ§as e animaÃ§Ãµes sÃ£o conferidas nos GLB reais.
 const fs = require('node:fs');
 const path = require('node:path');
