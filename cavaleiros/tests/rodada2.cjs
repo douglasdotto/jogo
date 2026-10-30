@@ -1183,14 +1183,16 @@ test('Coração do Castelo mantém foco coletivo nos três chefes, troca ao cair
   threat.pendingHit=null;team=t.makeTargetContext();
   assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),executioner,'depois do perigo, a equipe retoma o chefe escolhido');
   darkKnight.pos.set(0,0,4);darkKnight.busy=0;darkKnight.stunT=0;darkKnight.cd.charge=0;darkKnight.pendingHit=null;
+  for(const hero of party){hero.targetFocus=threat;hero.targetFocusT=1;}
   darkKnight.update(.016);
   assert.ok(darkKnight.telegraph?.alive,'a investida marcada do Cavaleiro do Eclipse fica registrada como telegráfico ativo');
   team=t.makeTargetContext();
-  assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,lich],.016,team),darkKnight,
-    'o grupo troca o foco coletivo para interromper a investida do Cavaleiro do Eclipse');
+  for(const hero of party)assert.equal(t.chooseHeroTarget(hero,[darkKnight,executioner,lich,threat],.016,team),darkKnight,
+    'o telegráfico supera o targetFocus antigo e redireciona todos os heróis que podem interromper');
   t.clearMonsterFx();assert.equal(darkKnight.telegraph,null,'o telegráfico deixa de ser urgente ao ser cancelado');
   team=t.makeTargetContext();
-  assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,lich],.016,team),executioner,'sem a investida, a equipe retoma o alvo coletivo');
+  for(const hero of party)assert.equal(t.chooseHeroTarget(hero,[darkKnight,executioner,lich,threat],.016,team),executioner,
+    'ao cancelar o telegráfico, todos retomam o foco coletivo em vez do alvo antigo');
   clear();
 });
 test('Coração limita interceptores na formação real e troca de foco quando um chefe se afasta',()=>{

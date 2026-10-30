@@ -425,8 +425,19 @@ export const CHALLENGE_COSMETICS = [
   { id: 'pesadelo', chapter: 'Desafio 3★ · Pesadelo', name: 'Espiral do Pesadelo', icon: '☾', auraStyle: 'nightmare', color: 0xb882ff, difficultyId: 'pesadelo', difficultyName: 'Pesadelo', track: 'challenge' },
 ];
 const CHAPTER_COSMETIC_RULE_VERSION = 2;
+const CHAPTER_STICKY_RULE_VERSION = 1;
 const CHALLENGE_MISSION_RULE_VERSION = 1;
 const LEGACY_CHALLENGE_MISSIONS = ['vila', 'ponte', 'santuario', 'chamas', 'fazendas', 'lago', 'duelo', 'caca', 'resgate', 'ruinas', 'torre', 'lago-sombrio', 'cemiterio', 'horda', 'castelo', 'cripta', 'trono'];
+// Snapshot dos IDs exigidos quando o desbloqueio de capítulo ainda não era sticky.
+// Permite reconhecer um save que só volta após novas arenas serem adicionadas.
+const CHAPTER_STICKY_MIGRATION_MISSIONS = {
+  vila: ['vila', 'ponte', 'santuario', 'chamas'],
+  ossos: ['fazendas', 'lago', 'duelo'],
+  veu: ['caca', 'resgate', 'ruinas'],
+  marcha: ['torre', 'lago-sombrio', 'cemiterio', 'horda', 'castelo'],
+  trono: ['cripta', 'trono'],
+  coracao: ['coracao-do-castelo'],
+};
 export function campaignCosmetics() {
   const starsByMission = new Map(MISSIONS.map((mission) => [mission.id, starsOf(mission.id)]));
   const boundedStarsOf = (mission) => Math.max(0, Math.min(3, Number(starsByMission.get(mission.id)) || 0));
@@ -442,6 +453,16 @@ export function campaignCosmetics() {
     }).map((cosmetic) => cosmetic.id);
     legacyUnlocked = [...new Set([...legacyUnlocked, ...previouslyUnlocked])];
     writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...storedVisuals, rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
+  }
+  if (!(Number(storedVisuals.chapterStickyRulesVersion) >= CHAPTER_STICKY_RULE_VERSION)) {
+    const previouslyCompleted = CHAPTER_COSMETICS.filter((cosmetic) => {
+      const missionIds = CHAPTER_STICKY_MIGRATION_MISSIONS[cosmetic.id] || [];
+      return missionIds.length > 0 && missionIds.every((id) => Number(starsByMission.get(id)) > 0);
+    }).map((cosmetic) => cosmetic.id);
+    legacyUnlocked = [...new Set([...legacyUnlocked, ...previouslyCompleted])];
+    writeCampaignObject(CAMPAIGN_COSMETIC_KEY, {
+      ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), chapterStickyRulesVersion: CHAPTER_STICKY_RULE_VERSION, legacyUnlocked,
+    });
   }
   const savedMedals = readMissionMedals();
   if (!(Number(storedVisuals.challengeRulesVersion) >= CHALLENGE_MISSION_RULE_VERSION)) {

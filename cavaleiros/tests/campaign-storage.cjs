@@ -115,6 +115,25 @@ assert.equal(oldCampaign.equippedCampaignCosmetic().id, 'vila', 'visual já equi
 assert.equal(oldCampaign.equipCampaignCosmetic(null), true);
 assert.equal(oldCampaign.equipCampaignCosmetic('vila'), true, 're-equipar preserva o entitlement migrado');
 
+const chapterIIds = cosmetics.MISSIONS.filter((mission) => mission.chapter === 'Capítulo I · Sinais na estrada').map(({ id }) => id);
+const completedChapterData = new Map([
+  ['cavaleiros-campanha', JSON.stringify(Object.fromEntries(chapterIIds.map((id) => [id, 1])))],
+  ['cavaleiros-campanha-visual', JSON.stringify({ rulesVersion: 2, equipped: 'vila' })],
+]);
+const completedChapterSave = loadCampaign({
+  getItem(key) { return completedChapterData.get(key) ?? null; },
+  setItem(key, value) { completedChapterData.set(key, String(value)); },
+});
+completedChapterSave.MISSIONS.push({ id: 'arena-extra-vila', chapter: 'Capítulo I · Sinais na estrada', name: 'Arena extra da Vila' });
+const expandedChapterReward = completedChapterSave.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vila');
+assert.equal(expandedChapterReward.requiredArenas, chapterIIds.length + 1);
+assert.equal(expandedChapterReward.completedArenas, chapterIIds.length);
+assert.equal(expandedChapterReward.unlocked, true, 'a migração reconhece a conclusão da lista antiga apesar da arena nova');
+assert.equal(expandedChapterReward.legacyEntitlement, true);
+assert.deepEqual(Array.from(expandedChapterReward.pendingMissions, (mission) => mission.id), ['arena-extra-vila']);
+assert.equal(completedChapterSave.equippedCampaignCosmetic().id, 'vila', 'o cosmético previamente equipado continua válido após a migração');
+assert.equal(completedChapterSave.equipCampaignCosmetic('vila'), true, 'o cosmético migrado também pode ser equipado novamente');
+
 const legacyChallengeMedals = Object.fromEntries(cosmetics.MISSIONS.slice(0, -1).map((mission) => [mission.id, { best: 'dificil', challenges: { dificil: true } }]));
 const legacyChallengeData = new Map([
   ['cavaleiros-medalhas-missao', JSON.stringify(legacyChallengeMedals)],
