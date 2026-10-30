@@ -80,6 +80,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
   FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
+context.queryObstacleCandidates=()=>context.world.obstacles;
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
 vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('export ',''),context);
 vm.runInContext(campaign.replaceAll('export ',''),context);
@@ -102,7 +103,7 @@ vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
@@ -136,7 +137,7 @@ for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skele
 const results=[];
 const failures=[];
 function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.stack||e.message)}}
-function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,test:false,twinFocus:null});}
+function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,rescueRunner:null,test:false,twinFocus:null});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.barHeight=0;hero.pos.set(0,0,-4);t.updateBars();
   const transform=hero.bar.style.transform,width=hero.bar.firstChild.style.width;
@@ -1135,6 +1136,39 @@ function begin(id,picks){
   for(const p of picks){t.confirmPick(idx(p));next();}
   context.setTimeout=noop;
 }
+test('resgate mantém um resgatista enquanto os demais defendem e reatribui após uma queda',()=>{
+  context.location={search:''};begin('resgate',['paladin','pyro','berserker']);
+  const captive=t.game.villager;assert.ok(captive);t.startPhase();
+  const party=t.heroes();captive.pos.set(0,0,0);
+  party[0].pos.set(0,0,10);party[1].pos.set(4,0,10);party[2].pos.set(-4,0,10);
+  for(const hero of party){hero.post.copy(hero.pos);hero.vel.set(0,0,0);hero.busy=0;hero.dead=false;hero.autoSkills.fill(false);}
+  for(const guard of t.skeletonsAlive()){guard.spawning=false;guard.pos.set(0,0,1);}
+  const runner=t.rescueRunnerFor(captive,party);assert.strictEqual(runner,party[0],'o mais próximo recebe a tarefa');
+  const saved=party[1].pos.clone();party[1].pos.set(0,0,1);
+  assert.strictEqual(t.rescueRunnerFor(captive,party),runner,'a aproximação de outro herói não troca a função a cada quadro');
+  party[1].pos.copy(saved);
+
+  const farGuard=t.skeletonsAlive()[0];
+  runner.update(.1);
+  assert.strictEqual(runner.engagedWith,farGuard,'o resgatista intercepta guardas no cativo além do leash normal');
+  assert.ok(runner.vel.z<0,'o resgatista avança até os guardas em vez de voltar ao posto');
+
+  for(const guard of t.skeletonsAlive())guard.remove();
+  const remote=new t.Skeleton('Minion',t.game.phase);remote.spawning=false;remote.pos.set(0,0,15);
+  runner.update(.1);assert.ok(runner.vel.z<0,'o resgatista avança mesmo com um inimigo distante ainda vivo');
+  for(const hero of party.slice(1))hero.update(.1);
+  assert.ok(party[1].vel.z>=-0.001&&party[2].vel.z>=-0.001,'os outros heróis não abandonam a formação para correr ao prisioneiro');
+
+  const local=new t.Skeleton('Minion',t.game.phase);local.spawning=false;local.pos.set(0,0,6.5);
+  runner.update(.1);assert.strictEqual(runner.engagedWith,local,'uma ameaça dentro da área pausa o avanço e é combatida');
+  local.remove();runner.update(.1);assert.ok(runner.vel.z<0,'o resgatista retoma o avanço quando a área fica livre');
+
+  runner.dead=true;
+  assert.strictEqual(t.rescueRunnerFor(captive,party),party[1],'um aliado vivo assume a tarefa se o resgatista cair');
+  party[1].update(.1);assert.ok(party[1].vel.z<0,'o substituto avança até o prisioneiro');
+  captive.rescued=true;party[1].update(.1);assert.equal(t.game.rescueRunner,null,'a função termina após a libertação');
+  clear();
+});
 test('17 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,17);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
@@ -1416,9 +1450,13 @@ test('resgate: prisioneiro longe e guardado, fora do alvo dos esqueletos e liber
   assert.ok(!t.allies().includes(v));assert.ok(!t.makeTargetContext().alliedUnits.includes(v));
   t.startPhase();
   assert.equal(t.skeletonsAlive().filter(s=>s.pos.distanceTo(v.pos)<3).length,2,'guardas ao lado do prisioneiro');
+  const approach=t.heroes()[0],spawnPosition=approach.pos.clone();approach.pos.copy(v.pos);
+  t.updateGame(1);assert.equal(t.game.rescueT,0,'a libertação não progride enquanto os guardas estão perto');
+  assert.equal(v.nameTag.textContent,'Limpe a área','o prisioneiro avisa que a zona ainda está perigosa');
+  approach.pos.copy(spawnPosition);
   for(const u of t.skeletonsAlive())u.remove();t.game.toSpawn=0;
   t.updateGame(.1);assert.equal(t.game.state,'fight','a fase espera o resgate');assert.equal(elements.get('left').textContent,'Liberte o prisioneiro');
-  const h=t.heroes()[0],before=h.pos.distanceTo(v.pos);h.busy=0;h.update(.2);h.update(.2);assert.ok(h.pos.distanceTo(v.pos)<before,'sem inimigos, o herói vai até o prisioneiro');
+  const h=t.rescueRunnerFor(v,t.heroes()),before=h.pos.distanceTo(v.pos);h.busy=0;h.update(.2);h.update(.2);assert.ok(h.pos.distanceTo(v.pos)<before,'sem inimigos, o resgatista vai até o prisioneiro');
   h.pos.set(v.pos.x+1,0,v.pos.z);t.updateGame(1);
   assert.equal(v.rescued,false);assert.ok(Math.abs(t.missionProgress({type:'rescue'})-.4)<.01);assert.match(v.nameTag.textContent,/Libertando 40%/);
   t.updateGame(1.6);assert.equal(v.rescued,true);assert.equal(t.game.rescueComplete,true);assert.equal(t.game.state,'cleared');

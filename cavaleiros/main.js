@@ -1853,10 +1853,10 @@ class Unit {
     if (d < 0.05) return;
     dir.divideScalar(d);
     const reach = Math.min(2.6, d);
-    const endX = this.pos.x + dir.x * reach, endZ = this.pos.z + dir.z * reach;
+    // O desvio acumulado pode girar a direção antes dos próximos obstáculos; cobre qualquer orientação até esse alcance.
     for (const o of queryObstacleCandidates(
-      Math.min(this.pos.x, endX), Math.max(this.pos.x, endX),
-      Math.min(this.pos.z, endZ), Math.max(this.pos.z, endZ), 0.5 * this.size,
+      this.pos.x - reach, this.pos.x + reach,
+      this.pos.z - reach, this.pos.z + reach, 0.5 * this.size,
     )) {
       const ox = o.x - this.pos.x, oz = o.z - this.pos.z;
       const ahead = ox * dir.x + oz * dir.z;                 // quão à frente está
@@ -2060,11 +2060,11 @@ const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dea
 const heroes = () => units.filter((u) => u.team === 'hero');
 const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued));   // o prisioneiro preso não é alvo
 let activeTargetContext = null;
-const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], defenseAnchor: null };
+const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], rescueThreats: [], defenseAnchor: null };
 
 function makeTargetContext(reuse = null) {
   const goal = game.mission?.goal;
-  let party, rangedHeroes, skeletons, attackableSkeletons, alliedUnits, livingAllies;
+  let party, rangedHeroes, skeletons, attackableSkeletons, alliedUnits, livingAllies, rescueThreats;
   if (reuse) {
     party = reuse.party;
     rangedHeroes = reuse.rangedHeroes;
@@ -2072,9 +2072,11 @@ function makeTargetContext(reuse = null) {
     attackableSkeletons = reuse.attackableSkeletons;
     alliedUnits = reuse.alliedUnits;
     livingAllies = reuse.livingAllies;
+    rescueThreats = reuse.rescueThreats;
     party.length = 0;
     rangedHeroes.length = 0;
     skeletons.length = attackableSkeletons.length = alliedUnits.length = livingAllies.length = 0;
+    rescueThreats.length = 0;
     for (const unit of units) {
       if (unit.team === 'hero') { party.push(unit); if (unit.ranged) rangedHeroes.push(unit); }
       if (unit.team === 'skeleton') {
@@ -2091,6 +2093,7 @@ function makeTargetContext(reuse = null) {
     attackableSkeletons = skeletons.filter((unit) => !unit.spawning);
     alliedUnits = allies();
     livingAllies = alliedUnits.filter((unit) => !unit.dead);
+    rescueThreats = [];
   }
   // o santuário entra como "aldeão": os heróis interceptam quem chega perto dele
   const villager = (goal?.type === 'escort' || goal?.type === 'rescue' && game.villager?.rescued) && !game.villager?.dead ? game.villager
@@ -2113,6 +2116,10 @@ function makeTargetContext(reuse = null) {
     ? party.find((hero) => !hero.dead) || null : null;
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
+  if (goal?.type === 'rescue' && game.villager && !game.villager.rescued) {
+    for (const enemy of skeletons) if (tacticalDistance(enemy.pos, game.villager.pos) <= RESCUE_CLEAR_RADIUS) rescueThreats.push(enemy);
+  }
+  context.rescueThreats = rescueThreats;
   context.alliedUnits = alliedUnits;
   context.livingAllies = livingAllies;
   return context;
@@ -2290,6 +2297,8 @@ const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goa
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
+  // No resgate, o corredor precisa alcançar guardas junto ao prisioneiro mesmo fora do leash do grupo.
+  if (goal?.type === 'rescue' && hero === game.rescueRunner && context.rescueThreats?.includes(target)) return true;
   if (fixedDefenseGoal(goal) && hero === defenseAnchor(context)) {
     // A âncora luta do próprio posto. Só abandona a linha se o alvo já prepara
     // um golpe no objetivo e nenhum outro herói vivo consegue interceptá-lo.
@@ -5109,8 +5118,13 @@ class Hero extends Unit {
     const kite = game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
     if (kite) { this.moveTo(kite, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const targeting = game.state === 'fight' ? targetContext() : null;
+    const captive = targeting ? captivePrisoner() : null;
+    const rescuer = targeting ? rescueRunnerFor(captive, targeting.party) : null;
+    const rescueThreatened = captive && targeting ? rescueAreaThreatened(captive, targeting.skeletons) : false;
+    const movingToRescue = !!captive && this === rescuer && !rescueThreatened;
+    const targetCandidates = rescueThreatened && this === rescuer ? targeting.rescueThreats : targeting?.skeletons;
     const target = targeting
-      ? chooseHeroTarget(this, targeting.skeletons, dt, targeting) : null;
+      ? chooseHeroTarget(this, targetCandidates, dt, targeting) : null;
     // no manual a habilidade fica carregada esperando o jogador pedir
     if (game.state === 'fight') {
       const requested = this.skillRequests.findIndex((time, slot) => time > 0 && this.skillTimers[slot] <= 0);
@@ -5130,10 +5144,9 @@ class Hero extends Unit {
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
     // margem para não pipocar: quem já está brigando só larga o alvo quando ele se afasta bem do posto
-    const engage = target && (canHeroReachTarget(this, target, targeting) || stillEngaged(this, target, targeting));
+    const engage = target && !movingToRescue && (canHeroReachTarget(this, target, targeting) || stillEngaged(this, target, targeting));
     this.engagedWith = engage ? target : null;
-    const captive = !engage && game.state === 'fight' ? captivePrisoner() : null;   // sem luta, vai libertar o prisioneiro
-    if (captive) {
+    if (movingToRescue) {
       if (this.pos.distanceTo(captive.pos) > RESCUE_RADIUS - 0.8) this.moveTo(captive.pos, dt);
       else this.face(captive.pos, dt);
     } else if (engage) {
@@ -5548,6 +5561,7 @@ function separatePair(a, b, ia, ib) {
 }
 
 const SEPARATION_CELL_SIZE = 3;
+const OBSTACLE_GRID_QUERY_THRESHOLD = 512;
 const separationAlive = [], separationCandidates = [], separationCellX = [], separationCellZ = [];
 const separationGrid = new Map(), separationGridPool = [];
 const obstacleGrid = new Map(), obstacleGridPool = [];
@@ -5589,6 +5603,7 @@ function indexObstacles(margin) {
 }
 
 function queryObstacleCandidates(minX, maxX, minZ, maxZ, margin = 0) {
+  if (world.obstacles.length <= OBSTACLE_GRID_QUERY_THRESHOLD) return world.obstacles;
   indexObstacles(Math.max(0, margin));
   obstacleQueryIndexes.length = 0;
   obstacleQuerySeen.clear();
@@ -5721,7 +5736,7 @@ function placeParty(first) {
   const m = game.mission;
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
-    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
+    guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, rescueRunner: null, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
     shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null });
   game.rerolls = game.test ? 0 : progress.rerolls();
@@ -5799,8 +5814,21 @@ function startPhase() {
 }
 
 // ---------- campanha: aldeão, totens e objetivos ----------
-const RESCUE_RADIUS = 2.4, RESCUE_TIME = 2.5;   // um herói fica perto do prisioneiro por RESCUE_TIME s para soltá-lo
+const RESCUE_RADIUS = 2.4, RESCUE_TIME = 2.5, RESCUE_CLEAR_RADIUS = 8;   // um herói liberta após limpar a área próxima
 const captivePrisoner = () => game.mission?.goal.type === 'rescue' && game.villager && !game.villager.dead && !game.villager.rescued ? game.villager : null;
+const rescueAreaThreatened = (captive, enemies) => !!captive
+  && enemies.some((enemy) => !enemy.dead && tacticalDistance(enemy.pos, captive.pos) <= RESCUE_CLEAR_RADIUS);
+function rescueRunnerFor(captive, party = heroes()) {
+  if (!captive) { game.rescueRunner = null; return null; }
+  if (game.rescueRunner && !game.rescueRunner.dead && party.includes(game.rescueRunner)) return game.rescueRunner;
+  let runner = null, nearest = Infinity;
+  for (const hero of party) if (!hero.dead) {
+    const distance = tacticalDistance(hero.pos, captive.pos);
+    if (distance < nearest) { nearest = distance; runner = hero; }
+  }
+  game.rescueRunner = runner;
+  return runner;
+}
 // aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
 class Villager extends Unit {
   constructor(captive = false) {
@@ -6350,10 +6378,12 @@ function campaignTick(dt, skeletons, party = heroes()) {
     : 'A pessoa presa caiu antes do resgate.');
   const captive = captivePrisoner();
   if (captive && game.state === 'fight') {   // libertar leva tempo; longe dele o progresso cai devagar
+    const rescueThreatened = rescueAreaThreatened(captive, skeletons);
     let near = false;
-    for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS) { near = true; break; }
+    if (!rescueThreatened) for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS) { near = true; break; }
     game.rescueT = near ? game.rescueT + dt : Math.max(0, game.rescueT - dt * 0.5);
-    captive.nameTag.textContent = game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';
+    captive.nameTag.textContent = rescueThreatened ? 'Limpe a área'
+      : game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';
   }
   if (captive && game.rescueT >= RESCUE_TIME) {
     game.villager.rescued = true;
