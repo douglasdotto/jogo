@@ -70,8 +70,7 @@ function objectiveTip(mission, heroes = []) {
   }
   if (goal.type === 'boss' && !mission.bossDown) {
     if (!mission.bossSeen) {
-      const phase = Math.max(1, number(mission.phase));
-      const bossPhase = Math.max(6, Math.ceil(phase / 6) * 6);
+      const bossPhase = number(mission.bossPhase) || Math.max(1, number(mission.phase));   // main.js manda a fase real do chefe
       return `O grupo caiu antes da estreia do chefe, na fase ${bossPhase}.`;
     }
     return 'O chefe ainda está ativo: foque nele e saia das áreas marcadas.';
@@ -135,9 +134,10 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
           : `${objective}Três estrelas! ${unlock}`;
       }
       const remaining = number(mission.remainingStars);
+      const maxStars = number(mission.maxStars);
       return remaining > 0
         ? `${objective}Rejogue as missões pelas ${remaining} estrelas restantes.`
-        : `${objective}Campanha perfeita! ${number(mission.maxStars) || 24} estrelas.`;
+        : `${objective}Campanha perfeita!${maxStars ? ` ${maxStars} estrelas.` : ''}`;
     }
     return 'Experimente outra composição de grupo.';
   }

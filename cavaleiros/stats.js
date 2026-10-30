@@ -111,16 +111,16 @@ function renderHeroPanel(full = false) {
 // ---------- resumo do fim da partida ----------
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-// fim da partida: três números à vista (dano, abates, quedas), dica de 1 linha na derrota e o resto em "Detalhes"
+// fim da partida: três números à vista (dano, abates, quedas), dica de 1 linha (derrota ou progresso da vitória) e o resto em "Detalhes"
 export function summaryHTML(heroes, highlights = [], totals = {}) {
   if (!heroes.length && !highlights.length) return '';
   const total = (k) => heroes.reduce((sum, h) => sum + h.stats[k], 0);
   const keys = [['⚔', 'Dano', fmt('dano', total('dano'))], ['☠', 'Abates', fmt('abates', totals.kills ?? total('abates'))], ['✝', 'Quedas', totals.falls ?? 0]];
   const numbers = `<div class="end-keys">${keys.map(([icon, label, v]) =>
     `<span class="end-key" tabindex="0" data-tip="${label}" aria-label="${label}: ${v}"><i aria-hidden="true">${icon}</i><b>${v}</b></span>`).join('')}</div>`;
-  const tip = !totals.won && highlights.find((item) => item.id === 'next-try');
-  const tipLine = tip ? `<p class="end-tip">${escapeHTML(tip.text)}</p>` : '';
-  highlights = highlights.filter((item) => item.id !== 'next-try');   // a vitória já tem o botão "Próxima"; a derrota mostra a dica acima
+  const tip = highlights.find((item) => item.id === 'next-try');
+  const tipLine = tip ? `<p class="end-tip${totals.won ? ' won' : ''}">${escapeHTML(tip.text)}</p>` : '';
+  highlights = highlights.filter((item) => item.id !== 'next-try');   // a dica já aparece acima, fora dos detalhes
   const best = (k) => heroes.length ? Math.max(...heroes.map((h) => h.stats[k])) : 0;
   const cols = [['dano', 'Dano'], ['abates', 'Abates'], ['recebido', 'Recebido'], ['cura', 'Cura']];
   const mvp = heroes.length ? heroes.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a)) : null;

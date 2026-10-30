@@ -25,7 +25,7 @@ import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
 import { startKingdom, linkKingdom, loadKingdomRecords, kingdomRecordText } from './kingdom.js';
-import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, absorbWard } from './monsters.js';
+import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -817,10 +817,7 @@ function showCampaign(autoPlay = null) {
   const mapSeeds = campaignMapSession.get();
   const play = (m) => {
     game.mission = m;
-    // Cada missão da campanha recebe seu próprio cenário; a jornada completa mantém o mapa-base.
-    world.dispose?.();
-    const castleInterior = m.id === 'coracao-do-castelo';
-    world = createWorld(scene, ROAD, castleInterior ? 13 : PHASES, mapSeeds.get(m.id), { castleInterior });
+    useMissionWorld(m, mapSeeds.get(m.id));
     root.classList.add('hidden');
     showDifficulty();
   };
@@ -833,6 +830,34 @@ function showCampaign(autoPlay = null) {
   root.querySelector('.camp-head')?.prepend(back);
   root.classList.remove('hidden');
   if (autoPlay) play(autoPlay);
+}
+
+// Cada missão da campanha recebe seu próprio cenário; a jornada completa mantém o mapa-base.
+function useMissionWorld(m, seed) {
+  world.dispose?.();
+  const castleInterior = m.id === 'coracao-do-castelo';
+  world = createWorld(scene, ROAD, castleInterior ? 13 : PHASES, seed, { castleInterior });
+}
+
+// "Repetir" da campanha: mesma missão, cenário, dificuldade e equipe, sem passar pelas escolhas
+function replayMission({ replay: m, team, seed }) {
+  game.mission = m;
+  useMissionWorld(m, seed);
+  prepareRun();
+  game.picksLeft = 0;
+  for (const cfg of team.slice(0, m.heroes)) {
+    const h = new Hero(cfg);
+    arrangeParty();
+    h.gainXp(XP_LEVELS[m.level - 1]);
+    autoUpgrade();   // a missão já começa no nível certo, como na escolha normal
+  }
+  startMission();
+}
+
+// "Repetir" da jornada: mesma dificuldade, direto para a escolha do primeiro herói
+function replayJourney() {
+  prepareRun();
+  showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos');
 }
 
 // dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão; no Reino, o recorde do Reino
@@ -885,6 +910,13 @@ function confirmDifficulty(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   if (pick.reino) { pick.timer = setTimeout(() => startGame('reino'), 450); return; }   // o Reino usa a dificuldade escolhida aqui
+  const m = prepareRun();
+  pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
+    : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
+}
+
+// dificuldade já escolhida: prepara o cenário e o grupo vazio da missão (ou da jornada)
+function prepareRun() {
   const m = game.mission;
   if (m) campaignMapSession.reset();   // a próxima visita à campanha começa uma nova combinação de mapas
   if (!m && world.seed != null && world.seed !== 11) {
@@ -896,8 +928,7 @@ function confirmDifficulty(i) {
   placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
   game.campaignSquadSuggestion = m && !game.test ? loadCampaignSquad() : [];
   game.picksLeft = m ? m.heroes : 0;
-  pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
-    : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
+  return m;
 }
 
 const pickTitle = () => game.mission.heroes > 1 ? `Escolha o herói ${heroes().length + 1} de ${game.mission.heroes}` : 'Escolha seu herói';
@@ -6794,7 +6825,8 @@ addEventListener('pointermove', (e) => {
 // state: 'fight' (onda) -> 'cleared' (comemoração + escolha de herói) -> 'advance' (sobe a estrada) -> 'fight'
 const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: 0, over: false, paused: false };
 
-// view: 'menu' (tela inicial) ou 'map' (mapa da campanha)
+// view: 'menu' (tela inicial), 'map' (mapa da campanha), uma missão (vai à dificuldade),
+// { replay, team, seed } (repete a missão) ou 'journey' (repete a jornada)
 function startGame(view = 'menu') {
   setDirectControlMode(false, null, false);
   game.realm?.stop();   // saindo do modo Reino: some a arena e volta a estrada
@@ -6836,7 +6868,9 @@ function startGame(view = 'menu') {
   $('overlay').classList.remove('results', 'lost', 'won', 'test-run');
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
-  else if (view?.goal) showCampaign(view);   // "Próxima missão" / "Tentar de novo" vão direto à dificuldade
+  else if (view?.replay) replayMission(view);   // "Repetir": mesma missão, dificuldade e equipe
+  else if (view === 'journey') replayJourney();   // "Repetir" da jornada: mesma dificuldade
+  else if (view?.goal) showCampaign(view);   // "Próxima missão" vai direto à dificuldade
   else if (view === 'reino') startKingdom();
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
   syncDirectControlUI();
@@ -7591,7 +7625,7 @@ function campaignTick(dt, skeletons, party = heroes()) {
     case 'escort': text = v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão'; break;
     case 'rescue': text = v?.rescued ? `Pessoa resgatada · ${game.state === 'cleared' && game.phase >= game.mission.to ? 'missão concluída' : game.phase < game.mission.to ? `avance até a fase ${game.mission.to}` : 'limpe a onda'}`
       : game.rescueT > 0 ? 'Libertando o prisioneiro' : 'Encontre e resgate a pessoa'; break;
-    case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${Math.ceil(game.phase / 6) * 6}`; break;
+    case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${nextBossPhase(game.phase) ?? game.mission.to}`; break;
     case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : game.toSpawn > 0 || skeletons.length ? 'Sobreviveu · limpe a onda' : 'Sobreviveu!'; break;
     case 'totems': text = `Totens ${game.totemsDown}/${goal.count}${game.totemsDown >= goal.count ? ` · ${game.state === 'cleared' && game.phase >= game.mission.to ? 'missão concluída' : game.phase < game.mission.to ? `avance até a fase ${game.mission.to}` : 'limpe a onda'}` : ''}`; break;
     case 'tower': text = game.towersDown >= goal.count
@@ -7660,14 +7694,15 @@ function missionRewardHTML(stars, gained, medal) {
   return chips.length ? `<div class="mission-reward end-chips" aria-label="Recompensa da missão">${chips.join('')}</div>` : '';
 }
 
-// próximo passo no fim da missão: seguir para a próxima arena ou tentar de novo
+// próximo passo no fim da missão: seguir para a próxima arena e/ou repetir com a mesma equipe
+const REPLAY_TIP = 'Mesma missão, dificuldade e equipe';
 function missionNextHTML(won, next, unlockedNow) {
   if (won && next) {
     const tip = `${unlockedNow ? 'Nova missão liberada' : 'Próxima missão'}: ${next.name}`;
-    return `<button class="mission-next-btn" type="button" aria-label="Próxima missão: ${escAttr(next.name)}" data-tip="${escAttr(tip)}">Próxima ▸</button>`;
+    return `<button class="mission-replay-btn" type="button" data-act="replay" aria-label="Repetir" data-tip="${REPLAY_TIP}">↻</button>`
+      + `<button class="mission-next-btn" type="button" data-act="next" aria-label="Próxima missão: ${escAttr(next.name)}" data-tip="${escAttr(tip)}">Próxima ▸</button>`;
   }
-  if (won) return '';
-  return '<button class="mission-next-btn" type="button" data-tip="Ajuste o grupo e tente de novo">↻ Tentar de novo</button>';
+  return `<button class="mission-next-btn" type="button" data-act="replay" data-tip="${REPLAY_TIP}">↻ Repetir</button>`;
 }
 
 // fim da missão: estrelas animadas, gravação e aviso de variante nova
@@ -7690,8 +7725,8 @@ function missionEnd(won) {
   const best = !game.test && saveStars(game.mission.id, stars);
   // a medalha compara com os recordes anteriores, então grava antes do tempo
   const medal = game.test ? null : saveMissionMedal(game.mission.id, { won, stars, difficultyId: difficulty.id });
-  // na horda, tempo maior é melhor: quem mede são as estrelas, não o recorde de tempo
-  const bestTime = !game.test && game.mission.goal.type !== 'endless' && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
+  // só grava recorde de tempo onde terminar rápido importa (saveMissionRecord filtra o objetivo)
+  const bestTime = !game.test && saveMissionRecord(game.mission.id, { won, seconds: game.missionT, difficultyId: difficulty.id });
   const fresh = allOpen() ? [] : UNLOCKS.filter((u) => u.stars > before && u.stars <= totalStars()).map((u) => VARIANTS.find((v) => v.id === u.id));
   const cosmeticUnlocks = cosmeticsBefore
     ? campaignCosmetics().filter((cosmetic) => cosmetic.unlocked && !cosmeticsBefore.has(cosmetic.id))
@@ -7916,10 +7951,16 @@ function endGame(text, won = false) {
   if (game.mission) {   // próximo passo: a missão recém-liberada (ou a seguinte) ou repetir a atual
     const following = missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1) ? MISSIONS[missionIndex + 1] : null;
     const next = !won ? null : MISSIONS.find((mission) => mission.name === nextMission) || following;
-    const target = won ? next : game.mission;
+    const replay = { replay: game.mission, team: (game.roster || []).map((h) => h.cfg), seed: world.seed };
     $('overlayNext').innerHTML = missionNextHTML(won, next, next === following && following && !followingWasOpen);
-    const nextBtn = $('overlayNext').querySelector('.mission-next-btn');
-    if (nextBtn && target) nextBtn.onclick = () => startGame(target);
+    const nextBtn = $('overlayNext').querySelector('[data-act="next"]');
+    if (nextBtn) nextBtn.onclick = () => startGame(next);
+    const replayBtn = $('overlayNext').querySelector('[data-act="replay"]');
+    if (replayBtn) replayBtn.onclick = () => startGame(replay);
+  } else {   // jornada: repetir na mesma dificuldade; o botão principal volta ao menu
+    $('overlayNext').innerHTML = `<button class="mission-next-btn" type="button" data-act="replay" data-tip="Mesma dificuldade">↻ Repetir</button>`;
+    const replayBtn = $('overlayNext').querySelector('[data-act="replay"]');
+    if (replayBtn) replayBtn.onclick = () => startGame('journey');
   }
   const party = game.roster;
   const report = buildBattleReport({
@@ -7934,6 +7975,7 @@ function endGame(text, won = false) {
       bossDown: game.bossDown,
       bossSeen: game.bossSeen,
       phase: game.phase,
+      bossPhase: nextBossPhase(game.phase) ?? game.mission.to,
       villagerDown: !!game.villager?.dead,
       totemsDown: game.totemsDown,
       surviveRemaining: game.surviveT,
@@ -7961,8 +8003,8 @@ function endGame(text, won = false) {
   }
   const storageWarning = !game.test ? progressStorageWarning() : '';
   if (storageWarning) $('overlayStars').innerHTML += `<div class="storage-warning" role="status">${storageWarning}</div>`;
-  $('overlayBtn').textContent = game.mission ? 'Mapa' : 'Jogar de novo';
-  $('overlayBtn').setAttribute('aria-label', game.mission ? 'Voltar ao mapa' : 'Jogar de novo');
+  $('overlayBtn').textContent = game.mission ? 'Mapa' : 'Menu';
+  $('overlayBtn').setAttribute('aria-label', game.mission ? 'Voltar ao mapa' : 'Voltar ao menu');
   $('overlayBtn').hidden = false;
   const resultOverlay = $('overlay');
   resultOverlay.classList.add('results');
