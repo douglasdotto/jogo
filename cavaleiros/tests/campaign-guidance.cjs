@@ -65,6 +65,8 @@ function render(stars, visuals = null) {
       ? 'Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'
       : mission.id === 'santuario'
         ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).'
+        : mission.id === 'lago-sombrio'
+          ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
       : '');
   return {
     map, info, focusState, data,
@@ -116,6 +118,10 @@ view.map.children[2].onclick();
 assert.ok(view.map.children[2].classList.contains('sel'), 'O Santuário continua selecionável após concluir a campanha');
 assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).'),
   'o resumo do Santuário destaca cura e proteção para defender o cristal');
+view.map.children[11].onclick();
+assert.ok(view.map.children[11].classList.contains('sel'), 'Lago Sombrio continua selecionável após concluir a campanha');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),
+  'o resumo de Lago Sombrio orienta a composição que preserva a vida e busca três estrelas');
 
 view = render({ vila: 2, fazendas: 3 });
 assert.ok(view.map.children[1].classList.contains('sel'), 'a missão liberada seguinte é selecionada');

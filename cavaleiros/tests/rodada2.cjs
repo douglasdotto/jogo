@@ -470,6 +470,13 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   clear();t.setDifficulty(1);t.setMission(sanctuary);t.game.picksLeft=2;t.showPick('','');
   assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Guardião + Clériga + Piromante'));
   assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
+  const shadowLake=t.MISSIONS.find(m=>m.id==='lago-sombrio');
+  const shadowLakeRecommendation='Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).';
+  assert.equal(t.difficultyTeamRecommendation({id:'normal'},shadowLake),shadowLakeRecommendation,
+    'a formação equilibrada ajuda a preservar as três estrelas de Lago Sombrio');
+  clear();t.setDifficulty(1);t.setMission(shadowLake);t.game.picksLeft=4;t.showPick('','');
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Guardião + Piromante + Clériga'));
+  assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
 });
 test('Anjo tem asas animadas e paira acima do chão',()=>{
   clear();const angel=new t.Hero(cfg('angel'));
