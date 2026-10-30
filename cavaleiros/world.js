@@ -19,16 +19,20 @@ const ROUTE = [[0, 14], [2, 0], [8, -18], [4, -38], [-7, -56], [-10, -76], [-3, 
 export const MAP_STYLES = [
   { name: 'Pradaria', grass: [0x76cc32, 0x5db426], sand: [0xf0b860, 0xe0a24c], cliffs: [0xdba468, 0xc98d55], bed: 0xc9a46a, dry: 0xa39a5c, gloom: 0x5e536e,
     river: 0x5fb3e0, deep: 0x2a7fa6, shallow: 0x8fdde6, murky: 0x3e5a5a, pondLeaf: 0x6fae46, reeds: 0x6f8f3e,
-    canopy: [0x4fb82a, 0x3fa424, 0x62c834, 0x37941e, 0x58bf2c], pine: [0x6aa83f, 0x5e9e3c, 0x77b347], tuft: [0x82d63e, 0x6cc432, 0x94e04a, 0x5cb22a], modelHue: 38, leaves: null },
+    canopy: [0x4fb82a, 0x3fa424, 0x62c834, 0x37941e, 0x58bf2c], pine: [0x6aa83f, 0x5e9e3c, 0x77b347], tuft: [0x82d63e, 0x6cc432, 0x94e04a, 0x5cb22a], modelHue: 38, leaves: null,
+    sky: 0x86cdf6, sun: 0xffe2b0, accent: 0xfff09a, meadow: 0x8fd63e },
   { name: 'Outono', grass: [0xa5bd55, 0x829643], sand: [0xe6b96b, 0xd39b50], cliffs: [0xc99a69, 0xa97951], bed: 0xb99a6b, dry: 0xa59859, gloom: 0x6f5668,
     river: 0x68afd0, deep: 0x2e718e, shallow: 0x98d4d6, murky: 0x566263, pondLeaf: 0x8b9c46, reeds: 0x8a8845,
-    canopy: [0x9e982f, 0xbb7c2c, 0xcc5b35, 0xc58a39, 0x7c9140], pine: [0x667f35, 0x738c3a, 0x849343], tuft: [0xa8b947, 0x8fa73e, 0xc6b44a, 0x819d3c], modelHue: 24, leaves: [0xf0b545, 0xa8402a] },
+    canopy: [0x9e982f, 0xbb7c2c, 0xcc5b35, 0xc58a39, 0x7c9140], pine: [0x667f35, 0x738c3a, 0x849343], tuft: [0xa8b947, 0x8fa73e, 0xc6b44a, 0x819d3c], modelHue: 24, leaves: [0xf0b545, 0xa8402a],
+    sky: 0xe8cfa4, sun: 0xffcf96, accent: 0xff8a5a, meadow: 0xc2c25a, bushLeaves: [0xd3c25a, 0x5f7330] },
   { name: 'Pântano', grass: [0x6aa974, 0x4e806a], sand: [0xc8ae79, 0xa48d67], cliffs: [0xa79b83, 0x837d70], bed: 0x698f86, dry: 0x8e8d65, gloom: 0x4f5660,
     river: 0x4e9ca0, deep: 0x285f65, shallow: 0x74b9aa, murky: 0x384d4e, pondLeaf: 0x567d68, reeds: 0x71804d,
-    canopy: [0x3f7858, 0x4b8a5e, 0x68945b, 0x567d68, 0x71834f], pine: [0x3f6959, 0x517b62, 0x617e5d], tuft: [0x79a34c, 0x648a49, 0x93aa5a, 0x5e8551], modelHue: 76, leaves: [0x8fb36a, 0x2f5e4c] },
+    canopy: [0x3f7858, 0x4b8a5e, 0x68945b, 0x567d68, 0x71834f], pine: [0x3f6959, 0x517b62, 0x617e5d], tuft: [0x79a34c, 0x648a49, 0x93aa5a, 0x5e8551], modelHue: 76, leaves: [0x8fb36a, 0x2f5e4c],
+    sky: 0xa9ccbc, sun: 0xf4e6c0, accent: 0xd8e080, meadow: 0x86b56c },
   { name: 'Crepúsculo', grass: [0x738da8, 0x556f90], sand: [0xd1ad88, 0xb58d79], cliffs: [0x978a9e, 0x746d88], bed: 0x677e9c, dry: 0x888b83, gloom: 0x50415f,
     river: 0x609cc8, deep: 0x365f9a, shallow: 0x9ec4e8, murky: 0x494c68, pondLeaf: 0x5f7f8a, reeds: 0x758c91,
-    canopy: [0x4e708e, 0x5a789d, 0x7c78a5, 0x586f8a, 0x6c8ca2], pine: [0x435b7a, 0x4e6888, 0x5c7691], tuft: [0x82a6a9, 0x70958e, 0x93aaa2, 0x6c8789], modelHue: 205, leaves: [0x9cb4d6, 0x3e5584] },
+    canopy: [0x4e708e, 0x5a789d, 0x7c78a5, 0x586f8a, 0x6c8ca2], pine: [0x435b7a, 0x4e6888, 0x5c7691], tuft: [0x82a6a9, 0x70958e, 0x93aaa2, 0x6c8789], modelHue: 205, leaves: [0x9cb4d6, 0x3e5584],
+    sky: 0xb7a6d6, sun: 0xffc6c0, accent: 0xd0a8e8, meadow: 0x8aa6c0 },
 ];
 
 function mapStyleForSeed(seedValue = 11) {
@@ -509,12 +513,20 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     dry = new THREE.Color(biome.dry), necro = new THREE.Color(biome.gloom);
   const c = new THREE.Color(), grass = new THREE.Color(), sand = new THREE.Color(), cliff = new THREE.Color();
   const smooth = THREE.MathUtils.smoothstep;
+  // manchas grandes de grama mais clara/quente e mais escura (sombra de bosque), terra com trilhas mais
+  // gastas no meio, margem do rio úmida: o chão deixa de ser uma cor chapada
+  const meadow = new THREE.Color(biome.meadow ?? biome.grass[0]).offsetHSL(-0.02, 0.02, 0.06), shade = new THREE.Color(biome.grass[1]).multiplyScalar(0.78);
+  const worn = new THREE.Color(biome.sand[1]).multiplyScalar(0.88), damp = new THREE.Color(biome.grass[1]).lerp(new THREE.Color(biome.bed), 0.35).multiplyScalar(0.85);
   for (let i = 0; i < gp.count; i++) {
-    const x = gp.getX(i), y = gp.getY(i), z = gp.getZ(i);
-    grass.copy(grassA).lerp(grassB, rand());
-    sand.copy(sandA).lerp(sandB, rand());
+    const x = gp.getX(i), y = gp.getY(i), z = gp.getZ(i), d = vDist[i];
+    const n1 = patch(x * 0.55 + 40, z * 0.55), n2 = noise(x * 2.1, z * 2.1);
+    grass.copy(grassA).lerp(grassB, rand() * 0.45 + n2 * 0.4);
+    grass.lerp(meadow, smooth(n1, 0.58, 0.78) * 0.7).lerp(shade, smooth(n1, 0.38, 0.18) * 0.55 + smooth(d, ROAD + 14, ROAD + 34) * 0.25);
+    sand.copy(sandA).lerp(sandB, rand() * 0.5 + n2 * 0.35).lerp(worn, smooth(d, 2.2, 0.4) * 0.35 * (0.6 + n1));
     cliff.copy(cliffA).lerp(cliffB, rand());
-    c.copy(grass).lerp(sand, smooth(sandAt(x, z, vDist[i]), 0.36, 0.48));
+    const dRiver = riverDist(x, z);
+    if (dRiver < 7) grass.lerp(damp, smooth(dRiver, 7, 3.6) * 0.6);
+    c.copy(grass).lerp(sand, smooth(sandAt(x, z, d), 0.36, 0.48));
     c.lerp(cliff, Math.max(smooth(1 - gn.getY(i), 0.12, 0.3), smooth(y, 6.5, 8.5)));   // encostas e topos
     c.lerp(bed, smooth(-y, 0.05, 0.3));                                                  // leito do rio
     const g = gloomAt(z);   // grama secando e depois virando terra morta arroxeada
@@ -578,6 +590,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   const reedGeo = new THREE.CylinderGeometry(0.035, 0.05, 1, 4), headGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.3, 5);
   const padGeo = new THREE.CircleGeometry(0.42, 9, 0.3, Math.PI * 2 - 0.6), plankGeo = new THREE.BoxGeometry(1.6, 0.14, 0.42);
   const lakes = [];
+  const zoneTreeSpots = [];   // árvores pedidas pelos platôs (atrás da colina e do rochedo)
 
   const rockMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
 
@@ -632,14 +645,20 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     const mtx = (x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) => new THREE.Matrix4().compose(V(x, y, z),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(sx, sy, sz));
 
+    // tipo: 'hill' (colina de grama e terra, trilha de troncos), 'crag' (rochedo com degraus esculpidos)
+    // ou 'ruin' (forte baixo de pedra em ruínas, escada embutida entre muretas de alvenaria)
+    const kind = zone.kind || 'crag', hill = kind === 'hill', ruin = kind === 'ruin';
     // paleta: cinzas de pedra (os mesmos tons das pedras do mapa) e musgo escuro que seca nas trevas
-    const rockTones = [0x8f8b86, 0x9d988f, 0x827f7b, 0xa9a399, 0x8a8f96].map((h) => new THREE.Color(h));
+    const rockTones = (ruin ? [0xb5a993, 0xa89c86, 0x9d927e, 0xc2b7a0, 0xaea38c] : [0x8f8b86, 0x9d988f, 0x827f7b, 0xa9a399, 0x8a8f96]).map((h) => new THREE.Color(h));
     const dark = new THREE.Color(0x4a4456), dry = new THREE.Color(biome.dry), necro = new THREE.Color(biome.gloom);
     const mossA = new THREE.Color(biome.grass[1]).multiplyScalar(0.72), mossB = new THREE.Color(0x5d7a3c);
+    const turfA = new THREE.Color(biome.grass[0]), turfB = new THREE.Color(biome.grass[1]), soil = new THREE.Color(biome.cliffs[1]).multiplyScalar(0.85), path = new THREE.Color(biome.sand[1]);
     const out = new THREE.Color(), nrm = V(), e1 = V(), e2 = V();
     const wither = (c) => (gloom > 0 ? c.lerp(dry, Math.min(1, gloom * 1.6) * 0.6).lerp(necro, Math.max(0, gloom - 0.4) * 1.3) : c);
     const stone = (k = 1) => out.copy(lpick(rockTones)).multiplyScalar(lrange(0.95, 1.05) * k).lerp(dark, gloom * 0.5);
     const moss = (mix = lr()) => wither(out.copy(mossA).lerp(mossB, mix));
+    const turf = (k = 1) => wither(out.copy(turfA).lerp(turfB, lr() * 0.8).multiplyScalar(k * lrange(0.94, 1.04)));
+    const earth = (k = 1) => wither(out.copy(soil).lerp(path, lr() * 0.4).multiplyScalar(k * lrange(0.92, 1.05)));
     const s1 = lrange(0, 6.3), s2 = lrange(0, 6.3), s3 = lrange(0, 6.3);
     // face de rocha: pé mais escuro, faces de cima mais claras, faixas de estrato nas faces de pé
     // e, se pedir, musgo raro só nas faces viradas para cima
@@ -652,30 +671,39 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       if (up < 0.55 && band < 0.17) k *= 0.83;   // estrato
       return stone(k);
     };
+    // encosta da colina: grama onde a face deita, terra e um pouco de pedra onde fica em pé
+    const slopeColor = (a, b, d) => {
+      nrm.crossVectors(e1.subVectors(b, a), e2.subVectors(d, a)).normalize();
+      const up = Math.abs(nrm.y), y = (a.y + b.y + d.y) / 3;
+      // manchas grandes (hash de baixa frequência) em vez de sorteio por triângulo: sem xadrez
+      const h = hash(Math.round((a.x + b.x + d.x) / 3.6), Math.round(y / 0.9 + (a.x + a.z) * 0.15), Math.round((a.z + b.z + d.z) / 3.6), s3);
+      if (up > 0.42 || (y > 1.7 && h < 0.8)) return turf(0.9 + 0.12 * smooth(y, 0, 3));
+      return h < 0.42 ? earth(0.88 + 0.1 * smooth(y, 0, 3)) : h < 0.88 ? turf(0.84) : stone(0.95);
+    };
 
     // rocha amassada: cada vértice é empurrado conforme a sua posição (vértices repetidos andam juntos,
     // a pedra não racha) e o que passa de `cap` vira uma face plana, como pedra lascada
     const hash = (x, y, z, s) => { const h = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719 + s) * 43758.5453; return h - Math.floor(h); };
     const icoGeo = new THREE.IcosahedronGeometry(1, 1), dodecaGeo = new THREE.DodecahedronGeometry(1, 0);
     const blockGeo = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), spireGeo = new THREE.CylinderGeometry(0.32, 1, 1, 6, 3).translate(0, 0.5, 0);
-    const rock = (base, m, rough, cap = 9, mossChance = 0) => {
+    const rock = (base, m, rough, cap = 9, mossChance = 0, colorOf = null) => {
       const g = base.clone(), p = g.attributes.position, sd = lr() * 100;
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
         const k = 1 + (hash(Math.round(x * 97), Math.round(y * 97), Math.round(z * 97), sd) - 0.5) * 2 * rough;
         p.setXYZ(i, x * k, Math.min(y * k, cap), z * k);
       }
-      addGeo(g, m, (a, b, d) => faceColor(a, b, d, mossChance));
+      addGeo(g, m, colorOf || ((a, b, d) => faceColor(a, b, d, mossChance)));
       g.dispose();
     };
 
     // a estrada fica do lado +x da malha (o grupo gira com zone.fwd e o centro está 6,5 m para zone.side)
     // contorno: raio que varia suave com o ângulo; no topo nunca menos que 4 (cobre a área andável)
     const lobe = (a) => Math.sin(a * 2 + s1) * 0.16 + Math.sin(a * 3 + s2) * 0.12 + Math.sin(a * 5 + s3) * 0.07;
-    const rimAt = (a) => 4.1 + 0.5 * (lobe(a) + 0.35) / 0.7;
+    const rimAt = ruin ? (a) => 4.12 + 0.04 * Math.sin(a * 7 + s1) : (a) => 4.1 + 0.5 * (lobe(a) + 0.35) / 0.7;
     const rampH = (z) => THREE.MathUtils.clamp((z + 9) / 2, 0, 3);
     const nearRamp = (x, z, w = 3.3) => z < -2 && Math.abs(x) < w;
-    // corte do penhasco na frente: a largura da rampa desce até a altura dela e os lados viram ombros de pedra
+    // corte na frente: a largura da rampa desce até a altura dela e os lados viram ombros
     const cut = (v) => {
       if (v.z > -2.6) return;
       const ax = Math.abs(v.x);
@@ -683,27 +711,41 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       else if (ax < 2.6) v.y = Math.min(v.y, rampH(v.z) + 0.2 + (ax - 1.75) * 1.4);
     };
 
-    // penhasco: fileiras desencontradas com contrafortes fortes, como uma parede de pedra lascada
+    // encosta: fileiras do pé ao topo. Rochedo: parede lascada com contrafortes; colina: rampa suave que se
+    // abre no pé (sem passar de ~5,4 m, onde a navegação já contorna); ruína: muro de pedra quase reto
     const SEG = 30;
-    const angles = Array.from({ length: SEG }, (_, i) => ((i + lrange(-0.3, 0.3)) / SEG) * TAU);
-    const rows = [[-0.3, 0.2], [0.45, 0.12], [1.0, 0.22], [1.6, 0.06], [2.15, 0.16], [2.6, 0.04], [2.88, 0.02]];
+    const angles = Array.from({ length: SEG }, (_, i) => ((i + (ruin ? 0 : lrange(-0.3, 0.3))) / SEG) * TAU);
+    const rows = hill ? [[-0.3, 1.2], [0.3, 0.95], [0.95, 0.66], [1.6, 0.4], [2.2, 0.2], [2.7, 0.07], [2.95, 0.01]]
+      : ruin ? [[-0.25, 0.3], [0.45, 0.22], [1.1, 0.16], [1.75, 0.11], [2.35, 0.07], [2.8, 0.04], [3.0, 0.02]]
+        : [[-0.3, 0.2], [0.45, 0.12], [1.0, 0.22], [1.6, 0.06], [2.15, 0.16], [2.6, 0.04], [2.88, 0.02]];
     const R0 = angles.map(rimAt);
-    const column = angles.map(() => lrange(-0.3, 0.45));
+    const column = angles.map(() => (ruin ? 0 : lrange(-0.3, 0.45) * (hill ? 0.35 : 1)));
+    const jit = ruin ? 0.015 : hill ? 0.08 : 0.16;
     const grid = rows.map(([y, flare], k) => angles.map((a, i) => {
       const inner = k > 0 && k < rows.length - 1, buttress = k > 0 && k < rows.length - 2 ? column[i] * Math.sin((k / (rows.length - 1)) * Math.PI) : 0;
-      const r = R0[i] + flare + buttress + (inner ? lrange(-0.16, 0.16) : lrange(-0.04, 0.04));
-      const v = V(Math.sin(a) * r, y + (inner ? lrange(-0.14, 0.14) : 0), Math.cos(a) * r);
+      const r = R0[i] + flare + buttress + (inner ? lrange(-jit, jit) : lrange(-0.04, 0.04));
+      const v = V(Math.sin(a) * r, y + (inner && !ruin ? lrange(-0.14, 0.14) : 0), Math.cos(a) * r);
       cut(v);
       return v;
     }));
+    // alvenaria: cada pedra do muro é um pedaço da fileira com tom próprio, desencontrado da fileira de baixo
+    const brick = (k, i) => {
+      const id = Math.floor((i + (k % 2) * 0.5) / 1.5);
+      const h = hash(k, id, 3, s2);
+      if (k >= 3 && h < 0.12) return moss(0.3);   // hera nas pedras de cima
+      return out.copy(rockTones[Math.floor(h * rockTones.length)]).multiplyScalar(0.86 + 0.1 * (k / rows.length) + h * 0.06).lerp(dark, gloom * 0.5);
+    };
     for (let k = 0; k < rows.length - 1; k++) for (let i = 0; i < SEG; i++) {
       const j = (i + 1) % SEG, a = grid[k][i], b = grid[k][j], d = grid[k + 1][i], e = grid[k + 1][j];
-      tri(a, b, d, faceColor(a, b, d));
-      tri(b, e, d, faceColor(b, e, d));
+      if (ruin) { const t = brick(k, i).clone(); tri(a, b, d, t); tri(b, e, d, t); continue; }
+      const colorOf = hill ? slopeColor : faceColor;
+      tri(a, b, d, colorOf(a, b, d));
+      tri(b, e, d, colorOf(b, e, d));
     }
 
-    // topo de lajes: anéis com vértices compartilhados (sem frestas), cada laje junta alguns segmentos
-    // de um anel e ganha um tom próprio; algumas com musgo perto da borda, poucas mais escuras (fenda)
+    // topo: anéis com vértices compartilhados (sem frestas), cada placa junta alguns segmentos de um anel
+    // e ganha um tom próprio. Rochedo: lajes com musgo e tufos de grama; colina: gramado com terra batida
+    // no meio (o acampamento); ruína: piso de lajes
     const ring = (k, y, jit) => angles.map((a, i) => {
       const r = R0[i] * k + lrange(-jit, jit);
       const v = V(Math.sin(a) * r, y + lrange(-0.02, 0.02), Math.cos(a) * r);
@@ -715,14 +757,19 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     const center = V(lrange(-0.3, 0.3), 3.03, lrange(-0.3, 0.3));
     for (let i = 0; i < SEG; i++) {   // quina da borda, um pouco mais clara
       const j = (i + 1) % SEG;
-      quad(top[i], top[j], rings[0][i], rings[0][j], stone(1.04));
+      quad(top[i], top[j], rings[0][i], rings[0][j], hill ? turf(0.95) : stone(1.04));
     }
     const plateSize = [[2, 3], [3, 4], [3, 5], [5, 8]];
+    const topTone = (k, roll) => {
+      if (hill) return k >= 2 ? earth(lrange(1.0, 1.1)) : roll < 0.15 ? earth(1.05) : turf(lrange(1.0, 1.1));
+      if (!ruin && roll < 0.22 && k < 2) return k === 0 ? turf(0.95) : moss(0.25 + lr() * 0.3);   // rochedo: grama nas fendas da borda
+      return roll < 0.08 && k === 0 ? moss(0.25 + lr() * 0.3) : stone(lrange(1.0, 1.14) * (roll > 0.9 ? 0.84 : 1));
+    };
     for (let k = 0; k < rings.length; k++) {
       const outer = rings[k], inner = rings[k + 1];
       for (let s = Math.floor(lr() * 3), done = 0; done < SEG;) {
-        const n = Math.min(SEG - done, Math.round(lrange(...plateSize[k]))), roll = lr();
-        const tone = (roll < 0.08 && k === 0 ? moss(0.25 + lr() * 0.3) : stone(lrange(1.0, 1.14) * (roll > 0.9 ? 0.84 : 1))).clone();
+        const n = Math.min(SEG - done, Math.round(lrange(...plateSize[k])));
+        const tone = topTone(k, lr()).clone();
         for (let m = 0; m < n; m++, s++) {
           const i = s % SEG, j = (s + 1) % SEG;
           if (inner) quad(outer[i], outer[j], inner[i], inner[j], tone);
@@ -732,82 +779,121 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       }
     }
 
-    // escadaria: leito de cascalho e, por cima, lajes que seguem a rampa (degrau de 0,1 sem sair
-    // mais de 0,06 da altura onde os pés pisam), com espelho e laterais escuras
+    // subida: leito que segue a rampa (terra na colina, cascalho no resto) e, por cima, degraus que não saem
+    // mais de 0,06 da altura onde os pés pisam: troncos na colina, lajes esculpidas no rochedo e na ruína
     const gx = [-1.62, -0.8, 0, 0.8, 1.62];
     const bedY = (z) => (z < -9 ? 0.02 : rampH(z) - 0.06);
     for (let z = -10.1; z < -2.95; z += 0.5) {
       const z1 = Math.min(z + 0.5, -2.95);
       for (let i = 0; i < gx.length - 1; i++) {
-        quad(V(gx[i], bedY(z), z), V(gx[i + 1], bedY(z), z), V(gx[i], bedY(z1), z1), V(gx[i + 1], bedY(z1), z1), stone(0.72 * lrange(0.9, 1.05)));
+        const tone = hill ? earth(lrange(0.95, 1.08)) : stone(0.72 * lrange(0.9, 1.05));
+        quad(V(gx[i], bedY(z), z), V(gx[i + 1], bedY(z), z), V(gx[i], bedY(z1), z1), V(gx[i + 1], bedY(z1), z1), tone);
       }
     }
-    for (let z0 = -9.05; z0 < -3.05;) {
-      const z1 = Math.min(z0 + lrange(0.55, 0.72), -2.98);
-      const cutsX = lr() < 0.5 ? [-1.5, lrange(-0.4, 0.4), 1.5] : [-1.5, lrange(-0.75, -0.35), lrange(0.35, 0.75), 1.5];
-      for (let i = 0; i < cutsX.length - 1; i++) {
-        const g = 0.045, j = () => lrange(-0.025, 0.025);
-        const xa = cutsX[i] + g, xb = cutsX[i + 1] - g, za = z0 + g, zb = z1 - g * 0.5;
-        const yF = rampH(z0) + 0.06, yB = rampH(z1) - 0.04, foot = rampH(z0) - 0.06;
-        const fl = V(xa + j(), yF + j() * 0.5, za + j()), fr = V(xb + j(), yF + j() * 0.5, za + j());
-        const bl = V(xa + j(), yB, zb), br = V(xb + j(), yB, zb);
-        const fl0 = V(fl.x, foot, fl.z), fr0 = V(fr.x, foot, fr.z), bl0 = V(bl.x, rampH(z1) - 0.08, bl.z), br0 = V(br.x, rampH(z1) - 0.08, br.z);
-        quad(fl, fr, bl, br, stone(lrange(1.0, 1.12)).clone());
-        const side = stone(0.78).clone();
-        quad(fl0, fr0, fl, fr, side);
-        quad(bl0, fl0, bl, fl, side);
-        quad(fr0, br0, fr, br, side);
+    if (hill) {
+      const log = new THREE.CylinderGeometry(0.12, 0.12, 1, 6).rotateZ(Math.PI / 2);
+      const wood = new THREE.Color(0x7a5230), woodDark = new THREE.Color(0x5c3c22);
+      for (let z = -8.7; z < -3.2; z += lrange(0.62, 0.78)) {
+        const w = lrange(2.6, 3.0);
+        addGeo(log, mtx(lrange(-0.1, 0.1), rampH(z) - 0.02, z, w, 1, 1, lrange(-0.06, 0.06)), () => wither(out.copy(lr() < 0.5 ? wood : woodDark)));
+        for (const sx of [-1, 1]) addGeo(blockGeo, mtx(sx * (w / 2 + 0.05), rampH(z) + 0.06, z + 0.16, 0.09, 0.4, 0.09), () => wither(out.copy(woodDark)));   // estacas
       }
-      z0 = z1;
+      log.dispose();
+    } else {
+      for (let z0 = -9.05; z0 < -3.05;) {
+        const z1 = Math.min(z0 + lrange(0.55, 0.72), -2.98);
+        const cutsX = lr() < 0.5 ? [-1.5, lrange(-0.4, 0.4), 1.5] : [-1.5, lrange(-0.75, -0.35), lrange(0.35, 0.75), 1.5];
+        for (let i = 0; i < cutsX.length - 1; i++) {
+          const g = 0.045, j = () => lrange(-0.025, 0.025);
+          const xa = cutsX[i] + g, xb = cutsX[i + 1] - g, za = z0 + g, zb = z1 - g * 0.5;
+          const yF = rampH(z0) + 0.06, yB = rampH(z1) - 0.04, foot = rampH(z0) - 0.06;
+          const fl = V(xa + j(), yF + j() * 0.5, za + j()), fr = V(xb + j(), yF + j() * 0.5, za + j());
+          const bl = V(xa + j(), yB, zb), br = V(xb + j(), yB, zb);
+          const fl0 = V(fl.x, foot, fl.z), fr0 = V(fr.x, foot, fr.z), bl0 = V(bl.x, rampH(z1) - 0.08, bl.z), br0 = V(br.x, rampH(z1) - 0.08, br.z);
+          quad(fl, fr, bl, br, stone(lrange(1.0, 1.12)).clone());
+          const side = stone(0.78).clone();
+          quad(fl0, fr0, fl, fr, side);
+          quad(bl0, fl0, bl, fl, side);
+          quad(fr0, br0, fr, br, side);
+        }
+        z0 = z1;
+      }
     }
 
-    // muretas da escadaria: blocos lascados de cada lado, subindo junto com os degraus (param antes do topo)
-    for (const sx of [-1, 1]) {
+    // laterais da subida: ruína = muretas de alvenaria (blocos retos que sobem com os degraus);
+    // rochedo = lombadas de rocha natural; colina = pedras soltas e tufos (logo abaixo)
+    if (!hill) for (const sx of [-1, 1]) {
       for (let z = -9.8; z < -4.2;) {
         const len = lrange(1.0, 1.45), z1 = Math.min(z + len, -3.75), zc = (z + z1) / 2, w = lrange(0.85, 1.15);
-        const h = rampH(z1) + lrange(0.18, 0.42);
-        rock(blockGeo, mtx(sx * (1.66 + w / 2), (h - 0.35) / 2, zc, w, h + 0.35, z1 - z, lrange(-0.05, 0.05)), 0.08, 9, 0.12);
+        const h = rampH(z1) + (ruin ? lrange(0.45, 0.6) : lrange(0.1, 0.3));
+        if (ruin) rock(blockGeo, mtx(sx * (1.66 + w / 2), (h - 0.35) / 2, zc, w, h + 0.35, z1 - z, lrange(-0.03, 0.03)), 0.03, 9, 0.18);
+        else rock(icoGeo, mtx(sx * (1.6 + w * 0.7), h - (h + 0.4) * 0.5, zc, w * 0.9, (h + 0.4) * 0.55, (z1 - z) * 0.62, lr() * TAU), 0.2, h, 0.35);
         z += (z1 - z) * lrange(0.72, 0.88);
       }
     }
 
-    // matacões grandes encostados no penhasco, de alturas diferentes (o topo fica abaixo da borda,
-    // então nada sobe na área andável); do lado da estrada não passam do pé antigo do rochedo
-    for (let n = 0, tries = 0; n < 14 && tries < 90; tries++) {
-      const a = lr() * TAU, w = lrange(0.85, 1.5);
-      let r = rimAt(a) + lrange(-0.1, 0.5);
+    // matacões encostados (rochedo) ou afloramentos meio enterrados na encosta (colina); na ruína viram
+    // blocos caídos do muro. O topo fica abaixo da borda e, do lado da estrada, nada passa do pé antigo
+    const boulders = hill ? 7 : ruin ? 0 : 14;
+    for (let n = 0, tries = 0; n < boulders && tries < 90; tries++) {
+      const a = lr() * TAU, w = lrange(0.85, 1.5) * (hill ? 0.8 : 1);
+      let r = rimAt(a) + (hill ? lrange(0.4, 0.9) : lrange(-0.1, 0.5));
       if (Math.sin(a) > 0.3) r = Math.min(r, 5.3 - w * 1.15);
       const x = Math.sin(a) * r, z = Math.cos(a) * r;
       if (nearRamp(x, z, 2.9 + w)) continue;
-      const sy = lrange(0.9, 1.5), topY = lrange(1.2, 2.75);
-      rock(icoGeo, mtx(x, topY - sy * 0.82, z, w, sy, w * lrange(0.75, 1.15), lr() * TAU, lrange(-0.15, 0.15), lrange(-0.15, 0.15)), 0.17, 0.72, 0.3);
+      const sy = lrange(0.9, 1.5) * (hill ? 0.7 : 1), topY = hill ? lrange(0.6, 1.9) : lrange(1.2, 2.75);
+      rock(icoGeo, mtx(x, topY - sy * 0.82, z, w, sy, w * lrange(0.75, 1.15), lr() * TAU, lrange(-0.15, 0.15), lrange(-0.15, 0.15)), 0.17, 0.72, hill ? 0.5 : 0.3);
       n++;
     }
-    // rochas que despontam na borda (fora do raio 4 e longe da estrada e da escadaria)
-    for (let n = 0, tries = 0; n < 6 && tries < 50; tries++) {
-      const a = lr() * TAU, w = lrange(0.45, 0.85), r = Math.max(rimAt(a) + 0.1, 4.25 + w * 1.3);
-      const x = Math.sin(a) * r, z = Math.cos(a) * r;
-      if (x > 1 || z < -1.2) continue;
-      const sy = lrange(0.8, 1.2), topY = lrange(3.35, 4.2);
-      rock(dodecaGeo, mtx(x, topY - sy * 0.75, z, w, sy, w * lrange(0.8, 1.1), lr() * TAU), 0.15, 0.7, 0.35);
+    if (ruin) for (let n = 0, tries = 0; n < 10 && tries < 60; tries++) {   // entulho: blocos de alvenaria no pé do muro
+      const a = lr() * TAU, r = rimAt(a) + lrange(0.4, 1.3), x = Math.sin(a) * r, z = Math.cos(a) * r;
+      if (nearRamp(x, z, 3.2) || (Math.sin(a) > 0.3 && r > 5.2)) continue;
+      const s = lrange(0.35, 0.6);
+      rock(blockGeo, mtx(x, s * 0.3, z, s * lrange(1, 1.6), s * 0.7, s, lr() * TAU, lrange(-0.2, 0.2), lrange(-0.2, 0.2)), 0.05, 9, 0.2);
       n++;
     }
-    // pináculos: 1 a 3 agulhas de pedra atrás, no lado oposto à estrada, dão a silhueta de montanha
-    const spires = 1 + Math.floor(lr() * 3);
+    // borda de cima: rochas que despontam (rochedo e colina, poucas) ou ameias quebradas (ruína)
+    if (ruin) {
+      for (let i = 0; i < SEG; i += 2) {
+        const a = angles[i] + Math.PI / SEG, x = Math.sin(a) * 4.42, z = Math.cos(a) * 4.42;
+        if (nearRamp(x, z, 2.8) || hash(i, 1, 7, s3) < 0.3) continue;
+        const h = hash(i, 2, 5, s1) < 0.35 ? lrange(0.15, 0.3) : lrange(0.5, 0.7);   // umas inteiras, outras quebradas
+        rock(blockGeo, mtx(x, 2.98 + h / 2, z, 0.62, h, 0.5, a), 0.03, 9, 0.2);
+      }
+      // pedaço da torre que sobrou: muro alto e serrilhado atrás, longe da estrada
+      const a0 = -Math.PI / 2 + lrange(-0.5, 0.5);
+      for (let s = 0; s < 6; s++) {
+        const a = a0 + (s - 2.5) * 0.13, H = 5.3 - Math.abs(s - 2.5) * lrange(0.4, 0.75);
+        for (let y = -0.2, row = 0; y < H; y += 0.56, row++) {   // fiadas de pedra desencontradas
+          const aa = a + (row % 2 ? 0.065 : 0) + lrange(-0.01, 0.01), r = 4.55 + lrange(-0.04, 0.04);
+          rock(blockGeo, mtx(Math.sin(aa) * r, y + 0.27, Math.cos(aa) * r, lrange(0.56, 0.64), 0.52, lrange(0.7, 0.8), aa), 0.05, 9, 0.12);
+        }
+      }
+    } else {
+      for (let n = 0, tries = 0; n < (hill ? 3 : 6) && tries < 50; tries++) {
+        const a = lr() * TAU, w = lrange(0.45, 0.85), r = Math.max(rimAt(a) + 0.1, 4.25 + w * 1.3);
+        const x = Math.sin(a) * r, z = Math.cos(a) * r;
+        if (x > 1 || z < -1.2) continue;
+        const sy = lrange(0.8, 1.2), topY = lrange(3.35, 4.2) - (hill ? 0.5 : 0);
+        rock(dodecaGeo, mtx(x, topY - sy * 0.75, z, w, sy, w * lrange(0.8, 1.1), lr() * TAU), 0.15, 0.7, 0.35);
+        n++;
+      }
+    }
+    // pináculos (só o rochedo): 1 a 2 agulhas de pedra atrás, no lado oposto à estrada
+    const spires = kind === 'crag' ? 1 + Math.floor(lr() * 2) : 0;
     for (let n = 0; n < spires; n++) {
       const a = -0.25 - (n + lrange(0.15, 0.85)) * (1.45 / spires), base = lrange(0.85, 1.25) * (n === 0 ? 1.1 : 0.9);
       const r = 4.35 + base * 1.2 + lrange(0, 0.5), x = Math.sin(a) * r, z = Math.cos(a) * r;
-      const H = n === 0 ? lrange(5.6, 6.8) : lrange(3.9, 5.2);
+      const H = n === 0 ? lrange(4.8, 6) : lrange(3.6, 4.6);
       rock(spireGeo, mtx(x, -0.4, z, base, H, base * lrange(0.8, 1.05), lr() * TAU), 0.13, 9, 0.08);
-      // lasca encostada do lado de fora
       const ox = Math.sin(a) * (r + base * 0.75), oz = Math.cos(a) * (r + base * 0.75);
       rock(spireGeo, mtx(ox, -0.3, oz, base * 0.6, H * lrange(0.45, 0.6), base * 0.55, lr() * TAU), 0.15, 9, 0.1);
     }
 
-    // cascalho e pedras soltas na base e ao pé da escadaria
+    // cascalho e pedras soltas na base e ao pé da subida
     const pebble = (x, y, z, s, flat = 0.6) => rock(dodecaGeo, mtx(x, y, z, s * lrange(0.85, 1.2), s * flat, s * lrange(0.85, 1.1), lr() * TAU, lrange(-0.3, 0.3)), 0.15);
     for (let n = 0, tries = 0; n < 12 && tries < 60; tries++) {
-      const a = lr() * TAU, r = Math.min(rimAt(a) + lrange(0.6, 1.4), Math.sin(a) > 0.3 ? 5.3 : 9);
+      const a = lr() * TAU, r = Math.min(rimAt(a) + lrange(0.6, 1.4) + (hill ? 0.8 : 0), Math.sin(a) > 0.3 ? 5.5 : 9);
       const x = Math.sin(a) * r, z = Math.cos(a) * r;
       if (nearRamp(x, z)) continue;
       const s = lrange(0.18, 0.45);
@@ -815,20 +901,41 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       n++;
     }
     for (const sx of [-1, 1]) for (let n = 0; n < 2; n++) pebble(sx * lrange(1.9, 2.6), 0.04, lrange(-10.3, -9.6), lrange(0.2, 0.36));
-    for (let n = 0; n < 6; n++) { const a = lr() * TAU, r = Math.sqrt(lr()) * 3.3; pebble(Math.sin(a) * r, 3.03, Math.cos(a) * r, lrange(0.07, 0.13)); }
+    if (hill) for (const sx of [-1, 1]) for (let z = -9.4; z < -4; z += lrange(1.1, 1.8)) pebble(sx * lrange(1.75, 2.05), rampH(z) + 0.02, z, lrange(0.2, 0.34), 0.7);   // pedras na beira da trilha
+    if (!hill) for (let n = 0; n < 6; n++) { const a = lr() * TAU, r = Math.sqrt(lr()) * 3.3; pebble(Math.sin(a) * r, 3.03, Math.cos(a) * r, lrange(0.07, 0.13)); }
 
-    // tufos só no chão em volta (o rochedo em si é pedra) e almofadas de musgo em poucas fendas do topo
+    // tufos no chão em volta e na beira da subida; colina e rochedo ganham tufos e flores no topo e na encosta
     const tuftGeo = mergeGeometries([0, 1, 2].map((i) => new THREE.ConeGeometry(0.06, 0.5, 3).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0.25, 0).toNonIndexed()));
     const tuftTones = biome.tuft.map((h) => new THREE.Color(h));
     const tuft = (x, y, z) => { const t = lpick(tuftTones); addGeo(tuftGeo, mtx(x, y, z, 1, lrange(0.7, 1.3), 1, lr() * 6), () => wither(out.copy(t))); };
-    for (let n = 0; n < 12; n++) {
-      const a = lr() * TAU, r = Math.min(rimAt(a) + lrange(0.5, 1.0), Math.sin(a) > 0.3 ? 5.3 : 9), x = Math.sin(a) * r, z = Math.cos(a) * r;
+    for (let n = 0; n < (hill ? 20 : 12); n++) {
+      const a = lr() * TAU, r = Math.min(rimAt(a) + lrange(0.5, 1.0) + (hill ? 0.7 : 0), Math.sin(a) > 0.3 ? 5.5 : 9), x = Math.sin(a) * r, z = Math.cos(a) * r;
       if (!nearRamp(x, z, 2.7)) tuft(x, 0, z);
     }
-    for (const sx of [-1, 1]) for (let n = 0; n < 2; n++) tuft(sx * lrange(2.8, 3.2), 0, lrange(-9.8, -6.5));
-    for (let n = 0; n < 4; n++) {
+    for (const sx of [-1, 1]) for (let n = 0; n < (hill ? 4 : 2); n++) { const z = lrange(-9.8, -4.5); tuft(sx * lrange(2.1, 3.2), hill ? Math.max(0, rampH(z) - 0.1) : 0, z); }
+    if (!ruin) {
+      const petals = [0xf5d142, 0xffffff, 0xe8414a, 0xb46ad9].map((h) => new THREE.Color(h));
+      const flower = new THREE.IcosahedronGeometry(0.09, 0);
+      for (let n = 0; n < (hill ? 16 : 7); n++) {   // no topo, perto da borda (longe do acampamento)
+        const a = lr() * TAU, r = lrange(2.6, 3.8), x = Math.sin(a) * r, z = Math.cos(a) * r;
+        if (z < -2.6 && Math.abs(x) < 1.8) continue;
+        tuft(x, 2.99, z);
+        if (lr() < (gloom > 0.5 ? 0.15 : 0.7)) { const p = lpick(petals); addGeo(flower, mtx(x + 0.12, 3.24, z, 1, 1, 1), () => wither(out.copy(p))); }
+      }
+      if (hill) for (let n = 0; n < 4; n++) {   // moitas na borda de trás do topo
+        const a = -Math.PI / 2 + lrange(-1.1, 1.1), r = lrange(3.55, 3.95);
+        addGeo(icoGeo, mtx(Math.sin(a) * r, 3.15, Math.cos(a) * r, lrange(0.45, 0.7), lrange(0.35, 0.5), lrange(0.45, 0.7), lr() * TAU), () => turf(lrange(0.78, 0.92)));
+      }
+      flower.dispose();
+    }
+    if (!hill) for (let n = 0; n < 4; n++) {
       const a = lr() * TAU, r = lrange(2.6, 3.6);
       addGeo(icoGeo, mtx(Math.sin(a) * r, 2.99, Math.cos(a) * r, lrange(0.22, 0.38), 0.05, lrange(0.18, 0.3), lr() * TAU), () => moss());
+    }
+    // árvores do Forest pack atrás da colina e do rochedo (saem junto com as árvores do mapa)
+    if (!ruin) for (let n = 0; n < (hill ? 3 : 2); n++) {
+      const a = -Math.PI / 2 + lrange(-0.9, 0.9), r = lrange(6.6, 8.2), lx = Math.sin(a) * r, lz = Math.cos(a) * r;
+      zoneTreeSpots.push(new THREE.Vector3(zone.center.x + lx * zone.fwd.z + lz * zone.fwd.x, 0, zone.center.z - lx * zone.fwd.x + lz * zone.fwd.z));
     }
 
     // acampamento dos esqueletos no topo: ossos, fogueira apagada e estandarte roxo
@@ -898,7 +1005,12 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     obstacles.push({ x: zone.center.x, z: zone.center.z, r: 3.2 });
   }
 
-  for (const zone of zones.values()) {
+  // cada platô tem um visual próprio (a lógica é a mesma): colina de grama com trilha de troncos, rochedo com
+  // degraus esculpidos e, perto das ruínas (fase 10), um forte baixo em ruínas. A ordem colina/rochedo troca por bioma.
+  const swapKinds = MAP_STYLES.indexOf(biome) % 2 === 1;
+  const PLATEAU_KIND = { 3: swapKinds ? 'crag' : 'hill', 7: swapKinds ? 'hill' : 'crag', 10: 'ruin' };
+  for (const [phase, zone] of zones) {
+    zone.kind = PLATEAU_KIND[phase] || 'crag';
     const group = new THREE.Group();
     group.position.copy(zone.center).setY(0);
     group.rotation.y = Math.atan2(zone.fwd.x, zone.fwd.z);
@@ -1246,35 +1358,54 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     }
     if (models) natureSwaps.push(rec);
   }
-  // variantes do Forest pack por tipo (a ordem conta: variante = hash do índice)
+  // variantes do Forest pack por tipo (a ordem conta: variante = hash do índice; as 2 primeiras são as mais leves).
+  // As árvores ficam procedurais (copas redondas); do pack vêm arbustos, capim e pedras
+  // fit por variante: o pack tem tamanhos bem diferentes; a escala sorteada no lugar continua valendo por cima
   const FOREST = {
-    round: ['Tree_1_A_Color1', 'Tree_2_A_Color1'], pine: ['Tree_4_A_Color1', 'Tree_4_B_Color1'],
-    dead: ['Tree_Bare_1_A_Color1'], bush: ['Bush_1_C_Color1'], rock: ['Rock_3_E_Color1'],   // uma variante: menos chamadas de desenho
+    bush: ['Bush_1_C', 'Bush_3_B', 'Bush_1_D', 'Bush_4_D'],
+    grass: ['Grass_1_B', 'Grass_2_B'],
+    rock: ['Rock_3_E', 'Rock_1_E', 'Rock_2_C', 'Rock_3_G'],
+    boulder: ['Rock_1_J', 'Rock_3_Q'],
   };
+  for (const k of Object.keys(FOREST)) FOREST[k] = FOREST[k].map((n) => `${n}_Color1`);
+  const FOREST_FIT = { Bush_1_D_Color1: 0.75, Bush_3_B_Color1: 0.85, Bush_4_D_Color1: 0.8,
+    Rock_1_E_Color1: 0.75, Rock_2_C_Color1: 0.7, Rock_3_G_Color1: 0.6, Rock_1_J_Color1: 0.55, Rock_3_Q_Color1: 0.45 };
   const fitMatrix = new THREE.Matrix4(), liftMatrix = new THREE.Matrix4(), modelMatrix = new THREE.Matrix4();
   const white = new THREE.Color(0xffffff), tmpTint = new THREE.Color();
-  const DEAD_BARK = [0x9a8c8a, 0x3e3436];   // tronco seco acinzentado (o atlas original é marrom-alaranjado)
   const rockTint = (col) => tmpTint.copy(col).lerp(white, 0.35).multiplyScalar(1.15);
+  // algumas copas puxam para um tom de destaque do bioma (amarelado, ferrugem...): o bosque não fica de uma cor só
+  const accentTint = new THREE.Color(biome.accent ?? 0xfff0a0);
+  const FAR_LAT = ROAD + 22;   // além disso da estrada a sombra do sol (±24 m em volta do grupo) quase nunca alcança
   function buildNatureModels(rec) {
-    const { names, fit = 1, lift = 0, tint } = rec.models;
+    const { names, fit = 1, lift = 0, tint, accent = 0 } = rec.models;
     if (!sceneryReady(names)) return false;
     const material = rec.models.material?.() || sceneryModel(names[0]).material;
-    fitMatrix.makeScale(fit, fit, fit).premultiply(liftMatrix.makeTranslation(0, -lift, 0));   // lift: desce o que o procedural subia
+    // LOD simples: o que fica longe da estrada (fora do alcance da sombra) usa só a primeira variante
+    // (a mais leve: menos chamadas de desenho) e não projeta nem recebe sombra
+    rec.far ??= rec.zs.map((z, i) => roadDist(rec.matrices[i].elements[12], z) > FAR_LAT);
+    const N = names.length;
     for (const band of bandsByZ(rec.zs, INSTANCE_BAND)) {
-      const byVariant = names.map(() => []);
-      for (const i of band) byVariant[((i * 2654435761) >>> 0) % names.length].push(i);
-      byVariant.forEach((list, v) => {
+      const byVariant = Array.from({ length: N * 2 }, () => []);
+      for (const i of band) {
+        const h = (i * 2654435761) >>> 0;
+        byVariant[rec.far[i] ? N : h % N].push(i);
+      }
+      byVariant.forEach((list, slot) => {
         if (!list.length) return;
+        const v = slot % N, far = slot >= N;
+        const f = fit * (FOREST_FIT[names[v]] ?? 1);
+        fitMatrix.makeScale(f, f, f).premultiply(liftMatrix.makeTranslation(0, -lift, 0));   // lift: desce o que o procedural subia
         const im = new THREE.InstancedMesh(sceneryModel(names[v]).geometry, material, list.length);
         list.forEach((i, j) => {
           im.setMatrixAt(j, modelMatrix.multiplyMatrices(rec.matrices[i], fitMatrix));
           // a textura já traz a cor: a instância só escurece rumo ao castelo e varia um pouco o tom
+          const h = ((i * 40503) >>> 0) % 100;
           if (tint) c.copy(tint(rec.colors[rec.colors.length - 1][i], rec.gs[i]));
-          else c.copy(white).multiplyScalar(0.9 + (((i * 40503) >>> 0) % 100) / 600).lerp(gloomTint, rec.gs[i]);
+          else c.copy(white).multiplyScalar(0.88 + h / 450).lerp(accentTint, h < accent * 100 ? 0.55 : 0).lerp(gloomTint, rec.gs[i]);
           im.setColorAt(j, c);
         });
         im.computeBoundingSphere();
-        im.castShadow = im.receiveShadow = rec.shadow;
+        im.castShadow = im.receiveShadow = rec.shadow && !far;
         scene.add(im);
         rec.meshes.push(im);
       });
@@ -1752,21 +1883,68 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     new THREE.ConeGeometry(0.85, 1.6, 7).translate(0, 2.6, 0),
   ].map((g) => g.toNonIndexed()));
   // dark: até onde a trevas permite (árvores vivas somem aos poucos; secas aparecem)
-  const treePlace = (min, max, maxGloom = 1, minGloom = 0) => (o) => {
-    const p = spot(min, max);
-    if (!p) return false;
-    const g = gloomAt(p.z);
-    if (g > maxGloom || g < minGloom || (maxGloom === 1 && minGloom === 0 && rand() < g * 0.8)) return false;
-    placeAt(o, p, range(0.75, 1.5));
-    blocked.push({ x: p.x, z: p.z, r: 1.4 });
+  // bosques: depois de uma árvore "semente", as próximas nascem em volta dela (2 a 5 juntas), com
+  // tamanhos diferentes; parte dos pontos fica guardada para arbustos e capim fazerem a borda do bosque
+  const groveSpots = [];
+  const nearSpot = (center, rMin, rMax, minRoad, onSand = true) => {
+    const a = rand() * 6.283, r = range(rMin, rMax);
+    const p = new THREE.Vector3(center.x + Math.cos(a) * r, 0, center.z + Math.sin(a) * r);
+    const d = roadDist(p.x, p.z);
+    if (d < minRoad || riverDist(p.x, p.z) < 3.6 || !isFree(p.x, p.z)) return null;
+    if (!onSand && isSand(p.x, p.z, d)) return null;
+    p.y = heightAt(p.x, p.z, d);
+    return p;
+  };
+  const treePlace = (min, max, maxGloom = 1, minGloom = 0) => {
+    let seedSpot = null, left = 0;
+    return (o) => {
+      let p = left > 0 && seedSpot ? nearSpot(seedSpot, 2.3, 4.6, min) : null;
+      left--;
+      const grown = !!p;
+      if (!p) p = spot(min, max);
+      if (!p) return false;
+      const g = gloomAt(p.z);
+      if (g > maxGloom || g < minGloom || (maxGloom === 1 && minGloom === 0 && rand() < g * 0.8)) return false;
+      if (!grown && rand() < 0.65) { seedSpot = p; left = 2 + Math.floor(rand() * 4); }
+      placeAt(o, p, grown ? range(0.6, 1.25) : range(0.85, 1.5));
+      blocked.push({ x: p.x, z: p.z, r: 1.4 });
+      if (rand() < 0.5) groveSpots.push(p);
+      return true;
+    };
+  };
+  // árvores procedurais redondas (o usuário preferiu às copas quadradas do Forest pack): duas formas de copa
+  // redonda e de pinheiro, em bosques, com tamanhos e giros variados; a cor da copa sai da paleta do bioma
+  const roundTrunk2 = mergeGeometries([
+    new THREE.CylinderGeometry(0.13, 0.22, 3.2, 6).translate(0, 1.6, 0),
+    new THREE.CylinderGeometry(0.06, 0.09, 1, 5).rotateZ(-0.8).translate(-0.4, 2.5, 0.1),
+  ].map((g) => g.toNonIndexed()));
+  const roundTop2 = mergeGeometries([   // copa mais alta e oval
+    new THREE.IcosahedronGeometry(1.15, 1).translate(0, 3.7, 0),
+    new THREE.IcosahedronGeometry(0.9, 1).translate(0.45, 4.6, -0.2),
+    new THREE.IcosahedronGeometry(0.85, 1).translate(-0.65, 3.4, 0.45),
+    new THREE.IcosahedronGeometry(0.7, 1).translate(0.75, 3.1, -0.55),
+  ].map((g) => g.toNonIndexed()));
+  const pineTop3 = mergeGeometries([   // pinheiro alto de três andares
+    new THREE.ConeGeometry(1.25, 1.9, 7).translate(0, 1.6, 0),
+    new THREE.ConeGeometry(0.95, 1.7, 7).translate(0, 2.6, 0),
+    new THREE.ConeGeometry(0.62, 1.4, 7).translate(0, 3.5, 0),
+  ].map((g) => g.toNonIndexed()));
+  const roundPlace = treePlace(ROAD + 3, ROAD + 50);
+  const zoneTree = (o) => {   // primeiro as árvores atrás dos platôs, depois o mapa
+    const p = zoneTreeSpots.pop();
+    if (!p) return roundPlace(o);
+    if (roadDist(p.x, p.z) < ROAD + 3 || riverDist(p.x, p.z) < 3.6) return false;
+    p.y = heightAt(p.x, p.z);
+    placeAt(o, p, range(1.05, 1.4));
+    groveSpots.push(p);
     return true;
   };
-  // modelos do Forest pack: copas na cor do bioma (atlas repintado), cerejeiras em rosa
-  const leafMat = () => (biome.leaves ? forestMaterial(...biome.leaves) : null);
-  instanced([[roundTrunk, trunks], [roundTop, limes]], 380, treePlace(ROAD + 3, ROAD + 50), true, null, { names: FOREST.round, fit: 1.1, material: leafMat });
-  instanced([[roundTrunk, trunks], [roundTop, [0xffb7d5, 0xf9a3c8, 0xffc9e0, 0xffd6e8]]], 70, treePlace(ROAD + 3, ROAD + 40, 0.3), true, null,   // cerejeiras
-    { names: FOREST.round, fit: 1.1, material: () => forestMaterial(0xffd3e4, 0xe07fa8) });
-  instanced([[pineTrunk, trunks], [pineTop, biome.pine]], 120, treePlace(ROAD + 6, ROAD + 55), true, null, { names: FOREST.pine, fit: 0.75, material: leafMat });
+  instanced([[roundTrunk, trunks], [roundTop, limes]], 240, zoneTree);
+  instanced([[roundTrunk2, trunks], [roundTop2, limes]], 160, roundPlace);
+  instanced([[roundTrunk, trunks], [roundTop, [0xffb7d5, 0xf9a3c8, 0xffc9e0, 0xffd6e8]]], 60, treePlace(ROAD + 3, ROAD + 40, 0.3));   // cerejeiras
+  const pinePlace = treePlace(ROAD + 6, ROAD + 55);
+  instanced([[pineTrunk, trunks], [pineTop, biome.pine]], 80, pinePlace);
+  instanced([[pineTrunk, trunks], [pineTop3, biome.pine]], 60, pinePlace);
   // árvores secas: tronco torto com galhos, sem folhas
   const deadTree = mergeGeometries([
     new THREE.CylinderGeometry(0.12, 0.26, 2.8, 5).translate(0, 1.4, 0),
@@ -1775,23 +1953,78 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     new THREE.CylinderGeometry(0.04, 0.07, 0.9, 4).rotateX(0.9).translate(0, 2.7, 0.35),
     new THREE.CylinderGeometry(0.03, 0.05, 0.6, 4).rotateZ(0.4).translate(0.95, 2.85, 0),
   ].map((g) => g.toNonIndexed()));
-  instanced([deadTree, [0x5a4a42, 0x4a3e3a, 0x6a5a50]], 260, treePlace(ROAD + 2.5, ROAD + 45, 1, 0.3), true, null,
-    { names: FOREST.dead, fit: 1, material: () => forestMaterial(null, null, DEAD_BARK) });
+  instanced([deadTree, [0x5a4a42, 0x4a3e3a, 0x6a5a50]], 260, treePlace(ROAD + 2.5, ROAD + 45, 1, 0.3));
+  // arbustos, pedras e capim do Forest pack: folhagem na cor do bioma (atlas repintado)
+  const leafMat = () => (biome.leaves ? forestMaterial(...biome.leaves) : null);
 
+  // arbustos: parte na beira do caminho, parte fazendo a borda dos bosques (perto das árvores)
+  const skirt = (minRoad, rMin, rMax, onSand = true) => (groveSpots.length ? nearSpot(groveSpots[Math.floor(rand() * groveSpots.length)], rMin, rMax, minRoad, onSand) : null);
   const bushGeo = new THREE.IcosahedronGeometry(0.55, 1);
-  instanced([bushGeo, limes], 340, (o) => { const p = spot(ROAD + 1.3, ROAD + 14, 2); if (!p) return false; placeAt(o, p, range(0.6, 1.3), 0.3); o.scale.y *= 0.75; return true; }, true, null,
-    { names: FOREST.bush, fit: 1, lift: 0.4, material: leafMat });
+  instanced([bushGeo, limes], 420, (o) => {
+    const p = rand() < 0.45 ? skirt(ROAD + 1.3, 1.5, 3) : spot(ROAD + 1.3, ROAD + 14, 2);
+    if (!p) return false;
+    placeAt(o, p, range(0.55, 1.35), 0.3); o.scale.y *= 0.75; return true;
+  }, true, null, { names: FOREST.bush, fit: 1, lift: 0.4, material: () => (biome.bushLeaves ? forestMaterial(...biome.bushLeaves) : leafMat()), accent: 0.25 });
 
   const rockGeo = new THREE.DodecahedronGeometry(0.5, 0);
-  instanced([rockGeo, [0xd1a06a, 0xc08c5a, 0xb9a48c]], 200, (o) => { const p = spot(ROAD + 1, ROAD + 45); if (!p) return false; placeAt(o, p, range(0.4, 1.8), 0.15); o.scale.y *= 0.6; o.rotation.x = rand(); return true; }, true, null,
+  instanced([rockGeo, [0xd1a06a, 0xc08c5a, 0xb9a48c]], 200, (o) => { const p = spot(ROAD + 1, ROAD + 45); if (!p) return false; placeAt(o, p, range(0.4, 1.8), 0.15); o.scale.y *= 0.6; o.rotation.x = rand() * 0.25; return true; }, true, null,
     { names: FOREST.rock, fit: 0.9, tint: rockTint });
+  // matacões grandes só longe da estrada, meio enterrados nos morros: dão escala ao horizonte
+  instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 36, (o) => { const p = spot(ROAD + 16, ROAD + 50, 1); if (!p) return false; placeAt(o, p, range(1.4, 2.6), -0.2); o.scale.y *= 0.8; blocked.push({ x: p.x, z: p.z, r: 2 }); return true; }, true, null,
+    { names: FOREST.boulder, fit: 0.5, lift: 0.1, tint: rockTint });
   instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 280, (o) => { const p = spot(0, ROAD + 12, 1.5); if (!p) return false; placeAt(o, p, range(0.15, 0.4)); o.scale.y *= 0.5; return true; }, false);   // pedrinhas: o procedural basta
 
   const tuftGeo = mergeGeometries([0, 1, 2].map((i) => new THREE.ConeGeometry(0.06, 0.5, 3).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0.25, 0).toNonIndexed()));
-  instanced([tuftGeo, biome.tuft], 7000, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
+  instanced([tuftGeo, biome.tuft], 5600, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
+  // touceiras de capim do pack em manchas, na borda dos bosques e da estrada (sem sombra)
+  const grassTint = (col, g) => tmpTint.copy(col).lerp(white, 0.45).lerp(gloomTint, g);
+  let clump = null, clumpLeft = 0;
+  instanced([tuftGeo, biome.tuft], 700, (o) => {
+    if (clumpLeft <= 0) { clump = rand() < 0.5 ? skirt(ROAD + 0.5, 1, 3.5, false) : spot(ROAD - 1, ROAD + 24, 1.6, false); clumpLeft = 3 + Math.floor(rand() * 4); }
+    clumpLeft--;
+    if (!clump) { clumpLeft = 0; return false; }
+    const p = nearSpot(clump, 0, 1.3, ROAD - 1.5, false);
+    if (!p) return false;
+    placeAt(o, p, range(0.7, 1.3)); return true;
+  }, false, null, { names: FOREST.grass, fit: 1, lift: 0.02, tint: grassTint });
 
+  // flores em canteiros (5 a 9 juntas), não espalhadas como confete
   const flowerGeo = new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.25, 0);
-  instanced([flowerGeo, [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7]], 1600, (o) => { const p = spot(1, ROAD + 22, 1.8, false); if (!p || gloomAt(p.z) > rand() * 0.6) return false; placeAt(o, p, range(0.8, 1.3)); return true; }, false);
+  let flowerBed = null, bedLeft = 0;
+  instanced([flowerGeo, [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7]], 1600, (o) => {
+    if (bedLeft <= 0) { flowerBed = rand() < 0.35 ? skirt(1, 1.5, 3, false) : spot(1, ROAD + 22, 1.8, false); bedLeft = 5 + Math.floor(rand() * 5); }
+    bedLeft--;
+    if (!flowerBed || gloomAt(flowerBed.z) > rand() * 0.6) { bedLeft = 0; return false; }
+    const p = nearSpot(flowerBed, 0, 1.1, 1, false);
+    if (!p) return false;
+    placeAt(o, p, range(0.8, 1.3)); return true;
+  }, false);
+
+  // margem do rio: juncos em touceiras e pedras meio afundadas na beira d'água (longe da ponte e da estrada)
+  const bank = (minOff, maxOff, near = null) => {
+    const k = near ?? 1 + Math.floor(rand() * (riverPts.length - 2));
+    const a = riverPts[Math.max(0, k - 1)], b = riverPts[Math.min(riverPts.length - 1, k + 1)], tl = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const off = (rand() < 0.5 ? -1 : 1) * range(minOff, maxOff);
+    const p = new THREE.Vector3(riverPts[k].x - ((b.z - a.z) / tl) * off, 0, riverPts[k].z + ((b.x - a.x) / tl) * off);
+    if (Math.hypot(p.x - cp.x, p.z - cp.z) < 8 || roadDist(p.x, p.z) < ROAD + 1.5) return null;
+    p.y = heightAt(p.x, p.z);
+    p.k = k;
+    return p;
+  };
+  const reedTuft = mergeGeometries([[-0.12, 0, 1], [0.1, 0.08, 1.25], [0.02, -0.1, 0.85]].flatMap(([x, z, h]) => [
+    new THREE.CylinderGeometry(0.03, 0.045, h, 4).translate(x, h / 2, z).toNonIndexed(),
+    new THREE.CylinderGeometry(0.07, 0.07, 0.24, 5).translate(x, h + 0.08, z).toNonIndexed()]));
+  let reedAt = null, reedLeft = 0;
+  instanced([reedTuft, [biome.reeds, new THREE.Color(biome.reeds).offsetHSL(0.02, 0, 0.06).getHex()]], 240, (o) => {
+    if (reedLeft <= 0) { reedAt = bank(2.9, 3.6); reedLeft = 2 + Math.floor(rand() * 4); }
+    reedLeft--;
+    if (!reedAt) { reedLeft = 0; return false; }
+    const p = bank(2.8, 3.8, Math.min(riverPts.length - 2, reedAt.k + Math.floor(rand() * 3)));
+    if (!p || gloomAt(p.z) > 0.8) return false;
+    placeAt(o, p, range(0.7, 1.2)); o.rotation.z = range(-0.12, 0.12); return true;
+  }, false);
+  instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 130, (o) => { const p = bank(2.6, 4.4); if (!p) return false; placeAt(o, p, range(0.35, 0.9), -0.1); o.scale.y *= 0.7; return true; }, false, null,
+    { names: [FOREST.rock[0], FOREST.rock[2]], fit: 0.9, tint: rockTint });
 
   // ---------- terras do necromante: lápides, ossos e cogumelos brilhantes ----------
   const darkSpot = (min, max, minGloom) => { const p = spot(min, max, 1.5); return p && gloomAt(p.z) > minGloom + rand() * 0.25 ? p : null; };
@@ -2475,5 +2708,6 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     }
   }
 
-  return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update, seed: seedValue, biome: biome.name, dispose };
+  return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update, seed: seedValue, biome: biome.name, dispose,
+    sky: castleInterior ? null : biome.sky, sunTint: castleInterior ? null : biome.sun };   // céu, névoa e sol de dia do bioma (main.js mistura com as trevas)
 }

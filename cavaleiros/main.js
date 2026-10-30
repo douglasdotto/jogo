@@ -266,6 +266,7 @@ scene.add(hemi);
 const SKY = [new THREE.Color(0x7cc6ff), new THREE.Color(0x3f3552)];   // azul vivo de dia (estilo Clash)
 const HEMI = [new THREE.Color(0xfff4dc), new THREE.Color(0xb8a8d8)], HEMI_GROUND = [new THREE.Color(0xa89868), new THREE.Color(0x3e3448)];
 const SUN = [new THREE.Color(0xffe2b8), new THREE.Color(0xc6a8ff)];
+const daySky = new THREE.Color(), daySun = new THREE.Color();   // céu e sol de dia do bioma do mapa (world.sky/sunTint)
 const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -9634,14 +9635,14 @@ function frame() {
   placeSun(follow);
   world.update(real, follow.z, camera);
   const gloom = world.gloomAt(follow.z);
-  scene.background.lerpColors(SKY[0], SKY[1], gloom);
+  scene.background.lerpColors(world.sky != null ? daySky.setHex(world.sky) : SKY[0], SKY[1], gloom);
   scene.fog.color.copy(scene.background);
   scene.fog.near = 45 - gloom * 22;
   scene.fog.far = 110 - gloom * 45;
   hemi.color.lerpColors(HEMI[0], HEMI[1], gloom);
   hemi.groundColor.lerpColors(HEMI_GROUND[0], HEMI_GROUND[1], gloom);
   hemi.intensity = 1.35 - gloom * 0.3;   // menos luz ambiente e sol mais forte: sombras marcadas
-  sun.color.lerpColors(SUN[0], SUN[1], gloom);
+  sun.color.lerpColors(world.sunTint != null ? daySun.setHex(world.sunTint) : SUN[0], SUN[1], gloom);
   sun.intensity = 3.1 - gloom * 1.4;
   const moveMarker = directControl.enabled ? directControl.moveTarget : null;
   const attackMarker = directControl.enabled ? directControl.attackTarget : null;

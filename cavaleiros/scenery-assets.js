@@ -1,4 +1,4 @@
-// Cenário pronto (KayKit Forest Nature Pack e Dungeon Pack, CC0): árvores, arbustos e pedras do mundo e do
+// Cenário pronto (KayKit Forest Nature Pack e Dungeon Pack, CC0): arbustos, capim e pedras do mundo e do
 // mapa da campanha, e peças do salão do trono. Cada modelo vira { geometry, material } para InstancedMesh.
 // Carrega só quando pedido (preloadSceneryAssets) e nunca rejeita: se algo faltar, quem usa cai no procedural.
 import * as THREE from 'three';
@@ -7,8 +7,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const FOREST_DIR = 'assets/kaykit/forest/Assets/gltf/';
 const DUNGEON_DIR = 'assets/kaykit/dungeon/Assets/gltf/';
-// variantes leves (poucas centenas de triângulos) e de tamanho parecido com as procedurais que substituem
-export const FOREST_MODELS = ['Tree_1_A', 'Tree_2_A', 'Tree_4_A', 'Tree_4_B', 'Tree_Bare_1_A', 'Bush_1_C', 'Rock_3_E']
+// variantes leves (até ~500 triângulos), várias por tipo para não repetir a mesma silhueta. As árvores ficam
+// procedurais (copas redondas); do pack vêm arbustos, capim e pedras. O primeiro é a base do atlas repintado.
+export const FOREST_MODELS = ['Bush_1_C', 'Bush_1_D', 'Bush_3_B', 'Bush_4_D', 'Grass_1_B', 'Grass_2_B',
+  'Rock_1_E', 'Rock_2_C', 'Rock_3_E', 'Rock_3_G', 'Rock_1_J', 'Rock_3_Q']
   .map((n) => `${n}_Color1`);
 export const DUNGEON_MODELS = ['floor_tile_large', 'wall', 'pillar_decorated', 'pillar',
   'banner_patternA_red', 'banner_thin_red', 'torch_mounted', 'barrel_large', 'barrel_small_stack', 'chest_gold',
