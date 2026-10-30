@@ -200,6 +200,30 @@ export function makeBuilding(type) {
         box(g, C.stone, x, 2.025, z, 0.5, 0.35, 0.5);
       }
       break;
+    case 'market': {
+      // praça de feira (pegada 3x3 = 6 m): três barracas com toldo listrado, caixotes, sacos e uma balança
+      box(g, 0xcdbf9f, 0, 0.08, 0, 5.6, 0.16, 5.6);
+      const stalls = [[-1.6, -1.5, 0], [1.6, -1.5, 0], [0, 1.4, Math.PI]];
+      stalls.forEach(([x, z, ry], i) => {
+        const s = new THREE.Group();
+        s.position.set(x, 0, z);
+        s.rotation.y = ry;
+        g.add(s);
+        box(s, C.wood, 0, 0.55, 0, 2.2, 0.9, 1.1);
+        for (const dx of [-1, 1]) for (const dz of [-0.6, 0.6]) box(s, C.beam, dx, 1.2, dz, 0.12, 2.4, 0.12);
+        for (let k = 0; k < 4; k++) box(s, k % 2 ? 0xfff4e0 : [C.red, C.blue, 0x3f9a4a][i], -0.84 + k * 0.56, 2.45, 0, 0.56, 0.1, 1.5);
+        part(s, 'ico', [0x6fc24a, C.gold, 0xe0453a][i], [-0.5, 1.12, 0.1], [0.3, 0.2, 0.3]);
+        part(s, 'ico', [0xe0453a, 0xc79c5b, C.gold][i], [0.45, 1.12, -0.1], [0.28, 0.2, 0.28]);
+      });
+      crate(g, 2.1, 0.16, 1.6, 0.6);
+      part(g, 'ico', 0xc79c5b, [-2.1, 0.5, 1.7], [0.45, 0.42, 0.4]);
+      // balança no centro da praça
+      rod(g, C.beam, [0, 0.16, 0], [0, 2.1, 0], 0.07);
+      rod(g, C.beam, [-0.8, 2.05, 0], [0.8, 2.05, 0], 0.045);
+      for (const x of [-0.8, 0.8]) part(g, 'cylinder', C.gold, [x, 1.6, 0], [0.3, 0.05, 0.3]);
+      flag(g, 0, 2.1, 0, 1.2, C.gold);
+      break;
+    }
     case 'farm': {
       // canteiro arado com fileiras de trigo e uma cerquinha (pegada 2x2 = 4 m)
       box(g, 0x7a5232, 0, 0.06, 0, 3.7, 0.12, 3.7);

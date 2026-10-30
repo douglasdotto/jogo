@@ -29,8 +29,9 @@ export const BUILDINGS = {
   barracks: { name: 'Quartel', glyph: '⚔', size: 3, hp: 1100, cost: { wood: 150, stone: 40 }, time: 32, height: 4.6, trains: ['soldier', 'archer'], tip: 'Treina soldados e besteiros' },
   tower: { name: 'Torre', glyph: '♖', size: 2, hp: 750, cost: { wood: 50, stone: 120 }, time: 30, height: 8.6, attack: { range: 11, dmg: 15, cooldown: 1.3 }, tip: 'Atira nos esqueletos por perto' },
   wall: { name: 'Muralha', glyph: '▦', size: 1, hp: 400, cost: { stone: 10 }, time: 6, height: 2.8, tip: 'Bloqueia a passagem · Shift para várias' },
+  market: { name: 'Mercado', glyph: '⚖', size: 3, hp: 900, cost: { wood: 175 }, time: 35, height: 4.2, market: true, tip: 'Troca recursos por ouro · o preço piora a cada troca e volta com o tempo' },
 };
-export const BUILD_MENU = ['house', 'farm', 'storehouse', 'barracks', 'tower', 'wall'];
+export const BUILD_MENU = ['house', 'farm', 'storehouse', 'barracks', 'tower', 'wall', 'market'];
 export const UNITS = {
   worker: { name: 'Aldeão', glyph: '⚒', cost: { food: 50 }, time: 10, pop: 1, hp: 60, dmg: 3, range: 1.2, speed: 3.2, cooldown: 1.4, tip: 'Coleta, entrega e constrói' },
   soldier: { name: 'Soldado', glyph: '⚔', cost: { food: 60, gold: 20 }, time: 13, pop: 1, hp: 120, dmg: 11, range: 1.6, speed: 3, cooldown: 1.2, tip: 'Luta corpo a corpo' },
@@ -61,7 +62,7 @@ export function createKingdomState(arena, D = null) {
   const entries = arena.entries?.length || 0;
   return { arena, D, res: { wood: START.wood, stone: START.stone, gold: START.gold, food: START.food }, buildings: [], units: [],
     waveN: 0, waveT: FIRST_WAVE, pending: 0, spawnT: 0, spawnK: 0, leader: null, time: 0, castle: null, portal: null,
-    sources: [-1], nextSources: waveSources(1, entries),
+    sources: [-1], nextSources: waveSources(1, entries), market: { wood: MARKET.base, stone: MARKET.base, food: MARKET.base },
     stats: { gathered: { wood: 0, stone: 0, gold: 0, food: 0 }, built: 0, trained: 0, lost: 0 } };
 }
 export const canAfford = (K, cost) => RES.every((r) => (K.res[r] || 0) >= (cost[r] || 0));
@@ -265,6 +266,72 @@ export function tickWaves(K, dt, spawn) {
     }
   }
 }
+// mercado: lotes de 100 contra ouro; cada compra encarece e cada venda barateia aquele recurso, e o preço volta ao normal com o tempo
+export const MARKET = { lot: 100, base: 100, step: 10, min: 30, max: 400, fee: 0.3, recover: 0.5 };
+export const TRADE_RES = ['wood', 'stone', 'food'];
+export const buyPrice = (K, r) => Math.ceil(K.market[r]);
+export const sellPrice = (K, r) => Math.floor(K.market[r] * (1 - MARKET.fee));
+export const hasMarket = (K) => K.buildings.some((b) => b.def.market && b.done && !b.dead);
+export function trade(K, r, buy) {
+  if (!TRADE_RES.includes(r) || !hasMarket(K)) return false;
+  if (buy) {
+    const price = buyPrice(K, r);
+    if (K.res.gold < price) return false;
+    K.res.gold -= price;
+    K.res[r] += MARKET.lot;
+    K.market[r] = Math.min(MARKET.max, K.market[r] + MARKET.step);
+  } else {
+    if (K.res[r] < MARKET.lot) return false;
+    K.res[r] -= MARKET.lot;
+    K.res.gold += sellPrice(K, r);
+    K.market[r] = Math.max(MARKET.min, K.market[r] - MARKET.step);
+  }
+  return true;
+}
+export function tickMarket(K, dt) {
+  for (const r of TRADE_RES) {
+    const d = MARKET.base - K.market[r], step = MARKET.recover * dt;
+    K.market[r] += Math.abs(d) <= step ? d : Math.sign(d) * step;
+  }
+}
+
+// ordens de ataque-movendo e patrulha: anda até o ponto; patrulha troca de ponta ao chegar
+export function orderLeg(o, pos, near = 0.7) {
+  if (flat(pos, o) >= near) return 'go';
+  if (o.type !== 'patrol') return 'done';
+  [o.x, o.z, o.bx, o.bz] = [o.bx, o.bz, o.x, o.z];
+  return 'turn';
+}
+// inimigo mais perto dentro do raio (borda do alvo), ignorando quem ainda está nascendo
+export function nearestFoe(list, pos, radius) {
+  let best = null, bd = radius;
+  for (const s of list) {
+    if (s.dead || s.spawning) continue;
+    const d = flat(s.pos, pos) - (s.reach || 0);
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
+
+// recordes do Reino por dificuldade: melhor tempo de vitória e onda máxima
+export const RECORDS_KEY = 'cavaleiros-reino-recordes';
+export function loadKingdomRecords(store = globalThis.localStorage) {
+  try { return JSON.parse(store.getItem(RECORDS_KEY)) || {}; } catch { return {}; }
+}
+export function mergeKingdomRecord(records, id, { won, time, wave }) {
+  const old = records[id] || { bestTime: null, maxWave: 0 };
+  const best = { time: won && (old.bestTime == null || time < old.bestTime), wave: wave > old.maxWave };
+  records[id] = { bestTime: best.time ? Math.round(time) : old.bestTime, maxWave: Math.max(old.maxWave, wave) };
+  return best;
+}
+export function saveKingdomRecord(id, result, store = globalThis.localStorage) {
+  const records = loadKingdomRecords(store);
+  const best = mergeKingdomRecord(records, id, result);
+  try { store.setItem(RECORDS_KEY, JSON.stringify(records)); } catch {}
+  return { record: records[id], best };
+}
+export const kingdomRecordText = (r) => (r?.bestTime != null ? `♛ ${clock(r.bestTime)}` : r?.maxWave ? `☠ ${r.maxWave}` : '');
+
 export function kingdomResult(K) {
   if (K.castle?.dead) return 'lost';
   if (K.portal?.dead) return 'won';
@@ -500,6 +567,11 @@ function defineClasses() {
       } else if (o?.type === 'move') {
         if (flat(this.pos, o) < 0.7) { this.order = null; this.anchor.set(o.x, 0, o.z); }
         else { this.goal.set(o.x, 0, o.z); this.moveTo(this.goal, dt); }
+      } else if (o?.type === 'amove' || o?.type === 'patrol') {
+        // briga com o que encontrar no caminho e depois segue
+        target = nearestFoe(G.skeletonsAlive(), this.pos, this.ranged ? this.range + 3 : 8);
+        if (!target && orderLeg(o, this.pos) === 'done') { this.order = null; this.anchor.set(o.x, 0, o.z); }
+        else if (!target) { this.goal.set(o.x, 0, o.z); this.moveTo(this.goal, dt); }
       }
       if (!this.order) {
         // parado: briga com quem chega perto e não se afasta demais do posto
@@ -636,6 +708,7 @@ function beginKingdom() {
 function stopKingdom() {
   if (!R) return;
   cancelPlacing();
+  aim(null);
   R.root.removeFromParent();
   R.root.traverse((o) => {   // só o que o cenário do mapa criou (as peças dos modelos são compartilhadas)
     if (!o.isMesh) return;
@@ -670,9 +743,13 @@ function endKingdom(won) {
   $('overlayTitle').textContent = won ? 'Vitória!' : 'Derrota';
   $('overlayText').textContent = won ? 'O Portal de Ossos caiu!' : 'O castelo caiu.';
   const g = K.stats.gathered;
-  const chip = (icon, text, tip) => `<span class="end-chip" tabindex="0" data-tip="${esc(tip)}" aria-label="${esc(tip)}"><i aria-hidden="true">${icon}</i>${text}</span>`;
+  const chip = (icon, text, tip, cls = '') => `<span class="end-chip${cls}" tabindex="0" data-tip="${esc(tip)}" aria-label="${esc(tip)}"><i aria-hidden="true">${icon}</i>${text}</span>`;
+  const D = G.difficulty || { id: 'normal', name: 'Normal', icon: '⚔︎' };
+  const { record: rec, best } = saveKingdomRecord(D.id, { won, time: K.time, wave: K.waveN });
+  const records = (rec.bestTime != null ? chip('♛', clock(rec.bestTime), `${best.time ? 'Novo recorde · ' : ''}Vitória mais rápida · ${D.name}`, best.time ? ' medal' : '') : '')
+    + chip('★', rec.maxWave, `${best.wave ? 'Novo recorde · ' : ''}Onda máxima · ${D.name}`, best.wave ? ' medal' : '');
   $('overlayStars').innerHTML = '';
-  $('overlayStats').innerHTML = `<div class="k-end">${chip('⏱', clock(K.time), 'Tempo de partida')}${chip('☠', K.waveN, 'Ondas enfrentadas')}${chip('⚔', game.kills, 'Esqueletos derrotados')}`
+  $('overlayStats').innerHTML = `<div class="k-end">${chip(D.icon, '', `Dificuldade: ${D.name}`)}${records}${chip('⏱', clock(K.time), 'Tempo de partida')}${chip('☠', K.waveN, 'Ondas enfrentadas')}${chip('⚔', game.kills, 'Esqueletos derrotados')}`
     + `${chip(ICONS.wood, Math.round(g.wood), 'Madeira coletada')}${chip(ICONS.stone, Math.round(g.stone), 'Pedra coletada')}${chip(ICONS.gold, Math.round(g.gold), 'Ouro coletado')}${chip(ICONS.food, Math.round(g.food), 'Comida coletada')}`
     + `${chip('⌂', K.stats.built, 'Construções erguidas')}${chip('⚒', K.stats.trained, 'Unidades treinadas')}</div>`;
   $('overlayNext').innerHTML = '<button type="button" class="k-menu-btn">Menu</button>';
@@ -696,6 +773,7 @@ function tick(dt) {
     G.audio?.play?.('levelup');
   });
   tickProduction(K, dt, spawnFrom);
+  tickMarket(K, dt);
   tickWaves(K, dt, spawnWave);
   guardPortal(dt);
   // heróis: seguem a ordem atual e voltam no castelo depois de um tempo caídos
@@ -718,6 +796,11 @@ function tick(dt) {
     if (o?.type === 'attack') {
       if (o.target.dead || !G.units.includes(o.target)) h.kOrder = null;
       else h.post.copy(o.target.pos);
+    } else if (o?.type === 'amove' || o?.type === 'patrol') {
+      // ataque-movendo: perto de inimigo o posto fica onde está (o herói briga); senão o posto é o destino
+      if (nearestFoe(G.skeletonsAlive(), h.pos, 9)) h.post.copy(h.pos);
+      else if (orderLeg(o, h.pos, 1) === 'done') { h.kOrder = null; h.post.set(o.x, 0, o.z); }
+      else h.post.set(o.x, 0, o.z);
     }
   }
   const result = kingdomResult(K);
@@ -891,6 +974,7 @@ function select(list, add = false) {
   const units = next.filter(own);
   R.sel = units.length ? units : next.filter(isBuilding).slice(-1);
   R.heroPick = false;
+  aim(null);
   R.selKey = '';
   if (R.sel.length) G.audio?.play?.('click');
 }
@@ -971,6 +1055,25 @@ function command(x, y, add = false) {
     } else u.order = enemy ? { type: 'attack', target: enemy } : { type: 'move', x: spot.x, z: spot.z };
   }
   G.ring(enemy ? enemy.pos : node ? new THREE.Vector3(node.x, 0, node.z) : at, enemy ? 1 : 0.6, enemy ? 0xff5a4a : node ? 0xffe066 : 0x7dff8a, 0.5);
+  G.audio?.play?.('click');
+}
+
+// ataque-movendo / patrulha: o botão arma a ordem e o próximo clique esquerdo no chão a dá (Shift mantém armada)
+function aim(type) {
+  if (!R) return;
+  R.aim = type;
+  document.body.classList.toggle('k-aiming', !!type);
+}
+function orderAt(type, x, y) {
+  const at = groundAt(x, y);
+  if (!at) return;
+  const army = R.sel.filter((u) => own(u) && u.kKind !== 'worker');
+  const spots = formation(army.length, at);
+  army.forEach((u, i) => {
+    const o = { type, x: spots[i].x, z: spots[i].z, bx: u.pos.x, bz: u.pos.z };
+    if (u.kKind === 'hero') { u.kOrder = o; u.targetFocus = null; u.targetFocusT = 0; } else u.order = o;
+  });
+  G.ring(at, 0.7, type === 'patrol' ? 0x7db7ff : 0xff9a4a, 0.5);
   G.audio?.play?.('click');
 }
 
@@ -1144,6 +1247,7 @@ function refreshPanel() {
     R.selBox.querySelectorAll('.k-mini').forEach((b) => { const u = sel[+b.dataset.i]; if (u) b.querySelector('i').style.width = `${Math.max(0, u.hp / u.maxHp) * 100}%`; });
   }
   // botões: custo que falta fica apagado; recargas das habilidades do herói
+  refreshTrades();
   for (const b of R.cmds.querySelectorAll('[data-cost]')) {
     const cost = JSON.parse(b.dataset.cost);
     b.classList.toggle('poor', !canAfford(K, cost));
@@ -1206,6 +1310,12 @@ function renderCommands() {
         () => kind === 'hero' ? (heroCount(K) < HERO_LIMIT ? (R.heroPick = true, R.selKey = '') : G.popText(b.pos, `♛ ${HERO_LIMIT}/${HERO_LIMIT}`, 'block')) : train(b, kind));
       btn.dataset.kind = kind;
     }
+    if (b.done && b.def.market) for (const buy of [false, true]) for (const r of TRADE_RES) {
+      const t = tradeButton(r, buy);
+      const btn = add(t.glyph, t.tip, t.cost, () => { if (!trade(K, r, buy)) flashCost(t.now().cost); else G.audio?.play?.('click'); }, `<b class="k-gain">+${t.gain}</b>`);
+      btn.classList.add('k-trade');
+      btn.dataset.trade = `${buy ? 'buy' : 'sell'}:${r}`;
+    }
     if (b !== K.castle) {   // demolir: devolve metade do custo; tecla Delete
       const btn = cmdButton('Del', '✕', `Demolir · devolve ${costText(halfCost(b.def.cost)) || 'nada'}`, null, () => { if (demolish(K, b)) { b.die(); G.audio?.play?.('click'); } });
       btn.dataset.key = 'DELETE';
@@ -1245,8 +1355,34 @@ function renderCommands() {
       }
     });
   }
+  if (sel.some((u) => u.kKind !== 'worker' && !u.building)) {
+    const amove = cmdButton('A', '➹', 'Atacar no caminho · A + clique', null, () => aim('amove'));
+    box.appendChild(amove);
+    add('⇄', 'Patrulhar · clique no destino', null, () => aim('patrol'));
+  }
 }
 
+// botão de troca: ícone do que se recebe, custo do que se paga; preço atual na dica
+function tradeButton(r, buy) {
+  const now = () => {
+    const gold = buy ? buyPrice(K, r) : sellPrice(K, r);
+    return { gold, cost: buy ? { gold } : { [r]: MARKET.lot }, gain: buy ? MARKET.lot : gold,
+      tip: buy ? `Comprar ${MARKET.lot} ${RES_NAME[r].toLowerCase()} · ${gold} ouro` : `Vender ${MARKET.lot} ${RES_NAME[r].toLowerCase()} · +${gold} ouro` };
+  };
+  return { glyph: ICONS[buy ? r : 'gold'], now, ...now() };
+}
+function refreshTrades() {
+  for (const b of R.cmds.querySelectorAll('[data-trade]')) {
+    const [mode, r] = b.dataset.trade.split(':');
+    const t = tradeButton(r, mode === 'buy');
+    if (b.dataset.tip === t.tip) continue;
+    b.setAttribute('data-tip', t.tip);
+    b.setAttribute('aria-label', t.tip);
+    b.dataset.cost = JSON.stringify(t.cost);
+    b.querySelector('.k-costs').innerHTML = costHTML(t.cost);
+    b.querySelector('.k-gain').textContent = `+${t.gain}`;
+  }
+}
 function flashCost(cost) {
   for (const r of RES) if ((cost[r] || 0) > K.res[r]) {
     const chip = R.ui.querySelector(`[data-res="${r}"]`);
@@ -1391,9 +1527,10 @@ function bindInput() {
     e.stopImmediatePropagation();
     if (blocked()) return;
     if (e.button === 1) { e.preventDefault(); R.pan = { x: e.clientX, y: e.clientY, cx: R.cam.x, cz: R.cam.z }; return; }
-    if (e.button === 2) { e.preventDefault(); if (R.placing) cancelPlacing(); else command(e.clientX, e.clientY, e.shiftKey); return; }
+    if (e.button === 2) { e.preventDefault(); if (R.placing) cancelPlacing(); else if (R.aim) aim(null); else command(e.clientX, e.clientY, e.shiftKey); return; }
     if (e.button !== 0) return;
     if (R.placing) { tryPlace(e.shiftKey); return; }
+    if (R.aim) { orderAt(R.aim, e.clientX, e.clientY); if (!e.shiftKey) aim(null); return; }
     R.drag = { x: e.clientX, y: e.clientY, shift: e.shiftKey, ctrl: e.ctrlKey };
   }, true);
   on(canvas, 'pointerup', (e) => { if (K) e.stopImmediatePropagation(); }, true);
@@ -1464,6 +1601,9 @@ function onKey(e) {
   if (!K || !R) return;
   if (e.target.closest?.('input, textarea, select')) return;
   const key = e.key.toLowerCase();
+  // com tropa selecionada, A é ataque-movendo (a câmera segue nas setas)
+  const amove = key === 'a' && !e.ctrlKey && !e.altKey && !e.metaKey && !blocked() && R.cmds.querySelector('[data-key="A"]');
+  if (amove) { if (!e.repeat) amove.click(); e.preventDefault(); e.stopImmediatePropagation(); return; }
   if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) && !e.ctrlKey && !e.altKey) {
     R.keys.add(key);
     if (key.startsWith('arrow')) e.preventDefault();
@@ -1473,6 +1613,7 @@ function onKey(e) {
   if (blocked()) return;
   if (e.key === 'Escape') {
     if (R.placing) cancelPlacing();
+    else if (R.aim) aim(null);
     else if (R.heroPick) { R.heroPick = false; R.selKey = ''; }
     else select([]);
     return;
