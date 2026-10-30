@@ -991,13 +991,13 @@ function renderInfo(cfg) {
   const masteryPerks = MASTERY_PERKS.slice(1, mastery.level).map((perk) => perk.text).join(' · ') || 'Jogue com este herói para ganhar maestria.';
   const masteryXp = mastery.next ? `${mastery.xp}/${mastery.next} XP` : 'máxima';
   const masteryLine = `<div class="hero-mastery mastery-${mastery.level}" tabindex="0" data-tip="${attrText(`Maestria ${mastery.level} · ${masteryXp} · ${masteryPerks}`)}" aria-label="${attrText(`Maestria ${mastery.level}, ${masteryXp}`)}"><b aria-hidden="true">✦${mastery.level}</b><span class="mastery-track" aria-hidden="true"><i style="width:${mastery.next ? Math.round((mastery.xp - mastery.from) / (mastery.next - mastery.from) * 100) : 100}%"></i></span></div>`;
-  const kindName = (skill) => skill.ultimate ? 'Ultimate' : skill.slot === 1 ? 'Técnica' : 'Básica';
+  const kindName = (skill) => skill.ultimate ? 'Ultimate' : skill.slot > 0 ? 'Técnica' : 'Básica';
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="hero-profile"><div class="crest"><img src="${cfg.portrait}" alt=""></div>
       <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? '➶' : '⚔'}</small><div class="ribbon">${cfg.name}</div>
         <span class="hero-role-pill" tabindex="0" data-tip="${attrText(`${CLASSES[cfg.classId].summary} ${info.tip}`)}">${info.role}</span>${masteryLine}</div></div>
-    <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot === 1 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attrText(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
+    <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot > 0 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attrText(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼', '✧'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
     <div class="stats hero-stats" aria-label="Atributos">${stats}</div>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info" aria-label="Ganhe ${starsToUnlock(cfg.id)} estrelas na campanha para liberar">\u{1F512}︎ ★ ${starsToUnlock(cfg.id)}</div>`}`;
   // equipe fixa ao lado dos cartões: mini-retratos, contagem, papéis cobertos e os que faltam
@@ -1200,7 +1200,7 @@ function relicOnKill(foe) {
     damageArea(foe.pos, 2.6, Math.max(14, (killer?.dmg || 18) * 0.8), killer);
   }
   if (hasRelic('shadow-mark') && killer?.cfg.classId === 3) {
-    for (let slot = 0; slot < 3; slot++) killer.skillTimers[slot] = Math.max(0, killer.skillTimers[slot] - 2);
+    for (let slot = 0; slot < killer.skillTimers.length; slot++) killer.skillTimers[slot] = Math.max(0, killer.skillTimers[slot] - 2);
   }
 }
 
@@ -1390,8 +1390,10 @@ function showEvolution() {
 }
 
 function chooseAutoEvolution(hero) {
-  const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm']);
-  const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile']);
+  const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
+    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen']);
+  const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
+    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner']);
   const skills = skillSetFor(hero.cfg);
@@ -1612,21 +1614,22 @@ async function pumpPortraits() {
 // ---------- barra de habilidades: três botões por herói, incluindo ultimate ----------
 let skillItems = [], skillHeroes = [];
 const skillParty = [], skillRoster = [];
-const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F']];
+const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F'], ['Z', 'X', 'V', 'B']];   // linha = slot, coluna = herói (C fica para o controle direto)
 const SKILL_GLYPHS = {
-  paladin: ['✚', '⬟', '☼'], guardian: ['⛨', '⚑', '♜'], champion: ['⚔', '➶', '✦'],
-  berserker: ['♨', '⚔', '✹'], crusher: ['⬟', '✹', '☄'], viking: ['⚒', '➶', '✹'],
-  pyro: ['♨', '♨', '☄'], arcane: ['⚡', '✺', '✷'], cryo: ['❄', '⛨', '❆'],
-  assassin: ['✦', '⚔', '☠'], crossbow: ['➶', '⇶', '✹'], ninja: ['✧', '☯', '✴'],
-  duelist: ['⚔', '✕', '✺'],
-  king: ['♛', '✦', '☀'], iceviking: ['❄', '➶', '❆'], necro: ['☠', '♟', '☥'],
-  druid: ['❀', '❧', '☘'], cleric: ['✚', '⛨', '☼'], bard: ['♫', '♪', '♬'],
-  angel: ['✧', '⛨', '☼'], chronist: ['⌛', '⚡', '◷'],
-  archer: ['➹', '⇊', '◎'], monk: ['✊', '≋', '❂'], alchemist: ['⚗', '✸', '♈'],
-  engineer: ['⚙', '⚡', '✹'], beast_tamer: ['♞', '≋', '✪'], oracle: ['☼', '◉', '☯'],
+  paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '⚑', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
+  berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
+  pyro: ['♨', '♨', '☄', '☲'], arcane: ['⚡', '✺', '✷', '⊛'], cryo: ['❄', '⛨', '❆', '⟡'],
+  assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
+  duelist: ['⚔', '✕', '✺', '⤺'],
+  king: ['♛', '✦', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '♟', '☥', '⚱'],
+  druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
+  angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '⚡', '◷', '⟲'],
+  archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
+  engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
   brute: ['⛰', '⤴', '⬢'],
   summoner: ['✿', '⬢', '♆'],
 };
+const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -1654,7 +1657,7 @@ function buildSkillBar(party) {
       b.setAttribute('data-hero', h.cfg.id);
       b.setAttribute('data-slot', String(slot));
       b.setAttribute('data-key', key);
-      const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
+      const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼', '✧'][slot];
       // dois botões irmãos (usar e auto): botão dentro de botão não é acessível; nome e tipo ficam na dica
       b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" data-tip="Uso automático: liga e desliga" aria-label="Uso automático de ${skill.name}" aria-pressed="true">↻</button>
         <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : slot === 0 ? 'assinatura' : 'técnica'}.${key ? ` Tecla ${key}.` : ''}"><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span></button>`;
@@ -1749,8 +1752,8 @@ function skillTooltip(el) {
   if (!skill) return '';
   const hero = heroes().find((h) => h.cfg.id === cfg.id);
   const level = hero?.level || 1, maxLevel = cfg.names?.length || 3, rate = hero?.skillRate || 1;
-  const [kindId, kindName] = SKILL_KIND[skill.ultimate ? 2 : slot === 1 ? 1 : 0];
-  const glyph = SKILL_GLYPHS[cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
+  const [kindId, kindName] = SKILL_KIND[skill.ultimate ? 2 : slot > 0 ? 1 : 0];
+  const glyph = SKILL_GLYPHS[cfg.id]?.[slot] || ['✦', '⚔', '☼', '✧'][slot];
   const facts = [['Recarga', `${num(cooldownForSkill(cfg, slot, level, rate))} s`]];
   if (slot === 0) {
     const aim = aimSpec(hero || { cfg, level, skillPower: 1, range: cfg.range });
@@ -1785,7 +1788,7 @@ initTooltips();
 
 addEventListener('keydown', (e) => {
   if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')
-    || pick.open || game.over || game.realm || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
+    || pick.open || game.over || game.realm || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdfzxvb]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
@@ -2161,6 +2164,8 @@ class Unit {
       }
       n = relicGuard(this, n);
       if (n <= 0) return;
+      n = this.skillGuard(n, owner);
+      if (n <= 0) return;
     } else if (this.markT > 0) n *= 1 + this.markBonus;   // Flecha do caçador: o alvo marcado sofre mais de todos
     const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
     if (this.stats) this.stats.recebido += real;
@@ -2489,7 +2494,12 @@ function damageArea(center, radius, dmg, owner = null) {
 function heroHit(owner, target, dmg, center = owner.pos) {
   dmg = applySynergy(owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
-  target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1), center, owner.summoner || owner, critical);
+  const dealt = dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1);
+  target.takeDamage(dealt, center, owner.summoner || owner, critical);
+  if (owner.leechT > 0 && !owner.dead) {   // Sede de Sangue: o golpe devolve vida ao Berserker
+    const heal = Math.min(owner.maxHp - owner.hp, dealt * owner.leech);
+    if (heal > 0) { owner.hp += heal; owner.stats.cura += heal; }
+  }
   return critical;
 }
 
@@ -4773,7 +4783,7 @@ function stasis(enemy) {
 
 const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
-Object.assign(FX, { rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
+Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 Object.assign(FX, { pactCall, fairyPulse, golemSlam, dragonBreath });   // Invocador
 
 class Hero extends Unit {
@@ -4793,12 +4803,12 @@ class Hero extends Unit {
     this.songT = 0;
     this.songHaste = 1;
     this.formation = POSTS[Math.min(3, heroes().length - 1)];
-    this.skillTimers = [2, 4, 8];
-    this.skillMaxes = [2, 4, 8];
-    this.autoSkills = [0, 1, 2].map((slot) => loadAutoSlot(cfg.id, slot));
-    this.skillRequests = [0, 0, 0];
-    this.skillTargets = [null, null, null];
-    this.skillManuals = [false, false, false];
+    this.skillTimers = [2, 4, 8, 6];
+    this.skillMaxes = [2, 4, 8, 6];
+    this.autoSkills = [0, 1, 2, 3].map((slot) => loadAutoSlot(cfg.id, slot));
+    this.skillRequests = [0, 0, 0, 0];
+    this.skillTargets = [null, null, null, null];
+    this.skillManuals = [false, false, false, false];
     // aliases preservam compatibilidade com código e salvamentos da habilidade original.
     Object.defineProperties(this, {
       skillTimer: { get: () => this.skillTimers[0], set: (value) => { this.skillTimers[0] = value; } },
@@ -4820,6 +4830,9 @@ class Hero extends Unit {
     this.stoneT = 0;      // Brutamontes: Pele de pedra ativa
     this.hurl = null;     // Brutamontes: inimigo arremessado em voo
     this.size = this.heroSize();
+    this.resetSkillStates();
+    this.hpHistory = [];  // Rebobinar do Cronomante: vida a cada 0,5 s
+    this.hpSampleT = 0;
     this.age = 0;
     this.hover = cfg.id === 'angel' ? 0.52 : 0;
     for (const relic of game.relics || []) applyRelicToHero(this, relic);
@@ -4894,7 +4907,7 @@ class Hero extends Unit {
       this.levelLabel.title = this.cfg.names[this.level - 1];
       this.aura.visible = !this.dead;
       this.halo.visible = !this.dead && this.level === 3;
-      for (let slot = 0; slot < 3; slot++) this.skillTimers[slot] = Math.min(this.skillTimers[slot], 1);
+      for (let slot = 0; slot < this.skillTimers.length; slot++) this.skillTimers[slot] = Math.min(this.skillTimers[slot], 1);
       this.popT = 0;
       audio.play('levelup');
       poof(this.pos, 1.5);
@@ -5290,7 +5303,7 @@ class Hero extends Unit {
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
-    if (!force && slot === 1 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
+    if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
       && !(skill.effect === 'sentry-overcharge' && ownSentry) && !(skill.effect === 'alpha-beast' && ownBeast)) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
@@ -5696,6 +5709,564 @@ class Hero extends Unit {
         };
         break;
       }
+      // ---------- segundas técnicas (slot 3): um comportamento próprio por herói ----------
+      case 'oath-link': {
+        // Juramento: o Paladino assume parte do dano do aliado mais ferido
+        const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 9));
+        const ward = allies.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        if (!force && (!ward || ward.hp / ward.maxHp > 0.7)) return false;
+        const ally = ward || this;
+        target = ally;
+        effect = () => {
+          if (ally !== this) {
+            ally.oathT = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+            ally.oathBy = this;
+            ally.oathShare = skill.share || 0.4;
+          } else this.guardT = Math.max(this.guardT, 2 * power);
+          const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', 10 + level * 4) * power);
+          if (heal > 0) { ally.hp += heal; this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
+          popText(ally.pos, 'Juramento!', 'evolve');
+          if (ally !== this) FX.zigzag(this.pos, ally.pos);
+          FX.rays(ally.pos, 'holy', 0.4, 4, 0.7, { follow: ally });
+        };
+        break;
+      }
+      case 'shield-rush': {
+        // Investida de escudo: avança até o alvo, atordoa e empurra quem estiver perto do impacto
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 7) && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        const aim = force && pool.includes(target) ? target : highestPriorityHeroTarget(this, pool);
+        if (!aim) return false;
+        if (!force && !urgentEnemy && attackables.filter((s) => !s.dead && s.pos.distanceTo(aim.pos) <= (skill.radius || 2.2)).length < 2) return false;
+        target = aim;
+        effect = () => {
+          if (aim.dead) return;
+          const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize();
+          const stop = aim.pos.clone().addScaledVector(dir, -(0.9 + 0.35 * aim.size));
+          if (stop.distanceTo(from) > 0.5 && world.canStep(from, stop)) { this.pos.copy(stop).setY(world.groundHeight(stop.x, stop.z)); this.vel.set(0, 0, 0); }
+          this.face(aim.pos, 1);
+          const hit = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(aim.pos) <= (skill.radius || 2.2) + 0.4 * (s.size - 1));
+          for (const enemy of hit) {
+            damageOne(enemy);
+            enemy.stunT = Math.max(enemy.stunT || 0, scaleBranchEffect(this, 'control', 1 + (level - 1) * 0.15) * power);
+            enemy.pendingHit = null;
+            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(enemy.boss ? 1.5 : 5));
+          }
+          this.guardT = Math.max(this.guardT, 1.5);
+          FX.steelDash(from, this.pos);
+          wave(aim.pos, color, 0.2, skill.radius || 2.2, 0.5);
+          burst(aim.pos, [color, 0xffffff], 16, 4);
+        };
+        break;
+      }
+      case 'duel-challenge': {
+        // Desafio do Campeão: o inimigo mais forte por perto só ataca o Campeão, que bate mais e aguenta mais
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const worth = (s) => (s.boss ? 1e6 : 0) + s.hp;
+        const rival = force && pool.includes(target) ? target : pool.reduce((best, s) => (!best || worth(s) > worth(best) ? s : best), null);
+        if (!rival || (!force && !rival.boss && !urgentEnemy && pool.length < 3)) return false;
+        target = rival;
+        effect = () => {
+          if (rival.dead) return;
+          const duration = scaleBranchEffect(this, 'control', skill.duration || 5) * (0.9 + 0.1 * power);
+          rival.taunt = this; rival.tauntT = duration;
+          this.royalT = Math.max(this.royalT, duration);
+          this.royalBonus = Math.max(this.royalBonus, skill.bonus || 0.3);
+          this.guardT = Math.max(this.guardT, duration * 0.6);
+          popText(rival.pos, 'Desafiado!', 'crit');
+          FX.huntMark(rival);
+          FX.slashX(rival, this);
+        };
+        break;
+      }
+      case 'royal-edict': {
+        // Édito real: inimigos comuns se ajoelham (atordoados); chefes só ficam lentos
+        if (!force && enemies.length < 3 && !urgentEnemy) return false;
+        effect = () => {
+          for (const enemy of enemies) {
+            if (enemy.dead) continue;
+            damageOne(enemy);
+            enemy.pendingHit = null;
+            if (enemy.boss || enemy.totem) enemy.slowT = Math.max(enemy.slowT || 0, scaleBranchEffect(this, 'control', skill.duration || 3) * power);
+            else enemy.stunT = Math.max(enemy.stunT || 0, scaleBranchEffect(this, 'control', 0.9 + (level - 1) * 0.15) * power);
+          }
+          popText(this.pos, 'Ajoelhem-se!', 'evolve');
+          FX.royal(this, []);
+          wave(this.pos, color, 0.25, radius, 0.7);
+        };
+        break;
+      }
+      case 'bloodthirst': {
+        // Sede de sangue: por alguns segundos os golpes devolvem vida
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= 3.5);
+        if (!force && (!close.length || this.hp > this.maxHp * 0.85)) return false;
+        effect = () => {
+          this.leechT = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+          this.leech = skill.leech || 0.3;
+          this.furyT = Math.max(this.furyT, 1.5);
+          popText(this.pos, 'Sede de sangue!', 'crit');
+          column(this.pos, color, 0.6, 2.6, 0.7, { follow: this });
+          burst(this.pos, [color, 0x7a0d12], 18, 3.5);
+        };
+        break;
+      }
+      case 'boulder': {
+        // Rocha arremessada: impacto em área num grupo afastado (ou no ponto mirado)
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 10) && (s.pos.distanceTo(this.pos) >= (skill.minRange || 2.5) || (force && s === target)));
+        const ground = force && target?.groundTarget ? target : null;
+        const { center, count } = densest(pool, skill.radius || 2.2, force && !ground ? target : null);
+        const spot = ground || center;
+        if (!spot || (!ground && !force && count < 2 && !urgentEnemy)) return false;
+        target = spot;
+        const at = spot.pos.clone(), area = (skill.radius || 2.2) * (0.9 + 0.1 * power);
+        effect = () => {
+          const mesh = groundMark(at, area, 0x6b4a2a, 0.3);
+          flames.push({ mesh, radius: area, owner: this, wait: 0.5, t: 0.05, tick: 0, every: 1, dmg: this.dmg * power * (skill.power || 1.5), onTick: (f) => {
+            for (const s of skeletonsAlive()) if (!s.dead && !s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1)) {
+              s.stunT = Math.max(s.stunT || 0, scaleBranchEffect(this, 'control', 1) * power);
+              s.pendingHit = null;
+            }
+            wave(f.mesh.position, color, 0.3, f.radius, 0.6);
+            burst(f.mesh.position, [color, 0x5a4026, 0xd9c7a0], 22, 5);
+            poof(f.mesh.position, 1.2);
+          } });
+          burst(this.pos.clone().setY(this.pos.y + 0.3), [color, 0x5a4026], 10, 3);
+        };
+        break;
+      }
+      case 'war-cry': {
+        // Brado nórdico: os inimigos próximos recuam assustados, lentos e sem o golpe preparado
+        if (!force && enemies.length < 2 && !urgentEnemy) return false;
+        effect = () => {
+          for (const enemy of enemies) {
+            if (enemy.dead) continue;
+            enemy.pendingHit = null;
+            enemy.slowT = Math.max(enemy.slowT || 0, scaleBranchEffect(this, 'control', skill.duration || 2.5) * power);
+            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(enemy.boss ? 1.5 : 7));
+          }
+          this.guardT = Math.max(this.guardT, 2.5);
+          popText(this.pos, 'Brado!', 'evolve');
+          wave(this.pos, color, 0.3, radius, 0.6);
+          wave(this.pos, 0xffffff, 0.2, radius * 0.7, 0.45);
+        };
+        break;
+      }
+      case 'ice-skin': {
+        // Pele de gelo: menos dano recebido e quem bate de perto fica lento e se fere
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3.5));
+        if (!force && (!close.length || (close.length < 2 && this.hp > this.maxHp * 0.8))) return false;
+        effect = () => {
+          this.iceSkinT = scaleBranchEffect(this, 'control', skill.duration || 6) * (0.9 + 0.1 * power);
+          this.iceSkinBy = skill.power || 0.4;
+          popText(this.pos, 'Pele de gelo!', 'block');
+          FX.iceFan(this, this);
+          burst(this.pos, [color, 0xffffff], 18, 3);
+        };
+        break;
+      }
+      case 'fire-wall': {
+        // Muralha de fogo: uma fileira de chamas atravessada na frente dos inimigos
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const ground = force && target?.groundTarget ? target : null;
+        const { center, count } = densest(pool, 2.5, force && !ground ? target : null);
+        const spot = ground || center;
+        if (!spot || (!ground && !force && count < 2 && !urgentEnemy)) return false;
+        target = spot;
+        const at = spot.pos.clone(), dir = new THREE.Vector3().subVectors(at, this.pos).setY(0).normalize();
+        const side = new THREE.Vector3(-dir.z, 0, dir.x), patch = skill.radius || 1.1;
+        const pulse = this.dmg * power * (skill.pulse || 0.22);
+        effect = () => {
+          for (let i = -2; i <= 2; i++) {
+            const p = at.clone().addScaledVector(side, i * patch * 1.6).addScaledVector(dir, -0.6);
+            p.y = world.groundHeight(p.x, p.z);
+            const mesh = groundMark(p, patch, 0x3a1608, 0.45);
+            flames.push({ mesh, radius: patch, owner: this, t: scaleBranchEffect(this, 'control', skill.duration || 4) * power, tick: 0, every: 0.5, dmg: pulse });
+            FX.fireField(mesh, patch);
+          }
+          burst(at, [color, 0xffe070], 16, 4);
+        };
+        break;
+      }
+      case 'blink': {
+        // Translocação: foge de quem encurrala o Arcano e deixa uma explosão onde estava
+        const threats = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= 2.8);
+        if (!force && !threats.length) return false;
+        const from = this.pos.clone();
+        const away = new THREE.Vector3();
+        for (const s of threats) away.add(tmp.subVectors(from, s.pos).setY(0).normalize());
+        if (away.lengthSq() < 0.01) away.copy(this.fwd).multiplyScalar(-1);
+        away.setY(0).normalize();
+        let dest = null;
+        for (const step of [skill.range || 6, 4.5, 3]) {
+          const p = from.clone().addScaledVector(away, step);
+          if (world.canStep(from, p)) { dest = p; break; }
+        }
+        if (!dest && !force) return false;
+        target = null;
+        effect = () => {
+          if (dest) { this.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z)); this.vel.set(0, 0, 0); }
+          const area = (skill.radius || 2.6) * (0.9 + 0.1 * power);
+          for (const s of attackables) if (!s.dead && !s.spawning && s.pos.distanceTo(from) <= area + 0.4 * (s.size - 1)) {
+            damageOne(s);
+            s.slowT = Math.max(s.slowT || 0, scaleBranchEffect(this, 'control', 2.5) * power);
+          }
+          FX.zigzag(from, this.pos);
+          wave(from, color, 0.2, area, 0.6);
+          burst(from, [color, 0xffffff], 22, 5);
+        };
+        break;
+      }
+      case 'ice-lance': {
+        // Lança de gelo: atravessa a fila; quem já estava lento ou preso se estilhaça (dano dobrado)
+        const reach = skill.range || 9;
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= reach);
+        const chilled = (s) => s.slowT > 0 || s.rootT > 0;
+        let aim = force && pool.includes(target) ? target : null, line = aim ? lineTargets(this.pos, aim.pos, pool, reach) : [];
+        if (!aim) for (const s of pool) {
+          const hits = lineTargets(this.pos, s.pos, pool, reach);
+          const score = hits.length + hits.filter(chilled).length;
+          if (score > line.length + line.filter(chilled).length) { line = hits; aim = s; }
+        }
+        if (!aim || (!force && line.length < 2 && !line.some(chilled) && !urgentEnemy)) return false;
+        target = aim;
+        effect = () => {
+          const from = this.pos.clone(), end = from.clone().addScaledVector(new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize(), reach);
+          for (const enemy of lineTargets(from, end, attackables.filter((s) => !s.dead && !s.spawning), reach)) {
+            const shatter = chilled(enemy);
+            damageOne(enemy, shatter ? 2 : 1);
+            if (shatter) popText(enemy.pos, 'Estilhaço!', 'crit');
+            enemy.slowT = Math.max(enemy.slowT || 0, scaleBranchEffect(this, 'control', 2) * power);
+          }
+          FX.zigzag(from, end);
+          burst(aim.pos, [color, 0xffffff], 16, 4);
+        };
+        break;
+      }
+      case 'life-drain': {
+        // Drenar vida: fere até três inimigos e transfere parte do dano aos aliados mais feridos
+        if (!force && !wounded.length && enemies.length < 3) return false;
+        const victims = prioritizedHeroTargets(this, enemies).slice(0, 3);
+        if (!victims.length) return false;
+        effect = () => {
+          let drained = 0;
+          for (const enemy of victims) {
+            if (enemy.dead) continue;
+            const before = enemy.hp;
+            damageOne(enemy);
+            drained += Math.max(0, before - Math.max(0, enemy.hp));
+            FX.zigzag(enemy.pos, this.pos);
+          }
+          let pool = scaleBranchEffect(this, 'support', drained * (skill.leech || 0.6));
+          for (const ally of [...party].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)) {
+            if (pool <= 0) break;
+            const heal = Math.min(ally.maxHp - ally.hp, pool);
+            if (heal <= 0) continue;
+            ally.hp += heal; pool -= heal; this.stats.cura += heal;
+            popText(ally.pos, '+' + Math.round(heal), 'heal');
+          }
+          burst(this.pos, [color, 0x1e4a24], 16, 3);
+        };
+        break;
+      }
+      case 'poison-blade': {
+        // Lâmina envenenada: adaga arremessada que deixa veneno corroendo o alvo
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 7));
+        const prey = force && pool.includes(target) ? target : highestPriorityHeroTarget(this, pool.filter((s) => !(s.burnT > 0)).length ? pool.filter((s) => !(s.burnT > 0)) : pool);
+        if (!prey || (!force && !(prey.maxHp > this.dmg * 4) && !urgentEnemy)) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          damageOne(prey);
+          prey.burnT = Math.max(prey.burnT || 0, scaleBranchEffect(this, 'control', skill.duration || 6));
+          prey.burnTick = Math.min(prey.burnTick || 0.5, 0.35);
+          prey.burnDmg = Math.max(prey.burnDmg || 0, this.dmg * power * 0.24);
+          prey.burnOwner = this;
+          popText(prey.pos, 'Envenenado!', 'crit');
+          FX.zigzag(this.pos, prey.pos);
+          column(prey.pos, color, 0.35, 2.2, 0.8, { follow: prey });
+        };
+        break;
+      }
+      case 'harpoon': {
+        // Virote arpão: fisga um inimigo afastado (atiradores primeiro), puxa para a frente e prende
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9) && (s.pos.distanceTo(this.pos) >= (skill.minRange || 3) || (force && s === target)));
+        const preferred = pool.filter((s) => s.ranged || s.kind?.priority || ['Priest', 'Bomber'].includes(s.enemyKind));
+        const prey = force && pool.includes(target) ? target : highestPriorityHeroTarget(this, preferred.length ? preferred : pool);
+        if (!prey || (!force && !preferred.length && !urgentEnemy)) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          damageOne(prey);
+          if (!prey.boss && !prey.totem) {
+            const dest = prey.pos.clone().lerp(this.pos, 0.5);
+            dest.y = world.groundHeight(dest.x, dest.z);
+            if (world.canStep(prey.pos, dest)) prey.pos.copy(dest);
+          }
+          prey.rootT = Math.max(prey.rootT || 0, scaleBranchEffect(this, 'control', skill.duration || 1.6) * power);
+          prey.pendingHit = null;
+          FX.zigzag(this.pos, prey.pos);
+          burst(prey.pos, [color, 0xffffff], 12, 3);
+        };
+        break;
+      }
+      case 'giant-shuriken': {
+        // Shuriken gigante: corta a fila na ida e, meio segundo depois, na volta
+        const reach = skill.range || 8;
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= reach);
+        let aim = force && pool.includes(target) ? target : null, line = aim ? lineTargets(this.pos, aim.pos, pool, reach, 0.9) : [];
+        if (!aim) for (const s of pool) {
+          const hits = lineTargets(this.pos, s.pos, pool, reach, 0.9);
+          if (hits.length > line.length) { line = hits; aim = s; }
+        }
+        if (!aim || (!force && line.length < 2 && !urgentEnemy)) return false;
+        target = aim;
+        effect = () => {
+          const from = this.pos.clone(), end = from.clone().addScaledVector(new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize(), reach);
+          const pass = () => {
+            for (const enemy of lineTargets(from, end, skeletonsAlive().filter((s) => !s.dead && !s.spawning), reach, 0.9)) { damageOne(enemy); FX.bladeCut(enemy, this, 0); }
+          };
+          pass();
+          const mesh = groundMark(end, 0.6, color, 0.2);
+          flames.push({ mesh, radius: 0.1, owner: this, wait: 0.5, t: 0.05, tick: 0, every: 1, dmg: 0, onTick: () => { pass(); FX.steelDash(end, from); } });
+          FX.steelDash(from, end);
+        };
+        break;
+      }
+      case 'riposte': {
+        // Contra-ataque: apara tudo por instantes e devolve um corte a cada golpe corpo a corpo
+        const attackers = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3) && (s.pendingHit?.target === this || s.engagedWith === this || s.target === this));
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3));
+        if (!force && !attackers.length && close.length < 2) return false;
+        effect = () => {
+          this.riposteT = (skill.duration || 2.5) * (0.9 + 0.1 * power);
+          this.riposteBy = skill.power || 1.4;
+          popText(this.pos, 'Em guarda!', 'block');
+          FX.bladeDance(this, 1.5);
+        };
+        break;
+      }
+      case 'thorn-vines': {
+        // Vinhas espinhosas: área de espinhos que fere e deixa lento quem continuar nela
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const ground = force && target?.groundTarget ? target : null;
+        const { center, count } = densest(pool, skill.radius || 2.6, force && !ground ? target : null);
+        const spot = ground || center;
+        if (!spot || (!ground && !force && count < 2 && !urgentEnemy)) return false;
+        target = spot;
+        const at = spot.pos.clone(), area = (skill.radius || 2.6) * (0.9 + 0.1 * power);
+        effect = () => {
+          const mesh = groundMark(at, area, 0x2f5a1c, 0.4);
+          flames.push({ mesh, radius: area, owner: this, t: scaleBranchEffect(this, 'control', skill.duration || 5) * power, tick: 0, every: 0.5,
+            dmg: this.dmg * power * (skill.pulse || 0.18), onTick: (f) => {
+              for (const s of skeletonsAlive()) if (!s.dead && !s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1)) s.slowT = Math.max(s.slowT || 0, 0.8);
+            } });
+          for (const s of attackables) if (!s.dead && !s.spawning && s.pos.distanceTo(at) <= area) FX.roots(s);
+          burst(at, [color, 0x2f5a1c], 16, 3);
+        };
+        break;
+      }
+      case 'blessing': {
+        // Bênção duradoura: cura aos poucos e segura uma queda com 1 de vida
+        const pool = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 9) && !(h.blessT > 0));
+        const ally = pool.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        if (!ally || (!force && ally.hp / ally.maxHp > 0.6)) return false;
+        target = ally;
+        effect = () => {
+          const duration = skill.duration || 6;
+          ally.blessT = duration;
+          ally.blessBy = this;
+          ally.blessHeal = scaleBranchEffect(this, 'support', 6 + level * 2) * power;
+          popText(ally.pos, 'Abençoado!', 'heal');
+          FX.rays(ally.pos, 'holy', 0.4, 5, 0.8, { follow: ally });
+        };
+        break;
+      }
+      case 'ballad': {
+        // Balada da coragem: encurta as recargas dos aliados próximos e os cura um pouco
+        const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= radius);
+        const waiting = allies.reduce((sum, h) => sum + h.skillTimers.reduce((a, t) => a + Math.max(0, Math.min(t, 3)), 0), 0);
+        if (!force && waiting < 6) return false;
+        effect = () => {
+          for (const h of [...allies, this]) {
+            if (h !== this) for (let s = 0; s < h.skillTimers.length; s++) h.skillTimers[s] = Math.max(0, h.skillTimers[s] - 3 * power);
+            const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', h.maxHp * 0.06) * power);
+            if (heal > 0) { h.hp += heal; this.stats.cura += heal; popText(h.pos, '+' + Math.round(heal), 'heal'); }
+          }
+          popText(this.pos, 'Coragem!', 'evolve');
+          FX.song(this, allies);
+          wave(this.pos, color, 0.3, radius, 0.8);
+        };
+        break;
+      }
+      case 'sky-lance': {
+        // Lança celestial: luz concentrada no inimigo mais forte; ampara o aliado mais perto dele
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
+        const worth = (s) => (s.boss || s.totem ? 1e6 : 0) + s.hp;
+        const prey = force && pool.includes(target) ? target : pool.reduce((best, s) => (!best || worth(s) > worth(best) ? s : best), null);
+        if (!prey || (!force && !prey.boss && !urgentEnemy && prey.hp < this.dmg * 3)) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          damageOne(prey);
+          const ally = nearest(prey.pos, party);
+          if (ally) {
+            const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', 8 + level * 3) * power);
+            if (heal > 0) { ally.hp += heal; this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
+          }
+          FX.rays(prey.pos, 'holy', 0.5, 8, 0.7);
+          column(prey.pos, color, 0.45, 6, 0.5);
+          burst(prey.pos, [color, 0xffffff], 18, 4);
+        };
+        break;
+      }
+      case 'rewind': {
+        // Rebobinar: a vida dos aliados próximos volta a como estava 3 s atrás (só se for maior)
+        const back = (h) => (h.hpHistory.length ? Math.min(h.maxHp, h.hpHistory[0]) : h.hp);
+        const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
+        const lost = allies.filter((h) => back(h) - h.hp > h.maxHp * 0.15);
+        if (!force && !lost.length) return false;
+        effect = () => {
+          for (const h of allies) {
+            const heal = back(h) - h.hp;
+            if (heal <= 0) continue;
+            h.hp += heal; this.stats.cura += heal;
+            popText(h.pos, '+' + Math.round(heal), 'heal');
+            FX.rays(h.pos, 'arcane', 0.4, 3, 0.6, { follow: h });
+          }
+          popText(this.pos, 'Rebobinar!', 'evolve');
+          wave(this.pos, color, 0.3, radius * 0.6, 0.7);
+        };
+        break;
+      }
+      case 'snare-trap': {
+        // Armadilha: armada no caminho do inimigo mais próximo; prende e fere quem pisar
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
+        const ground = force && target?.groundTarget ? target : null;
+        const prey = ground ? null : force && pool.includes(target) ? target : nearest(this.pos, pool);
+        if (!ground && !prey) return false;
+        const at = ground ? ground.pos.clone() : prey.pos.clone().addScaledVector(new THREE.Vector3().subVectors(this.pos, prey.pos).setY(0).normalize(), Math.min(1.2, prey.pos.distanceTo(this.pos) * 0.3));
+        at.y = world.groundHeight(at.x, at.z);
+        target = ground || prey;
+        const trigger = skill.radius || 1.4;
+        effect = () => {
+          const mesh = groundMark(at, trigger, 0x5a4026, 0.5);
+          flames.push({ mesh, radius: trigger, owner: this, wait: 0.3, t: 12, tick: 0, every: 0.1, dmg: 0, onTick: (f) => {
+            const caught = skeletonsAlive().filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1));
+            if (!caught.length) return;
+            for (const s of caught) {
+              heroHit(this, s, this.dmg * power * (skill.power || 1.4), f.mesh.position);
+              s.rootT = Math.max(s.rootT || 0, scaleBranchEffect(this, 'control', (s.boss ? 0.5 : 1) * (skill.duration || 2.5)) * power);
+              s.pendingHit = null;
+              FX.roots(s);
+            }
+            popText(f.mesh.position, 'Presa!', 'crit');
+            f.t = 0;
+          } });
+          burst(at, [color, 0x5a4026], 10, 2.5);
+        };
+        break;
+      }
+      case 'chi-transfer': {
+        // Chi compartilhado: o Monge doa vida ao aliado mais ferido, que recebe o dobro
+        const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const ally = allies.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        if (!force && (!ally || ally.hp / ally.maxHp > 0.55 || this.hp < this.maxHp * 0.5)) return false;
+        const receiver = ally || this;
+        target = receiver;
+        effect = () => {
+          const cost = receiver === this ? 0 : Math.min(this.hp - 1, this.maxHp * 0.15);
+          const heal = Math.min(receiver.maxHp - receiver.hp, scaleBranchEffect(this, 'support', receiver === this ? this.maxHp * 0.1 : cost * 2));
+          this.hp -= cost;
+          if (heal > 0) { receiver.hp += heal; this.stats.cura += heal; popText(receiver.pos, '+' + Math.round(heal), 'heal'); }
+          if (receiver !== this) FX.zigzag(this.pos, receiver.pos);
+          FX.calmPulse(this, 2, [receiver]);
+        };
+        break;
+      }
+      case 'giant-elixir': {
+        // Elixir do gigante: o aliado na linha de frente bate mais forte, aguenta mais e se cura
+        const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const front = allies.filter((h) => h.engagedWith && !h.engagedWith.dead && !h.ranged);
+        const pickFrom = front.length ? front : allies;
+        const ally = pickFrom.reduce((best, h) => (!best || h.maxHp > best.maxHp ? h : best), null);
+        if (!force && !front.length) return false;
+        const drinker = ally || this;
+        target = drinker;
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'support', skill.duration || 7) * (0.9 + 0.1 * power);
+          drinker.royalT = Math.max(drinker.royalT, duration);
+          drinker.royalBonus = Math.max(drinker.royalBonus, skill.bonus || 0.3);
+          drinker.guardT = Math.max(drinker.guardT, duration * 0.6);
+          const heal = Math.min(drinker.maxHp - drinker.hp, drinker.maxHp * 0.1 * power);
+          if (heal > 0) { drinker.hp += heal; this.stats.cura += heal; popText(drinker.pos, '+' + Math.round(heal), 'heal'); }
+          popText(drinker.pos, 'Gigante!', 'evolve');
+          FX.flaskToss(this, drinker.pos, 0.35);
+          column(drinker.pos, color, 0.6, 3, 0.8, { follow: drinker });
+        };
+        break;
+      }
+      case 'magnet-pull': {
+        // Ímã magnético: junta os inimigos ao redor da torre (ou à frente) e os deixa lentos
+        const center = (ownSentry ? ownSentry.root.position : this.pos.clone().addScaledVector(this.fwd, 3)).clone();
+        const caught = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(center) <= radius);
+        if (!force && caught.length < 3) return false;
+        effect = () => {
+          for (const s of caught) {
+            if (s.dead) continue;
+            const pull = new THREE.Vector3().subVectors(center, s.pos).setY(0);
+            s.vel.add(pull.multiplyScalar(s.boss ? 0.3 : 1.6));
+            s.slowT = Math.max(s.slowT || 0, scaleBranchEffect(this, 'control', skill.duration || 1.5) * power);
+            damageOne(s);
+            FX.zigzag(center, s.pos);
+          }
+          wave(center, color, radius, 0.3, 0.7);
+          burst(center.clone().setY(center.y + 0.8), [color, 0xffffff], 20, 4);
+        };
+        break;
+      }
+      case 'sic-em': {
+        // Comando de ataque: a fera salta no alvo prioritário e o faz sangrar; sem fera, uma rede o prende
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 10));
+        const prey = force && pool.includes(target) ? target : highestPriorityHeroTarget(this, pool);
+        if (!prey || (!force && !ownBeast)) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          const beast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
+          if (beast) {
+            const from = beast.pos.clone(), dir = new THREE.Vector3().subVectors(prey.pos, from).setY(0).normalize();
+            const dest = prey.pos.clone().addScaledVector(dir, -(0.8 + 0.3 * prey.size));
+            if (world.canStep(prey.pos, dest)) beast.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z));
+            heroHit(this, prey, this.dmg * power * (skill.power || 1.4));
+            prey.burnT = Math.max(prey.burnT || 0, scaleBranchEffect(this, 'control', skill.duration || 4));
+            prey.burnTick = Math.min(prey.burnTick || 0.5, 0.35);
+            prey.burnDmg = Math.max(prey.burnDmg || 0, this.dmg * power * 0.2);
+            prey.burnOwner = this;
+            FX.shadowStep(from, beast.pos);
+            popText(prey.pos, 'Mordida!', 'crit');
+          } else {
+            damageOne(prey, 0.5);
+            prey.rootT = Math.max(prey.rootT || 0, scaleBranchEffect(this, 'control', 2) * power);
+            prey.pendingHit = null;
+            FX.roots(prey);
+            popText(prey.pos, 'Rede!', 'crit');
+          }
+          burst(prey.pos, [color, 0xffffff], 14, 3.5);
+        };
+        break;
+      }
+      case 'omen': {
+        // Presságio: cada aliado próximo esquiva o próximo dano nos próximos segundos
+        const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
+        const warned = attackables.some((s) => s.telegraph?.t > 0);
+        if (!force && !warned && !criticalAlly && enemies.length < 4) return false;
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'control', skill.duration || 5);
+          for (const h of allies) { h.omenT = duration; FX.rays(h.pos, 'arcane', 0.35, 3, 0.6, { follow: h }); }
+          popText(this.pos, 'Presságio!', 'evolve');
+          wave(this.pos, color, 0.2, radius * 0.6, 0.7);
+        };
+        break;
+      }
       case 'summon':
         effect = () => {
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
@@ -5859,9 +6430,62 @@ class Hero extends Unit {
     FX.calmPulse(this, radius, healed);
   }
 
+  // estados das segundas técnicas (slot 3) que mudam como o herói recebe ou causa dano
+  resetSkillStates() {
+    this.oathT = 0; this.oathBy = null; this.oathShare = 0;   // Juramento do Paladino
+    this.iceSkinT = 0;      // Pele de Gelo do Viking do Gelo
+    this.riposteT = 0;      // Contra-ataque do Duelista
+    this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
+    this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
+    this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
+  }
+
+  updateSkillStates(dt) {
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.leechT -= dt;
+    if (this.blessT > 0) {
+      this.blessT -= dt;
+      const heal = Math.min(this.maxHp - this.hp, this.blessHeal * dt);
+      if (heal > 0 && !this.dead) { this.hp += heal; if (this.blessBy?.stats) this.blessBy.stats.cura += heal; }
+    }
+    this.hpSampleT -= dt;
+    if (this.hpSampleT <= 0) {
+      this.hpSampleT = 0.5;
+      this.hpHistory.push(this.dead ? 0 : this.hp);
+      if (this.hpHistory.length > 7) this.hpHistory.shift();   // 7 amostras = 3 s atrás
+    }
+  }
+
+  // dano já reduzido chegando ao herói: segundas técnicas podem esquivar, aparar, refletir, dividir ou segurar a queda
+  skillGuard(n, owner) {
+    if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
+    const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
+    if (this.riposteT > 0) {
+      popText(this.pos, 'Aparou!', 'block');
+      if (melee) { heroHit(this, owner, this.dmg * this.skillPower * (this.riposteBy || 1.4)); FX.bladeCut(owner, this, 0); }
+      return 0;
+    }
+    if (this.iceSkinT > 0) {
+      n *= 0.7;
+      if (melee) { owner.slowT = Math.max(owner.slowT || 0, scaleBranchEffect(this, 'control', 2)); owner.takeDamage(this.dmg * this.skillPower * (this.iceSkinBy || 0.4), null, this); }
+    }
+    if (this.oathT > 0 && this.oathBy && this.oathBy !== this && !this.oathBy.dead) {
+      const share = n * this.oathShare;
+      n -= share;
+      const taken = Math.min(share * 0.75, this.oathBy.hp - 1);   // o Paladino aguenta melhor e nunca cai pelo juramento
+      if (taken > 0) { this.oathBy.hp -= taken; this.oathBy.stats.recebido += taken; popText(this.oathBy.pos, taken, 'hurt'); }
+    }
+    if (this.blessT > 0 && n >= this.hp && this.hp > 1) {
+      n = this.hp - 1;
+      this.blessT = 0;
+      popText(this.pos, 'Bênção!', 'evolve');
+      FX.rays(this.pos, 'holy', 0.45, 4, 0.8, { follow: this });
+    }
+    return n;
+  }
+
   requestSkill(target = null, slot = 0, manual = false) {
     if (this.dead || game.over || game.paused) return 'off';
-    if (slot < 0 || slot > 2) return 'none';
+    if (slot < 0 || slot >= this.skillTimers.length) return 'none';
     if (this.skillTimers[slot] > 0) return 'wait';
     if (game.state !== 'fight') { this.missSkill(); return 'none'; }
     this.skillTargets[slot] = target;
@@ -5896,7 +6520,9 @@ class Hero extends Unit {
     this.bladeDanceT = 0;
     this.meditateT = this.immuneT = 0;
     this.stoneT = 0;
+    this.resetSkillStates();
     this.hp = this.maxHp * difficulty.revive;
+    this.hpHistory.length = 0;
     this.bar.style.display = '';
     this.current = null;
     this.mixer.stopAllAction();
@@ -5906,7 +6532,7 @@ class Hero extends Unit {
 
   update(dt) {
     if (dt <= 0) return;
-    for (let slot = 0; slot < 3; slot++) {
+    for (let slot = 0; slot < this.skillTimers.length; slot++) {
       this.skillTimers[slot] -= dt;
       this.skillRequests[slot] -= dt;
       if (this.skillRequests[slot] <= 0) { this.skillTargets[slot] = null; this.skillManuals[slot] = false; }
@@ -5947,6 +6573,7 @@ class Hero extends Unit {
     if (this.hurl) this.updateHurl(dt);
     this.immuneT -= dt;
     if (this.meditateT > 0) this.updateMeditation(dt);
+    this.updateSkillStates(dt);
     this.updateCommon(dt);
     this.tickSkillBody(dt);
   if (this.dead || game.over) return;
@@ -5985,7 +6612,7 @@ class Hero extends Unit {
         this.missSkill();
       } else {
         // A IA reserva a ultimate para chefes, perigo real, grupo cercado ou aliados feridos.
-        for (const slot of [2, 1, 0]) {
+        for (const slot of SKILL_AI_ORDER) {
           if (this.skillTimers[slot] > 0 || !this.autoSkills[slot]) continue;
           if (this.useSkill(target, false, false, slot)) return;
         }
@@ -6067,7 +6694,7 @@ const SKILL_MOVES = {
   summoner: ['2H_Melee_Attack_Stab', 1.5, 0.45, 'summon'],
 };
 
-// Corpo de cada habilidade [básica, técnica, ultimate]. O tempo continua o de SKILL_MOVES (o clipe novo é
+// Corpo de cada habilidade [básica, técnica, ultimate, segunda técnica]. O tempo continua o de SKILL_MOVES (o clipe novo é
 // acelerado/freado para caber nele). clip: golpe solto; hold: pose em laço segurada durante a carga;
 // f: fração do clipe em que acontece o impacto; arc: rastro do golpe (slash, chop, ring, thrust);
 // hop: salto que aterrissa no impacto; float: levita durante a carga; spin: voltas do corpo no impacto;
@@ -6077,136 +6704,163 @@ const SKILL_ANIMS = {
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.12, kick: -0.8 },
     { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: 1 },
     { clip: '1H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.5, arc: 'chop', hop: 0.45 },
+    { clip: 'Cheer', hold: 'Blocking', f: 0.4, lean: -0.08 },
   ],
   guardian: [
     { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: -1 },
     { clip: '1H_Melee_Attack_Stab', f: 0.45, arc: 'thrust', kick: 1.4 },
     { clip: 'Cheer', hold: 'Blocking', f: 0.35, arc: 'ring', lean: -0.15, hop: 0.25 },
+    { clip: 'Dodge_Forward', hold: 'Blocking', f: 0.55, arc: 'slash', kick: 1.8 },
   ],
   champion: [
     { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 1 },
     { clip: '2H_Melee_Attack_Stab', f: 0.45, arc: 'thrust', lean: 0.18 },
     { clip: '2H_Melee_Attack_Spin', hold: '2H_Melee_Idle', f: 0.55, arc: 'ring', spin: 2, hop: 0.3 },
+    { clip: 'Cheer', hold: '2H_Melee_Idle', f: 0.38, lean: -0.2, hop: 0.15 },
   ],
   king: [
     { clip: 'Cheer', f: 0.35, lean: -0.18 },
     { clip: 'Spellcast_Raise', f: 0.5, lean: -0.1, kick: 0.8 },
     { clip: '2H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.5, arc: 'chop', hop: 0.5 },
+    { clip: '2H_Melee_Attack_Stab', hold: '2H_Melee_Idle', f: 0.5, arc: 'thrust', lean: -0.05, kick: 0.4 },
   ],
   berserker: [
     { clip: 'Dualwield_Melee_Attack_Stab', f: 0.38, arc: 'thrust', lean: 0.22, hop: 0.2 },
     { clip: 'Dualwield_Melee_Attack_Chop', f: 0.5, arc: 'chop', hop: 0.7, lean: 0.15 },
     { clip: '2H_Melee_Attack_Spinning', hold: 'Unarmed_Idle', f: 0.5, arc: 'ring', spin: 2 },
+    { clip: 'Cheer', hold: 'Unarmed_Idle', f: 0.4, lean: -0.25, hop: 0.1 },
   ],
   crusher: [
     { clip: '2H_Melee_Attack_Chop', f: 0.55, arc: 'chop', hop: 0.55 },
     { clip: 'Jump_Full_Short', f: 0.72, arc: 'ring', kick: 1 },
     { clip: '2H_Melee_Attack_Spin', hold: '2H_Melee_Idle', f: 0.6, arc: 'ring', spin: 1, hop: 0.4 },
+    { clip: 'Throw', f: 0.5, lean: 0.25, kick: 0.3 },
   ],
   viking: [
     { clip: 'Throw', f: 0.45, lean: 0.15 },
     { clip: '1H_Ranged_Shooting', hold: '1H_Ranged_Aiming', f: 0.45, lean: 0.2, kick: -0.8 },
     { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 2 },
+    { clip: 'Cheer', hold: 'Block', f: 0.36, lean: -0.18, kick: -0.3 },
   ],
   iceviking: [
     { clip: 'Throw', hold: 'Block', f: 0.45, lean: 0.2, hop: 0.2 },
     { clip: '2H_Melee_Attack_Chop', f: 0.55, arc: 'chop', hop: 0.5 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.6, arc: 'ring', float: 0.35 },
+    { clip: 'Block', hold: 'Blocking', f: 0.45, lean: 0.08 },
   ],
   pyro: [
     { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -1 },
     { clip: '2H_Melee_Attack_Spin', f: 0.5, arc: 'ring', spin: 1 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.6, lean: -0.22, float: 0.25 },
+    { clip: 'Spellcast_Long', f: 0.5, lean: 0.15, kick: -0.4 },
   ],
   arcane: [
     { clip: '1H_Ranged_Shoot', hold: 'Spellcasting', f: 0.3, kick: -0.8 },
     { clip: 'Spellcast_Raise', f: 0.44, arc: 'thrust', spin: 0.6, float: 0.28, lean: 0.12, kick: -0.35 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, float: 0.45 },
+    { clip: 'Dodge_Backward', f: 0.45, float: 0.2, kick: -1.6 },
   ],
   cryo: [
     { clip: '1H_Ranged_Shooting', hold: '1H_Ranged_Aiming', f: 0.3, kick: -1 },
     { clip: 'Spellcast_Raise', f: 0.5, lean: -0.1 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
+    { clip: 'Spellcast_Shoot', hold: 'Spellcasting', f: 0.42, lean: 0.2, kick: -0.5 },
   ],
   assassin: [
     { clip: 'Dodge_Forward', f: 0.6, lean: 0.25 },
     { clip: 'Dualwield_Melee_Attack_Slice', f: 0.55, arc: 'slash', hop: 0.3 },
     { clip: 'Dualwield_Melee_Attack_Chop', hold: 'Blocking', f: 0.5, arc: 'chop', hop: 0.45, lean: 0.2 },
+    { clip: 'Throw', f: 0.45, lean: 0.3, kick: -0.4 },
   ],
   crossbow: [
     { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, kick: -1.4 },
     { clip: '2H_Ranged_Shooting', f: 0.3, kick: -1 },
     { clip: '2H_Ranged_Reload', f: 0.68, lean: -0.3, hop: 0.3 },
+    { clip: '1H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.3, lean: -0.2, kick: -0.9 },
   ],
   duelist: [
     { clip: 'Dualwield_Melee_Attack_Slice', f: 0.45, arc: 'slash', kick: 0.6 },
     { clip: 'Dualwield_Melee_Attack_Stab', hold: 'Blocking', f: 0.5, arc: 'thrust', kick: 1.4, lean: 0.25 },
     { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 3, hop: 0.3 },
+    { clip: 'Block', hold: 'Blocking', f: 0.4, arc: 'slash', kick: -0.5, lean: -0.1 },
   ],
   ninja: [
     { clip: 'Throw', f: 0.45, lean: 0.15, hop: 0.25 },
     { clip: 'Dodge_Backward', f: 0.5, hop: 0.35 },
     { clip: 'Dualwield_Melee_Attack_Chop', f: 0.5, arc: 'slash', spin: 2.5, hop: 0.42, lean: 0.2, kick: 0.5 },
+    { clip: '1H_Melee_Attack_Slice_Horizontal', f: 0.45, arc: 'slash', spin: 1, lean: 0.1 },
   ],
   necro: [
     { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, lean: -0.1 },
     { clip: 'Spellcast_Shoot', f: 0.5, kick: -0.8 },
     { clip: '2H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.3 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.5, lean: 0.1, float: 0.15 },
   ],
   druid: [
     { clip: 'PickUp', f: 0.5, lean: 0.15 },
     { clip: '2H_Melee_Attack_Chop', f: 0.55, arc: 'ring', hop: 0.3 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, float: 0.4, lean: -0.12 },
+    { clip: 'Spellcast_Shoot', hold: 'Spellcasting', f: 0.48, lean: 0.18 },
   ],
   cleric: [
     { clip: 'Spellcast_Long', f: 0.45, lean: -0.15 },
     { clip: 'Block', hold: 'Blocking', f: 0.5, kick: -0.6 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.4 },
+    { clip: 'Cheer', f: 0.4, lean: -0.2, float: 0.15 },
   ],
   bard: [
     { clip: 'Interact', f: 0.3, hop: 0.3 },
     { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -0.7 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
+    { clip: 'Cheer', f: 0.42, spin: 0.5, hop: 0.2 },
   ],
   angel: [
     { clip: 'Jump_Full_Long', f: 0.6, hop: 0.6, lean: 0.15 },
     { clip: 'Block', hold: 'Blocking', f: 0.5 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.6 },
+    { clip: 'Spellcast_Shoot', hold: 'Spellcasting', f: 0.45, float: 0.5, lean: 0.15 },
   ],
   chronist: [
     { clip: 'Dodge_Right', f: 0.5, kick: -0.8 },
     { clip: '1H_Ranged_Shoot', f: 0.3, lean: 0.1, kick: -0.8 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.35 },
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.5, spin: -1, float: 0.25 },
   ],
   archer: [
     { clip: '2H_Ranged_Shooting', hold: '2H_Ranged_Aiming', f: 0.2, lean: -0.1, kick: -0.8 },
     { clip: '1H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.3, lean: -0.35 },   // mira para o alto: a chuva cai lá na frente
     { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, lean: 0.15, hop: 0.25, kick: -1.4 },
+    { clip: 'PickUp', f: 0.55, lean: 0.25 },
   ],
   monk: [
     { clip: 'Unarmed_Melee_Attack_Punch_A', f: 0.45, arc: 'thrust', kick: 0.8 },
     { clip: 'Unarmed_Melee_Attack_Punch_B', hold: 'Unarmed_Idle', f: 0.45, arc: 'thrust', lean: 0.2, kick: 1.2 },
     { clip: 'Sit_Floor_Down', hold: 'Unarmed_Idle', f: 0.6, float: 0.2 },
+    { clip: 'Spellcast_Raise', hold: 'Unarmed_Idle', f: 0.5, lean: -0.1, float: 0.1 },
   ],
   alchemist: [
     { clip: 'Use_Item', f: 0.45, lean: 0.12 },
     { clip: 'Throw', hold: 'Use_Item', f: 0.45, hop: 0.2, lean: 0.2 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.62, arc: 'ring', spin: -0.8, float: 0.22, lean: -0.12 },
+    { clip: 'Spellcast_Shoot', hold: 'Use_Item', f: 0.45, lean: 0.15, kick: 0.2 },
   ],
   engineer: [
     { clip: '1H_Ranged_Reload', hold: '1H_Ranged_Aiming', f: 0.38, lean: 0.22, kick: 0.25 },
     { clip: 'Throw', hold: 'Use_Item', f: 0.48, hop: 0.15, lean: 0.3 },
     { clip: '2H_Ranged_Reload', hold: '2H_Ranged_Aiming', f: 0.62, spin: -0.5, kick: -0.6 },
+    { clip: 'Use_Item', hold: '1H_Ranged_Aiming', f: 0.5, lean: -0.15 },
   ],
   beast_tamer: [
     { clip: 'Unarmed_Melee_Attack_Kick', hold: 'Unarmed_Idle', f: 0.32, lean: -0.2, hop: 0.2 },
     { clip: '2H_Melee_Attack_Chop', f: 0.64, arc: 'chop', hop: 0.55, lean: 0.24 },
     { clip: 'Jump_Full_Long', hold: 'Unarmed_Idle', f: 0.58, arc: 'ring', spin: 0.7, hop: 0.72 },
+    { clip: 'Unarmed_Melee_Attack_Punch_A', hold: 'Unarmed_Idle', f: 0.4, arc: 'thrust', lean: 0.25 },
   ],
   oracle: [
     { clip: 'Spellcasting', hold: 'Spellcast_Raise', f: 0.28, lean: 0.18, kick: -0.7 },
     { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.53, spin: -0.6, float: 0.3, lean: -0.16 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.62, spin: 0.9, float: 0.42, kick: -0.2 },
+    { clip: 'Cheer', hold: 'Spellcasting', f: 0.45, float: 0.3, lean: -0.12 },
   ],
   brute: [
     { clip: 'Jump_Land', hold: 'Unarmed_Idle', f: 0.3, arc: 'ring', hop: 0.6, lean: 0.2 },
@@ -6995,8 +7649,8 @@ const directControl = {
   enabled: false, hero: null, pointerX: null, pointerY: null, commandDownAt: null,
   moveTarget: null, attackTarget: null, moveKeys: new Set(), aimDirection: new THREE.Vector3(),
 };
-const DIRECT_SKILL_SLOTS = { q: 0, w: 1, e: 2 };
-const DIRECT_BLOCKED_LEGACY_KEYS = new Set('1234qwerasdf'.split(''));
+const DIRECT_SKILL_SLOTS = { q: 0, w: 1, e: 2, r: 3 };
+const DIRECT_BLOCKED_LEGACY_KEYS = new Set('1234qwerasdfzxvb'.split(''));
 const DIRECT_MOVE_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 const DIRECT_AIM_EFFECTS = new Set(['charge', 'volley', 'execute', 'shadow', 'chain', 'cross-dash', 'arrow-storm', 'volatile', 'hunter-mark', 'wind-palm', 'emp-pulse']);
 const DIRECT_GROUND_AIM_EFFECTS = new Set(['arrow-storm', 'volatile']);
@@ -7045,7 +7699,7 @@ function syncDirectControlUI() {
     : `Assumir ${selected?.cfg.name || 'controle'} (C)`;
   toggle.setAttribute('aria-label', label);
   toggle.setAttribute('aria-pressed', String(directControl.enabled));
-  toggle.setAttribute('data-tip', `${label} · setas ou botão direito movem · esquerdo ataca · Q/W/E habilidades manuais`);
+  toggle.setAttribute('data-tip', `${label} · setas ou botão direito movem · esquerdo ataca · Q/W/E/R habilidades manuais`);
   if (toggle.textContent !== '🎮') toggle.textContent = '🎮';
   hint.classList.toggle('is-hidden', !directControl.enabled);
   const title = $('directControlHero');
@@ -8929,7 +9583,7 @@ new ResizeObserver(frameView).observe($('skills'));
 // modo Reino (kingdom.js): recebe as peças do jogo sem importar o main.js, como o monsters.js
 linkKingdom({ Unit, Hero, Skeleton, units, scene, camera, controls, renderer, sun, follow, assets, HEROES, VARIANTS, variantOpen, militiaWeapon,
   fireBolt, ring, poof, popText, showBanner, FX, audio, pickMonster, skeletonsAlive, skillSetFor, startGame, withBattleAssets,
-  skillGlyph: (id, slot) => SKILL_GLYPHS[id]?.[slot] || ['✦', '⚔', '☼'][slot],
+  skillGlyph: (id, slot) => SKILL_GLYPHS[id]?.[slot] || ['✦', '⚔', '☼', '✧'][slot],
   pickOpen: () => pick.open,
   replaceWorld(next) { world.dispose?.(); world = next; },
   restoreWorld() { world.dispose?.(); world = createWorld(scene, ROAD, PHASES, 11); },

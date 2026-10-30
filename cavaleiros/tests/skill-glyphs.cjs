@@ -1,4 +1,4 @@
-// node tests/skill-glyphs.cjs — toda variante de VARIANTS tem os três glifos da barra de habilidades.
+// node tests/skill-glyphs.cjs — toda variante de VARIANTS tem os quatro glifos da barra de habilidades.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -21,7 +21,7 @@ const glyphs = context.result;
 for (const id of ids) {
   const set = glyphs[id];
   assert.ok(Array.isArray(set), `variante ${id} sem glifo em SKILL_GLYPHS`);
-  assert.equal(set.length, 3, `variante ${id} precisa de 3 glifos`);
+  assert.equal(set.length, 4, `variante ${id} precisa de 4 glifos`);
   for (const glyph of set) assert.ok(typeof glyph === 'string' && glyph.trim(), `variante ${id} com glifo vazio`);
 }
 
