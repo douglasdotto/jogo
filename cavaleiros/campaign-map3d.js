@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MAP_STYLES } from './world.js';
+import { preloadSceneryAssets, sceneryModel, sceneryReady, forestMaterial } from './scenery-assets.js';
 import { makeBuilding, makeBridge, makeTree } from './kingdom-models.js';
 import { CAMPAIGN_ROAD, CHAPTER_COSMETICS, campaignRoadX } from './campaign.js';
 
@@ -401,21 +402,26 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   }
   for (const t of extraTrees) if (roadDist(t.x, t.z) > 1.8) plants.pine.push({ ...t, theme: themeOf(chapterAt(t.x, t.z)) });
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
-  function instancedFrom(template, items, tint) {
+  // giro e escala sorteados antes (na ordem de sempre): procedural e modelos prontos dão o mesmo mapa
+  const spin = (items) => items.forEach((it) => { it.ry ??= rand() * Math.PI * 2; it.s ??= 0.42 + rand() * 0.25; });
+  spin(plants.pine); spin(plants.round);
+  plants.rock.forEach((it) => (it.s = 0.5 + rand() * 0.7));
+  spin(plants.rock);
+  function instancedFrom(template, items, tint, out) {
     template.updateMatrixWorld(true);
     template.traverse((o) => {
       if (!o.isMesh || !items.length) return;
       const mat = new THREE.MeshLambertMaterial({ flatShading: true });
       const im = new THREE.InstancedMesh(o.geometry, mat, items.length);   // geometria compartilhada do Reino: não é liberada aqui
       items.forEach((it, k) => {
-        q.setFromAxisAngle(up, it.ry ?? (it.ry = rand() * Math.PI * 2));
-        it.s ??= 0.42 + rand() * 0.25;
+        q.setFromAxisAngle(up, it.ry);
         m4.compose(v3.set(it.x, heightAt(it.x, it.z) - 0.05, it.z), q, s3.setScalar(it.s)).multiply(o.matrixWorld);
         im.setMatrixAt(k, m4);
         im.setColorAt(k, tint(o, it, k));
       });
       im.computeBoundingSphere();
       own.mats.push(mat); own.instanced.push(im);
+      out.push(im);
       scene.add(im);
     });
   }
@@ -426,18 +432,62 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     return it.theme.dead ? color.lerp(GLOOM, 0.65) : color.lerp(GLOOM, it.theme.gloom * 0.6);
   };
   const isTrunk = (o) => o.material.color.getHex() === STATE_COLORS.pole;
-  instancedFrom(makeTree(0), plants.pine, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).pine, k)));
-  instancedFrom(makeTree(2), plants.round, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).canopy, k)));
-  {
+  function proceduralPlants() {
+    const out = [];
+    instancedFrom(makeTree(0), plants.pine, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).pine, k)), out);
+    instancedFrom(makeTree(2), plants.round, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).canopy, k)), out);
     const rock = new THREE.Group();
     const geo = new THREE.DodecahedronGeometry(0.7, 0);
     own.geos.push(geo);
     const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x9aa0a8 }));
     mesh.scale.set(1, 0.6, 1); mesh.position.y = 0.25;
     rock.add(mesh);
-    plants.rock.forEach((it) => (it.s = 0.5 + rand() * 0.7));
-    instancedFrom(rock, plants.rock, (o, it) => color.setHex(styleOf(it.theme).cliffs[1]).lerp(GLOOM, it.theme.gloom * 0.7));
+    instancedFrom(rock, plants.rock, (o, it) => color.setHex(styleOf(it.theme).cliffs[1]).lerp(GLOOM, it.theme.gloom * 0.7), out);
     mesh.material.dispose();
+    return out;
+  }
+  // Forest pack (scenery-assets.js): uma InstancedMesh por modelo e paleta de copa; capítulos sombrios ganham árvores secas
+  const PLANT_MODELS = { pine: ['Tree_4_A_Color1', 'Tree_4_B_Color1'], round: ['Tree_1_A_Color1', 'Tree_2_A_Color1'],
+    dead: ['Tree_Bare_1_A_Color1'], rock: ['Rock_3_E_Color1'] };
+  const PLANT_FIT = { pine: 0.6, round: 0.85, dead: 0.95, rock: 1.1 };
+  function modelPlants() {
+    const groups = new Map(), white = new THREE.Color(0xffffff);
+    const add = (kind, it, k, material, tint) => {
+      const list = PLANT_MODELS[kind], name = list[((k * 2654435761) >>> 0) % list.length];
+      const key = `${name}|${material.id}`;
+      if (!groups.has(key)) groups.set(key, { name, material, items: [] });
+      groups.get(key).items.push({ it, s: it.s * PLANT_FIT[kind], c: tint.clone() });
+    };
+    const leaves = (it) => { const l = styleOf(it.theme).leaves; return (l && forestMaterial(...l)) || sceneryModel(PLANT_MODELS.round[0]).material; };
+    const tree = (kind) => (it, k) => {
+      if (it.theme.dead && (kind === 'round' || k % 2 === 0)) add('dead', it, k, forestMaterial(null, null, [0x9a8c8a, 0x3e3436]), color.copy(white).lerp(GLOOM, it.theme.gloom * 0.4));
+      else add(kind, it, k, leaves(it), color.copy(white).lerp(GLOOM, (it.theme.dead ? 0.65 : it.theme.gloom * 0.6)));
+    };
+    plants.pine.forEach(tree('pine'));
+    plants.round.forEach(tree('round'));
+    plants.rock.forEach((it, k) => add('rock', it, k, sceneryModel(PLANT_MODELS.rock[0]).material,
+      color.setHex(styleOf(it.theme).cliffs[1]).lerp(white, 0.35).lerp(GLOOM, it.theme.gloom * 0.7)));
+    for (const { name, material, items } of groups.values()) {
+      const im = new THREE.InstancedMesh(sceneryModel(name).geometry, material, items.length);   // geometria e material em cache: não liberados aqui
+      items.forEach(({ it, s, c }, k) => {
+        q.setFromAxisAngle(up, it.ry);
+        im.setMatrixAt(k, m4.compose(v3.set(it.x, heightAt(it.x, it.z) - 0.05, it.z), q, s3.setScalar(s)));
+        im.setColorAt(k, c);
+      });
+      im.computeBoundingSphere();
+      own.instanced.push(im);
+      scene.add(im);
+    }
+  }
+  const plantNames = Object.values(PLANT_MODELS).flat();
+  if (sceneryReady(plantNames)) modelPlants();
+  else {
+    const fallback = proceduralPlants();   // até o Forest pack chegar (ou para sempre, se ele faltar)
+    preloadSceneryAssets().then((ok) => {
+      if (!ok || disposed || !sceneryReady(plantNames)) return;
+      for (const im of fallback) { scene.remove(im); im.dispose(); own.instanced.splice(own.instanced.indexOf(im), 1); }
+      modelPlants();
+    });
   }
 
   // ---------- detalhes: uma malha instanciada (uma chamada de desenho) por tipo de peça, geometria unitária compartilhada ----------
