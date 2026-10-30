@@ -258,6 +258,7 @@ function giveWard(shaman, o) {
 }
 
 let mPacking = false;   // crânios do enxame criados pelo líder não criam outro enxame
+const HARD_COUNT = 1.12;   // Difícil e Pesadelo: bando de 3 crânios, golem avulso e 2 sacerdotes/xamãs
 
 // ---------- tipos novos (atributos base; fase e dificuldade escalam no Skeleton) ----------
 export const MONSTER_TYPES = {
@@ -410,7 +411,7 @@ export const MONSTER_TYPES = {
       s.trail.castShadow = false;
       boneOf(s, 'head').add(s.trail);
       s.bob = Math.random() * 6;
-      s.pack = mPacking ? 0 : G.difficulty.count >= 1.25 ? 3 : 2;   // o primeiro traz o bando
+      s.pack = mPacking ? 0 : G.difficulty.count >= HARD_COUNT ? 3 : 2;   // o primeiro traz o bando
       s.attackTimer = 0.6 + Math.random() * 1.2;   // não mergulham todos juntos
     },
     tick(s, dt) {
@@ -894,13 +895,13 @@ export function pickMonster(p, type) {
   for (const [kind, from, max, grow] of ROSTER) {
     if (p < from) continue;
     let w = Math.min(max, grow * (p - from + 1)) * variety;
-    if (kind === 'Priest' && countOf('Priest') >= (p >= 9 && D.count > 1.2 ? 2 : 1)) w = 0;
-    if (kind === 'Shaman' && countOf('Shaman') >= (p >= 11 && D.count > 1.2 ? 2 : 1)) w = 0;
+    if (kind === 'Priest' && countOf('Priest') >= (p >= 9 && D.count >= HARD_COUNT ? 2 : 1)) w = 0;
+    if (kind === 'Shaman' && countOf('Shaman') >= (p >= 11 && D.count >= HARD_COUNT ? 2 : 1)) w = 0;
     if (kind === 'DarkKnight' && countOf('DarkKnight') >= 2) w = 0;
     if (r < w) return kind;
     r -= w;
   }
-  if (p >= 9 && D.count >= 1.25 && !countOf('Golem') && Math.random() < 0.015) return 'Golem';
+  if (p >= 9 && D.count >= HARD_COUNT && !countOf('Golem') && Math.random() < 0.015) return 'Golem';
   return type;
 }
 // quem fecha a onda: Rei (6), Carrasco (9), Lich (12); golem nas fases 4 e 8

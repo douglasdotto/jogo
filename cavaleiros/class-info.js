@@ -42,7 +42,7 @@ const TEAM_ROLE_RULES = {
   berserker: ['Defesa', 'Área', 'Dano a chefe'], crusher: ['Defesa', 'Controle', 'Área', 'Dano a chefe'],
   viking: ['Defesa', 'Dano a chefe'], iceviking: ['Defesa', 'Controle', 'Área'],
   pyro: ['À distância', 'Área'], arcane: ['À distância', 'Área'], cryo: ['À distância', 'Controle', 'Área'],
-  assassin: ['Dano a chefe'], crossbow: ['À distância', 'Dano a chefe'], ninja: ['À distância', 'Área'], duelist: ['Área', 'Dano a chefe'], necro: ['À distância'],
+  assassin: ['Dano a chefe'], crossbow: ['À distância', 'Dano a chefe'], ninja: ['Área'], duelist: ['Área', 'Dano a chefe'], necro: ['À distância'],
   druid: ['À distância', 'Controle', 'Cura'], cleric: ['À distância', 'Cura'], bard: ['À distância', 'Dano a chefe'],
   angel: ['À distância', 'Cura', 'Área'], chronist: ['À distância', 'Controle'],
   archer: ['À distância', 'Área', 'Dano a chefe'], monk: ['Defesa', 'Controle', 'Cura'], alchemist: ['À distância', 'Cura', 'Controle'],

@@ -104,11 +104,11 @@ const VARIANTS = [
   { id: 'alchemist', names: ['Alquimista', 'Mestre dos Frascos', 'Grão-Transmutador'], desc: 'Frascos de veneno e de tônico.', ability: 'Frasco', color: ['#d8f59a', '#8cb83f'],
     use: [], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 200, dmg: 14, range: 6, speed: 3, cooldown: 1.15, ranged: true, splash: 0.6, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'alchemist' },
   { id: 'engineer', names: ['Engenheira', 'Inventora de Batalha', 'Mestra das Engrenagens'], desc: 'Constrói uma torre automática e desmonta a formação inimiga.', ability: 'Torreta sentinela', color: ['#9be8db', '#3b9c94'],
-    use: ['1H_Wand', 'Spellbook'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 190, dmg: 19, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['1H_Ranged_Shoot'], classId: 2, pickGroup: 'engineer' },
+    use: ['1H_Wand', 'Spellbook'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 190, dmg: 19, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0.6, attacks: ['1H_Ranged_Shoot'], classId: 2, pickGroup: 'engineer' },
   { id: 'beast_tamer', names: ['Domador', 'Guardião da Matilha', 'Lenda Selvagem'], desc: 'Chama uma fera aliada que protege o grupo e caça ameaças.', ability: 'Companheiro feral', color: ['#d2c28e', '#8c6d36'],
     use: ['1H_Axe'], stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop'], classId: 1, pickGroup: 'beast-tamer' },
   { id: 'oracle', names: ['Oráculo', 'Vidente do Véu', 'Profeta das Estrelas'], desc: 'Prevê ataques anunciados e interrompe os golpes dos chefes.', ability: 'Estilhaço do augúrio', color: ['#c6b4ff', '#7862c5'],
-    use: ['Spellbook', '1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle' },
+    use: ['Spellbook', '1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -2385,6 +2385,22 @@ function damageCleave(owner, primary) {
   }
 }
 
+// Controle num inimigo (stunT, rootT, slowT): nunca encurta o que já está valendo.
+// Chefes têm retorno decrescente em atordoar/prender: dentro de 8 s do último controle, o 2º dura 50%,
+// o 3º 25% e depois ficam imunes até a janela fechar. Devolve a duração aplicada (0 = resistiu).
+const BOSS_CONTROL_WINDOW = 8, BOSS_CONTROL_SCALE = [1, 0.5, 0.25];
+function controlEnemy(enemy, key, duration) {
+  if (enemy.boss && key !== 'slowT') {
+    if (!(enemy.controlWindowT > 0)) enemy.controlCount = 0;
+    duration *= BOSS_CONTROL_SCALE[enemy.controlCount] ?? 0;
+    if (duration <= 0) return 0;
+    enemy.controlCount++;
+    enemy.controlWindowT = BOSS_CONTROL_WINDOW;
+  }
+  enemy[key] = Math.max(enemy[key] || 0, duration);
+  return duration;
+}
+
 function damageArea(center, radius, dmg, owner = null) {
   const count = units.length;
   for (let i = 0; i < count; i++) {
@@ -2979,10 +2995,10 @@ function updateBolts(dt) {
         }
         if (b.kind === 'cryo' || b.kind === 'iceviking') {
           if (targetSnapshot === null) targetSnapshot = frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive();
-          for (const s of targetSnapshot) if (!s.dead && s.pos.distanceTo(b.target.pos) <= radius) s.slowT = scaleBranchEffect(b.owner, 'control', 3 + (b.level - 1) * 0.5) * b.power;
+          for (const s of targetSnapshot) if (!s.dead && s.pos.distanceTo(b.target.pos) <= radius) controlEnemy(s, 'slowT', scaleBranchEffect(b.owner, 'control', 3 + (b.level - 1) * 0.5) * b.power);
         }
-        if (b.kind === 'oracle' && !b.target.dead && b.target.telegraph?.interruptible && b.target.telegraph.t > 0) {
-          b.target.stunT = Math.max(b.target.stunT || 0, scaleBranchEffect(b.owner, 'control', 1.15 + (b.level - 1) * 0.15) * b.power);
+        if (b.kind === 'oracle' && !b.target.dead && b.target.telegraph?.interruptible && b.target.telegraph.t > 0
+          && controlEnemy(b.target, 'stunT', scaleBranchEffect(b.owner, 'control', 1.15 + (b.level - 1) * 0.15) * b.power)) {
           b.target.pendingHit = null;
           popText(b.target.pos, 'Previsto!', 'crit');
           FX.stasis(b.target);
@@ -4870,8 +4886,7 @@ class Hero extends Unit {
       effect = () => {
         const duration = scaleBranchEffect(this, 'control', 2.3 + (level - 1) * 0.35) * power;
         for (const enemy of nearby) if (!enemy.dead) {
-          enemy.rootT = Math.max(enemy.rootT || 0, duration);
-          enemy.pendingHit = null;
+          if (controlEnemy(enemy, 'rootT', duration)) enemy.pendingHit = null;
           enemy.vel.set(0, 0, 0);
           heroHit(this, enemy, this.dmg * 0.55 * power);
           FX.stasis(enemy);   // tempo parado, não raízes
@@ -4900,7 +4915,7 @@ class Hero extends Unit {
           if (id === 'crusher' && !inMeleeArc(this, s, 2.2 * power)) continue;
           heroHit(this, s, this.dmg * 1.1);
           if (id === 'champion') s.vel.add(new THREE.Vector3().subVectors(s.pos, this.pos).setY(0).normalize().multiplyScalar(6 + level));
-          else { s.stunT = scaleBranchEffect(this, 'control', 1.5 + (level - 1) * 0.25) * power; s.pendingHit = null; s.vel.set(0, 0, 0); }
+          else { if (controlEnemy(s, 'stunT', scaleBranchEffect(this, 'control', 1.5 + (level - 1) * 0.25) * power)) s.pendingHit = null; s.vel.set(0, 0, 0); }
         }
         if (id === 'champion') FX.whirl(this, radius);
         else FX.quake(this, 2.2 * power);
@@ -4967,8 +4982,7 @@ class Hero extends Unit {
           FX.palmHit(target, this, kick);
           if (i > 0) audio.play('hit');
           if (kick) {
-            target.stunT = Math.max(target.stunT || 0, scaleBranchEffect(this, 'control', 0.8) * power);
-            target.pendingHit = null;
+            if (controlEnemy(target, 'stunT', scaleBranchEffect(this, 'control', 0.8) * power)) target.pendingHit = null;
             target.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(target.boss ? 1 : 4));
             return;
           }
@@ -5062,7 +5076,7 @@ class Hero extends Unit {
       if (!force && !urgentHeal && !valuableControl) return false;
       effect = () => {
         for (const enemy of skeletonsAlive()) if (!enemy.spawning && enemy.pos.distanceTo(this.pos) <= radius) {
-          enemy.rootT = scaleBranchEffect(this, 'control', 1.5) * power;
+          controlEnemy(enemy, 'rootT', scaleBranchEffect(this, 'control', 1.5) * power);
           enemy.vel.set(0, 0, 0);
           FX.roots(enemy);
         }
@@ -5134,9 +5148,9 @@ class Hero extends Unit {
     const control = (enemy) => {
       if (!enemy || enemy.dead) return;
       const controlType = skill.control || (['blizzard', 'roots-heal', 'nature-storm'].includes(skill.effect) ? 'root' : null);
-      if (controlType === 'stun') { enemy.stunT = Math.max(enemy.stunT || 0, scaleBranchEffect(this, 'control', 1.35 + (level - 1) * 0.2) * power); enemy.pendingHit = null; }
-      if (controlType === 'root') { enemy.rootT = Math.max(enemy.rootT || 0, scaleBranchEffect(this, 'control', skill.duration || 2.8) * power); enemy.pendingHit = null; }
-      if (controlType === 'slow') enemy.slowT = Math.max(enemy.slowT || 0, scaleBranchEffect(this, 'control', skill.duration || 3.5) * power);
+      if (controlType === 'stun' && controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 1.35 + (level - 1) * 0.2) * power)) enemy.pendingHit = null;
+      if (controlType === 'root' && controlEnemy(enemy, 'rootT', scaleBranchEffect(this, 'control', skill.duration || 2.8) * power)) enemy.pendingHit = null;
+      if (controlType === 'slow') controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', skill.duration || 3.5) * power);
       if (controlType === 'burn') {
         enemy.burnT = Math.max(enemy.burnT || 0, scaleBranchEffect(this, 'control', skill.duration || 3.2) * power);
         enemy.burnTick = Math.min(enemy.burnTick || 0.5, 0.35);
@@ -5168,8 +5182,7 @@ class Hero extends Unit {
         effect = () => {
           for (const enemy of caught) {
             damageOne(enemy);
-            enemy.stunT = Math.max(enemy.stunT || 0, scaleBranchEffect(this, 'control', 1.1 + (level - 1) * 0.15) * power);
-            enemy.pendingHit = null;
+            if (controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 1.1 + (level - 1) * 0.15) * power)) enemy.pendingHit = null;
           }
           FX.zigzag(this.pos.clone().setY(this.pos.y + 1.2), center.clone().setY(center.y + 0.7));
           wave(center, color, 0.25, radius, 0.65);
@@ -5185,8 +5198,7 @@ class Hero extends Unit {
           const center = sentry.root.position.clone();
           for (const enemy of attackables) if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius) {
             damageOne(enemy, 0.75);
-            enemy.stunT = Math.max(enemy.stunT || 0, 0.45 * power);
-            enemy.pendingHit = null;
+            if (controlEnemy(enemy, 'stunT', 0.45 * power)) enemy.pendingHit = null;
           }
           wave(center, color, 0.25, radius, 0.8);
           burst(center.clone().setY(center.y + 0.8), [color, 0xe6fffb, 0xffffff], 28, 5);
@@ -5251,7 +5263,7 @@ class Hero extends Unit {
           for (const warning of warnings) {
             const owner = warning.owner;
             if (!owner || owner.dead || warning.alive === false || warning.t <= 0 || owner.telegraph !== warning) continue;
-            owner.stunT = Math.max(owner.stunT || 0, scaleBranchEffect(this, 'control', skill.duration || 1.1) * power);
+            if (!controlEnemy(owner, 'stunT', scaleBranchEffect(this, 'control', skill.duration || 1.1) * power)) continue;
             owner.pendingHit = null;
             popText(owner.pos, 'Destino reescrito!', 'crit');
             FX.stasis(owner);
@@ -5267,7 +5279,7 @@ class Hero extends Unit {
         effect = () => {
           for (const h of party) if (h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5)) h.guardT = Math.max(h.guardT, duration);
           if (skill.effect === 'bastion') { this.guardT = Math.max(this.guardT, duration); for (const enemy of enemies) control(enemy); }
-          if (skill.effect === 'frost-ward') for (const enemy of enemies) { enemy.slowT = Math.max(enemy.slowT, duration * 0.65); damageOne(enemy, 0.35); }
+          if (skill.effect === 'frost-ward') for (const enemy of enemies) { controlEnemy(enemy, 'slowT', duration * 0.65); damageOne(enemy, 0.35); }
           FX.dome(this, radius);
           if (skill.effect === 'frost-ward') { FX.iceFan(this, target || this); burst(this.pos, color, 18, 4); }
         };
@@ -5468,7 +5480,7 @@ class Hero extends Unit {
           const duration = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
           for (const enemy of enemies) {
             if (enemy.dead) continue;
-            if (enemy.boss || enemy.totem) { enemy.slowT = Math.max(enemy.slowT || 0, duration); continue; }
+            if (enemy.boss || enemy.totem) { controlEnemy(enemy, 'slowT', duration); continue; }
             if (!(enemy.sheepT > 0)) FX.sheep(enemy);
             enemy.sheepT = Math.max(enemy.sheepT || 0, duration);
             enemy.pendingHit = null;
@@ -6096,7 +6108,7 @@ class BeastCompanion extends Unit {
           if (enemy.dead || !units.includes(enemy)) return;
           heroHit(this.summoner, enemy, this.dmg * (this.empowerT > 0 ? 1.75 : 1), this.pos);
           burst(enemy.pos.clone().setY(enemy.pos.y + 0.6), [0xcbb36f, 0xffe6a1], 7, 2.4);
-          if (this.empowerT > 0) enemy.stunT = Math.max(enemy.stunT || 0, 0.45);
+          if (this.empowerT > 0) controlEnemy(enemy, 'stunT', 0.45);
         } };
       }
       for (const enemy of threats) if (enemy.pos.distanceTo(this.pos) <= 2.8 && enemy.tauntT <= 0.35) {
@@ -6201,6 +6213,7 @@ class Skeleton extends Unit {
     if (this.rootT > 0) this.vel.set(0, 0, 0);
     this.stunT = Math.max(0, this.stunT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
+    this.controlWindowT = Math.max(0, (this.controlWindowT || 0) - dt);
     this.burnT = Math.max(0, this.burnT - dt);
     this.burnTick -= dt;
     if (this.burnT > 0 && this.burnTick <= 0 && this.burnOwner && !this.dead) {
