@@ -455,7 +455,6 @@ export function campaignCosmetics() {
       ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), challengeRulesVersion: CHALLENGE_MISSION_RULE_VERSION, legacyUnlocked,
     });
   }
-  const legacyUnlockSet = new Set(legacyUnlocked);
   const chapters = CHAPTER_COSMETICS.map((cosmetic) => {
     const missions = MISSIONS.filter((mission) => mission.chapter === cosmetic.chapter);
     const maxStars = missions.length * 3;
@@ -463,8 +462,14 @@ export function campaignCosmetics() {
     const completedArenas = missions.filter((mission) => Number(starsByMission.get(mission.id)) > 0).length;
     const requiredArenas = missions.length;
     const requiredStars = requiredArenas; // compatibilidade: uma estrela mínima por arena
-    const unlocked = (requiredArenas > 0 && completedArenas === requiredArenas) || legacyUnlockSet.has(cosmetic.id);
-    return { ...cosmetic, stars, maxStars, completedArenas, requiredArenas, requiredStars, unlocked };
+    const currentChapterComplete = requiredArenas > 0 && completedArenas === requiredArenas;
+    if (currentChapterComplete && !legacyUnlocked.includes(cosmetic.id)) {
+      legacyUnlocked.push(cosmetic.id);
+      writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
+    }
+    const stickyUnlock = legacyUnlocked.includes(cosmetic.id);
+    return { ...cosmetic, stars, maxStars, completedArenas, requiredArenas, requiredStars,
+      legacyEntitlement: stickyUnlock && !currentChapterComplete, unlocked: stickyUnlock || currentChapterComplete };
   });
   const challenges = CHALLENGE_COSMETICS.map((cosmetic) => {
     // As missões atuais entram no domínio 3★; a migração acima preserva quem já
@@ -706,7 +711,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     const rewardPercent = Math.round(rewardValue / rewardTarget * 100);
     const rewardRemaining = Math.max(0, Number(chapterReward?.requiredArenas) - Number(chapterReward?.completedArenas));
     const rewardLabel = chapterReward
-      ? `${chapterReward.name}: ${chapterReward.unlocked ? `desbloqueado, ${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas, ${chapterReward.stars} de ${chapterReward.maxStars} estrelas do capítulo` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas; faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'} para desbloquear`}`
+      ? `${chapterReward.name}: ${chapterReward.unlocked ? `desbloqueado, ${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas, ${chapterReward.stars} de ${chapterReward.maxStars} estrelas do capítulo${chapterReward.legacyEntitlement ? '; desbloqueio anterior preservado apesar das arenas novas' : ''}` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas; faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'} para desbloquear`}`
       : '';
     const mapLabel = typeof biome === 'string' && biome.trim() ? biome.trim().toUpperCase() : 'MAPA ALEATÓRIO';
     announcement.textContent = `${i + 1}. ${m.name}. ${m.chapter}. Objetivo: ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`;
@@ -737,7 +742,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
           <strong>${chapterReward.unlocked ? `${chapterReward.stars}/${chapterReward.maxStars} ★` : `${chapterReward.completedArenas}/${chapterReward.requiredArenas} arenas`}</strong>
         </div>
         <div class="camp-chapter-track" role="progressbar" aria-label="${attr(rewardLabel)}" aria-valuemin="0" aria-valuemax="${rewardTarget}" aria-valuenow="${rewardValue}"><i style="width:${rewardPercent}%"></i></div>
-        <span class="camp-chapter-reward-foot">${chapterReward.unlocked ? `Desbloqueado · ${chapterReward.stars}/${chapterReward.maxStars} estrelas do capítulo` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas · faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'}`}</span>
+        <span class="camp-chapter-reward-foot">${chapterReward.legacyEntitlement ? 'Desbloqueado anteriormente · recompensa preservada' : chapterReward.unlocked ? `Desbloqueado · ${chapterReward.stars}/${chapterReward.maxStars} estrelas do capítulo` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas · faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'}`}</span>
       </div>` : ''}
       <div class="camp-goal" data-tip="${attr(m.tip)}" tabindex="0" aria-label="Objetivo: ${attr(goalText(m.goal))}. Plano de batalha: ${attr(m.tip)}"><i aria-hidden="true">⚑</i>${goalText(m.goal)}</div>
       ${threats.length ? `<div class="camp-threats" role="list" aria-label="Inimigos especiais">${threats.map((threat) => {

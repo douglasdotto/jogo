@@ -98,7 +98,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','scene-perf.js'),'utf8'
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
-vm.runInContext(part(source,'function fireBolt','// ---------- efeitos'),context);
+vm.runInContext(part(source,'function fireBolt','// ---------- efeitos fofos'),context);
 vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
@@ -179,6 +179,30 @@ test('unidade clona cada material-fonte uma vez e mantém os bonecos isolados',(
     assert.equal(disposed.length,4,'cada material próprio é descartado uma vez');
   }finally{context.SkeletonUtils.clone=originalClone;clear();}
 });
+const ringContext=vm.createContext({
+  THREE:{DoubleSide:2,MeshBasicMaterial:class{constructor(options={}){Object.assign(this,options);this.userData={};this.color={setHex:noop};this.dispose=noop;}} ,
+    Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.rotation={x:0};this.position=new Vector3();this.scale={setScalar:noop};}},
+  Vector3,RingGeometry:class{}},ringGeo:{},blasts:[],scene:{add:noop},
+});
+vm.runInContext(fxPool.replaceAll('export ',''),ringContext);
+vm.runInContext(part(source,'const ringMaterials = materialPool(','const colors ='),ringContext);
+vm.runInContext(part(source,'function ring(at, radius, color, life = 0.6) {','function beam(start'),ringContext);
+vm.runInContext('globalThis.ringApi={ring,ringMaterials,blasts};',ringContext);
+test('anéis de impacto reutilizam o material e restauram sua opacidade ao reaparecer',()=>{
+  const {ring,ringMaterials,blasts}=ringContext.ringApi,used=[];
+  for(let i=0;i<100;i++){
+    ring(new Vector3(i,0,0),1,0xff0000+i);
+    const active=blasts.at(-1).mesh.material;
+    assert.equal(active.opacity,.65,'a opacidade inicial é aplicada pelo estoque');
+    used.push(active);active.opacity=.03;
+    ringMaterials.give(active);blasts.pop();
+  }
+  assert.equal(new Set(used).size,1,'cem anéis sequenciais precisam de uma única alocação de material');
+  ring(new Vector3(),1,0xff00ff);
+  assert.strictEqual(blasts.at(-1).mesh.material,used[0],'o material reaparece do estoque');
+  assert.equal(blasts.at(-1).mesh.material.opacity,.65,'a opacidade visual volta ao valor correto');
+  assert.equal(ringMaterials.free,0,'o anel ativo não fica contado como material livre');
+});
 test('cache de emissive preserva glow base e só atualiza quando a cor muda',()=>{
   const wasOver=t.game.over;t.game.over=true;
   const tracked=glow=>{const writes=[];let current=glow;return {userData:{glow},writes,emissive:{getHex:()=>current,setHex(hex){current=hex;writes.push(hex)}}};};
@@ -258,6 +282,25 @@ test('cosméticos de capítulo e domínio equipam no herói, giram e são libera
   assert.equal(veteran.campaignAuraSpin,.16);
   veteran.remove();
   context.equipCampaignCosmetic(null);context.localStorage.data={};context.location={search:'?tudo=1'};clear();
+});
+test('recompensa de capítulo fica liberada após novas arenas serem adicionadas',()=>{
+  const previousStorage={...context.localStorage.data},missionsLength=t.MISSIONS.length;
+  try{
+    context.localStorage.data={};
+    const chapterMissions=t.MISSIONS.filter(item=>item.chapter==='Capítulo I · Sinais na estrada');
+    for(const item of chapterMissions)context.saveStars(item.id,1);
+    let reward=context.campaignCosmetics().find(item=>item.id==='vila');
+    assert.equal(reward.unlocked,true,'concluir o capítulo grava a recompensa conquistada');
+    assert.equal(context.equipCampaignCosmetic('vila'),true);
+    t.MISSIONS.push({id:'nova-arena-vila',chapter:'Capítulo I · Sinais na estrada',name:'Nova arena'});
+    reward=context.campaignCosmetics().find(item=>item.id==='vila');
+    assert.equal(reward.unlocked,true,'uma arena futura não revoga a recompensa');
+    assert.equal(reward.legacyEntitlement,true,'o catálogo informa que a recompensa antiga foi preservada');
+    assert.equal(context.equippedCampaignCosmetic([reward])?.id,'vila','o visual continua equipado após a expansão');
+  }finally{
+    t.MISSIONS.length=missionsLength;
+    context.localStorage.data=previousStorage;
+  }
 });
 test('poof reutiliza materiais só depois que as partículas expiram',()=>{
   clear();
@@ -1022,6 +1065,15 @@ test('Coração do Castelo mantém foco coletivo nos três chefes, troca ao cair
   assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),threat,'um ataque prestes a atingir o grupo interrompe o foco');
   threat.pendingHit=null;team=t.makeTargetContext();
   assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),executioner,'depois do perigo, a equipe retoma o chefe escolhido');
+  darkKnight.pos.set(0,0,4);darkKnight.busy=0;darkKnight.stunT=0;darkKnight.cd.charge=0;darkKnight.pendingHit=null;
+  darkKnight.update(.016);
+  assert.ok(darkKnight.telegraph?.alive,'a investida marcada do Cavaleiro do Eclipse fica registrada como telegráfico ativo');
+  team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,lich],.016,team),darkKnight,
+    'o grupo troca o foco coletivo para interromper a investida do Cavaleiro do Eclipse');
+  t.clearMonsterFx();assert.equal(darkKnight.telegraph,null,'o telegráfico deixa de ser urgente ao ser cancelado');
+  team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,lich],.016,team),executioner,'sem a investida, a equipe retoma o alvo coletivo');
   clear();
 });
 test('Coração limita interceptores na formação real e troca de foco quando um chefe se afasta',()=>{

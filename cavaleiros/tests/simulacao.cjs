@@ -90,6 +90,7 @@ vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
 vm.runInContext(part(source, 'let skillItems', 'function pressSkill'), context);   // glifos das habilidades usados na ficha da escolha
 vm.runInContext(part(source, 'const units =', '// projéteis e áreas'), context);
 vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), context);
+vm.runInContext(part(source, 'function releaseFxMaterial(material) {', 'function clearFx()'), context);
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts,

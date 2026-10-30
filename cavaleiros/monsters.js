@@ -87,6 +87,7 @@ function track(item) {
 function releaseFx(item) {
   item.alive = false;
   if (item.owner) ownedFxCount = Math.max(0, ownedFxCount - 1);
+  if (item.owner?.telegraph === item) item.owner.telegraph = null;
   mBossWarnings.delete(item);
   disposeFx(item);
 }
@@ -110,7 +111,7 @@ function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, har
   group.position.y += 0.07;
   if (line) group.rotation.y = Math.atan2(line.dir.x, line.dir.z);
   G.scene.add(group);
-  return track({ owner, at: at.clone(), radius, line, announce: owner?.boss && !harmless ? announce : '', harmless: harmless || !!follow, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), notice, end,
+  const effect = track({ owner, at: at.clone(), radius, line, announce: owner?.boss && !harmless ? announce : '', harmless: harmless || !!follow, interruptible: !harmless, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), notice, end,
     step(f) {
       const k = 1 - Math.max(0, f.t) / f.life;
       if (follow && !follow.dead) { f.at.copy(follow.pos); group.position.copy(follow.pos); group.position.y += 0.07; }
@@ -118,6 +119,8 @@ function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, har
       else fill.scale.setScalar(Math.max(0.01, radius * k));
       fillMat.opacity = 0.25 + 0.25 * k;
     } });
+  if (owner?.boss && effect.interruptible) owner.telegraph = effect;
+  return effect;
 }
 
 // herói dentro de um aviso: devolve para onde correr (cada herói percebe ou não, uma vez por aviso)

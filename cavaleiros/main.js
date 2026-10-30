@@ -2700,6 +2700,7 @@ function twinBossFocus(context) {
 function isUrgentTwinThreat(target, context) {
   return target.pendingHit?.target?.team === 'hero' || target.pendingHit?.target?.team === 'villager'
     || target.enemyKind === 'Priest' || !!target.kind?.priority
+    || (target.phaseBoss && target.telegraph?.alive && target.telegraph.interruptible && target.telegraph.t > 0.2)
     || (target.enemyKind === 'Bomber' && context.friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, target.pos) < 7));
 }
 
@@ -2787,12 +2788,13 @@ const groundGeo = new THREE.CircleGeometry(1, 24);
 const ringGeo = new THREE.RingGeometry(0.75, 1, 32);
 const haloGeo = new THREE.TorusGeometry(0.35, 0.06, 6, 24);
 const beamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
+const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }), 128);
 const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
 function ring(at, radius, color, life = 0.6) {
-  const mesh = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }));
+  const mesh = new THREE.Mesh(ringGeo, ringMaterials.take(color, 0.65));
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.copy(at).setY(at.y + 0.07);
   mesh.scale.setScalar(radius);
@@ -2912,7 +2914,7 @@ function updateBolts(dt) {
     bl.t -= dt;
     if (bl.ripple) bl.mesh.scale.addScalar(dt * 1.2);
     bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
-    if (bl.t <= 0) { scene.remove(bl.mesh); bl.mesh.material.dispose(); blasts.splice(i, 1); }
+    if (bl.t <= 0) { scene.remove(bl.mesh); releaseFxMaterial(bl.mesh.material); blasts.splice(i, 1); }
   }
 }
 
@@ -5940,7 +5942,7 @@ function startGame(view = 'menu') {
   for (const list of [bolts, blasts, flames]) while (list.length) {
     const effect = list.pop();
     scene.remove(effect.mesh);
-    if (list !== bolts) effect.mesh.material.dispose();
+    if (list !== bolts) releaseFxMaterial(effect.mesh.material);
   }
   clearFx();
   FX.clear();
