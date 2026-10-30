@@ -295,7 +295,7 @@ export const LOOKS = {
     },
     hide: ['Barbarian_Hat', 'Barbarian_Cape'],
     paint: {
-      ...outfit('Barbarian', '#3c4652', '#3a2a20', 0.75), ...face('Barbarian', { skin: '#c88a5e', hair: '#5a1e0e', eyes: '#7affd8' }),
+      ...outfit('Barbarian', '#3c4652', '#3a2a20', 0.75), ...face('Barbarian', { skin: '#c88a5e', hair: '#5a1e0e' }),
       Barbarian_ArmLeft: { tint: '#c88a5e', amount: 0.4 }, Barbarian_ArmRight: { tint: '#c88a5e', amount: 0.4 },   // braços nus, cor de pele
     },
     extras: [
@@ -306,8 +306,6 @@ export const LOOKS = {
       { type: 'armWraps', bone: 'lowerarm.r', color: 0x5a3a24, radius: 0.13, n: 3 },
       { type: 'stoneFist', bone: 'hand.l' }, { type: 'stoneFist', bone: 'hand.r' },
       { type: 'beard', bone: 'head', color: 0x5a1e0e },
-      { type: 'brows', bone: 'head', color: 0x3a140a, angle: 0.4, size: 1.5 },
-      { type: 'scar', bone: 'head', side: 1, color: 0xe0907a },
     ],
   },
   // ---------- Invocador ----------

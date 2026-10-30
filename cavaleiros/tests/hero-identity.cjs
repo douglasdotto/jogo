@@ -46,7 +46,7 @@ const palette = (h) => {
   assert.ok(body, `${h.id}: roupa com tinta própria`);
   if (h.model !== 'Skeleton_Mage') assert.ok(face.skin && (face.hair || face.hood), `${h.id}: rosto com pele e cabelo/capuz`);
   // olhos ficam os originais do KayKit (escuros com brilho): a identidade vem da roupa, pele e cabelo
-  if (h.id !== 'brute') assert.ok(!face.eyes, `${h.id}: olhos sem cor própria`);
+  assert.ok(!face.eyes, `${h.id}: olhos sem cor própria`);
   return { body, hair: face.hair || face.hood || '#000000', skin: face.skin || '#000000' };
 };
 const palettes = heroes.map((h) => ({ ...h, pal: palette(h) }));
@@ -102,7 +102,7 @@ assert.ok(LOOKS.brute.bones['hand.l'].scale > 1.2 && LOOKS.brute.bones.head.scal
 assert.ok(has('brute', 'armWraps', 'lowerarm.l') && has('brute', 'armWraps', 'lowerarm.r'), 'Brutamontes com manoplas nos dois braços');
 // nada solto na frente dos olhos: sobrancelha, cicatriz, pintura e monóculo saíram (o Brutamontes é de outro agente)
 const faceBits = ['brows', 'scar', 'facePaint', 'monocle'];
-for (const [id, look] of Object.entries(LOOKS)) if (id !== 'brute') assert.ok(!look.extras.some((e) => faceBits.includes(e.type)), `${id}: sem peça solta no rosto`);
+for (const [id, look] of Object.entries(LOOKS)) assert.ok(!look.extras.some((e) => faceBits.includes(e.type)), `${id}: sem peça solta no rosto`);
 for (const c of context.result) assert.ok(!(c.extras || []).some((e) => faceBits.includes(e.type)), `${c.id}: sem peça solta no rosto`);
 for (const id of ['archer', 'monk', 'alchemist', 'brute']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
 
