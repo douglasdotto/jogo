@@ -183,7 +183,7 @@ const nextNightmareTeamId = (mission) => {
   const selected = new Set(heroes().map((hero) => hero.cfg.id));
   return nightmareTeamPlanIds(mission).find((id) => !selected.has(id)) || null;
 };
-const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses', 'totems']);
+const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses', 'totems', 'defend']);
 const shouldRecommendMissionTeam = (mission, difficultyId = difficulty.id) => difficultyId === 'pesadelo'
   || Boolean(mission && TEAM_RECOMMENDATION_GOALS.has(mission.goal?.type));
 const difficultyTeamRecommendation = (option, mission) => {

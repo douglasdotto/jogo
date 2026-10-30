@@ -463,6 +463,13 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   const at=id=>t.pick.options.findIndex(hero=>hero.id===id);
   assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Piromante + Clériga + Guardião'));
   assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
+  const sanctuary=t.MISSIONS.find(m=>m.id==='santuario');
+  const sanctuaryRecommendation='Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).';
+  assert.equal(t.difficultyTeamRecommendation({id:'normal'},sanctuary),sanctuaryRecommendation,
+    'a defesa do santuário recomenda cura e proteção também no Normal');
+  clear();t.setDifficulty(1);t.setMission(sanctuary);t.game.picksLeft=2;t.showPick('','');
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Guardião + Clériga + Piromante'));
+  assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
 });
 test('Anjo tem asas animadas e paira acima do chão',()=>{
   clear();const angel=new t.Hero(cfg('angel'));

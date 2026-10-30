@@ -63,6 +63,8 @@ function render(stars, visuals = null) {
     ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).'
     : mission.id === 'ruinas'
       ? 'Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'
+      : mission.id === 'santuario'
+        ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).'
       : '');
   return {
     map, info, focusState, data,
@@ -110,6 +112,10 @@ view.map.children[9].onclick();
 assert.ok(view.map.children[9].classList.contains('sel'), 'Ruínas Antigas continua selecionável após concluir a campanha');
 assert.ok(view.info.innerHTML.includes('Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'),
   'o resumo de Ruínas explica a composição de área e o reforço recomendado');
+view.map.children[2].onclick();
+assert.ok(view.map.children[2].classList.contains('sel'), 'O Santuário continua selecionável após concluir a campanha');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços recomendados: Clériga (suporte/cura) e Piromante (dano em área).'),
+  'o resumo do Santuário destaca cura e proteção para defender o cristal');
 
 view = render({ vila: 2, fazendas: 3 });
 assert.ok(view.map.children[1].classList.contains('sel'), 'a missão liberada seguinte é selecionada');
