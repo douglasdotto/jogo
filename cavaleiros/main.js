@@ -19,6 +19,7 @@ import { logoSVG } from './logo.js';
 import { tutorial } from './tutorial.js';
 import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, starsFor, saveStars, saveMissionRecord, saveMissionMedal, missionMedal, renderCampaign, totalStars, starsOf, unlocked, variantOpen, starsToUnlock, UNLOCKS, allOpen, campaignCosmetics, equippedCampaignCosmetic, equipCampaignCosmetic, formatMissionRecordTime, campaignStorageIsVolatile, campaignStorageWasCorrupted, campaignCorruptBackupFailed } from './campaign.js';
 import { materialPool } from './fx-pool.js';
+import { buildSummon } from './summon-models.js';
 import { createPopTextPool } from './pop-text-pool.js';
 import { createCampaignAura } from './campaign-aura.js';
 import { mountCampaignMap3D } from './campaign-map3d.js';
@@ -4014,7 +4015,7 @@ function fury(h) {
 }
 
 // Esmagador: onda de choque, rachaduras com brilho de lava e pedrinhas voando
-function quake(h, reach) {
+function quake(h, reach, tremor = 0.55) {
   const c = h.pos.clone().addScaledVector(V(Math.sin(h.root.rotation.y), 0, Math.cos(h.root.rotation.y)), 1.2);
   wave(c, 0xffb060, 0.3, reach * 1.7, 0.55, { y: 0.12 });
   wave(c, 0x9a7a55, 0.3, reach * 1.3, 0.8, { geo: ringGeo, opacity: 0.55, dust: true });
@@ -4040,7 +4041,7 @@ function quake(h, reach) {
     const a = (i / dust) * TAU;
     sprite('puff', 'dust', V(c.x, c.y + 0.4, c.z), V(Math.cos(a) * 4, 0.6, Math.sin(a) * 4), 0.9, { size: 1.1, grow: 1.2, drag: 3, opacity: 0.95 });
   }
-  shake(0.55);
+  shake(tremor);
 }
 
 // impacto dos tiros de habilidade (e de cada inimigo atravessado pelos perfurantes)
@@ -4200,25 +4201,94 @@ function pactCall(h, creature, color) {
       V(rnd(0.5), 1.6 + Math.random() * 1.4, rnd(0.5)), 0.7, { size: 1.1, gravity: -0.4 });
   }
 }
-// fada: pó de luz rosado sobe do aliado curado
+const petalGeo = new THREE.IcosahedronGeometry(0.11, 0).scale(1, 0.22, 0.7);   // pétala achatada que gira ao cair
+const FAIRY_SPARKS = [0xffb8dc, 0xb8fff0, 0xfff6a0];
+// fada: rastro de brilhos que caem devagar (em fúria, faíscas rosa-choque)
+function fairyTrail(at, fury) {
+  if (lowQuality && Math.random() < 0.5) return;   // Gráficos: baixa corta metade
+  particle(sparkGeo, fury ? 0xff5ab0 : FAIRY_SPARKS[Math.floor(Math.random() * 3)], V(at.x + rnd(0.12), at.y + rnd(0.12), at.z + rnd(0.12)),
+    V(rnd(0.25), -0.35, rnd(0.25)), 0.7, { size: 0.45 + Math.random() * 0.4 });
+}
+// fada: fio de brilho até o aliado, anel duplo, raios rosados e pétalas caindo sobre ele
 function fairyPulse(fairy, target) {
-  wave(target.pos, 0xffb8dc, 0.2, 1.1, 0.45);
-  for (let i = 0; i < fewer(6); i++)
-    particle(sparkGeo, i % 2 ? 0xffb8dc : 0xfff6c8, V(target.pos.x + rnd(0.4), target.pos.y + 0.4 + Math.random(), target.pos.z + rnd(0.4)), V(rnd(0.3), 1.2, rnd(0.3)), 0.6, { size: 0.9 });
-}
-// golem: pancada que levanta poeira em anel
-function golemSlam(at, radius) {
-  wave(at, 0xd8c29a, 0.3, radius, 0.5, { dust: true });
-  puffs(at.clone().setY(at.y + 0.2), 4, 'dust', { spread: radius * 0.5, rise: 0.4, size: 1 });
-  shake(0.12);
-}
-// dragãozinho: baforada de fogo em cone a partir da boca
-function dragonBreath(from, dir, reach) {
-  for (let i = 0; i < fewer(10); i++) {
-    const side = rnd(0.5), c = Math.cos(side), s = Math.sin(side);
-    const d = V(dir.x * c + dir.z * s, 0, dir.z * c - dir.x * s).multiplyScalar(reach * (1.7 + Math.random() * 0.7));
-    sprite('puff', 'fire', from.clone(), d.setY(-0.9), 0.55, { size: 0.5, grow: 1.6, drag: 1.4, delay: i * 0.02 });
+  const at = target.pos, from = fairy.visual.getWorldPosition(V(0, 0, 0));
+  for (let i = 0; i < 6; i++) {
+    const p = from.clone().lerp(V(at.x, at.y + 1, at.z), i / 5);
+    particle(sparkGeo, i % 2 ? 0xffb8dc : 0xffffff, p, V(rnd(0.2), 0.3, rnd(0.2)), 0.45, { size: 1, delay: i * 0.03 });
   }
+  wave(at, 0xffb8dc, 0.2, 1.4, 0.55);
+  wave(at, 0xb8fff0, 0.1, 0.9, 0.5, { delay: 0.1 });
+  rays(at, 'tonic', 0.45, 1.8, 0.6, { opacity: 0.8 });
+  for (let i = 0; i < fewer(8); i++)
+    particle(petalGeo, i % 2 ? 0xff8ad8 : 0xffd0e8, V(at.x + rnd(0.6), at.y + 1.6 + Math.random() * 0.6, at.z + rnd(0.6)), V(rnd(0.4), -0.9, rnd(0.4)), 1.1,
+      { solid: true, size: 0.8 + Math.random() * 0.5, delay: 0.1 + Math.random() * 0.2 });
+  for (let i = 0; i < fewer(6); i++)
+    particle(sparkGeo, i % 2 ? 0xffb8dc : 0xfff6c8, V(at.x + rnd(0.4), at.y + 0.4 + Math.random(), at.z + rnd(0.4)), V(rnd(0.3), 1.2, rnd(0.3)), 0.6, { size: 0.9 });
+}
+// golem: poeirinha a cada passo pesado
+function golemStep(at) {
+  puffs(at, 2, 'dust', { spread: 0.35, rise: 0.25, size: 0.5, life: 0.6, speed: 0.6 });
+}
+// golem: brota do chão em pedaços (pedras saltando, poeira e um tremorzinho)
+function golemRise(at) {
+  wave(at, 0x9a8a78, 0.3, 1.8, 0.7, { dust: true, opacity: 0.6 });
+  for (let i = 0; i < fewer(12); i++)
+    particle(rockGeo, i % 3 ? 0x8a8070 : 0x6aae7a, V(at.x + rnd(0.7), at.y + 0.1, at.z + rnd(0.7)), V(rnd(2), 4 + Math.random() * 3, rnd(2)), 0.9,
+      { solid: true, gravity: 16, size: 1 + Math.random() * 1.2, delay: Math.random() * 0.3 });
+  puffs(at.clone().setY(at.y + 0.2), 5, 'dust', { spread: 0.8, rise: 0.6, size: 1, life: 1 });
+  shake(0.15);
+}
+// golem: pancada em área: o tremor do Esmagador centrado no golem (tremida mais leve), mais faíscas dos cristais
+function golemSlam(golem, radius) {
+  const yaw = golem.root.rotation.y;
+  quake({ pos: golem.pos.clone().addScaledVector(V(Math.sin(yaw), 0, Math.cos(yaw)), -0.6), root: { rotation: { y: yaw } } }, radius * 0.75, 0.22);
+  burst(golem.pos.clone().setY(golem.pos.y + 0.4), [0xff8ad8, 0x7ff0e0, 0xffffff], fewer(10), 4, { up: 1.5 });
+}
+// dragãozinho: baforada em cone saindo da boca: brasa na boca, chamas que crescem, faíscas e fumaça no fim
+function dragonBreath(from, dir, reach) {
+  blast(from.clone(), 0.55, 0.35, 'fire', 0.08);
+  const n = fewer(14);
+  for (let i = 0; i < n; i++) {
+    const side = rnd(0.45), c = Math.cos(side), s = Math.sin(side);
+    const d = V(dir.x * c + dir.z * s, 0, dir.z * c - dir.x * s).multiplyScalar(reach * (1.8 + Math.random() * 0.8));
+    sprite(i % 3 ? 'puff' : 'orb', 'fire', from.clone(), d.setY(-0.8 + rnd(0.3)), 0.5 + Math.random() * 0.2,
+      { size: 0.35 + Math.random() * 0.2, grow: 2.2, drag: 1.6, delay: 0.1 + i * 0.022 });
+  }
+  for (let i = 0; i < fewer(8); i++) {
+    const side = rnd(0.5), c = Math.cos(side), s = Math.sin(side);
+    particle(sparkGeo, i % 2 ? 0xffd27a : 0xff7a3a, from.clone(), V(dir.x * c + dir.z * s, 0, dir.z * c - dir.x * s).multiplyScalar(reach * 1.6).setY(0.6), 0.55,
+      { gravity: 3, size: 0.8, delay: 0.1 + i * 0.03 });
+  }
+  puffs(from.clone().addScaledVector(dir, reach * 0.8).setY(from.y - 0.7), 3, 'smoke', { spread: 0.6, size: 0.7, life: 0.8, delay: 0.5 });
+}
+// criatura que some: o golem desmorona em pedaços que caem e afundam; fada e dragãozinho encolhem num brilho
+function summonFade(creature) {
+  const kind = creature.summonKind, at = creature.pos, pieces = [];
+  creature.root.updateMatrixWorld(true);
+  creature.visual.traverse((o) => { if (o.isMesh && o.visible && !o.userData.aura) pieces.push(o); });
+  for (const m of pieces) {
+    scene.attach(m);   // mantém a pose do mundo; geometria e material são do kit (keep), dropFx não os descarta
+    const s0 = m.scale.clone(), vel = kind === 'golem' ? V(rnd(1.4), 1.5 + Math.random() * 1.5, rnd(1.4)) : V(rnd(0.5), 1.4, rnd(0.5));
+    const spin = V(rnd(4), rnd(3), rnd(4)), floor = at.y + 0.1;
+    addFx(m, kind === 'golem' ? 1.2 : 0.4, (e, dt, k) => {
+      if (kind === 'golem') {
+        vel.y -= 14 * dt;
+        m.position.addScaledVector(vel, dt);
+        if (m.position.y < floor) { m.position.y = floor; vel.multiplyScalar(0.3); vel.y = 0; }
+        m.rotation.x += spin.x * dt * (1 - k); m.rotation.z += spin.z * dt * (1 - k);
+        m.scale.copy(s0).multiplyScalar(k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45);
+      } else {
+        m.position.addScaledVector(vel, dt);
+        m.scale.copy(s0).multiplyScalar(1 - k);
+      }
+    });
+  }
+  if (kind === 'golem') {
+    for (let i = 0; i < fewer(10); i++)
+      particle(rockGeo, i % 3 ? 0x8a8070 : 0x6aae7a, V(at.x + rnd(0.5), at.y + 0.6 + Math.random() * 1.2, at.z + rnd(0.5)), V(rnd(2.5), 2 + Math.random() * 2, rnd(2.5)), 0.9,
+        { solid: true, gravity: 14, size: 1 + Math.random() });
+    puffs(at.clone().setY(at.y + 0.3), 6, 'dust', { spread: 0.9, rise: 0.5, size: 1.1, life: 1.1 });
+  } else burst(at.clone().setY(at.y + 1.3), kind === 'fairy' ? FAIRY_SPARKS : [0x46b8a8, 0xff9ccf, 0xffd27a], fewer(12), 3, { gravity: 1, size: 1 });
 }
 
 // Assassino: rastro de sombra entre a saída e a chegada
@@ -4799,7 +4869,7 @@ const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt,
   whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
-Object.assign(FX, { pactCall, fairyPulse, golemSlam, dragonBreath });   // Invocador
+Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -7057,83 +7127,18 @@ class BeastCompanion extends Unit {
 }
 
 // ---------- Invocador: fada, golem e dragãozinho ----------
-// Criaturas leves: sem GLB nem animação; o corpo é montado com peças low-poly compartilhadas (geometrias e
-// materiais criados uma vez e reaproveitados por todas). Uma de cada tipo por Invocador; somem ao fim da fase.
+// Criaturas leves, sem GLB: o corpo vem de summon-models.js (poucas malhas, geometrias e materiais compartilhados);
+// os gestos são feitos no update. Uma de cada tipo por Invocador; somem ao fim da fase.
 // vida e dano base (crescem 10% por nível e com o poder de habilidade); life = duração em segundos;
-// every = recarga da habilidade própria (cura, pancada, baforada)
+// every = recarga da habilidade própria (cura, pancada, baforada); bar = altura da barra de vida
 const SUMMON_RULES = {
-  fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 2.2, color: 0xffb8dc },
+  fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 1.75, color: 0xffb8dc },
   golem: { hp: 240, dmg: 14, range: 1.6, speed: 2.7, cooldown: 1.5, every: 6, life: 15, size: 1.05, bar: 2.5, color: 0xd8c29a },
-  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 2.7, color: 0xff7a3a },
+  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 2.55, color: 0xff7a3a },
 };
 const SUMMON_TAUNT = 3, SUMMON_SLAM_RADIUS = 2.4, SUMMON_STUN = 0.9, SUMMON_BOSS_CONTROL = 0.35;   // chefes: controle mais curto
 const EMPTY_GLTF = { scene: new THREE.Group(), animations: [] };
-let summonParts = null;
-function summonKit() {
-  if (summonParts) return summonParts;
-  const lam = (color, o = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...o });
-  const shine = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
-  summonParts = {
-    ball: new THREE.IcosahedronGeometry(0.5, 1), rock: new THREE.DodecahedronGeometry(0.5, 0), block: new THREE.BoxGeometry(1, 1, 1),
-    cone: new THREE.ConeGeometry(0.5, 1, 5), wing: new THREE.CircleGeometry(0.5, 3), dot: new THREE.SphereGeometry(0.5, 6, 5),
-    fairy: lam(0xfff0f6, { emissive: 0xff8ad8, emissiveIntensity: 0.45 }), hair: lam(0xffd86a, { emissive: 0x7a5010, emissiveIntensity: 0.3 }),
-    fairyWing: shine(0xbff4ff, 0.65), fairyGlow: shine(0xffb8dc, 0.3),
-    stone: lam(0xa0968a), stoneDark: lam(0x6e655a), moss: lam(0x76a84a), eyes: new THREE.MeshBasicMaterial({ color: 0x8ff4ff }),
-    scales: lam(0xe8673a), belly: lam(0xffd27a), horn: lam(0xfff0d0), dragonWing: lam(0xb8402a, { side: THREE.DoubleSide }), pupil: new THREE.MeshBasicMaterial({ color: 0x2a1408 }),
-  };
-  for (const value of Object.values(summonParts)) if (value?.isMaterial) value.userData.keep = true;
-  return summonParts;
-}
-// peça compartilhada num grupo: pos, escala [x, y, z] e rotação [x, y, z]
-function summonPiece(group, geometry, material, pos, scale, rot) {
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(...pos);
-  mesh.scale.set(...scale);
-  if (rot) mesh.rotation.set(...rot);
-  mesh.castShadow = !material.transparent;
-  group.add(mesh);
-  return mesh;
-}
-const SUMMON_BODIES = {
-  fairy(g, k) {   // corpinho brilhante, cabelo dourado e quatro asas de luz
-    summonPiece(g, k.ball, k.fairyGlow, [0, 0.2, 0], [0.9, 0.9, 0.9]);
-    summonPiece(g, k.cone, k.fairy, [0, 0.05, 0], [0.22, 0.34, 0.22]);
-    summonPiece(g, k.ball, k.fairy, [0, 0.36, 0], [0.24, 0.24, 0.24]);
-    summonPiece(g, k.ball, k.hair, [0, 0.42, -0.04], [0.27, 0.2, 0.27]);
-    const wings = [];
-    for (const side of [-1, 1]) for (const [y, s] of [[0.24, 0.42], [0.08, 0.3]])
-      wings.push(summonPiece(g, k.wing, k.fairyWing, [side * 0.2, y, -0.08], [s, s * 0.8, s], [0, side * 0.5, side * -0.6]));
-    return { wings, hover: 1.25 };
-  },
-  golem(g, k) {   // blocos de pedra empilhados, musgo nos ombros e olhos brilhando
-    summonPiece(g, k.block, k.stoneDark, [-0.26, 0.3, 0], [0.34, 0.6, 0.38]);
-    summonPiece(g, k.block, k.stoneDark, [0.26, 0.3, 0], [0.34, 0.6, 0.38]);
-    summonPiece(g, k.block, k.stone, [0, 1.0, 0], [1, 0.85, 0.7], [0, 0, 0.04]);
-    summonPiece(g, k.block, k.stone, [0, 1.62, 0.06], [0.5, 0.42, 0.46]);
-    const arms = [];
-    for (const side of [-1, 1]) {
-      arms.push(summonPiece(g, k.block, k.stoneDark, [side * 0.68, 0.88, 0.05], [0.32, 0.8, 0.34], [0, 0, side * 0.1]));
-      summonPiece(g, k.rock, k.moss, [side * 0.45, 1.44, -0.05], [0.36, 0.16, 0.36]);
-      summonPiece(g, k.dot, k.eyes, [side * 0.12, 1.66, 0.3], [0.08, 0.08, 0.04]);
-    }
-    summonPiece(g, k.rock, k.stoneDark, [0.18, 1.22, 0.36], [0.22, 0.18, 0.12]);
-    return { arms, hover: 0 };
-  },
-  dragon(g, k) {   // corpo redondo, barriga clara, chifrinhos, cauda e asas de morcego
-    summonPiece(g, k.ball, k.scales, [0, 0.4, 0], [0.8, 0.66, 1.05]);
-    summonPiece(g, k.ball, k.belly, [0, 0.32, 0.12], [0.6, 0.5, 0.8]);
-    summonPiece(g, k.ball, k.scales, [0, 0.82, 0.42], [0.52, 0.48, 0.56]);
-    summonPiece(g, k.cone, k.scales, [0, 0.76, 0.74], [0.3, 0.3, 0.3], [Math.PI / 2, 0, 0]);
-    summonPiece(g, k.cone, k.scales, [0, 0.36, -0.68], [0.24, 0.7, 0.24], [-Math.PI / 2 - 0.3, 0, 0]);
-    const wings = [];
-    for (const side of [-1, 1]) {
-      summonPiece(g, k.cone, k.horn, [side * 0.14, 1.08, 0.36], [0.1, 0.24, 0.1], [-0.4, 0, side * -0.3]);
-      summonPiece(g, k.dot, k.pupil, [side * 0.15, 0.9, 0.66], [0.07, 0.08, 0.05]);
-      wings.push(summonPiece(g, k.wing, k.dragonWing, [side * 0.45, 0.62, -0.05], [0.75, 0.55, 0.75], [Math.PI / 2, 0, side * 0.2]));
-    }
-    return { wings, hover: 1.3 };
-  },
-};
+const summonAt = new THREE.Vector3();
 
 class SummonedCreature extends Unit {
   constructor(summoner, kind) {
@@ -7159,9 +7164,18 @@ class SummonedCreature extends Unit {
     this.root.rotation.y = summoner.root.rotation.y;
     this.visual = new THREE.Group();
     this.root.add(this.visual);
-    this.parts = SUMMON_BODIES[kind](this.visual, summonKit());
-    poof(this.pos, rule.size);
+    this.parts = buildSummon(kind, this.root, this.visual);   // summon-models.js; inclui o anel e o brilho da Fúria do Bestiário
+    this.spawnT = 0;   // entrada: o golem brota do chão, o dragãozinho desce rodopiando
+    this.actT = this.actDur = 0;   // gesto em curso (actKind): cura, soco, pancada, baforada
+    this.trailT = 0;
+    this.animate(0);
+    if (kind === 'golem') { this.popT = 0.45; FX.golemRise(this.pos); } else poof(this.pos, rule.size);
     if (kind === 'golem') this.provoke();
+  }
+
+  act(kind, duration) {
+    this.actKind = kind;
+    this.actT = this.actDur = duration;
   }
 
   // o corpo não tem clipes: os gestos são feitos no update
@@ -7178,7 +7192,8 @@ class SummonedCreature extends Unit {
 
   vanish() {
     this.dead = true;   // quem estava provocado ou mirando nela larga o alvo
-    poof(this.pos, this.size);
+    if (this.summonKind !== 'golem') poof(this.pos, this.size);
+    FX.summonFade(this);   // as peças saem do corpo para desmoronar/encolher; o kit compartilhado não é descartado
     this.remove();
   }
 
@@ -7208,22 +7223,108 @@ class SummonedCreature extends Unit {
     if (fury) this.attackTimer -= dt * fury;
     const summoner = this.summoner;
     if (this.dead || this.life <= 0 || summoner.dead || !units.includes(summoner) || game.state === 'cleared' || game.phase !== this.phase) { this.vanish(); return; }
-    this.animate();
+    this.animate(dt);
     if (game.over || game.state !== 'fight' || this.busy > 0) return;
     if (this.summonKind === 'fairy') this.thinkFairy(dt);
     else if (this.summonKind === 'golem') this.thinkGolem(dt);
     else this.thinkDragon(dt);
   }
 
-  animate() {
-    const { wings, arms, hover } = this.parts, t = this.age;
-    this.visual.position.y = hover + (hover ? Math.sin(t * 3) * 0.12 : 0);
-    if (wings) for (let i = 0; i < wings.length; i++) {
-      const side = wings[i].position.x < 0 ? -1 : 1, beat = Math.sin(t * (this.summonKind === 'fairy' ? 22 : 9)) * 0.5;
-      if (this.summonKind === 'fairy') wings[i].rotation.y = side * (0.5 + beat);
-      else wings[i].rotation.z = side * (0.2 + beat);
+  // gestos em código: flutuar, bater asas, andar, golpes; act = progresso do gesto atual (0→1) ou −1 sem gesto
+  animate(dt) {
+    const p = this.parts, t = this.age, fury = this.frenzyT > 0, speed = this.vel.length();
+    this.spawnT += dt;
+    if (this.actT > 0) this.actT -= dt;
+    const act = this.actT > 0 ? 1 - this.actT / this.actDur : -1;
+    if (this.summonKind === 'fairy') this.poseFairy(p, t, act, speed, fury, dt);
+    else if (this.summonKind === 'golem') this.poseGolem(p, t, act, speed, dt);
+    else this.poseDragon(p, t, act, speed, fury);
+    p.aura.visible = p.shell.visible = fury;
+    if (fury) {
+      p.aura.scale.setScalar(p.auraR * (1 + Math.sin(t * 10) * 0.08));
+      p.aura.rotation.y = t * 2;
+      p.shell.scale.setScalar(p.shellR * (1 + Math.sin(t * 12) * 0.05));
     }
-    if (arms) for (let i = 0; i < arms.length; i++) arms[i].rotation.x = this.moving ? Math.sin(t * 6 + i * Math.PI) * 0.35 : 0;
+    this.trailT -= dt;
+    if (this.trailT <= 0 && (this.summonKind === 'fairy' || fury)) {   // rastro da fada; em fúria, faíscas em todas
+      this.trailT = (this.summonKind === 'fairy' ? 0.07 : 0.14);
+      FX.fairyTrail(p.core.getWorldPosition(summonAt), fury);
+    }
+  }
+
+  // fada: voa em oito, inclina nas curvas e gira ao curar; quatro asas batendo rápido
+  poseFairy(p, t, act, speed, fury) {
+    const v = this.visual;
+    v.position.set(Math.sin(t * 1.7) * 0.22, p.hover + Math.sin(t * 3.4) * 0.1, 0);
+    v.rotation.set(Math.min(0.35, speed * 0.08), act >= 0 ? (1 - (1 - act) ** 3) * Math.PI * 2 : 0, -Math.cos(t * 1.7) * 0.18);
+    const flap = Math.sin(t * (fury ? 42 : 32));
+    for (const w of p.wings) w.rotation.y = w.userData.side * (0.55 + flap * 0.5);
+  }
+
+  // golem: passos pesados com balanço, soco alternado, pulo antes da pancada e queda com braços no chão; brota da terra
+  poseGolem(p, t, act, speed, dt) {
+    const { core, legs, arms } = p;
+    let lift = 0, bob = Math.sin(t * 2.2) * 0.015, roll = 0, lean = 0, twist = 0;
+    const legX = [0, 0], armX = [Math.sin(t * 2.2) * 0.05, -Math.sin(t * 2.2) * 0.05];
+    if (speed > 0.3) {
+      const w = this.walkPhase = (this.walkPhase || 0) + dt * (2.4 + speed * 1.4), sw = Math.sin(w);
+      legX[0] = sw * 0.55; legX[1] = -sw * 0.55;
+      armX[0] = -sw * 0.45; armX[1] = sw * 0.45;
+      bob = -Math.abs(Math.cos(w)) * 0.07;
+      roll = sw * 0.09;
+      lean = 0.12;
+      if (Math.sign(sw) !== this.stepSign) { this.stepSign = Math.sign(sw); if (dt > 0) FX.golemStep(this.pos); }
+    }
+    if (this.actKind === 'punch' && act >= 0) {   // recua o braço, soca à frente (o golpe acerta em ~55%) e volta
+      const i = this.punchSide > 0 ? 1 : 0, side = i ? 1 : -1;
+      const a = act < 0.4 ? 0.7 * (act / 0.4) : act < 0.6 ? 0.7 - 2.3 * ((act - 0.4) / 0.2) : -1.6 * (1 - (act - 0.6) / 0.4);
+      armX[i] = a;
+      twist = -side * a * 0.2;
+      lean += Math.max(0, -a) * 0.12;
+    } else if (this.actKind === 'slam' && act >= 0) {   // aterrissa: punhos no chão e volta devagar
+      const k = Math.min(1, act / 0.15), back = act < 0.4 ? 0 : (act - 0.4) / 0.6;
+      lift = 0.14 * (1 - k);
+      armX[0] = armX[1] = -2.7 + 1.8 * k + 0.9 * back;
+      lean = 0.35 * (1 - back);
+    } else if (this.slamReady && this.abilityT < 0.45 && this.busy <= 0 && game.state === 'fight') {   // pula erguendo os braços
+      const k = 1 - Math.max(0, this.abilityT) / 0.45;
+      lift = 0.55 * Math.sin(k * Math.PI * 0.92);
+      armX[0] = armX[1] = -2.7 * k;
+      legX[0] = legX[1] = -0.3 * k;
+      lean = -0.15 * k;
+    }
+    if (this.spawnT < 0.8) {   // brota do chão chacoalhando
+      const e = this.spawnT / 0.8;
+      lift -= 2.3 * (1 - e) ** 2;
+      roll += Math.sin(this.spawnT * 30) * 0.12 * (1 - e);
+    }
+    this.visual.position.y = lift;
+    core.position.y = 0.5 + bob;
+    core.rotation.set(lean, twist, roll);
+    for (let i = 0; i < 2; i++) {
+      legs[i].rotation.x = legX[i];
+      arms[i].rotation.set(armX[i], 0, (i ? 1 : -1) * 0.08);
+    }
+  }
+
+  // dragãozinho: voo ondulado com asas batendo, cauda balançando, cabeça que empina e avança na baforada; entra rodopiando
+  poseDragon(p, t, act, speed, fury) {
+    const v = this.visual, { head, jaw, tail, wings } = p, flap = Math.sin(t * (fury ? 13 : 9));
+    let y = p.hover + Math.sin(t * 2.1) * 0.12 + flap * 0.05, spin = 0, recoil = 0;
+    if (this.spawnT < 0.9) { const e = this.spawnT / 0.9; spin = (1 - e) ** 2 * Math.PI * 2 * 2; y += (1 - e) ** 2 * 1.6; }
+    for (const w of wings) w.rotation.set(0, w.userData.side * -0.15, w.userData.side * (0.2 + flap * 0.65));
+    tail.rotation.set(Math.sin(t * 2.1) * 0.12, Math.sin(t * 3) * 0.4, 0);
+    let headX = Math.sin(t * 2.1 + 0.6) * 0.08, jawX = 0.05 + Math.sin(t * 2) * 0.03;
+    if (this.actKind === 'breath' && act >= 0) {   // empina, depois avança com a boca aberta
+      const up = act < 0.18 ? act / 0.18 : 0, out = act >= 0.18 ? Math.sin(Math.PI * Math.min(1, (act - 0.18) / 0.82)) : 0;
+      headX = -0.5 * up + 0.35 * out;
+      jawX = 0.25 * up + 0.6 * out;
+      recoil = -0.12 * out;
+    }
+    head.rotation.set(headX, Math.sin(t * 0.9) * 0.15, 0);
+    jaw.rotation.x = jawX;
+    v.position.set(0, y, recoil);
+    v.rotation.set(Math.min(0.25, speed * 0.06) + Math.sin(t * 2.1 + 1) * 0.05, spin, Math.sin(t * 1.3) * 0.06);
   }
 
   // segue o herói mais ferido e cura em pulsos
@@ -7246,6 +7347,7 @@ class SummonedCreature extends Unit {
       popText(hero.pos, '+' + Math.round(heal), 'heal');
     }
     FX.fairyPulse(this, ward);
+    this.act('cast', 0.5);
   }
 
   // provoca, bate e, de tempos em tempos, dá uma pancada que atordoa ao redor
@@ -7256,13 +7358,17 @@ class SummonedCreature extends Unit {
       const d = enemy.pos.distanceTo(this.pos) - (enemy.pendingHit?.target?.team === 'hero' ? 3 : 0);   // quem ameaça um herói vem primeiro
       if (d < best) { best = d; target = enemy; }
     }
+    this.slamReady = false;
     if (!target) { if (this.pos.distanceTo(this.summoner.pos) > 2.2) this.moveTo(this.summoner.pos, dt); return; }
     const distance = target.pos.distanceTo(this.pos);
+    this.slamReady = distance <= SUMMON_SLAM_RADIUS + 0.6;   // só para o pulo de preparação da pancada
     if (this.abilityT <= 0 && distance <= SUMMON_SLAM_RADIUS) return this.slam();
     if (distance > this.range + 0.4 * (target.size - 1) || Math.abs(target.pos.y - this.pos.y) >= 0.85) { this.moveTo(target.pos, dt); return; }
     if (this.attackTimer > 0 || this.face(target.pos, dt) >= 0.5) return;
     this.busy = 0.55;
     this.attackTimer = this.cooldown;
+    this.punchSide = -(this.punchSide || 1);   // alterna os braços
+    this.act('punch', 0.55);
     this.pendingHit = { target, t: 0.3, effect: () => {
       if (target.dead || !units.includes(target)) return;
       heroHit(this.summoner, target, this.dmg, this.pos);
@@ -7280,7 +7386,8 @@ class SummonedCreature extends Unit {
       enemy.stunT = Math.max(enemy.stunT || 0, (enemy.boss ? SUMMON_BOSS_CONTROL : SUMMON_STUN) * power);
       if (!enemy.boss) enemy.pendingHit = null;
     }
-    FX.golemSlam(this.pos, SUMMON_SLAM_RADIUS);
+    this.act('slam', 0.7);
+    FX.golemSlam(this, SUMMON_SLAM_RADIUS);
   }
 
   // voa a meia distância do alvo e cospe fogo em cone, deixando os inimigos queimando
@@ -7303,7 +7410,8 @@ class SummonedCreature extends Unit {
       enemy.burnOwner = summoner;
     }
     const dir = tmp.subVectors(target.pos, this.pos).setY(0).normalize();
-    FX.dragonBreath(this.pos.clone().addScaledVector(dir, 0.6 * this.size).setY(this.pos.y + (this.parts.hover + 0.8) * this.size), dir.clone(), this.range);
+    this.act('breath', 0.6);
+    FX.dragonBreath(this.parts.mouth.getWorldPosition(new THREE.Vector3()), dir.clone(), this.range);
   }
 }
 
