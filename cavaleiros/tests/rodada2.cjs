@@ -429,7 +429,7 @@ test('27 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('81 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('108 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
@@ -444,18 +444,18 @@ test('81 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes no
       allChoreographies.push({label:`${v.id}[${slot}]`,signature:JSON.stringify(Object.entries(a).sort(([a],[b])=>a.localeCompare(b)))});
       total++;
     });
-    assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,3,v.id+': as três habilidades devem ter corpos diferentes');
-    assert.equal(new Set(anims.map(a=>a.clip)).size,3,v.id+': nenhum herói repete o clipe entre suas habilidades');
+    assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,4,v.id+': as quatro habilidades devem ter corpos diferentes');
+    assert.equal(new Set(anims.map(a=>a.clip)).size,4,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,81);
-  assert.equal(new Set(allNames).size,81,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,108);
+  assert.equal(new Set(allNames).size,108,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
   assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,81,
-    `cada uma das 81 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,108,
+    `cada uma das 108 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -975,7 +975,7 @@ test('clique esquerdo seleciona inimigo para atacar e perseguir',()=>{
     assert.equal(t.directControl.moveTarget,null,'atacar substitui um comando de movimento anterior');
   } finally { t.setDirectControlMode(false);clear(); }
 });
-test('QWE ativa as três skills do herói controlado sem disparar os atalhos globais',()=>{
+test('QWER ativa as quatro skills do herói controlado sem disparar os atalhos globais',()=>{
   clear();const legacy=[new t.Hero(cfg('guardian')),new t.Hero(cfg('pyro')),new t.Hero(cfg('bard'))];
   const controlled=new t.Hero(cfg('paladin'));
   assert.equal(directControlLegacyListeners.length,1,'o listener real de atalhos foi carregado no harness');
@@ -986,12 +986,12 @@ test('QWE ativa as três skills do herói controlado sem disparar os atalhos glo
   for(const [h,key] of legacy.map((h,i)=>[h,['Q','W','E'][i]]))t.skillItems().push({h,key,slot:1});
   try {
     t.setDirectControlMode(true,controlled);
-    for(const [key,slot] of [['q',0],['w',1],['e',2]]){
+    for(const [key,slot] of [['q',0],['w',1],['e',2],['r',3]]){
       const event=dispatchDirectControl('keydown',key);
       assert.equal(event.defaultPrevented,true,key.toUpperCase()+' é consumida pelo controle direto');
       assert.equal(event.immediateStopped,true,key.toUpperCase()+' bloqueia o listener antigo');
       assert.equal(controlled.skillRequests[slot],2,key.toUpperCase()+' enfileira o slot '+slot);
-      assert.deepEqual(legacy.map(h=>Array.from(h.skillRequests)),[[0,0,0],[0,0,0],[0,0,0]],'nenhuma skill global do grupo dispara');
+      assert.deepEqual(legacy.map(h=>Array.from(h.skillRequests)),[[0,0,0,0],[0,0,0,0],[0,0,0,0]],'nenhuma skill global do grupo dispara');
       controlled.skillRequests.fill(0);
     }
     t.skillItems().push({h:legacy[0],key:'1',slot:0});
@@ -1005,7 +1005,7 @@ test('QWE ativa as três skills do herói controlado sem disparar os atalhos glo
   } finally { t.setDirectControlMode(false);t.skillItems().length=0;clear(); }
 });
 test('skills marcadas como Auto continuam automáticas no herói assumido',()=>{
-  clear();const h=new t.Hero(cfg('pyro'));h.autoSkills=[true,false,false];h.skillTimers.fill(0);
+  clear();const h=new t.Hero(cfg('pyro'));h.autoSkills=[true,false,false,false];h.skillTimers.fill(0);
   const casts=[];h.useSkill=(_target,_manual,_force,slot)=>{casts.push(slot);return true;};
   try {
     t.setDirectControlMode(true,h);
@@ -1097,10 +1097,12 @@ test('automático/manual fica salvo por variante',()=>{
   assert.equal(new t.Hero(cfg('ninja')).auto,false);assert.equal(new t.Hero(cfg('cryo')).auto,true);
   t.saveAuto('ninja',true);assert.equal(t.loadAuto('ninja'),true);
 });
-test('cada variante oferece três habilidades e a ultimate tem recarga maior',()=>{
+test('cada variante oferece quatro habilidades e a ultimate tem recarga maior',()=>{
   for(const v of t.VARIANTS){
     const skills=t.skillSetFor(v);
-    assert.equal(skills.length,3,v.id);
+    assert.equal(skills.length,4,v.id);assert.deepEqual(Array.from(skills,s=>s.slot),[0,1,2,3],v.id+' slots em ordem');
+    assert.ok(t.cooldownForSkill(v,3)>=14&&t.cooldownForSkill(v,3)<=18,v.id+' segunda técnica com recarga intermediária');
+    assert.ok(t.cooldownForSkill(v,2)>t.cooldownForSkill(v,3),v.id+' ultimate vs segunda técnica');
     assert.equal(t.skillSetFor(v),skills,v.id+' lista fica em cache por variante');
     assert.equal(skills.filter(s=>s.ultimate).length,1,v.id);
     assert.ok(t.cooldownForSkill(v,2)>t.cooldownForSkill(v,1),v.id+' ultimate vs técnica');
@@ -1110,7 +1112,7 @@ test('cada variante oferece três habilidades e a ultimate tem recarga maior',()
 test('automático/manual pode ser salvo por habilidade sem perder o modo antigo',()=>{
   clear();context.localStorage.data={};t.saveAuto('ninja',false,2);
   const h=new t.Hero(cfg('ninja'));
-  assert.deepEqual(Array.from(h.autoSkills),[true,true,false]);
+  assert.deepEqual(Array.from(h.autoSkills),[true,true,false,true]);
   t.saveAuto('ninja',false);assert.equal(new t.Hero(cfg('ninja')).auto,false);
 });
 test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()=>{
@@ -1123,8 +1125,8 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas e ultimates das 27 variantes executam seus efeitos sem erro',()=>{
-  for(const v of t.VARIANTS)for(const slot of [1,2]){
+test('técnicas, segundas técnicas e ultimates das 27 variantes executam seus efeitos sem erro',()=>{
+  for(const v of t.VARIANTS)for(const slot of [1,2,3]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
     assert.equal(h.useSkill(e,false,true,slot),true,v.id+' slot '+slot);
@@ -1132,7 +1134,30 @@ test('técnicas e ultimates das 27 variantes executam seus efeitos sem erro',()=
     h.pendingHit.effect();
     assert.ok(h.skillTimers[slot]>0,v.id+' sem recarga');
   }
-  clear();
+  context.flames.length=0;clear();
+});
+test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio esquiva, bênção segura a queda e rebobinar devolve vida',()=>{
+  const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
+  const cast=(h,slot,target)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,h.cfg.id+' slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
+  clear();const paladin=new t.Hero(cfg('paladin')),ally=new t.Hero(cfg('pyro'));paladin.pos.set(0,0,0);ally.pos.set(2,0,0);ally.hp=ally.maxHp*0.3;
+  const e=foe(3,0);cast(paladin,3,null);
+  assert.equal(ally.oathBy,paladin,'Juramento vincula o aliado mais ferido');
+  let before=ally.hp,pb=paladin.hp;ally.takeDamage(20,null,e);
+  assert.ok(before-ally.hp<20&&paladin.hp<pb,'o Paladino assume parte do dano');
+  clear();const duelist=new t.Hero(cfg('duelist'));duelist.pos.set(0,0,0);const d=foe(1,0);cast(duelist,3,d);
+  before=duelist.hp;const dh=d.hp;duelist.takeDamage(30,d.pos,d);
+  assert.equal(duelist.hp,before,'Contra-ataque apara o golpe');assert.ok(d.hp<dh,'e devolve um corte');
+  clear();const oracle=new t.Hero(cfg('oracle')),friend=new t.Hero(cfg('guardian'));oracle.pos.set(0,0,0);friend.pos.set(2,0,0);foe(3,0);cast(oracle,3,null);
+  before=friend.hp;friend.takeDamage(40,null,null);assert.equal(friend.hp,before,'Presságio esquiva o primeiro dano');
+  friend.takeDamage(40,null,null);assert.ok(friend.hp<before,'só o primeiro');
+  clear();const cleric=new t.Hero(cfg('cleric')),hurt=new t.Hero(cfg('crossbow'));cleric.pos.set(0,0,0);hurt.pos.set(2,0,0);hurt.hp=hurt.maxHp*0.2;foe(3,0);cast(cleric,3,null);
+  assert.ok(hurt.blessT>0,'a Bênção vai para o mais ferido');hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,false,'a Bênção segura a queda');assert.equal(Math.round(hurt.hp),1);
+  clear();const chronist=new t.Hero(cfg('chronist')),tank=new t.Hero(cfg('guardian'));chronist.pos.set(0,0,0);tank.pos.set(2,0,0);foe(3,0);
+  tank.hpHistory=[tank.maxHp];tank.hp=tank.maxHp*0.4;cast(chronist,3,null);assert.equal(tank.hp,tank.maxHp,'Rebobinar devolve a vida de 3 s atrás');
+  clear();const archer=new t.Hero(cfg('archer'));archer.pos.set(0,0,0);const prey=foe(0,5);cast(archer,3,prey);
+  const trap=context.flames.at(-1);assert.ok(trap,'Armadilha fica no chão');prey.pos.copy(trap.mesh.position);
+  t.updateBolts(0.5);t.updateBolts(0.2);assert.ok(prey.rootT>0&&prey.hp<prey.maxHp,'quem pisa fica preso e ferido');
+  context.flames.length=0;clear();
 });
 test('habilidades principais dos quatro novos heróis têm efeitos funcionais',()=>{
   clear();
@@ -1216,7 +1241,7 @@ test('Duelista: rajada alterna as lâminas, Corte em X atravessa a fila e a Dan�
   const foe=(x,z)=>{const e=new t.Skeleton('Warrior',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e};
   clear();let d=new t.Hero(cfg('duelist'));d.pos.set(0,0,0);
   assert.equal(cfg('duelist').classId,3);assert.deepEqual(Array.from(cfg('duelist').use),['1H_Sword','1H_Sword_Offhand']);
-  assert.equal(t.skillSetFor(cfg('duelist')).length,3);
+  assert.equal(t.skillSetFor(cfg('duelist')).length,4);
   // básica: quatro cortes no alvo à frente
   let e=foe(0,1.5);assert.equal(d.useSkill(e),true);
   let cuts=0;while(d.pendingHit?.effect&&cuts<8){const hp=e.hp,p=d.pendingHit;d.pendingHit=null;p.effect();if(e.hp<hp)cuts++;}
@@ -2627,7 +2652,7 @@ test('habilidades usam a dica própria em vez do title nativo',()=>{
   const create=context.document.createElement;
   context.document.createElement=()=>{const e=el();e.attrs={};e.setAttribute=(k,v)=>{e.attrs[k]=String(v)};return e};
   try{t.buildSkillBar([hero]);}finally{context.document.createElement=create;}
-  const items=t.skillItems();assert.equal(items.length,3);
+  const items=t.skillItems();assert.equal(items.length,4);
   for(const it of items){
     assert.equal(it.b.title,undefined,'o botão não deve usar title');
     assert.ok(!/\stitle=/.test(it.b.innerHTML),'nada de title no conteúdo do botão');
@@ -2635,7 +2660,7 @@ test('habilidades usam a dica própria em vez do title nativo',()=>{
   }
   assert.ok(!/\.title\s*=|\stitle=/.test(part(source,'function buildSkillBar','function pressSkill')));
   t.showPick('','');t.selectCard(t.pick.options.findIndex(v=>v.id==='pyro'));
-  assert.equal((t.pick.info.innerHTML.match(/data-tip="skill"/g)||[]).length,3,'habilidades da ficha também têm a dica');
+  assert.equal((t.pick.info.innerHTML.match(/data-tip="skill"/g)||[]).length,4,'habilidades da ficha também têm a dica');
   clear();
 });
 test('barra de habilidades só reconstrói quando a identidade ou ordem do grupo muda',()=>{
@@ -2650,7 +2675,7 @@ test('barra de habilidades só reconstrói quando a identidade ou ordem do grupo
     t.updateSkillBar();
     assert.equal(rebuilds,1,`constrói a barra inicial (escritas: ${rebuilds}; heróis=${t.heroes().length}; barras=${t.skillItems().length}; cache=${vm.runInContext('skillRoster.length',context)})`);
     const initialItems=t.skillItems();
-    assert.equal(initialItems[0].h,first);assert.equal(initialItems[3].h,second);
+    assert.equal(initialItems[0].h,first);assert.equal(initialItems[4].h,second);
     first.skillTimers[0]=2.2;t.updateSkillBar();
     assert.equal(rebuilds,1,'quadros seguintes reutilizam a barra existente');
     assert.equal(t.skillItems()[0].secs.textContent,'3','a recarga continua atualizando sem reconstrução');
@@ -2659,12 +2684,12 @@ test('barra de habilidades só reconstrói quando a identidade ou ordem do grupo
     assert.equal(rebuilds,1);
     t.units.reverse();t.updateSkillBar();
     assert.equal(rebuilds,2,'reconstrói quando a ordem dos heróis muda');
-    assert.equal(t.skillItems()[0].h,second);assert.equal(t.skillItems()[3].h,first);
+    assert.equal(t.skillItems()[0].h,second);assert.equal(t.skillItems()[4].h,first);
     first.remove();
     const replacement=new t.Hero(cfg('paladin'));
     t.updateSkillBar();
     assert.equal(rebuilds,3,'reconstrói quando um herói é substituído por outro da mesma classe');
-    assert.equal(t.skillItems()[0].h,second);assert.equal(t.skillItems()[3].h,replacement);
+    assert.equal(t.skillItems()[0].h,second);assert.equal(t.skillItems()[4].h,replacement);
   } finally {
     Object.defineProperty(bar,'innerHTML',{configurable:true,writable:true,value:html});
     if(originalPerformance===undefined)delete context.performance;else context.performance=originalPerformance;
@@ -2686,8 +2711,8 @@ test('barra de habilidades só alterna classes quando o estado muda',()=>{
     const party=['paladin','pyro','guardian','crossbow'].map(id=>new t.Hero(cfg(id)));
     t.updateSkillBar();
     const items=t.skillItems(),item=items.find(it=>it.h===party[0]&&it.slot===0);
-    assert.equal(items.length,12,'quatro heróis têm doze botões');
-    assert.equal(calls.length,72,'a primeira pintura aplica as seis classes dinâmicas de cada botão');
+    assert.equal(items.length,16,'quatro heróis têm dezesseis botões');
+    assert.equal(calls.length,96,'a primeira pintura aplica as seis classes dinâmicas de cada botão');
 
     calls=[];t.updateSkillBar();
     assert.equal(calls.length,0,'quadros sem mudança não chamam classList.toggle');

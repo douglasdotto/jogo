@@ -47,7 +47,7 @@ function harness() {
     let frameSpread = 0;
     ${source.slice(start, end)}
     this.followParty = followParty;
-    this.endFrame = () => { ${wheelLine[0]} };
+    this.endFrame = () => { ${wheelLine[0].replace(/\/\/.*$/, '')} };
   `, context);
   // grupo bem espalhado: o enquadramento automático quer bem mais que 20 m
   const hero = (x) => ({ team: 'hero', dead: false, pos: new Vector3(x, 0, 3) });

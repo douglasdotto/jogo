@@ -1,4 +1,4 @@
-// node tests/skill-tooltip.cjs — toda variante de VARIANTS gera dica não vazia nos 3 slots da barra de habilidades.
+// node tests/skill-tooltip.cjs — toda variante de VARIANTS gera dica não vazia nos 4 slots da barra de habilidades.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -43,7 +43,7 @@ const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 // Na escolha de herói (ninguém em campo): nível 1.
 for (const cfg of VARIANTS) {
   const skills = skillSetFor(cfg);
-  for (const slot of [0, 1, 2]) {
+  for (const slot of [0, 1, 2, 3]) {
     const html = skillTooltip(el({ 'data-hero': cfg.id, 'data-slot': String(slot) }));
     assert.ok(typeof html === 'string' && html.trim(), `${cfg.id} slot ${slot}: dica vazia`);
     const plain = text(html);
@@ -68,4 +68,4 @@ assert.match(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2' })), /c
 assert.equal(skillTooltip(el({ 'data-hero': 'ninguem', 'data-slot': '0' })), '');
 assert.equal(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '7' })), '');
 
-console.log(`OK: dicas de habilidade completas para ${VARIANTS.length} variantes × 3 slots`);
+console.log(`OK: dicas de habilidade completas para ${VARIANTS.length} variantes × 4 slots`);
