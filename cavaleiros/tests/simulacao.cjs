@@ -21,6 +21,7 @@ const upgradeBranches = fs.readFileSync(path.join(dir, 'upgrade-branches.js'), '
 const battleReport = fs.readFileSync(path.join(dir, 'battle-report.js'), 'utf8');
 const monsters = fs.readFileSync(path.join(dir, 'monsters.js'), 'utf8');
 const progression = fs.readFileSync(path.join(dir, 'progression.js'), 'utf8');
+const fxPool = fs.readFileSync(path.join(dir, 'fx-pool.js'), 'utf8');
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
   set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -49,7 +50,7 @@ const el = () => ({ style: { setProperty: noop }, classList: { add: noop, remove
   append(...c) { this.children.push(...c); }, appendChild(c) { this.children.push(c); }, addEventListener: noop, querySelector: () => el(),
   querySelectorAll: () => [], remove: noop, firstChild: { style: {} }, innerHTML: '', textContent: '', scrollIntoView: noop });
 const color = () => ({ set: noop, setHex: noop, lerpColors: noop, copy: noop });
-const material = () => ({ color: color(), emissive: color(), dispose: noop });
+const material = () => ({ color: color(), emissive: color(), userData: {}, opacity: 1, dispose: noop });
 const euler = () => ({ x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } });
 const root = () => ({ position: new Vector3(), rotation: euler(), scale: new Vector3(1, 1, 1), quaternion: { setFromUnitVectors: noop },
   traverse: noop, add: noop, removeFromParent: noop, getObjectByName: () => ({ rotation: euler(), add: noop }), material: material(), children: [], rotateZ: noop, clone: root });
@@ -90,6 +91,8 @@ vm.runInContext(upgradeBranches.replaceAll('export ', ''), context);
 vm.runInContext(battleReport.replaceAll('export ', ''), context);
 vm.runInContext(monsters.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
 vm.runInContext(progression.replaceAll('export ', ''), context);   // sem localStorage: progressão só na memória, zerada
+vm.runInContext(fxPool.replaceAll('export ', ''), context);
+vm.runInContext('const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 128);', context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'scene-perf.js'), 'utf8').replaceAll('export ', ''), context);   // disposeSkeletons
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);

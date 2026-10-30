@@ -2791,6 +2791,7 @@ const haloGeo = new THREE.TorusGeometry(0.35, 0.06, 6, 24);
 const beamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
 const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }), 128);
 const beamMaterials = materialPool(() => new THREE.MeshBasicMaterial({ transparent: true }), 32);
+const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false }), 128);
 const beamDirection = new THREE.Vector3(), beamUp = new THREE.Vector3(0, 1, 0), beamLift = new THREE.Vector3(0, 1.3, 0);
 const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
@@ -2910,7 +2911,7 @@ function updateBolts(dt) {
       else damageArea(f.mesh.position, f.radius, f.dmg * 0.5, f.owner);
       f.tick += f.every || 0.5;
     }
-    if (f.t <= 0) { scene.remove(f.mesh); f.mesh.material.dispose(); flames.splice(i, 1); }
+    if (f.t <= 0) { scene.remove(f.mesh); releaseFxMaterial(f.mesh.material); flames.splice(i, 1); }
   }
   for (let i = blasts.length - 1; i >= 0; i--) {
     const bl = blasts[i];
@@ -2925,7 +2926,7 @@ function updateBolts(dt) {
 const ARCHER_SHOT = 1.3;   // Flecha longa: dano de cada inimigo atravessado (× dano do herói)
 
 function groundMark(at, radius, color, opacity = 0.45) {
-  const mesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity, depthWrite: false }));
+  const mesh = new THREE.Mesh(groundGeo, groundMarkMaterials.take(color, opacity));
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.copy(at).setY(at.y + 0.06);
   mesh.scale.setScalar(radius);

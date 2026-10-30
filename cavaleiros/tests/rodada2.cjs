@@ -93,6 +93,7 @@ vm.runInContext(battleReport.replaceAll('export ',''),context);
 vm.runInContext(monsters.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
 vm.runInContext(progression.replaceAll('export ',''),context);
 vm.runInContext(fxPool.replaceAll('export ',''),context);
+vm.runInContext('groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 128);',context);
 vm.runInContext(campaignAura.replaceAll('export ',''),context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','scene-perf.js'),'utf8').replaceAll('export ',''),context);   // disposeSkeletons
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
@@ -186,13 +187,14 @@ const ringContext=vm.createContext({
     Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.rotation={x:0};this.position={x:0,y:0,z:0,
       copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this;},add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this;},multiplyScalar(k){this.x*=k;this.y*=k;this.z*=k;return this;},
       setY(y){this.y=y;return this;}};this.scale={y:1,setScalar:noop};this.quaternion={setFromUnitVectors:noop};}},
-  Vector3,RingGeometry:class{}},ringGeo:{},beamGeo:{},blasts:[],scene:{add:noop},
+  Vector3,RingGeometry:class{}},ringGeo:{},beamGeo:{},groundGeo:{},blasts:[],flames:[],scene:{add:noop},
 });
 vm.runInContext(fxPool.replaceAll('export ',''),ringContext);
 vm.runInContext(part(source,'const ringMaterials = materialPool(','const colors ='),ringContext);
 vm.runInContext(part(source,'function ring(at, radius, color, life = 0.6) {','function fireBolt'),ringContext);
+vm.runInContext(part(source,'function groundMark(at, radius, color, opacity = 0.45) {','// um pulso da área'),ringContext);
 vm.runInContext(part(source,'function releaseFxMaterial(material) {','function clearFx()'),ringContext);
-vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,releaseFxMaterial,blasts};',ringContext);
+vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,groundMark,groundMarkMaterials,releaseFxMaterial,blasts};',ringContext);
 test('anéis de impacto reutilizam o material e restauram sua opacidade ao reaparecer',()=>{
   const {ring,ringMaterials,blasts}=ringContext.ringApi,used=[];
   for(let i=0;i<100;i++){
@@ -223,6 +225,25 @@ test('raios curtos reutilizam material e vetores temporários',()=>{
   beam(new Vector3(),new Vector3(0,0,4),0x6dff8c);
   assert.equal(blasts.at(-1).mesh.material.color.hex,0x6dff8c,'a cor muda corretamente quando o estoque reaproveita o material');
   releaseFxMaterial(blasts.at(-1).mesh.material);blasts.pop();
+});
+test('marcas de fogo e poças reutilizam materiais sem manter opacidade ou cor antigas',()=>{
+  const {groundMark,groundMarkMaterials,releaseFxMaterial}=ringContext.ringApi;
+  const materialCount=fxMaterialCreates,used=new Set();
+  for(let i=0;i<100;i++){
+    const mesh=groundMark(new Vector3(i,0,0),2,0x7a2a5a+i,.2);
+    used.add(mesh.material);
+    assert.equal(mesh.material.opacity,.2,'a poça conserva sua transparência inicial');
+    mesh.material.opacity=.03;
+    releaseFxMaterial(mesh.material);
+  }
+  assert.equal(used.size,1,'cem áreas sequenciais reutilizam um único material');
+  assert.equal(fxMaterialCreates-materialCount,1,'as áreas deixam de criar e descartar um material por uso');
+  const next=groundMark(new Vector3(),2,0x9cff3a,.45);
+  assert.strictEqual(next.material,[...used][0],'a próxima marca recebe o material devolvido');
+  assert.equal(next.material.opacity,.45,'a opacidade animada não vaza de uma área para outra');
+  assert.equal(next.material.color.hex,0x9cff3a,'a cor da nova área substitui a anterior');
+  releaseFxMaterial(next.material);
+  assert.equal(groundMarkMaterials.free,1,'a marca ativa deixa de estar contada no estoque livre');
 });
 test('cache de emissive preserva glow base e só atualiza quando a cor muda',()=>{
   const wasOver=t.game.over;t.game.over=true;
