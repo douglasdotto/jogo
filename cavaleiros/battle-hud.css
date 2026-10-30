@@ -75,12 +75,12 @@
   font: 400 12px/1 'Lilita One', sans-serif; border-radius: 50%; border-width: 2px; box-shadow: 0 2px 0 var(--outline); }
 .skill .key { top: -5px; left: -5px; min-width: 20px; height: 20px; font-size: 11px; border-radius: 6px; }
 
-/* Controles diretos aparecem somente quando o jogador assume um herói. */
+/* Controle direto: chip curto só enquanto o jogador assume um herói; os comandos ficam no tooltip. */
 #directControlHint { position: fixed; z-index: 24; left: 50%; bottom: clamp(170px, 20vh, 240px); translate: -50% 0;
-  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; box-sizing: border-box; cursor: help;
   color: #e8f2ff; background: linear-gradient(110deg, rgba(16, 30, 53, .94), rgba(30, 52, 83, .94));
   border: 1px solid rgba(174, 205, 249, .42); border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 5px 16px rgba(0,0,0,.38);
-  font: 600 12px/1 'Fredoka', sans-serif; text-shadow: 0 1px 2px #0b1424; white-space: nowrap; pointer-events: none; }
+  font: 600 12px/1 'Fredoka', sans-serif; text-shadow: 0 1px 2px #0b1424; white-space: nowrap; }
 #directControlHint.is-hidden { display: none; }
 #directControlHint .direct-control-title { color: #ffe27a; font: 400 14px/1 'Lilita One', sans-serif; }
 #directControlHint kbd { display: inline-grid; min-width: 22px; height: 22px; margin-right: 2px; padding: 0 5px; box-sizing: border-box; place-items: center;
@@ -224,6 +224,5 @@
   #bossBar { top: 82px; width: calc(100vw - 16px); }
   #soundHint { top: 78px; left: 6px; font-size: 12px; }
   body #aimHint { bottom: 112px; font-size: 12px; }
-  #aimCancel { bottom: 154px; }
   #banner { max-width: calc(100vw - 20px); font-size: 24px; padding: 6px 24px 10px; -webkit-text-stroke-width: 4px; }
 }

@@ -37,9 +37,11 @@
     button:hover { filter: brightness(1.12); transform: translateY(-1px); }
     button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .2), 0 1px 0 var(--wood-dark); }
     /* números de dano e corações */
-    .pop { position: absolute; transform: translate(-50%, -50%); font: 700 24px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 5px #d1342b; paint-order: stroke fill; animation: popUp .9s ease-out forwards; }
-    .pop.hurt { color: #ffe1e1; -webkit-text-stroke-color: #8a1c1c; font-size: 20px; }
-    .pop.heal { color: #ff6fa8; -webkit-text-stroke-color: #fff; font-size: 34px; }
+    .pop { position: absolute; transform: translate(-50%, -50%); font: 700 26px 'Fredoka', sans-serif; color: #fff; -webkit-text-stroke: 5px #d1342b; paint-order: stroke fill; animation: popUp .9s ease-out forwards; }
+    .pop.hurt { color: #ffe1e1; -webkit-text-stroke-color: #8a1c1c; font-size: 24px; }
+    /* cura nunca maior que dano; esquiva tem cor própria */
+    .pop.heal { color: #ff6fa8; -webkit-text-stroke-color: #fff; font-size: 22px; }
+    .pop.dodge { color: #e6fbff; -webkit-text-stroke-color: #2f7fa8; font-size: 22px; }
     @keyframes popUp { 0% { transform: translate(-50%, -50%) scale(.3); } 20% { transform: translate(-50%, -60%) scale(1.3); }
       40% { transform: translate(-50%, -70%) scale(1); } 100% { transform: translate(-50%, -180%) scale(.9); opacity: 0; } }
     /* ---------- escolha de herói: arcade medieval ---------- */
@@ -562,9 +564,6 @@
     #soundHint[hidden] { display: none; }
     @keyframes fadeHint { 0% { opacity: 0; } 8%, 85% { opacity: 1; } 100% { opacity: 0; } }
     #mute.hint { outline: 3px solid var(--gold); outline-offset: 2px; }
-    /* mira manual no toque: botão para desistir sem Esc nem botão direito */
-    #aimCancel { position: fixed; z-index: 31; left: 50%; bottom: 210px; translate: -50% 0; }
-    #aimCancel[hidden] { display: none; }
     @media (max-width: 600px) {
       /* HUD compacto: textos menores, só o essencial à mostra e opções num menu */
       #hud { top: 6px; left: 6px; right: 6px; gap: 5px; }
@@ -581,7 +580,6 @@
       #soundHint { top: 46px; left: 6px; font-size: 12px; }
       #bossBar { top: 44px; width: calc(100vw - 16px); }
       body #aimHint { bottom: 120px; font-size: 12px; }
-      #aimCancel { bottom: 170px; }
       #banner { font-size: 28px; padding: 6px 28px 10px; -webkit-text-stroke-width: 5px; }
     }
     /* Seletor desktop: cards de herói quadrados e com espaço próprio para imagem, nome e função. */
@@ -687,13 +685,9 @@
   </div>
   <div id="soundHint" role="status" hidden>Som desligado · ligue no alto-falante ↗</div>
   <div id="skills" role="group" aria-label="Habilidades dos heróis"></div>
-  <div id="directControlHint" class="is-hidden" role="status" aria-label="Controles do herói">
-    <span class="direct-control-title" id="directControlHero">Controle direto</span>
-    <span><kbd>C</kbd> devolver à IA</span>
-    <span><kbd>Setas</kbd> ou <kbd>botão direito</kbd> mover</span>
-    <span><kbd>Botão esquerdo</kbd> atacar</span>
-    <span><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> usar quando Auto estiver desligado</span>
-    <span><kbd>Mouse</kbd> mirar habilidades</span>
+  <div id="directControlHint" class="is-hidden" role="status" aria-label="Controle direto" tabindex="0"
+    data-tip="C devolve à IA · setas ou botão direito movem · botão esquerdo ataca · Q/W/E habilidades (Auto desligado) · mouse mira">
+    <span aria-hidden="true">🎮&#xFE0E;</span><span class="direct-control-title" id="directControlHero">Herói</span><kbd>C</kbd>
   </div>
   <div id="banner" aria-live="polite"></div>
   <div id="bossBar" hidden></div>
