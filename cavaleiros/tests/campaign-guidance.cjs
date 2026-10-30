@@ -69,6 +69,8 @@ function render(stars, visuals = null) {
         ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).'
         : mission.id === 'lago-sombrio'
           ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
+          : mission.id === 'horda'
+            ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
       : '');
   return {
     map, info, focusState, data,
@@ -98,6 +100,9 @@ assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo I · Sin
 assert.ok(!view.info.innerHTML.includes('camp-team-tip'), 'a sugestão específica da fase final não aparece em outras missões');
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'), 'o atalho some quando a missão recomendada já está selecionada');
 assert.equal(view.focusState.current, view.playButton, 'o foco vai para Batalhar após a seleção');
+view.map.children[13].onclick();
+assert.match(view.info.innerHTML, /class="camp-team-tip"[^>]*>.*Equipe recomendada para 4 heróis: Paladino \(cura\), Guardião \(proteção\), Piromante \(dano em área\) e Clériga \(suporte\/cura\)\./,
+  'o mapa recomenda uma equipe com cura, proteção e dano em área para a sobrevivência prolongada da Horda');
 
 view = render({ ...allDone, ponte: 2 });
 assert.ok(view.map.children.at(-1).classList.contains('sel'));
