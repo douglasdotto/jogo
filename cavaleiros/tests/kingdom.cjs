@@ -18,7 +18,7 @@ const THREE = new Proxy({ Vector3 }, { get: (o, k) => (k in o ? o[k] : Dummy) })
 const context = vm.createContext({ THREE, Math, Uint8Array, Uint32Array, Int32Array, Float32Array, Map, Set, JSON, performance: { now: () => 0 } });
 vm.runInContext(strip('kingdom-world.js'), context);
 vm.runInContext(strip('kingdom.js'), context);
-vm.runInContext('globalThis.k={ARENA,NODE_TYPES,TERRAIN,waveSources,createArena,createKingdomState,canAfford,spend,refund,popCap,popUsed,heroCount,addBuilding,canPlaceBuilding,placeBuilding,removeBuilding,constructionRate,tickConstruction,enqueue,cancelQueue,tickProduction,nearestDrop,workerStep,tickWaves,kingdomResult,waveSize,wavePhase,waveInterval,waveLeaderFor,portalGuard,salvage,demolish,loseBuilding,canRepair,SALVAGE,REPAIR,MARKET,TRADE_RES,trade,tickMarket,buyPrice,sellPrice,hasMarket,orderLeg,nearestFoe,mergeKingdomRecord,saveKingdomRecord,loadKingdomRecords,kingdomRecordText,BUILD_MENU,BUILDINGS,UNITS,START,GATHER,FIRST_WAVE,HERO_LIMIT,POP_MAX};', context);
+vm.runInContext('globalThis.k={ARENA,NODE_TYPES,TERRAIN,waveSources,createArena,createKingdomState,canAfford,spend,refund,popCap,popUsed,heroCount,addBuilding,canPlaceBuilding,placeBuilding,removeBuilding,constructionRate,tickConstruction,enqueue,cancelQueue,tickProduction,nearestDrop,workerStep,tickWaves,kingdomResult,waveSize,wavePhase,waveInterval,waveLeaderFor,portalGuard,salvage,demolish,loseBuilding,canRepair,SALVAGE,REPAIR,MARKET,TRADE_RES,trade,tickMarket,buyPrice,sellPrice,hasMarket,orderLeg,nearestFoe,mergeKingdomRecord,saveKingdomRecord,loadKingdomRecords,kingdomRecordText,GUIDE,GUIDE_KEY,createGuide,guideStep,finishGuide,advanceGuide,BUILD_MENU,BUILDINGS,UNITS,START,GATHER,FIRST_WAVE,HERO_LIMIT,POP_MAX};', context);
 const k = context.k;
 
 let failed = 0;
@@ -532,6 +532,65 @@ test('recordes do Reino: por dificuldade, melhor vitória e onda máxima', () =>
   assert.ok(mem.data['cavaleiros-reino-recordes']);
   assert.deepEqual({ ...k.loadKingdomRecords(mem).dificil }, { bestTime: 600, maxWave: 9 });
   assert.deepEqual({ ...k.loadKingdomRecords(undefined) }, {}, 'sem localStorage não quebra');
+});
+
+test('objetivos guiados: cada passo marca pelo que o jogador fez e a conclusão fica salva', () => {
+  const mem = { data: {}, getItem(key) { return this.data[key] ?? null; }, setItem(key, v) { this.data[key] = v; } };
+  const K = fresh();
+  const g = k.createGuide(mem);
+  assert.equal(g.open, true, 'primeira partida: lista aberta');
+  assert.deepEqual([...k.GUIDE.map((s) => s.id)], ['select', 'wood', 'house', 'farm', 'barracks', 'soldier', 'tower', 'wave', 'portal']);
+  assert.deepEqual([...k.advanceGuide(g, K, {}, mem)], [], 'nada feito ainda');
+  assert.equal(k.guideStep(g).id, 'select');
+  const w = worker(K.castle.pos.x + 5, K.castle.pos.z);
+  w.kKind = 'worker';
+  K.units.push(w);
+  assert.deepEqual([...k.advanceGuide(g, K, { sel: [w] }, mem)], ['select']);
+  assert.deepEqual([...k.advanceGuide(g, K, { sel: [] }, mem)], [], 'tirar a seleção não desmarca');
+  w.task = { type: 'gather', node: null, res: 'stone' };
+  k.advanceGuide(g, K, {}, mem);
+  assert.equal(k.guideStep(g).id, 'wood', 'pedra não conta como madeira');
+  w.task = { type: 'gather', node: null, res: 'wood' };
+  assert.deepEqual([...k.advanceGuide(g, K, {}, mem)], ['wood']);
+  // torre antes da casa: marca a torre, mas o passo atual continua a casa
+  const at = (type, dx, dz) => { const s = K.arena.snap(k.BUILDINGS[type].size, K.castle.pos.x + dx, K.castle.pos.z + dz); return k.placeBuilding(K, type, s.i0, s.j0, make); };
+  K.res.wood += 800; K.res.stone += 400;
+  assert.equal(typeof at('tower', 8, 8), 'object');
+  assert.deepEqual([...k.advanceGuide(g, K, {}, mem)], ['tower'], 'obra recém-posta já conta');
+  assert.equal(k.guideStep(g).id, 'house');
+  at('house', 8, -8); at('farm', 12, 0);
+  assert.equal(typeof at('barracks', 14, 8), 'object');
+  assert.deepEqual([...k.advanceGuide(g, K, {}, mem)], ['house', 'farm', 'barracks']);
+  const barracks = K.buildings.find((b) => b.kType === 'barracks');
+  barracks.done = true;
+  K.res.food += 100; K.res.gold += 100;
+  assert.equal(k.enqueue(K, barracks, 'soldier'), 'ok');
+  assert.deepEqual([...k.advanceGuide(g, K, {}, mem)], ['soldier'], 'soldado na fila conta');
+  // onda: só marca depois que a 1ª chegou e os esqueletos dela caíram (a guarda do portal não conta)
+  K.waveN = 1; K.pending = 2;
+  assert.deepEqual([...k.advanceGuide(g, K, { foes: 0 }, mem)], []);
+  K.pending = 0;
+  assert.deepEqual([...k.advanceGuide(g, K, { foes: 3 }, mem)], []);
+  assert.deepEqual([...k.advanceGuide(g, K, { foes: 0 }, mem)], ['wave']);
+  assert.equal(mem.data['cavaleiros-reino-tutorial'], undefined, 'ainda não terminou');
+  K.portal = { dead: true };
+  assert.deepEqual([...k.advanceGuide(g, K, {}, mem)], ['portal']);
+  assert.equal(k.guideStep(g), null);
+  assert.equal(mem.data['cavaleiros-reino-tutorial'], 'feito', 'conclusão salva');
+  const next = k.createGuide(mem);
+  assert.equal(next.open, false, 'próxima partida: só o botão ?');
+  assert.equal(next.done.size, 0, 'progresso da partida começa do zero');
+});
+
+test('objetivos guiados: fechar a lista conta como visto; sem localStorage não quebra', () => {
+  const mem = { data: {}, getItem(key) { return this.data[key] ?? null; }, setItem(key, v) { this.data[key] = v; } };
+  const g = k.createGuide(mem);
+  k.finishGuide(g, mem);
+  assert.equal(k.createGuide(mem).open, false);
+  const bad = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); } };
+  assert.equal(k.createGuide(bad).open, true);
+  assert.doesNotThrow(() => k.finishGuide(k.createGuide(bad), bad));
+  assert.equal(k.createGuide(undefined).open, true);
 });
 
 if (failed) { console.log(`${failed} teste(s) falharam`); process.exit(1); }
