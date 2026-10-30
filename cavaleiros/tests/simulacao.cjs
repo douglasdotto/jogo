@@ -1,5 +1,5 @@
 // Jornada: node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
-// Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|aleatorio] [semente] [detalhe]
+// Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|recomendado|aleatorio] [semente] [detalhe]
 // Exemplo rápido (2 por dificuldade): node cavaleiros/tests/simulacao.cjs campanha ponte todas 2 equilibrado 20261030 detalhe
 // Sem navegador. O modo campanha roda combate/objetivos, mas ainda usa estrada reta,
 // sem obstáculos, platôs ou lagos: não valida dificuldade de navegação/mapas sorteados.
@@ -93,8 +93,10 @@ vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), cont
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts,
-  DIFFICULTIES, MISSIONS, Unit, progress, showDifficulty, setMission: (m) => { game.mission = m; },
-  setDifficulty: (d) => { difficulty = d; } })`, context);
+  DIFFICULTIES, MISSIONS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
+  setDifficulty: (d) => { difficulty = d; },
+  setFrameTargetContext: () => { activeTargetContext = game.state === 'fight' && !game.paused && !game.over ? makeTargetContext(frameTargetContext) : null; },
+  clearFrameTargetContext: () => { activeTargetContext = null; } })`, context);
 // Captura o resultado calculado pelo runtime no encerramento, sem duplicar as regras de estrelas.
 vm.runInContext(`
   globalThis.__campaignOutcome = null;
@@ -158,7 +160,11 @@ function play(diff, profile, mission = null) {
       } else t.confirmPick(Math.floor(Math.random() * t.pick.cards.length));
       continue;
     }
+    // O jogo captura um contexto tático por quadro antes de atualizar os heróis.
+    // Compartilhá-lo aqui evita que a simulação tome decisões com listas diferentes por unidade.
+    t.setFrameTargetContext();
     for (const u of [...t.units]) u.update(dt);
+    t.clearFrameTargetContext();
     if (!t.game.over) t.separate();
     t.updateBolts(dt);
     t.updateEnemyBolts(dt);
@@ -180,16 +186,20 @@ function play(diff, profile, mission = null) {
     const kind = unit.enemyKind || unit.kind?.name || unit.nameTag?.textContent || (unit.totem ? 'Totem' : unit.team);
     return `${kind}@${pos.x.toFixed(1)},${pos.z.toFixed(1)}`;
   };
-  const diagnostic = mission && !t.game.over ? {
+  const diagnostic = mission ? {
     simulatedSeconds: Number(time.toFixed(1)), timeCap, phase: t.game.phase, state: t.game.state, timer: t.game.timer, missionT: t.game.missionT,
     surviveT: t.game.surviveT, toSpawn: t.game.toSpawn, spawnTimer: t.game.spawnTimer,
     shrine: t.game.shrine ? { hp: Math.round(t.game.shrine.hp), maxHp: t.game.shrine.maxHp, dead: t.game.shrine.dead,
       pos: `${t.game.shrine.pos.x.toFixed(1)},${t.game.shrine.pos.z.toFixed(1)}` } : null,
+    villager: t.game.villager ? { hp: Math.round(t.game.villager.hp), maxHp: t.game.villager.maxHp, dead: t.game.villager.dead,
+      rescued: t.game.villager.rescued, captive: t.game.villager.captive } : null,
     skeletonCount: t.units.filter((u) => u.team === 'skeleton' && !u.dead).length,
     skeletons: t.units.filter((u) => u.team === 'skeleton' && !u.dead).slice(0, 40).map((u) => ({ kind: u.enemyKind || u.kind?.name || (u.totem ? 'Totem' : '?'),
-      pos: `${u.pos.x.toFixed(1)},${u.pos.z.toFixed(1)}`, raider: Boolean(u.raider), spawning: Boolean(u.spawning) })),
+      pos: `${u.pos.x.toFixed(1)},${u.pos.z.toFixed(1)}`, raider: Boolean(u.raider), spawning: Boolean(u.spawning),
+      ranged: Boolean(u.ranged), mobile: Boolean(u.mobile), totem: Boolean(u.totem) })),
     heroes: t.heroes().map((h) => ({ id: h.cfg.id, dead: h.dead, hp: Math.round(h.hp),
-      pos: `${h.pos.x.toFixed(1)},${h.pos.z.toFixed(1)}`, targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
+      pos: `${h.pos.x.toFixed(1)},${h.pos.z.toFixed(1)}`, post: `${h.post.x.toFixed(1)},${h.post.z.toFixed(1)}`,
+      range: h.range, ranged: Boolean(h.ranged), targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
   } : null;
   return { won, timedOut: mission ? !t.game.over : false, initialHeroes, initialParty, falls: outcome?.falls ?? t.game.falls,
     villagerRatio, phase: t.game.phase, deaths, kills: t.game.kills, time,
@@ -214,13 +224,21 @@ const profiles = {
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],
   elite: ['paladin', 'guardian', 'pyro', 'viking'],
+  resgate: ['paladin', 'pyro', 'cleric', 'guardian'],
+  resgate_anjo: ['paladin', 'guardian', 'angel', 'pyro'],
+  resgate_suporte: ['paladin', 'guardian', 'angel', 'cleric'],
+  trono_piro_arqueira: ['paladin', 'guardian', 'pyro', 'archer'],
+  trono_arqueira_cleric: ['paladin', 'guardian', 'archer', 'cleric'],
+  ruinas: ['paladin', 'pyro', 'cleric', 'guardian'],
 };
-const profile = profiles[profileName];
-if (profileName !== 'aleatorio' && !profile) throw new Error(`Grupo desconhecido: ${profileName}. Use: ${Object.keys(profiles).join(', ')}`);
 const baseSeed = Number.isInteger(Number(seedArg)) ? Number(seedArg) >>> 0 : 20261028;
 const campaignMission = campaignMode ? t.MISSIONS.find((m) => m.id === missionId) : null;
 if (campaignMode && !campaignMission) throw new Error(`Missão desconhecida: ${missionId}. Use: ${t.MISSIONS.map((m) => m.id).join(', ')}`);
 if (campaignMode && !['todas', ...t.DIFFICULTIES.map((d) => d.id)].includes(which)) throw new Error(`Dificuldade desconhecida: ${which}. Use: todas, ${t.DIFFICULTIES.map((d) => d.id).join(', ')}`);
+const profile = campaignMode && profileName === 'recomendado'
+  ? t.nightmareTeamPlanIds(campaignMission)
+  : profiles[profileName];
+if (profileName !== 'aleatorio' && !profile) throw new Error(`Grupo desconhecido: ${profileName}. Use: recomendado (campanha), ${Object.keys(profiles).join(', ')}`);
 const vmMath = vm.runInContext('Math', context);
 function useSeed(seed) {
   let state = seed >>> 0 || 1;
@@ -249,8 +267,10 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
     const villager = withVillager.length ? `${Math.round(withVillager.reduce((sum, r) => sum + r.villagerRatio, 0) / withVillager.length * 100)}%` : '—';
     const incomplete = res.filter((r) => r.timedOut).length;
     console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
-    if (details) for (const [i, r] of res.entries())
-      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}${r.timedOut ? `\n    diagnóstico: ${JSON.stringify(r.diagnostic)}` : ''}`);
+    if (details) for (const [i, r] of res.entries()) {
+      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}`);
+      if (!r.won && r.diagnostic) console.log(`    diagnóstico: ${JSON.stringify(r.diagnostic)}`);
+    }
   } else {
     console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · fase média ${avg((r) => r.phase)} · quedas ${avg((r) => r.deaths)} · abates ${avg((r) => r.kills)} · derrotas nas fases ${res.filter((r) => !r.won).map((r) => r.phase).sort((x, y) => x - y).join(',') || '-'}`);
     if (details) for (const [i, r] of res.entries())

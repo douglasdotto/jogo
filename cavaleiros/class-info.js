@@ -56,7 +56,7 @@ const MISSION_ROLE_NEEDS = {
   duel: ['Defesa', 'Cura'],
   hunt: ['Defesa', 'Controle', 'Dano a chefe'],
   rescue: ['Defesa', 'Cura', 'Área'],
-  totems: ['À distância', 'Controle', 'Área'],
+  totems: ['À distância', 'Área', 'Cura'], // quebrar os totens cedo e sustentar o cerco; controle é útil, mas não essencial
   tower: ['À distância', 'Controle', 'Área'],
   nofall: ['Defesa', 'Cura', 'Controle'],
   timer: ['À distância', 'Área', 'Cura'],

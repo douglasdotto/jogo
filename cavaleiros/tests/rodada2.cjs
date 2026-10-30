@@ -103,11 +103,13 @@ vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
 vm.runInContext('t.world=world;',context);
+vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
 const t=context.t;
+vm.runInContext('t.inMeleeArc=inMeleeArc',context);
 vm.runInContext('t.goalShort=goalShort;',context);
 vm.runInContext('t.findGroundAimHit=findGroundAimHit;',context);
 vm.runInContext('t.equipCampaignCosmetic=equipCampaignCosmetic;',context);
@@ -153,16 +155,69 @@ test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   hero.pos.z=-4;t.updateBars();assert.equal(hero.bar.style.display,'');
   clear();
 });
+test('cache de emissive preserva glow base e só atualiza quando a cor muda',()=>{
+  const wasOver=t.game.over;t.game.over=true;
+  const tracked=glow=>{const writes=[];let current=glow;return {userData:{glow},writes,emissive:{getHex:()=>current,setHex(hex){current=hex;writes.push(hex)}}};};
+  const iron=tracked(0x123456),eyes=tracked(0xabcdef);
+  let materialPasses=0;
+  const trackedMaterials={*[Symbol.iterator](){materialPasses++;yield iron;yield eyes;}};
+  const s=Object.create(t.Skeleton.prototype);
+  Object.assign(s,{team:'skeleton',restoresBaseEmissive:true,root:{rotation:{z:0},scale:{set:noop}},rootT:0,vel:{set:noop,multiplyScalar:noop},
+    stunT:0,slowT:0,burnT:0,burnTick:20,burnOwner:null,tauntT:0,markT:0,markBonus:0,sheepT:0,ranged:false,mobile:false,
+    stars:{visible:false,rotation:{y:0}},dead:false,boss:false,mats:trackedMaterials,emissiveMode:null,emissiveDirty:true,synergyNoticeT:0,mixer:{update:noop},
+    attackTimer:1,busy:0,moving:false,squashT:0,popT:undefined,flash:0,flashOn:false,flashHeavy:false,pendingHit:null});
+  const tick=()=>t.Skeleton.prototype.update.call(s,.01);
+  try {
+    tick();tick();
+    assert.deepEqual([iron.writes,eyes.writes],[[0x123456],[0xabcdef]],'glow base é aplicado uma vez e fica estável');
+    assert.equal(materialPasses,1,'esqueletos não percorrem os materiais em quadros normais estáveis');
+    eyes.userData.glow=0x987654;s.emissiveDirty=true;tick();tick();
+    assert.deepEqual([iron.writes.length,eyes.writes.length],[1,2],'glow que muda durante a luta é aplicado uma vez, sem repetir');
+    assert.equal(materialPasses,2,'alteração de glow invalida o cache e só faz uma nova passagem');
+    s.slowT=.2;tick();tick();
+    assert.deepEqual([iron.writes.at(-1),eyes.writes.at(-1)],[0x246d99,0x246d99],'slow aplica azul uma vez');
+    iron.userData.glow=0x654321;s.slowT=.005;tick();tick();
+    assert.deepEqual([iron.writes.at(-1),eyes.writes.at(-1)],[0x654321,0x987654],'ao sair do slow restaura o glow atualizado de cada material');
+    s.flash=.1;tick();tick();
+    assert.deepEqual([iron.writes.at(-1),eyes.writes.at(-1)],[0xff3b2f,0xff3b2f],'flash vermelho não reescreve a mesma cor em quadros seguintes');
+    s.flashHeavy=true;tick();
+    assert.deepEqual([iron.writes.at(-1),eyes.writes.at(-1)],[0xffffff,0xffffff],'flash pesado troca para branco');
+    s.flash=.005;tick();tick();
+    assert.deepEqual([iron.writes.at(-1),eyes.writes.at(-1)],[0x654321,0x987654],'fim do flash restaura os glows próprios');
+    s.slowT=.2;tick();s.flash=.02;tick();tick();tick();tick();
+    assert.deepEqual([iron.writes.at(-1),eyes.writes.at(-1)],[0x246d99,0x246d99],'slow permanece sob o flash e volta quando ele termina');
+    const settled=[iron.writes.length,eyes.writes.length],settledPasses=materialPasses;tick();tick();
+    assert.deepEqual([iron.writes.length,eyes.writes.length],settled,'quadros estáveis não escrevem emissive novamente');
+    assert.equal(materialPasses,settledPasses,'quadros estáveis não percorrem a lista de materiais');
+    const totemMaterial=tracked(0x334455),totem=Object.create(t.Totem.prototype);
+    t.rememberUnitEmissive(totemMaterial);
+    Object.assign(totem,{team:'skeleton',root:{scale:{set:noop}},vel:{set:noop,multiplyScalar:noop},mats:[totemMaterial],
+      synergyNoticeT:0,mixer:{update:noop},attackTimer:1,busy:0,moving:false,squashT:0,flash:.005,flashOn:true,
+      flashHeavy:false,pendingHit:null,dead:false,glow:null});
+    totem.update(.01);
+    assert.equal(totemMaterial.writes.at(-1),0x334455,'Totem recupera o emissive original ao fim do flash');
+    const heroMaterial=tracked(0x552277),heroUnit=Object.create(t.Unit.prototype);
+    t.rememberUnitEmissive(heroMaterial);
+    Object.assign(heroUnit,{team:'hero',root:{scale:{set:noop}},vel:{multiplyScalar:noop},mats:[heroMaterial],
+      synergyNoticeT:0,mixer:{update:noop},attackTimer:1,busy:0,moving:false,squashT:0,flash:.02,flashOn:false,
+      flashHeavy:false,pendingHit:null,dead:false});
+    t.Unit.prototype.updateCommon.call(heroUnit,.01);
+    assert.equal(heroMaterial.writes.at(-1),0xff3b2f,'herói pisca vermelho ao receber golpe');
+    heroUnit.flash=.005;t.Unit.prototype.updateCommon.call(heroUnit,.01);
+    assert.equal(heroMaterial.writes.at(-1),0x552277,'herói recupera o brilho original ao fim do flash');
+  } finally { t.game.over=wasOver; }
+});
 test('HUD mantém vivos e vida do santuário visíveis no rótulo compacto',()=>{
   assert.equal(t.goalShort('Ninguém cai · 4 de pé',37),'4 de pé');
   assert.equal(t.goalShort('De pé 3/4 · quedas 1',75),'3/4 · 1 queda');
   assert.equal(t.goalShort('De pé 4/4 · quedas 0',100),'4/4 · 0 quedas');
   assert.equal(t.goalShort('Santuário 100% · 1:15',0),'100% · 1:15');
-  assert.equal(t.goalShort('Santuário 68% · limpe a onda',100),'68% · final');
+  assert.equal(t.goalShort('Santuário 68% · limpe a onda',85),'68% · limpe a onda');
+  assert.equal(t.goalShort('Sobreviveu · limpe a onda',85),'limpe a onda');
   assert.equal(t.goalShort('Passaram 2/6 · 0:31',56),'2/6 · 0:31');
   assert.equal(t.goalShort('Totens 2/3',67),'2/3','outros objetivos continuam usando o progresso já conhecido');
 });
-test('o cosmético de capítulo equipa no herói, gira e some quando ele cai',()=>{
+test('cosméticos de capítulo e domínio equipam no herói, giram e são liberados ao concluir os desafios',()=>{
   clear();context.location={search:''};context.localStorage.data={};
   context.saveStars('vila',3);context.saveStars('ponte',3);
   assert.equal(context.equipCampaignCosmetic('vila'),true,'seis estrelas liberam o estandarte do capítulo');
@@ -172,6 +227,12 @@ test('o cosmético de capítulo equipa no herói, gira e some quando ele cai',()
   let disposed=0;h.campaignAuraMaterial.dispose=()=>disposed++;
   h.die();assert.equal(h.campaignAura.visible,false,'o efeito não fica flutuando sobre um herói caído');
   h.remove();assert.equal(disposed,1,'o material exclusivo do herói é liberado uma vez');
+  for(const mission of t.MISSIONS)context.saveMissionMedal(mission.id,{won:true,stars:3,difficultyId:'dificil'});
+  assert.equal(context.equipCampaignCosmetic('vanguarda'),true,'o domínio 3★ no Difícil libera a aparência opcional');
+  const veteran=new t.Hero(cfg('guardian'));
+  assert.equal(veteran.campaignAura.userData.auraStyle,'vanguard');
+  assert.equal(veteran.campaignAuraSpin,.16);
+  veteran.remove();
   context.equipCampaignCosmetic(null);context.localStorage.data={};context.location={search:'?tudo=1'};clear();
 });
 test('poof reutiliza materiais só depois que as partículas expiram',()=>{
@@ -220,19 +281,31 @@ test('24 variantes, receitas e animações existentes nos GLB',()=>{
 });
 test('72 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
-  let total=0;
+  let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
     const anims=t.SKILL_ANIMS[v.id],clips=glb(v.recipe?.base||v.model).animations.map(a=>a.name);
     assert.ok(anims,v.id+' sem SKILL_ANIMS');assert.equal(anims.length,t.skillSetFor(v).length,v.id);
+    allNames.push(...t.skillSetFor(v).map(skill=>skill.name.trim().toLocaleLowerCase('pt-BR')));
+    primaryClips.push({hero:v.id,clip:anims[0].clip});
     anims.forEach((a,slot)=>{
       for(const clip of [a.clip,a.hold].filter(Boolean)) assert.ok(clips.includes(clip),v.id+'['+slot+']: '+clip);
       assert.ok(a.f>0&&a.f<1,v.id+'['+slot+']: impacto');
       if(a.arc) assert.ok(['slash','chop','ring','thrust'].includes(a.arc),v.id+'['+slot+']: '+a.arc);
+      allChoreographies.push({label:`${v.id}[${slot}]`,signature:JSON.stringify(Object.entries(a).sort(([a],[b])=>a.localeCompare(b)))});
       total++;
     });
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,3,v.id+': as três habilidades devem ter corpos diferentes');
+    assert.equal(new Set(anims.map(a=>a.clip)).size,3,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
   assert.equal(total,72);
+  assert.equal(new Set(allNames).size,72,'os nomes das habilidades não se repetem entre heróis');
+  const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
+    .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
+  assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
+    'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
+  const choreographySignatures=allChoreographies.map(item=>item.signature);
+  assert.equal(new Set(choreographySignatures).size,72,
+    `cada uma das 72 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -260,9 +333,11 @@ test('mira no chão reduz amostras e ainda encontra o primeiro cruzamento na ram
   const missRay={origin:{x:0,y:10,z:0},at(distance,out){out.x=distance;out.y=10+distance;out.z=0;return out;}};
   assert.equal(t.findGroundAimHit(missRay,()=>0,{x:0,y:0,z:0}),false,'não cria alvo quando o raio não cruza o terreno');
 });
-test('classes: Druida entra em Suporte e Cronomante em Mago, com os atributos de antes',()=>{
+test('arquétipos de combate preservam os atributos enquanto o seletor mostra as categorias próprias',()=>{
   assert.equal(t.HEROES.length,5);assert.equal(t.CLASSES.length,5);
   for(const [id,classId] of [['cleric',4],['bard',4],['angel',4],['druid',4],['chronist',2]])assert.equal(cfg(id).classId,classId,id);
+  assert.equal(t.pickGroupId(cfg('druid')),'druida');assert.equal(t.pickGroupId(cfg('cleric')),'cleric');
+  assert.equal(t.pickGroupId(cfg('monk')),'monk');assert.equal(t.pickGroupId(cfg('chronist')),'class-2');
   const d=cfg('druid'),c=cfg('chronist');
   assert.deepEqual([d.hp,d.dmg,d.range,d.speed,d.cooldown],[180,21,6,3,1]);
   assert.deepEqual([c.hp,c.dmg,c.range,c.speed,c.cooldown,c.splash],[165,21,6,3.5,1.05,0]);
@@ -280,15 +355,15 @@ test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'rescue'})),['Defesa','Cura','Área']);
   for(const m of t.MISSIONS)assert.ok(t.missionRoleNeeds(m.goal).length>0,`${m.id} orienta os papéis prioritários`);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'boss'})),['Defesa','Cura','Dano a chefe']);
-  assert.deepEqual(Array.from(t.missionRoleNeeds({type:'totems'})),['À distância','Controle','Área']);
+  assert.deepEqual(Array.from(t.missionRoleNeeds({type:'totems'})),['À distância','Área','Cura']);
   const bossDamage=t.teamCoverage(['champion','assassin','viking'].map(cfg));
   assert.equal(bossDamage.roles.find(role=>role.name==='Dano a chefe').count,3);
 });
 test('composições Pesadelo cobrem os papéis prioritários de todas as missões',()=>{
   const expected={
-    fazendas:['paladin','viking'],caca:['paladin','guardian','viking'],
+    fazendas:['paladin','viking'],caca:['paladin','guardian','viking'],ruinas:['paladin','pyro','cleric'],
     castelo:['paladin','guardian','viking','cleric'],cripta:['paladin','guardian','pyro','viking'],
-    trono:['paladin','guardian','viking','cleric'],resgate:['paladin','guardian','pyro'],
+    trono:['paladin','guardian','viking','cleric'],resgate:['paladin','guardian','angel'],
   };
   for(const m of t.MISSIONS){
     const ids=Array.from(t.nightmareTeamIds(m));
@@ -299,14 +374,41 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   }
   for(const [id,ids] of Object.entries(expected))
     assert.deepEqual(Array.from(t.nightmareTeamIds(t.MISSIONS.find(m=>m.id===id))),ids,`${id}: composição especializada`);
+  for(const [id,ids] of Object.entries({
+    fazendas:['paladin','viking','guardian','cleric'],caca:['paladin','guardian','viking','cleric'],
+    ruinas:['paladin','pyro','cleric','guardian'],resgate:['paladin','guardian','angel','pyro'],
+  })) assert.deepEqual(Array.from(t.nightmareTeamPlanIds(t.MISSIONS.find(m=>m.id===id))),ids,`${id}: plano inclui reforços`);
+  for(const id of ['vila','duelo'])
+    assert.deepEqual(Array.from(t.nightmareTeamPlanIds(t.MISSIONS.find(m=>m.id===id))),['paladin'],`${id}: não promete reforços em missão solo`);
   assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='fazendas')),
-    'Equipe para 2 heróis: Paladino (cura) e Viking (dano a chefe).');
+    'Equipe inicial para 2 heróis: Paladino (cura) e Viking (dano a chefe). Reforços sugeridos: Guardião (proteção) e Clériga (suporte/cura).');
+  assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='ruinas')),
+    'Equipe inicial para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço sugerido: Guardião (proteção).');
 });
 test('Anjo tem asas animadas e paira acima do chão',()=>{
   clear();const angel=new t.Hero(cfg('angel'));
   assert.equal(angel.hover,0.52);assert.equal(cfg('angel').idle,'Jump_Idle');
   assert.ok(t.CHARACTERS.find(c=>c.id==='angel').extras.some(e=>e.type==='wings'));
   assert.match(recipes,/wing\.userData\.wingFlap/);
+});
+test('seletor separa as classes especiais sem alterar os arquétipos de combate',()=>{
+  clear();t.showPick('','');
+  assert.equal(t.pick.classRows.filter(row=>!row.hidden).length,1,'só a categoria selecionada aparece ao abrir o seletor');
+  assert.deepEqual(Array.from(t.pick.classFilters,filter=>filter.innerHTML.match(/<span>(.*?)<\/span>/)?.[1]),
+    ['Cavaleiro','Bárbaro','Mago','Ladino','Monge','Druida','Clérigo','Bardo','Anjo','Alquimista']);
+  const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
+  assert.deepEqual(Array.from(rowFor('Bárbaro').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking']);
+  assert.deepEqual(Array.from(rowFor('Monge').children,card=>card.attributes['data-hero-id']),['monk']);
+  assert.deepEqual(Array.from(rowFor('Clérigo').children,card=>card.attributes['data-hero-id']),['cleric']);
+  assert.equal(cfg('monk').classId,1,'o arquétipo de combate do Monge continua separado da categoria visual');
+  assert.equal(cfg('druid').classId,4,'a categoria Druida não altera as regras de combate');
+  const monkGroup=t.PICK_GROUPS.findIndex(group=>group.name==='Monge');
+  t.pick.classFilters[monkGroup].onclick();
+  assert.equal(t.pick.activeClass,monkGroup,'clicar na categoria seleciona o grupo correto');
+  assert.equal(t.pick.options[t.pick.sel].id,'monk','o foco salta para o único herói do grupo');
+  assert.equal(t.pick.classRows[monkGroup].hidden,false);
+  assert.equal(t.pick.classRows.filter(row=>!row.hidden).length,1,'trocar de categoria esconde a anterior');
+  assert.match(t.pick.cards[t.pick.sel].attributes['aria-label'],/categoria Monge/);
 });
 test('navegação respeita as linhas de classe, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
@@ -345,12 +447,20 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   assert.equal(t.pick.sel,at('paladin'),'o primeiro herói sugerido fica em foco');
   assert.ok(t.pick.cards[at('berserker')].className.includes('suggested'),'a equipe anterior continua identificada');
   assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
-  assert.ok(elements.get('pickHint').textContent.includes('Sugestão Pesadelo: Paladino + Guardião + Piromante'));
+  assert.ok(elements.get('pickHint').textContent.includes('Sugestão Pesadelo: Paladino + Guardião + Anjo + Piromante'));
   assert.deepEqual(wantedRoles(true),['Área'],'com Paladino escolhido como candidato, a prioridade restante é dano em área');
   new t.Hero(cfg('paladin'));t.showPick('','');
   assert.equal(t.pick.sel,at('guardian'),'o segundo herói sugerido fica em foco');
   assert.ok(t.pick.cards[at('guardian')].className.includes('recommended'));
   assert.deepEqual(wantedRoles(true),['Área']);
+  new t.Hero(cfg('guardian'));t.showPick('','');
+  assert.equal(t.pick.sel,at('angel'),'o terceiro herói sugerido completa o papel de área e cura');
+  new t.Hero(cfg('angel'));t.showPick('','');
+  assert.equal(t.pick.sel,at('pyro'),'o reforço recomendado aparece após completar as vagas iniciais');
+  clear();t.setMission(t.MISSIONS.find(m=>m.id==='resgate'));t.game.picksLeft=3;t.game.campaignSquadSuggestion=[];t.setDifficulty(3);
+  new t.Hero(cfg('paladin'));new t.Hero(cfg('pyro'));t.showPick('','');
+  assert.equal(t.pick.sel,at('guardian'),'a recomendação escolhe o primeiro membro planejado que ainda não está no grupo');
+  assert.equal(t.nextNightmareTeamId(t.game.mission),'guardian');
   clear();t.game.campaignSquadSuggestion=[];context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);t.setDifficulty(1);
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
@@ -370,6 +480,15 @@ test('autoevolução só liga com permissão e resolve as escolhas automaticamen
   assert.equal(healer.evolutionBranches.support,1);assert.equal(Object.keys(healer.evolutionBranches).length,2);assert.equal(tank.evolutionBranches.control,1);
   button.onclick();assert.equal(context.localStorage.data[key],'false');assert.equal(button.textContent,'Evolução: você escolhe');
   if(saved===undefined)delete context.localStorage.data[key];else context.localStorage.data[key]=saved;
+  clear();
+});
+test('autoevolução considera a cura e o controle que faltam para a missão',()=>{
+  clear();t.setMission({goal:{type:'win'}});
+  const monk=new t.Hero(cfg('monk'));
+  assert.equal(t.chooseAutoEvolution(monk).id,'support','Meditação fortalece a cura quando falta suporte na equipe');
+  clear();t.setMission({goal:{type:'win'}});
+  const monkWithHealer=new t.Hero(cfg('monk'));new t.Hero(cfg('cleric'));
+  assert.equal(t.chooseAutoEvolution(monkWithHealer).id,'control','com uma Clériga na equipe, o Monge investe em controle');
   clear();
 });
 test('evolução manual oculta rotas já escolhidas pelo herói',()=>{
@@ -432,6 +551,21 @@ test('cleave frontal limita raio, dano secundário e recuo',()=>{
   const a=enemy(0,1.8),b=enemy(1,1.5),back=enemy(0,-1.8),far=enemy(0,2.3);
   t.damageCleave(h,a);assert.equal(a.hp,969);assert.equal(b.hp,981.4);assert.equal(back.hp,1000);assert.equal(far.hp,1000);
   assert.ok(b.vel.length()<a.vel.length());
+});
+test('arco corpo a corpo preserva direção e alcance sem alocar vetores',()=>{
+  const Vector=context.THREE.Vector3,owner={pos:new Vector(0,0,0),root:{rotation:{y:0}}};
+  const front={pos:new Vector(0,0,2)},edge={pos:new Vector(Math.sqrt(3),0,1)},side={pos:new Vector(2,0,0)};
+  const behind={pos:new Vector(0,0,-1)},far={pos:new Vector(0,0,2.21)},overlap={pos:new Vector(0,0,0)};
+  assert.equal(t.inMeleeArc(owner,front),true);assert.equal(t.inMeleeArc(owner,edge),true,'inclui o limite angular de 60°');
+  assert.equal(t.inMeleeArc(owner,side),false);assert.equal(t.inMeleeArc(owner,behind),false);
+  assert.equal(t.inMeleeArc(owner,far),false);assert.equal(t.inMeleeArc(owner,overlap),false);
+  owner.root.rotation.y=Math.PI/2;assert.equal(t.inMeleeArc(owner,{pos:new Vector(2,0,0)}),true,'acompanha a rotação do herói');
+  let allocations=0;
+  context.THREE.Vector3=class CountedVector3 extends Vector { constructor(...args){super(...args);allocations++;} };
+  try {
+    for(let i=0;i<1000;i++) t.inMeleeArc(owner,front);
+    assert.equal(allocations,0,'mil checagens do arco não criam vetores');
+  } finally { context.THREE.Vector3=Vector; }
 });
 test('fim de jogo mantém animação e impede dano e golpes pendentes',()=>{
   clear();const h=new t.Hero(cfg('king'));h.die();t.endGame('Derrota');const before=h.mixer.time;
@@ -742,7 +876,46 @@ test('contexto tático reúne alvos válidos uma vez para o quadro',()=>{
   const context=t.makeTargetContext();
   assert.ok(context.alliedUnits.includes(hero)&&context.alliedUnits.includes(minion));
   assert.ok(context.attackableSkeletons.includes(active)&&!context.attackableSkeletons.includes(spawning));
+  assert.equal(context.hasNonTotemTarget,true,'o contexto registra se há inimigo comum sem revarrer a lista a cada alvo');
+  const totem=new t.Skeleton('Minion',1);totem.totem=true;totem.spawning=false;active.remove();
+  const totemOnly=t.makeTargetContext();
+  assert.ok(totemOnly.attackableSkeletons.includes(totem));assert.equal(totemOnly.hasNonTotemTarget,false);
   clear();
+});
+test('totens e torre não liberam perseguição enquanto a onda está na fila ou surgindo',()=>{
+  for(const goal of [{type:'totems'},{type:'tower'}]){
+    clear();const hero=new t.Hero(cfg('paladin'));hero.pos.set(0,0,0);hero.post.copy(hero.pos);
+    t.game.mission={goal};t.game.state='fight';t.game.toSpawn=2;
+    const target=new t.Skeleton('Minion',1);target.totem=true;target.spawning=false;target.pos.set(0,0,30);
+    let context=t.makeTargetContext();
+    assert.equal(context.hasNonTotemTarget,true,goal.type+': inimigos na fila ainda contam como pressão');
+    assert.equal(t.canHeroReachTarget(hero,target,context),false,goal.type+': não corre para um totem distante antes da onda');
+
+    t.game.toSpawn=0;
+    const incoming=new t.Skeleton('Warrior',1);incoming.spawning=true;incoming.pos.set(0,0,-4);
+    context=t.makeTargetContext();
+    assert.equal(context.hasNonTotemTarget,true,goal.type+': inimigo em animação de surgimento ainda conta');
+    assert.equal(t.canHeroReachTarget(hero,target,context),false,goal.type+': mantém a formação durante o surgimento');
+
+    incoming.remove();context=t.makeTargetContext();
+    assert.equal(context.hasNonTotemTarget,false,goal.type+': libera o objetivo quando não há inimigos comuns');
+    assert.equal(t.canHeroReachTarget(hero,target,context),true,goal.type+': vai até o objetivo após limpar a onda');
+  }
+  clear();
+});
+test('priorização de habilidades pontua cada alvo uma vez e preserva empates estáveis',()=>{
+  const hero={pos:new Vector3(0,0,0),ranged:false},context={goal:{type:'win'},party:[],friends:[],villager:null};
+  const target=(z)=>({pos:new Vector3(0,0,z),hp:10,maxHp:10,size:1});
+  const far=target(5),nearA=target(2),nearB=target(-2);
+  assert.deepEqual(Array.from(t.prioritizedHeroTargets(hero,[far,nearA,nearB],context)),[nearA,nearB,far],
+    'a skill usa a menor pontuação e mantém a ordem original nos empates');
+});
+test('elite aplica glow dourado mesmo em materiais sem emissive prévio',()=>{
+  const emissive={setHex:noop},material={emissive,userData:{glow:0}};
+  const elite={hp:100,maxHp:100,dmg:10,size:1,root:{scale:{setScalar:noop}},mats:[material],bar:{classList:{add:noop}}};
+  t.makeElite(elite);
+  assert.equal(material.userData.glow,0x4a3400,'elite substitui glow zero por dourado');
+  assert.equal(elite.emissiveDirty,true,'a invalidação atualiza o glow sem varredura por quadro');
 });
 test('alvos táticos priorizam o sacerdote e o inimigo que ameaça o aldeão',()=>{
   clear();const h=new t.Hero(cfg('pyro'));h.pos.set(0,0,0);
@@ -778,12 +951,17 @@ test('Trono de Ossos concentra no chefe com menos vida relativa e retém o foco'
   lich.hp=lich.maxHp*.3;executioner.hp=executioner.maxHp*.6;
   t.game.mission={goal:{type:'twin'}};
   const team=t.makeTargetContext();
+  let focusScans=0;const filter=team.skeletons.filter.bind(team.skeletons);
+  team.skeletons.filter=(...args)=>{focusScans++;return filter(...args)};
   assert.equal(t.chooseHeroTarget(first,[executioner,lich],.016,team),lich,'a vida relativa mais baixa define o foco inicial');
+  assert.equal(focusScans,1,'calcula o foco dos chefes uma vez no quadro');
   assert.equal(t.chooseHeroTarget(second,[lich,executioner],.016,team),lich,'todos os heróis usam o mesmo chefe');
+  assert.equal(focusScans,1,'os outros heróis reutilizam a busca do mesmo quadro');
   lich.hp=lich.maxHp*.9;executioner.hp=executioner.maxHp*.1;
   assert.equal(t.chooseHeroTarget(first,[executioner,lich],.016,team),lich,'mudanças de vida não dividem o grupo enquanto o foco estiver atacável');
   lich.dead=true;lich.hp=0;
   assert.equal(t.chooseHeroTarget(second,[executioner,lich],.016,team),executioner,'o grupo troca quando o chefe focado morre');
+  assert.equal(focusScans,2,'um chefe caído invalida o cache e procura o próximo no mesmo quadro');
   clear();
 });
 test('Trono de Ossos desempata com ordem determinística e troca foco inacessível',()=>{
@@ -873,15 +1051,26 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);h.range=1;}
     const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
     t.game.mission={goal:{type:goalType}};
+    t.game.surviveT=75;
     if(goalType==='defend')t.game.shrine=objective;else t.game.gate=objective;
     const shooter=new t.Skeleton('Mage',1);shooter.spawning=false;shooter.ranged=true;shooter.mobile=false;shooter.pos.set(0,0,17);
     let team=t.makeTargetContext();
     assert.equal(team.villager,objective,goalType+': o objetivo protegido entra no contexto tático');
     const remoteTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
     assert.equal(remoteTargets[0],null,goalType+': a âncora não sai para perseguir o atirador');
-    assert.equal(remoteTargets[1],shooter,goalType+': primeiro interceptador alcança o atirador remoto');
-    assert.equal(remoteTargets[2],shooter,goalType+': segundo interceptador pode ajudar');
-    assert.equal(remoteTargets[3],null,goalType+': o teto de dois perseguidores mantém outro defensor');
+    assert.equal(remoteTargets[1],null,goalType+': o perseguidor mais veloz ocupa o segundo slot');
+    assert.equal(remoteTargets[2],shooter,goalType+': a heroína à distância recebe prioridade de interceptação');
+    assert.equal(remoteTargets[3],shooter,goalType+': o outro slot vai para o melhor perseguidor restante');
+
+    // O pior ponto de surgimento do Santuário fica ~19,1 m do posto recuado.
+    // A âncora continua protegendo o objetivo e dois aliados podem eliminar o mago.
+    for(const h of guards){h.targetFocus=null;h.targetFocusT=0;}
+    shooter.pos.set(4,0,18.7);team=t.makeTargetContext();
+    const diagonalTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+    assert.equal(diagonalTargets[0],null,goalType+': a âncora continua protegendo o objetivo contra atirador diagonal');
+    assert.equal(diagonalTargets[1],null,goalType+': o slot restante não depende da ordem de seleção');
+    assert.equal(diagonalTargets[2],shooter,goalType+': a heroína à distância alcança o atirador no limite diagonal');
+    assert.equal(diagonalTargets[3],shooter,goalType+': dois perseguidores bastam, sem liberar o grupo todo');
 
     shooter.mobile=true;
     const mobileTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
@@ -913,8 +1102,42 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': mantém o combate enquanto a ameaça fica dentro da corda tática');
     shooter.pos.set(0,0,11.1);
     assert.equal(t.canHeroReachTarget(guards[0],shooter,team),false,goalType+': a resposta não persegue além do limite tático');
+
+    if(goalType==='defend'){
+      t.game.surviveT=0;shooter.pos.set(4,0,18.7);guards[0].engagedWith=null;guards[0].targetFocus=null;guards[0].targetFocusT=0;
+      team=t.makeTargetContext();
+      assert.equal(t.canHeroReachTarget(guards[0],shooter,team),true,'com o cronômetro encerrado, a âncora pode limpar a onda restante');
+      assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,'o último herói não fica parado após defender o santuário');
+    }
   }
   clear();t.game.shrine=null;t.game.gate=null;
+});
+test('interceptores priorizam alcance e aptidão sem depender da ordem de seleção',()=>{
+  const run=(goalType,order)=>{
+    clear();t.game.shrine=null;t.game.gate=null;t.game.huntMark=null;t.game.phase=1;t.game.surviveT=75;
+    t.game.mission={goal:{type:goalType}};
+    if(goalType==='defend')t.game.shrine={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
+    const party=order.map(id=>new t.Hero(cfg(id)));
+    for(const h of party){h.pos.set(0,0,0);h.post.set(0,0,0);}
+    const target=new t.Skeleton(goalType==='hunt'?'Rogue':'Mage',1);
+    target.spawning=false;target.pos.set(4,0,18.7);
+    if(goalType==='hunt'){target.hunted=true;t.game.huntMark=target;}
+    else {target.ranged=true;target.mobile=false;}
+    const context=t.makeTargetContext();
+    const selected=[];
+    for(const hero of party)if(t.chooseHeroTarget(hero,[target],.016,context)===target)selected.push(hero.cfg.id);
+    return selected.sort();
+  };
+  const orders=[
+    ['paladin','berserker','assassin','pyro'],
+    ['paladin','pyro','assassin','berserker'],
+  ];
+  for(const goalType of ['defend','hunt']){
+    const assignments=orders.map(order=>run(goalType,order));
+    assert.deepEqual(assignments[0],assignments[1],goalType+': permutar a seleção não troca os interceptores');
+    assert.equal(assignments[0].length,2,goalType+': só dois heróis deixam a formação');
+    assert.ok(assignments[0].includes('pyro'),goalType+': a heroína com alcance à distância recebe um slot');
+  }
 });
 test('defesa fixa reserva uma âncora sem depender da ordem de atualização e transfere após queda',()=>{
   const permutations=list=>list.length<2?[list]:list.flatMap((item,index)=>permutations([...list.slice(0,index),...list.slice(index+1)]).map(rest=>[item,...rest]));
@@ -1071,7 +1294,7 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
   assert.equal(subtitle,`⚑ ${context.goalText(mission('lago').goal)}`,'o objetivo da missão continua no subtítulo');
   const nightmareIndex=idx('pesadelo'),nightmare=t.pick.cards[nightmareIndex];
   nightmare.onfocus();
-  const team='Equipe para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área).';
+  const team='Equipe inicial para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área). Reforço sugerido: Clériga (suporte/cura).';
   assert.ok(elements.get('pickHint').textContent.includes(team),'a recomendação aparece quando Pesadelo recebe foco');
   assert.ok(nightmare.classList.contains('sel'));
   assert.ok(nightmare.attributes['data-tip'].includes('Caídos só voltam uma fase depois.'),'a dica existente sobre reviver continua no tooltip');
@@ -1105,14 +1328,14 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
 test('Pesadelo recomenda Guardião para defender e mantém Piromante em metas ofensivas',()=>{
   clear();context.localStorage.data={};t.setMission(mission('santuario'));t.showDifficulty();
   let card=t.pick.cards[idx('pesadelo')];card.onfocus();
-  const defense='Equipe para 2 heróis: Paladino (cura) e Guardião (proteção).';
+  const defense='Equipe inicial para 2 heróis: Paladino (cura) e Guardião (proteção). Reforços sugeridos: Clériga (suporte/cura) e Piromante (dano em área).';
   assert.ok(elements.get('pickHint').textContent.includes(defense),'Santuário recomenda proteção para a composição de duas vagas');
   assert.ok(card.attributes['data-tip'].includes(defense),'a sugestão defensiva também aparece na dica');
   assert.ok(card.attributes['aria-label'].includes(defense),'a sugestão defensiva também fica acessível');
 
   clear();context.localStorage.data={};t.setMission(mission('fazendas'));t.showDifficulty();
   card=t.pick.cards[idx('pesadelo')];card.onfocus();
-  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 2 heróis: Paladino (cura) e Viking (dano a chefe).'),'Fazendas recomenda dano adequado ao chefe');
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe inicial para 2 heróis: Paladino (cura) e Viking (dano a chefe). Reforços sugeridos: Guardião (proteção) e Clériga (suporte/cura).'),'Fazendas recomenda dano adequado ao chefe e sugere os reforços');
   clear();t.setDifficulty(1);
 });
 test('mapas da campanha ficam estáveis ao voltar da dificuldade e rerrolam na próxima visita',()=>{
@@ -1148,9 +1371,24 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
   assert.strictEqual(t.rescueRunnerFor(captive,party),runner,'a aproximação de outro herói não troca a função a cada quadro');
   party[1].pos.copy(saved);
 
-  const farGuard=t.skeletonsAlive()[0];
+  for(const guard of t.skeletonsAlive())guard.remove();
+  runner.pos.set(0,0,13);runner.post.copy(runner.pos);t.game.rescueRunner=runner;
+  const nearRunner=new t.Skeleton('Minion',t.game.phase),nearCaptive=new t.Skeleton('Minion',t.game.phase);
+  nearRunner.spawning=nearCaptive.spawning=false;nearRunner.pos.set(0,0,7);nearCaptive.pos.set(0,0,.5);
+  const rescueContext={goal:mission('resgate').goal,party,friends:party,villager:null,plateauBonus:0,
+    rescueThreats:[nearRunner,nearCaptive],skeletons:[nearRunner,nearCaptive],attackableSkeletons:[nearRunner,nearCaptive],alliedUnits:party,livingAllies:party};
+  runner.targetFocus=nearRunner;runner.targetFocusT=1;
+  assert.strictEqual(t.chooseHeroTarget(runner,rescueContext.rescueThreats,.01,rescueContext),nearCaptive,
+    'o resgatista interrompe um foco anterior para priorizar a ameaça junto ao prisioneiro');
+  rescueContext.goal={type:'win'};runner.targetFocusT=0;
+  assert.strictEqual(t.chooseHeroTarget(runner,rescueContext.rescueThreats,.01,rescueContext),nearRunner,
+    'fora do resgate, a prioridade volta a considerar a ameaça mais próxima do herói');
+  rescueContext.goal=mission('resgate').goal;runner.targetFocus=null;runner.targetFocusT=0;
+  runner.pos.set(0,0,10);runner.post.copy(runner.pos);
+
+  const farGuard=nearCaptive;
   runner.update(.1);
-  assert.strictEqual(runner.engagedWith,farGuard,'o resgatista intercepta guardas no cativo além do leash normal');
+  assert.strictEqual(runner.engagedWith,farGuard,'o resgatista intercepta primeiro a ameaça mais próxima do cativo, além do leash normal');
   assert.ok(runner.vel.z<0,'o resgatista avança até os guardas em vez de voltar ao posto');
 
   for(const guard of t.skeletonsAlive())guard.remove();
@@ -1275,11 +1513,26 @@ test('progresso da missão acompanha o objetivo exibido no HUD',()=>{
   clear();t.game.mission={from:5,to:7};t.game.phase=5;t.game.state='fight';
   t.game.surviveT=90;
   assert.equal(t.missionProgress({type:'survive',phase:5,time:90},null,[]),0);
-  t.game.surviveT=45;assert.equal(t.missionProgress({type:'survive',phase:5,time:90},null,[]),.5);
-  t.game.totemsDown=2;assert.ok(Math.abs(t.missionProgress({type:'totems',count:3},null,[])-2/3)<.001);
+  t.game.surviveT=45;assert.equal(t.missionProgress({type:'survive',phase:5,time:90},null,[]),.425);
+  t.game.surviveT=0;t.game.toSpawn=7;assert.equal(t.missionProgress({type:'survive',phase:5,time:90},null,[]),.85);
+  t.game.toSpawn=0;assert.equal(t.missionProgress({type:'survive',phase:5,time:90},null,[]),1);
+  t.game.surviveT=37.5;assert.equal(t.missionProgress({type:'defend',time:75},null,[]),.425);
+  t.game.surviveT=0;t.game.toSpawn=7;assert.equal(t.missionProgress({type:'defend',time:75},null,[]),.85);
+  t.game.toSpawn=0;assert.equal(t.missionProgress({type:'defend',time:75},null,[]),1);
+  t.game.totemsDown=2;assert.ok(Math.abs(t.missionProgress({type:'totems',count:3},null,[])-2/3*.85)<.001);
   t.game.missionT=60;assert.equal(t.missionProgress({type:'timer',time:240},null,[]),.25);
   assert.equal(t.missionProgress({type:'escort'},{hp:35,maxHp:100},[]),.35);
   t.game.state='cleared';assert.equal(t.missionProgress({type:'win'},null,[]),1/3);
+  t.game.state='fight';t.game.phase=7;t.game.mission={from:7,to:8};t.game.rescueComplete=false;t.game.rescueT=2;
+  assert.ok(Math.abs(t.missionProgress({type:'rescue'},null,[])-.68)<.001,'o progresso do resgate reserva os 15% finais para concluir a missão');
+  t.game.rescueComplete=true;assert.equal(t.missionProgress({type:'rescue'},null,[]),.85,'libertar a pessoa não conclui a missão inteira');
+  t.game.phase=8;t.game.state='cleared';assert.equal(t.missionProgress({type:'rescue'},null,[]),1,'a missão completa o restante ao limpar a fase final');
+  t.game.state='fight';t.game.phase=8;t.game.towersDown=1;t.game.totemsDown=3;
+  assert.ok(Math.abs(t.missionProgress({type:'tower',count:1},null,[])-.925)<.001,'derrubar a torre reserva o fim da missão');
+  assert.ok(Math.abs(t.missionProgress({type:'totems',count:3},null,[])-.925)<.001,'destruir os totens reserva o fim da missão');
+  t.game.phase=10;t.game.state='cleared';
+  assert.equal(t.missionProgress({type:'tower',count:1},null,[]),1);
+  assert.equal(t.missionProgress({type:'totems',count:3},null,[]),1);
 });
 test('recordes de campanha guardam apenas a melhor vitória por missão e dificuldade',()=>{
   context.localStorage.data={};
@@ -1450,6 +1703,10 @@ test('resgate: prisioneiro longe e guardado, fora do alvo dos esqueletos e liber
   assert.ok(!t.allies().includes(v));assert.ok(!t.makeTargetContext().alliedUnits.includes(v));
   t.startPhase();
   assert.equal(t.skeletonsAlive().filter(s=>s.pos.distanceTo(v.pos)<3).length,2,'guardas ao lado do prisioneiro');
+  const rescueContext=t.makeTargetContext();
+  assert.strictEqual(rescueContext.captive,v,'o contexto do quadro mantém o prisioneiro atual');
+  assert.equal(rescueContext.rescueThreatened,true,'o contexto já sinaliza guardas na área de libertação');
+  assert.strictEqual(rescueContext.rescueRunner,t.rescueRunnerFor(v,t.heroes()),'o resgatista é resolvido uma vez no contexto');
   const approach=t.heroes()[0],spawnPosition=approach.pos.clone();approach.pos.copy(v.pos);
   t.updateGame(1);assert.equal(t.game.rescueT,0,'a libertação não progride enquanto os guardas estão perto');
   assert.equal(v.nameTag.textContent,'Limpe a área','o prisioneiro avisa que a zona ainda está perigosa');
@@ -1458,7 +1715,7 @@ test('resgate: prisioneiro longe e guardado, fora do alvo dos esqueletos e liber
   t.updateGame(.1);assert.equal(t.game.state,'fight','a fase espera o resgate');assert.equal(elements.get('left').textContent,'Liberte o prisioneiro');
   const h=t.rescueRunnerFor(v,t.heroes()),before=h.pos.distanceTo(v.pos);h.busy=0;h.update(.2);h.update(.2);assert.ok(h.pos.distanceTo(v.pos)<before,'sem inimigos, o resgatista vai até o prisioneiro');
   h.pos.set(v.pos.x+1,0,v.pos.z);t.updateGame(1);
-  assert.equal(v.rescued,false);assert.ok(Math.abs(t.missionProgress({type:'rescue'})-.4)<.01);assert.match(v.nameTag.textContent,/Libertando 40%/);
+  assert.equal(v.rescued,false);assert.ok(Math.abs(t.missionProgress({type:'rescue'})-.34)<.01);assert.match(v.nameTag.textContent,/Libertando 40%/);
   t.updateGame(1.6);assert.equal(v.rescued,true);assert.equal(t.game.rescueComplete,true);assert.equal(t.game.state,'cleared');
   assert.ok(t.allies().includes(v),'depois de solto ele volta a ser protegido e alvo');
 });
@@ -1627,6 +1884,28 @@ test('grade espacial separa unidades grandes nas células vizinhas e mantém col
     assert.ok(a.pos.distanceTo(b.pos)>=2.332-.01,'o par que atravessa o limite da célula deve se separar');
     clear();t.world.obstacles=[{x:10,z:0,r:1}];const unit=foe('Minion',10,0);t.separate();
     assert.ok(Math.hypot(unit.pos.x-10,unit.pos.z)>=1.53-.01,'a unidade deve sair do centro do obstáculo');
+  }finally{clear();t.world.obstacles=obstacles}
+});
+test('separação física encerra cedo quando a cena não tem colisões',()=>{
+  clear();const obstacles=t.world.obstacles;
+  try{
+    t.world.obstacles=[];
+    hero('paladin',-8,0);foe('Minion',8,0);
+    const groundHeight=t.world.groundHeight;let samples=0;
+    t.world.groundHeight=(...args)=>{samples++;return groundHeight(...args)};
+    t.separate();
+    assert.equal(samples,2,'uma única passada basta para duas unidades sem colisão');
+  }finally{clear();t.world.obstacles=obstacles}
+});
+test('separação repete a passada quando um empurrão cria uma colisão em cadeia',()=>{
+  clear();const obstacles=t.world.obstacles;
+  try{
+    t.world.obstacles=[];
+    const a=foe('Minion',0,0),b=foe('Minion',1.07,0),c=foe('Minion',2,0);
+    const min=0.53*(a.size+b.size);
+    t.separate();
+    assert.ok(a.pos.distanceTo(b.pos)>=min-.01,'a nova colisão entre os dois primeiros também é resolvida');
+    assert.ok(b.pos.distanceTo(c.pos)>=min-.01,'o par que iniciou o empurrão continua separado');
   }finally{clear();t.world.obstacles=obstacles}
 });
 test('monstros novos usam animações que existem nos GLB',()=>{
@@ -2051,7 +2330,10 @@ test('santuário: estrutura aliada que os saqueadores atacam e que derruba a mis
   context.location={search:''};context.localStorage.data={};
   begin('santuario',party(2));const shrine=t.game.shrine;
   assert.ok(shrine&&shrine.team==='villager'&&shrine.structure);
-  assert.equal(t.makeTargetContext().villager,shrine,'os heróis tratam o santuário como quem precisa de proteção');
+  const targets=t.makeTargetContext();
+  assert.equal(targets.villager,shrine,'os heróis tratam o santuário como quem precisa de proteção');
+  assert.ok(!targets.alliedUnits.includes(shrine),'inimigos comuns não escolhem o santuário como alvo padrão');
+  assert.ok(targets.livingAllies.includes(shrine),'o santuário continua exposto ao dano em área');
   t.startPhase();t.game.toSpawn=1;withRandom(0,()=>t.spawnSkeleton());
   const raider=t.skeletonsAlive().at(-1);assert.equal(raider.raider,true);
   Object.assign(t.game,{state:'fight',toSpawn:0});for(const s of t.skeletonsAlive())s.die();t.updateGame(1);
@@ -2062,6 +2344,23 @@ test('santuário: estrutura aliada que os saqueadores atacam e que derruba a mis
   assert.equal(context.starsFor({won:true,falls:1,goal:mission('santuario').goal,shrineRatio:.6}),2);
   assert.equal(context.starsFor({won:true,falls:0,goal:mission('santuario').goal,shrineRatio:.3}),1);
   clear();
+});
+test('sobrevivência e santuário só concluem depois da limpeza final da onda',()=>{
+  context.location={search:''};context.localStorage.data={};
+  for(const [id,picks,phase] of [['santuario',['paladin','pyro'],3],['lago',['paladin','pyro','cryo'],5]]){
+    begin(id,picks);t.game.phase=phase;t.startPhase();
+    for(const enemy of t.skeletonsAlive())enemy.remove();
+    Object.assign(t.game,{surviveT:0,toSpawn:0,state:'fight'});
+    const survivor=foe('Mage',0,-20);survivor.busy=99;
+    t.updateGame(.01);
+    const goalElement=elements.get('goal');
+    assert.equal(goalElement.classList.contains('done'),false,id+': relógio zerado não conclui enquanto há inimigo');
+    assert.match(goalElement.attributes['aria-valuetext'],/limpe a onda/i,id+': o HUD informa a limpeza restante');
+    assert.ok(t.missionProgress(t.game.mission.goal,t.game.shrine,[survivor])<1,id+': progresso fica incompleto durante a limpeza');
+    survivor.die();t.updateGame(.01);
+    assert.equal(goalElement.classList.contains('done'),true,id+': objetivo fica verde ao limpar a onda');
+    clear();
+  }
 });
 test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abatê-lo',()=>{
   context.location={search:''};context.localStorage.data={};
@@ -2086,6 +2385,9 @@ test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s 
   t.updateGame(.5);assert.ok(t.game.toSpawn>0,'a horda repõe esqueletos');assert.ok(t.game.endlessT>0);
   const goal=mission('horda').goal;
   assert.equal(context.starsFor({won:true,goal,endlessTime:61}),1);assert.equal(context.starsFor({won:true,goal,endlessTime:185}),3);
+  begin('horda',party(4));t.startPhase();t.game.endlessT=180;t.updateGame(.01);
+  assert.ok(Math.abs(t.missionProgress(goal)-.6)<.001,'o progresso acompanha os cinco minutos até o amanhecer');
+  assert.equal(elements.get('goal').classList.contains('done'),false,'três estrelas não encerram a missão antes do amanhecer');
   const originalRecordMatch=t.progress.recordMatch;let endedRun=null;
   t.progress.recordMatch=function(run){endedRun={...run};return originalRecordMatch.call(this,run);};
   try { t.game.endlessT=125;for(const h of t.heroes())h.die();t.updateGame(.1); }
@@ -2101,7 +2403,23 @@ test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s 
   begin('horda',party(4));t.startPhase();t.game.endlessT=40;for(const h of t.heroes()){h.hp=0;h.dead=true;}t.updateGame(.1);
   assert.match(context.document.getElementById('overlayText').textContent,/A horda venceu/);assert.equal(t.starsOf('horda'),2,'derrota não apaga o melhor');
   begin('horda',party(4));t.startPhase();t.game.endlessT=goal.dawn-.01;t.updateGame(.1);
+  assert.equal(elements.get('goal').classList.contains('done'),true,'o objetivo só fica concluído quando amanhece');
   assert.equal(t.game.last,t.game.phase,'ao amanhecer a horda recua e a fase pode terminar');assert.equal(t.game.toSpawn,0);
+  clear();
+});
+test('resgate, totens e torre não marcam missão concluída antes da última fase',()=>{
+  const cases=[
+    { id:'resgate', phase:7, prepare(){t.game.rescueComplete=true;t.game.villager={rescued:true,hp:100,maxHp:100};} },
+    { id:'ruinas', phase:8, prepare(){t.game.totemsDown=3;} },
+    { id:'torre', phase:9, prepare(){t.game.towersDown=1;} },
+  ];
+  for(const testCase of cases){
+    begin(testCase.id,party(4));t.startPhase();t.game.phase=testCase.phase;testCase.prepare();
+    t.updateGame(.01);
+    assert.ok(t.missionProgress(t.game.mission.goal)<1,testCase.id+': objetivo local deixa progresso da missão incompleto');
+    assert.equal(elements.get('goal').classList.contains('done'),false,testCase.id+': objetivo local não pinta o HUD como concluído');
+    assert.match(elements.get('goal').attributes['aria-valuetext'],/avance até a fase|limpe a onda/,testCase.id+': o HUD indica o próximo passo');
+  }
   clear();
 });
 test('missões novas entram na ordem da campanha sem travar saves antigos',()=>{

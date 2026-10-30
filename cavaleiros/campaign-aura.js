@@ -12,7 +12,7 @@ const auraGeometryFactories = {
   crownPoint: (THREE) => new THREE.ConeGeometry(0.11, 0.28, 4),
 };
 
-const auraSpin = { banner: 0.11, bones: 0.34, crescent: 0.24, crest: 0.08, crown: 0.18 };
+const auraSpin = { banner: 0.11, bones: 0.34, crescent: 0.24, crest: 0.08, crown: 0.18, vanguard: 0.16, nightmare: 0.27 };
 
 function sharedAuraGeometry(THREE, name) {
   let cache = auraGeometryCaches.get(THREE);
@@ -65,6 +65,16 @@ export function createCampaignAura(THREE, cosmetic) {
     add('crescent', [0, 1.72, 0], [0, 0, -Math.PI * 0.12]);
   } else if (style === 'crest') {
     add('crest', [0, 0.09, 0], [Math.PI / 2, Math.PI / 6, 0]);
+  } else if (style === 'vanguard') {
+    add('ring', [0, 0.08, 0], [Math.PI / 2, 0, 0]);
+    for (let i = 0; i < 8; i++) {
+      const angle = i * Math.PI / 4;
+      add('crownPoint', [Math.cos(angle) * 1.08, 0.16, Math.sin(angle) * 1.08], [0, -angle, 0]);
+    }
+  } else if (style === 'nightmare') {
+    add('knot', [0, 0.92, 0], [Math.PI / 2, 0, 0]);
+    add('crescent', [0, 1.62, 0], [0, 0, Math.PI * 0.12]);
+    add('crescent', [0, 1.62, 0], [0, Math.PI, -Math.PI * 0.12]);
   } else {
     add('ring', [0, 0.08, 0], [Math.PI / 2, 0, 0]);
     for (let i = 0; i < 5; i++) {

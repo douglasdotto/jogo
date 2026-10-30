@@ -417,35 +417,52 @@ export const CHAPTER_COSMETICS = [
   { id: 'marcha', chapter: 'Capítulo IV · A marcha final', name: 'Brasão da Marcha', icon: '♜', auraStyle: 'crest', color: 0x65e1b0 },
   { id: 'trono', chapter: 'Capítulo V · Além do Castelo', name: 'Auréola do Trono', icon: '♛', auraStyle: 'crown', color: 0xffd66e },
 ];
+export const CHALLENGE_COSMETICS = [
+  { id: 'vanguarda', chapter: 'Desafio 3★ · Difícil', name: 'Halo da Vanguarda', icon: '✹', auraStyle: 'vanguard', color: 0xffd36b, difficultyId: 'dificil', difficultyName: 'Difícil', track: 'challenge' },
+  { id: 'pesadelo', chapter: 'Desafio 3★ · Pesadelo', name: 'Espiral do Pesadelo', icon: '☾', auraStyle: 'nightmare', color: 0xb882ff, difficultyId: 'pesadelo', difficultyName: 'Pesadelo', track: 'challenge' },
+];
 const CHAPTER_COSMETIC_RULE_VERSION = 2;
 export function campaignCosmetics() {
+  const starsByMission = new Map(MISSIONS.map((mission) => [mission.id, starsOf(mission.id)]));
+  const boundedStarsOf = (mission) => Math.max(0, Math.min(3, Number(starsByMission.get(mission.id)) || 0));
   const storedVisuals = readCampaignObject(CAMPAIGN_COSMETIC_KEY);
   let legacyUnlocked = Array.isArray(storedVisuals.legacyUnlocked) ? storedVisuals.legacyUnlocked.filter((id) => CHAPTER_COSMETICS.some((cosmetic) => cosmetic.id === id)) : [];
   if (!(Number(storedVisuals.rulesVersion) >= CHAPTER_COSMETIC_RULE_VERSION)) {
     const previouslyUnlocked = CHAPTER_COSMETICS.filter((cosmetic) => {
       const missions = MISSIONS.filter((mission) => mission.chapter === cosmetic.chapter);
       const formerRequirement = Math.ceil(missions.length * 3 / 2);
-      const formerStars = missions.reduce((sum, mission) => sum + Math.max(0, Math.min(3, Number(starsOf(mission.id)) || 0)), 0);
+      const formerStars = missions.reduce((sum, mission) => sum + boundedStarsOf(mission), 0);
       return missions.length > 0 && formerStars >= formerRequirement;
     }).map((cosmetic) => cosmetic.id);
     legacyUnlocked = [...new Set([...legacyUnlocked, ...previouslyUnlocked])];
     writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...storedVisuals, rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
   }
   const legacyUnlockSet = new Set(legacyUnlocked);
-  return CHAPTER_COSMETICS.map((cosmetic) => {
+  const chapters = CHAPTER_COSMETICS.map((cosmetic) => {
     const missions = MISSIONS.filter((mission) => mission.chapter === cosmetic.chapter);
     const maxStars = missions.length * 3;
-    const stars = missions.reduce((sum, mission) => sum + Math.max(0, Math.min(3, Number(starsOf(mission.id)) || 0)), 0);
-    const completedArenas = missions.filter((mission) => starsOf(mission.id) > 0).length;
+    const stars = missions.reduce((sum, mission) => sum + boundedStarsOf(mission), 0);
+    const completedArenas = missions.filter((mission) => Number(starsByMission.get(mission.id)) > 0).length;
     const requiredArenas = missions.length;
     const requiredStars = requiredArenas; // compatibilidade: uma estrela mínima por arena
     const unlocked = (requiredArenas > 0 && completedArenas === requiredArenas) || legacyUnlockSet.has(cosmetic.id);
     return { ...cosmetic, stars, maxStars, completedArenas, requiredArenas, requiredStars, unlocked };
   });
+  const savedMedals = readMissionMedals();
+  const challenges = CHALLENGE_COSMETICS.map((cosmetic) => {
+    const completedMissions = MISSIONS.filter((mission) => savedMedals[mission.id]?.challenges?.[cosmetic.difficultyId] === true);
+    const completedArenas = completedMissions.length;
+    const completedIds = new Set(completedMissions.map((mission) => mission.id));
+    const pendingMissions = MISSIONS.filter((mission) => !completedIds.has(mission.id)).map(({ id, name }) => ({ id, name }));
+    const requiredArenas = MISSIONS.length;
+    return { ...cosmetic, stars: completedArenas, maxStars: requiredArenas, completedArenas, requiredArenas,
+      requiredStars: requiredArenas, pendingMissions, unlocked: requiredArenas > 0 && completedArenas === requiredArenas };
+  });
+  return [...chapters, ...challenges];
 }
-export function equippedCampaignCosmetic() {
+export function equippedCampaignCosmetic(cosmetics = campaignCosmetics()) {
   const id = readCampaignObject(CAMPAIGN_COSMETIC_KEY).equipped;
-  return campaignCosmetics().find((cosmetic) => cosmetic.id === id && cosmetic.unlocked) || null;
+  return cosmetics.find((cosmetic) => cosmetic.id === id && cosmetic.unlocked) || null;
 }
 export function equipCampaignCosmetic(id) {
   if (id == null) {
@@ -583,6 +600,7 @@ const BOSSES = ['King', 'Executioner', 'Lich', 'Golem'];
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
 export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null, storageWarning = '') {
   const total = totalStars();
+  const cosmetics = campaignCosmetics();
   const cleared = MISSIONS.every((m) => starsOf(m.id) > 0);
   let sel = MISSIONS.findIndex((_, i) => unlocked(i) && starsOf(MISSIONS[i].id) === 0);
   if (sel < 0) sel = cleared ? MISSIONS.length - 1 : 0;
@@ -640,7 +658,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     const threats = typeof getThreats === 'function' ? getThreats(m) : [];
     const records = missionRecords(m.id);
     const medal = missionMedal(m.id);
-    const chapterReward = campaignCosmetics().find((cosmetic) => cosmetic.chapter === m.chapter);
+    const chapterReward = cosmetics.find((cosmetic) => cosmetic.chapter === m.chapter);
     const rewardTarget = Math.max(1, Number(chapterReward?.requiredArenas) || 1);
     const rewardProgress = chapterReward?.completedArenas;
     const rewardValue = Math.min(rewardTarget, Number(rewardProgress) || 0);

@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'campaign.js'), 'utf8'
 function loadCampaign(localStorage) {
   const context = vm.createContext({ URLSearchParams, location: { search: '' } });
   if (localStorage) context.localStorage = localStorage;
-  vm.runInContext(`${source}\nthis.api = { starsOf, unlocked, totalStars, saveStars, missionRecords, saveMissionRecord, missionMedal, saveMissionMedal, campaignCosmetics, equippedCampaignCosmetic, equipCampaignCosmetic, campaignStorageIsVolatile, campaignStorageWasCorrupted, campaignCorruptBackupFailed };`, context);
+  vm.runInContext(`${source}\nthis.api = { MISSIONS, starsOf, unlocked, totalStars, saveStars, missionRecords, saveMissionRecord, missionMedal, saveMissionMedal, campaignCosmetics, equippedCampaignCosmetic, equipCampaignCosmetic, campaignStorageIsVolatile, campaignStorageWasCorrupted, campaignCorruptBackupFailed };`, context);
   return context.api;
 }
 
@@ -54,23 +54,53 @@ assert.equal(api.missionRecords('vila')[0].seconds, 123);
 const cosmeticData = new Map();
 const cosmeticStorage = { getItem(key) { return cosmeticData.get(key) ?? null; }, setItem(key, value) { cosmeticData.set(key, String(value)); } };
 const cosmetics = loadCampaign(cosmeticStorage);
-assert.equal(cosmetics.campaignCosmetics().length, 5, 'há um visual por capítulo');
+assert.equal(cosmetics.campaignCosmetics().length, 7, 'há um visual por capítulo e dois visuais de domínio');
 assert.equal(cosmetics.campaignStorageIsVolatile(), false, 'storage que grava normalmente não mostra aviso');
-assert.deepEqual(Array.from(cosmetics.campaignCosmetics(), (cosmetic) => cosmetic.requiredStars), [4, 3, 3, 5, 2], 'cada capítulo pede uma estrela por arena');
-assert.deepEqual(Array.from(cosmetics.campaignCosmetics(), (cosmetic) => cosmetic.requiredArenas), [4, 3, 3, 5, 2], 'cada capítulo acompanha arenas concluídas');
+const countedReads = new Map();
+const countedStorage = {
+  getItem(key) {
+    countedReads.set(key, (countedReads.get(key) || 0) + 1);
+    if (key === 'cavaleiros-campanha-visual') return JSON.stringify({ rulesVersion: 2 });
+    return null;
+  },
+  setItem() {},
+};
+const countedCampaign = loadCampaign(countedStorage);
+countedCampaign.campaignCosmetics();
+assert.equal(countedReads.get('cavaleiros-campanha'), countedCampaign.MISSIONS.length, 'o cálculo de recompensas lê as estrelas de cada arena só uma vez');
+assert.equal(countedReads.get('cavaleiros-medalhas-missao'), 1, 'o cálculo de domínio lê as medalhas uma vez');
+const chapterCosmetics = cosmetics.campaignCosmetics().filter((cosmetic) => cosmetic.track !== 'challenge');
+const challengeCosmetics = cosmetics.campaignCosmetics().filter((cosmetic) => cosmetic.track === 'challenge');
+assert.deepEqual(Array.from(chapterCosmetics, (cosmetic) => cosmetic.requiredStars), [4, 3, 3, 5, 2], 'cada capítulo pede uma estrela por arena');
+assert.deepEqual(Array.from(chapterCosmetics, (cosmetic) => cosmetic.requiredArenas), [4, 3, 3, 5, 2], 'cada capítulo acompanha arenas concluídas');
+assert.deepEqual(Array.from(challengeCosmetics, (cosmetic) => cosmetic.requiredArenas), [cosmetics.MISSIONS.length, cosmetics.MISSIONS.length], 'domínio pede 3★ em todas as missões na dificuldade correspondente');
 assert.equal(cosmetics.equipCampaignCosmetic('ossos'), false, 'não equipa visual bloqueado');
+assert.equal(cosmetics.equipCampaignCosmetic('vanguarda'), false, 'desafio ainda bloqueado não pode ser equipado');
 cosmetics.saveStars('vila', 3);
-let firstChapterReward = cosmetics.campaignCosmetics()[0];
+let firstChapterReward = cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vila');
 assert.equal(firstChapterReward.completedArenas, 1);
 assert.equal(firstChapterReward.stars, 3, 'estrelas extras contam para domínio do capítulo');
 assert.equal(firstChapterReward.unlocked, false, '3 estrelas numa arena não compensam outras arenas sem vitória');
 for (const id of ['ponte', 'santuario', 'chamas']) cosmetics.saveStars(id, 1);
-firstChapterReward = cosmetics.campaignCosmetics()[0];
+firstChapterReward = cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vila');
 assert.equal(firstChapterReward.completedArenas, 4);
 assert.equal(firstChapterReward.stars, 6, 'as estrelas extras permanecem no total após concluir o capítulo');
 assert.equal(firstChapterReward.unlocked, true, '1 estrela na primeira conclusão de cada arena libera o visual');
 assert.equal(cosmetics.equipCampaignCosmetic('vila'), true);
 assert.equal(loadCampaign(cosmeticStorage).equippedCampaignCosmetic().id, 'vila', 'aparência equipada persiste entre sessões');
+for (const mission of cosmetics.MISSIONS.slice(0, -1)) cosmetics.saveMissionMedal(mission.id, { won: true, stars: 3, difficultyId: 'dificil' });
+let vanguard = cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
+assert.equal(vanguard.completedArenas, cosmetics.MISSIONS.length - 1, 'a barra conta os desafios difíceis já concluídos');
+assert.equal(vanguard.unlocked, false, 'falta uma missão para o cosmético de domínio difícil');
+assert.deepEqual(Array.from(vanguard.pendingMissions, (mission) => mission.id), [cosmetics.MISSIONS.at(-1).id], 'domínio lista somente a arena sem 3★ na dificuldade');
+cosmetics.saveMissionMedal(cosmetics.MISSIONS.at(-1).id, { won: true, stars: 3, difficultyId: 'dificil' });
+vanguard = cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
+assert.equal(vanguard.unlocked, true, '3★ no Difícil em toda a campanha libera a Vanguarda');
+assert.equal(vanguard.pendingMissions.length, 0, 'domínio completo não deixa arenas pendentes');
+assert.equal(cosmetics.equipCampaignCosmetic('vanguarda'), true);
+for (const mission of cosmetics.MISSIONS) cosmetics.saveMissionMedal(mission.id, { won: true, stars: 3, difficultyId: 'pesadelo' });
+assert.equal(cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'pesadelo').unlocked, true, '3★ no Pesadelo em toda a campanha libera o cosmético próprio');
+assert.equal(loadCampaign(cosmeticStorage).equippedCampaignCosmetic().id, 'vanguarda', 'equipamento de desafio persiste entre sessões');
 assert.equal(cosmetics.equipCampaignCosmetic(null), true);
 assert.equal(cosmetics.equippedCampaignCosmetic(), null, 'pode remover a aparência');
 
@@ -79,7 +109,7 @@ const oldCampaignData = new Map([
   ['cavaleiros-campanha-visual', JSON.stringify({ equipped: 'vila' })],
 ]);
 const oldCampaign = loadCampaign({ getItem(key) { return oldCampaignData.get(key) ?? null; }, setItem(key, value) { oldCampaignData.set(key, String(value)); } });
-assert.equal(oldCampaign.campaignCosmetics()[0].unlocked, true, 'estrelas de saves antigos continuam valendo para o visual');
+assert.equal(oldCampaign.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vila').unlocked, true, 'estrelas de saves antigos continuam valendo para o visual');
 assert.deepEqual(JSON.parse(oldCampaignData.get('cavaleiros-campanha-visual')).legacyUnlocked, ['vila'], 'migração preserva o visual que já havia sido conquistado pela regra antiga');
 assert.equal(oldCampaign.equippedCampaignCosmetic().id, 'vila', 'visual já equipado em save antigo continua válido');
 assert.equal(oldCampaign.equipCampaignCosmetic(null), true);

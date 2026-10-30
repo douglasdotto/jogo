@@ -286,6 +286,25 @@ test('acampamento mostra o progresso por arenas e o domínio em estrelas dos cos
   assert.match(root.innerHTML, />Equipado</);
 });
 
+test('acampamento explica e acompanha os cosméticos opcionais de domínio 3★', () => {
+  const root = { ownerDocument: {}, innerHTML: '', querySelector() { return {}; }, querySelectorAll() { return []; } };
+  const cosmetic = { id: 'vanguarda', chapter: 'Desafio 3★ · Difícil', name: 'Halo da Vanguarda', icon: '✹', color: 0xffd36b,
+    track: 'challenge', difficultyName: 'Difícil', requiredArenas: 17, completedArenas: 8, unlocked: false,
+    pendingMissions: [{ id: 'santuario', name: 'O Santuário' }, { id: 'ruinas', name: 'Ruínas Antigas' }] };
+  P.renderCamp(root, P.createProgression(null), { cosmetics: [cosmetic], tab: 'cosmeticos' });
+  assert.match(root.innerHTML, /8 de 17 missões com 3★ no Difícil/);
+  assert.match(root.innerHTML, /<details class="cosmetic-missions"><summary>Ver missões pendentes \(2\)<\/summary><ul><li>O Santuário<\/li><li>Ruínas Antigas<\/li><\/ul><\/details>/,
+    'a lista expansível localiza as arenas que ainda faltam para este domínio');
+  assert.match(root.innerHTML, /aria-valuemax="17" aria-valuenow="8"/);
+  assert.match(root.innerHTML, /data-track="challenge"/);
+  assert.match(root.innerHTML, /Aparências por capítulo e por domínio 3★/);
+  assert.match(root.innerHTML, /Halo da Vanguarda/);
+  const unlocked = { ...cosmetic, id: 'pesadelo', chapter: 'Desafio 3★ · Pesadelo', name: 'Espiral do Pesadelo', difficultyName: 'Pesadelo', completedArenas: 17, unlocked: true };
+  P.renderCamp(root, P.createProgression(null), { cosmetics: [unlocked], tab: 'cosmeticos', equippedCosmetic: unlocked });
+  assert.match(root.innerHTML, /Desafio completo · 17 de 17 missões com 3★ no Pesadelo/);
+  assert.match(root.innerHTML, /cosmetic-item unlocked equipped challenge-cosmetic/);
+});
+
 test('acampamento avisa que o progresso está só na sessão', () => {
   const root = { ownerDocument: {}, innerHTML: '', querySelector() { return {}; }, querySelectorAll() { return []; } };
   P.renderCamp(root, P.createProgression(null), { storageWarning: () => 'Não foi possível salvar o progresso. pode se perder ao recarregar.' });

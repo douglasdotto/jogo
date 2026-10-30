@@ -42,6 +42,7 @@ const meshNamed = (s, end, fn) => s.root.traverse((o) => { if (o.isMesh && o.nam
 function paint(s, color, eyes, glow = 0) {
   for (const m of s.mats) { m.color?.set(color); (m.userData ||= {}).glow = glow; }
   if (eyes) meshNamed(s, '_Eyes', (m) => { m.color.set(eyes); m.userData.glow = eyes; });
+  G.markEmissiveDirty?.(s);
 }
 function nearestOf(from, list) {
   let best = null, bd = Infinity;
@@ -608,6 +609,7 @@ export const MONSTER_TYPES = {
         s.cd.whirl = 0.5;
         s.cd.cleave = Math.min(s.cd.cleave, 2);
         for (const m of s.mats) if (m.userData) m.userData.glow = 0x4a0000;
+        G.markEmissiveDirty?.(s);
         G.showBanner('Fúria do Carrasco!', 2.5);
         G.ring(s.pos, 4, 0xff2020, 1);
       }
@@ -721,6 +723,7 @@ export const MONSTER_TYPES = {
         s.cd.summon = 0;
         s.cd.shield = Math.min(s.cd.shield, 3);
         for (const m of s.mats) if (m.userData) m.userData.glow = 0x4a0a3a;
+        G.markEmissiveDirty?.(s);
         G.showBanner('Fase 2: o Lich se enfurece!', 2.5);
         G.ring(s.pos, 4, 0xff4fd8, 1);
       }
