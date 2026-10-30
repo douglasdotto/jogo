@@ -117,7 +117,7 @@ const gridStart=main.indexOf('const SEPARATION_CELL_SIZE = 3;'),gridEnd=main.ind
 if(gridStart<0||gridEnd<0)throw Error('Grade espacial de obstáculos ausente');
 world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));
 const movementSandbox={
-  THREE,world,tmp:new Vector3(),moveDir:new Vector3(),gridCellKey:(x,z)=>x*65536+(z&0xffff),
+  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),gridCellKey:(x,z)=>x*65536+(z&0xffff),
 };
 const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',movementSandbox);
 const {Walker,queryObstacleCandidates}=movementApi;
@@ -256,7 +256,7 @@ console.log('Navegação: 8 trajetos fase a fase e 1 alvo longo em estradas sinu
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
 const Unit=runInNewContext(main.slice(main.indexOf('class Unit {'),main.indexOf('const skeletonsAlive ='))+';Unit',{
-  THREE,world,tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),queryObstacleCandidates,game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
+  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),queryObstacleCandidates,game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
 });
 function unit(team='hero') {
   const u=Object.create(Unit.prototype);

@@ -1957,8 +1957,19 @@ class Unit {
     return Math.abs(diff);
   }
 
+  // d: distância já ajustada pelo chamador. Corpo a corpo também alcança quem está encostado: a separação
+  // segura adversários a UNIT_COMBAT_SEPARATION_FACTOR × (tamanhos), e sem isto quem tem alcance menor que
+  // o próprio corpo (lacaio, ladino, golem, chefes) anda contra o alvo para sempre e os dois se empurram.
+  inReach(target, d) {
+    if (d <= this.range) return true;
+    if (this.ranged) return false;
+    return Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z)
+      <= UNIT_COMBAT_SEPARATION_FACTOR * (this.size + (target.size || 1)) + MELEE_CONTACT_SLACK;
+  }
+
   // anda até o alvo desviando dos obstáculos que estão na frente
   moveTo(target, dt) {
+    const goal = target;   // posição de uma unidade (alvo, protegido, invocador): essa não se contorna
     target = world.nextWaypoint(this.pos, target, this, queryObstacleCandidates);
     const dir = moveDir.subVectors(target, this.pos).setY(0);
     const d = dir.length();
@@ -1978,6 +1989,21 @@ class Unit {
       if (Math.abs(side) > clear) continue;
       const push = (1 - Math.abs(side) / clear) * (1.6 - ahead / 2.6);
       const s = side >= 0 ? -1 : 1;                         // vira para o lado livre
+      const px = -dir.z, pz = dir.x;
+      dir.x += px * s * push; dir.z += pz * s * push;
+    }
+    // Contorna quem está parado no caminho (fila atrás de quem já luta, aliado no posto) em vez de
+    // andar contra ele e deixar a separação empurrar os dois todo quadro.
+    if (!this.phasing) for (const u of units) {
+      if (u === this || u.dead || u.phasing || u.pos === goal || !isPlanted(u)) continue;
+      const ox = u.pos.x - this.pos.x, oz = u.pos.z - this.pos.z;
+      const ahead = ox * dir.x + oz * dir.z;
+      if (ahead <= 0 || ahead > 2.6 || ahead > d || Math.abs(u.pos.y - this.pos.y) >= 0.85) continue;
+      const side = ox * -dir.z + oz * dir.x;
+      const clear = UNIT_SEPARATION_FACTOR * (this.size + u.size);
+      if (Math.abs(side) > clear) continue;
+      const push = (1 - Math.abs(side) / clear) * (1.6 - ahead / 2.6);
+      const s = side >= 0 ? -1 : 1;
       const px = -dir.z, pz = dir.x;
       dir.x += px * s * push; dir.z += pz * s * push;
     }
@@ -5724,7 +5750,7 @@ class Hero extends Unit {
       this.engagedWith = attackTarget || null;
       if (attackTarget) {
         const d = attackTarget.pos.distanceTo(this.pos) - 0.4 * ((attackTarget.size || 1) - 1) - (attackTarget.reach || 0);
-        if (d <= this.range && (this.ranged || Math.abs(attackTarget.pos.y - this.pos.y) < 0.85)) {
+        if (this.inReach(attackTarget, d) && (this.ranged || Math.abs(attackTarget.pos.y - this.pos.y) < 0.85)) {
           const turn = this.face(attackTarget.pos, dt);
           if (this.attackTimer <= 0 && turn < 0.5) {
             const attacks = this.cfg.attacks;
@@ -5746,7 +5772,7 @@ class Hero extends Unit {
       else this.face(captive.pos, dt);
     } else if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1) - (target.reach || 0);   // reach: raio de prédios e do portal
-      if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
+      if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
         const attacks = this.cfg.attacks;
@@ -5962,7 +5988,7 @@ class Minion extends Unit {
     const targets = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
     const target = nearest(this.pos, targets);
     if (target && game.state === 'fight') {
-      if (target.pos.distanceTo(this.pos) > this.range) this.moveTo(target.pos, dt);
+      if (!this.inReach(target, target.pos.distanceTo(this.pos))) this.moveTo(target.pos, dt);
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) this.attack(target, '1H_Melee_Attack_Chop');
     } else if (this.pos.distanceTo(this.summoner.pos) > 1.5) this.moveTo(this.summoner.pos, dt);
     if (this.busy <= 0) this.locomote('Walking_D_Skeletons', 'Walking_D_Skeletons', 'Idle_Combat');
@@ -6055,7 +6081,7 @@ class BeastCompanion extends Unit {
     const target = threats.length ? highestPriorityHeroTarget(this.summoner, threats, this.pos) : nearest(this.pos, targets);
     if (target) {
       const distance = target.pos.distanceTo(this.pos);
-      if (distance > this.range || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt);
+      if (!this.inReach(target, distance) || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt);
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) {
         const duration = this.once('1H_Melee_Attack_Chop', 1.25);
         this.busy = duration * 0.9;
@@ -6215,7 +6241,7 @@ class Skeleton extends Unit {
     if (target) {
       const d = target.pos.distanceTo(this.pos) - (target.reach || 0);   // prédios do Reino: golpeia a parede, não o centro
       if (this.ranged) this.vel.set(0, 0, 0);
-      if (d > this.range || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
+      if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
       else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
     }
     if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
@@ -6229,6 +6255,7 @@ const separationSideA = { x: 0, z: 0 }, separationSideB = { x: 0, z: 0 };
 // Mantém espaço entre aliados da mesma facção, mas deixa os adversários entrar no alcance de combate.
 const UNIT_SEPARATION_FACTOR = 0.86;
 const UNIT_COMBAT_SEPARATION_FACTOR = 0.68;
+const MELEE_CONTACT_SLACK = 0.12;   // folga para o contato contar como "no alcance" mesmo com a separação resolvendo no limite
 function collisionMove(unit, dx, dz) {
   const pos = unit.pos, fromX = pos.x, fromZ = pos.z;
   let fraction = 1;
@@ -6245,6 +6272,10 @@ function collisionMove(unit, dx, dz) {
   return 0;
 }
 
+const PLANTED_SEPARATION_WEIGHT = 0.15;
+// mesmo limiar de locomote(): abaixo dele a unidade está parada (idle) ou golpeando
+const isPlanted = (u) => u.busy > 0 || u.vel.x * u.vel.x + u.vel.z * u.vel.z < 0.0625;
+
 function separatePair(a, b, ia, ib) {
   if (Math.abs(a.pos.y - b.pos.y) >= 0.85) return false;
   const movableA = !(a.structure || a.totem), movableB = !(b.structure || b.totem);
@@ -6260,9 +6291,12 @@ function separatePair(a, b, ia, ib) {
     dx = Math.cos(angle); dz = Math.sin(angle); distance = 0;
   } else { dx /= distance; dz /= distance; }
 
-  const overlap = min - distance, half = overlap * 0.5;
-  let movedA = movableA ? collisionMove(a, -dx * half, -dz * half) : 0;
-  let movedB = movableB ? collisionMove(b, dx * half, dz * half) : 0;
+  // Quem está plantado (parado ou no meio do golpe) quase não cede: quem chega é que contorna.
+  // Sem isso a fila que anda empurra o da frente para dentro do alvo, e o grupo inteiro treme.
+  const weightA = isPlanted(a) ? PLANTED_SEPARATION_WEIGHT : 1, weightB = isPlanted(b) ? PLANTED_SEPARATION_WEIGHT : 1;
+  const overlap = min - distance, shareA = overlap * weightA / (weightA + weightB), shareB = overlap - shareA;
+  let movedA = movableA ? collisionMove(a, -dx * shareA, -dz * shareA) : 0;
+  let movedB = movableB ? collisionMove(b, dx * shareB, dz * shareB) : 0;
   let remaining = overlap - movedA - movedB;
   if (remaining > 0.002) {
     if (movableA && movableB) {
@@ -6306,9 +6340,10 @@ function separatePair(a, b, ia, ib) {
   // Remove inward velocity at contact so units stop pushing through one another.
   const closing = (a.vel.x - b.vel.x) * dx + (a.vel.z - b.vel.z) * dz;
   if (closing > 0) {
-    if (movableA && movableB) {
-      a.vel.x -= dx * closing * 0.5; a.vel.z -= dz * closing * 0.5;
-      b.vel.x += dx * closing * 0.5; b.vel.z += dz * closing * 0.5;
+    if (movableA && movableB) {   // o plantado não herda o embalo de quem chega (não "anda" por ser empurrado)
+      const cancelA = closing * weightA / (weightA + weightB), cancelB = closing - cancelA;
+      a.vel.x -= dx * cancelA; a.vel.z -= dz * cancelA;
+      b.vel.x += dx * cancelB; b.vel.z += dz * cancelB;
     } else if (movableA) { a.vel.x -= dx * closing; a.vel.z -= dz * closing; }
     else { b.vel.x += dx * closing; b.vel.z += dz * closing; }
   }
@@ -7073,7 +7108,7 @@ class Militia extends Unit {
     const foes = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
     const target = ward && game.state === 'fight' ? nearest(ward.pos, foes) : null;
     if (target && tacticalDistance(target.pos, ward.pos) <= MILITIA_REACH) {
-      if (target.pos.distanceTo(this.pos) > this.range) this.moveTo(target.pos, dt);
+      if (!this.inReach(target, target.pos.distanceTo(this.pos))) this.moveTo(target.pos, dt);
       else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
     } else if (this.pos.distanceTo(this.post) > 0.3) this.moveTo(this.post, dt);
     else if (ward) this.face(tmp.copy(this.post).multiplyScalar(2).sub(ward.pos), dt);   // de costas para o protegido

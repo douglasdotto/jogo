@@ -75,6 +75,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   addEventListener: noop, requestAnimationFrame: noop, hideTooltip: noop, logoSVG: () => "", tutorial: { on: noop, wants: () => false }, setTimeout: (fn) => fn(), clearTimeout: noop, innerWidth: 1440, innerHeight: 1000, aiming: null, battleGateId: 0, battleLoadingVisible: false,
   SkeletonUtils: { clone: root }, scene: { add: noop, remove: noop }, assets, ringGeo: {}, haloGeo: {}, goldMat: {}, starGeo: {}, puffGeo: {},
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
+  loadKingdomRecords: () => ({}), kingdomRecordText: () => "",   // Reino fica fora da simulação
   newStats: stats, openHeroPanel: noop, closeHeroPanel: noop, panelHero: () => null, tickHeroPanel: noop, summaryHTML: () => '', LOOKS: {}, applyLook: noop,
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
   blasts: simBlasts, sentries: [],
