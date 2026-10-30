@@ -9,7 +9,7 @@ import { LOOKS } from './looks.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
-import { synergyDamageMultiplier, synergyDamageTakenMultiplier } from './synergies.js';
+import { activeSynergies, damageSynergies, synergyDamageMultiplier, synergyDamageTakenMultiplier, synergyHealMultiplier, synergySummonHaste } from './synergies.js';
 import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './upgrade-branches.js';
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
@@ -931,6 +931,9 @@ function renderInfo(cfg) {
   const coveredIcons = team.roles.filter((role) => role.count)
     .map((role) => roleIcon(role.name, `covered${priorityRoles.includes(role.name) ? ' priority' : ''}`, role.name)).join('');
   const wantedIcons = wanted.map((name) => roleIcon(name, `wanted${objective ? ' priority' : ''}`, objective ? `Missão pede: ${name}` : `Falta: ${name}`)).join('');
+  // sinergias que a equipe (com o candidato) liga: só o ícone; nome e efeito ficam na dica
+  const synergyIcons = activeSynergies(projectedTeam.map((member) => member.id))
+    .map((synergy) => `<span class="covered synergy" data-synergy="${synergy.id}" tabindex="0" data-tip="${attrText(`${synergy.name} · ${synergy.effect}`)}" aria-label="${attrText(synergy.name)}">${synergy.icon}</span>`).join('');
   const teamMembers = projectedTeam.map((member) => {
     const candidate = canAddCandidate && member.id === cfg.id;
     return `<span class="${candidate ? 'candidate' : ''}" style="--c:${member.color[0]};--cd:${member.color[1]}" data-tip="${attrText(member.name)}" aria-label="${attrText(member.name + (candidate ? ' (novo)' : ''))}"><img src="${member.portrait}" alt=""></span>`;
@@ -959,6 +962,7 @@ function renderInfo(cfg) {
       <span class="pick-team-count" aria-label="${Math.min(projectedTeam.length, teamLimit)} de ${teamLimit} heróis">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>
       <div class="party-members">${teamMembers}</div>
       <div class="party-roles" aria-label="Papéis cobertos">${coveredIcons}</div>
+      ${synergyIcons ? `<div class="party-roles party-synergies" aria-label="Sinergias ativas">${synergyIcons}</div>` : ''}
       ${wantedIcons ? `<div class="party-roles party-wanted" aria-label="${objective ? 'Prioridades da missão' : 'Papéis que faltam'}">${wantedIcons}</div>` : ''}
       ${objective ? `<span class="party-objective" tabindex="0" data-tip="Objetivo da missão"><i aria-hidden="true">⚑</i> ${goalText(objective)}</span>` : ''}
     </section>`;
@@ -2030,7 +2034,7 @@ class Unit {
       const protection = synergyDamageTakenMultiplier(this, partyNow());
       if (protection < 1) {
         n *= protection;
-        if (this.synergyNoticeT <= 0) { popText(this.pos, '⛨−20%', 'block'); this.synergyNoticeT = 1.2; }
+        if (this.synergyNoticeT <= 0) { popText(this.pos, `⛨−${Math.round((1 - protection) * 100)}%`, 'block'); this.synergyNoticeT = 1.2; }
       }
       if (canBlock(this) && Math.random() < 0.3) {
         n *= 0.5;
@@ -2113,7 +2117,7 @@ class Unit {
   updateCommon(dt) {
     this.synergyNoticeT = Math.max(0, this.synergyNoticeT - dt);
     this.mixer.update(dt);
-    this.attackTimer -= dt;
+    this.attackTimer -= dt * (this.summoner ? synergySummonHaste(this.summoner) : 1);   // canção do Bardo acelera as invocações
     this.busy -= dt;
     // inércia: quem não está andando vai freando; a velocidade (e o recuo) move a unidade
     if (!this.moving) this.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
@@ -2277,25 +2281,12 @@ function makeTargetContext(reuse = null) {
 const targetContext = () => activeTargetContext || makeTargetContext();
 const partyNow = () => activeTargetContext?.party || heroes();   // grupo do quadro, sem refiltrar as unidades a cada golpe
 
-function applySynergy(attack, owner, target, damage) {
-  const members = partyNow();
-  if (attack === 'fire' && owner.cfg.id === 'pyro'
-    && members.some((h) => ['cryo', 'druid'].includes(h.cfg.id))) {
-    const multiplier = synergyDamageMultiplier('fire', target);
-    if (multiplier > 1) {
-      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, '✦+20%', 'evolve'); target.synergyNoticeT = 1.2; }
-      return damage * multiplier;
-    }
-  }
-  if (attack === 'piercing' && ['crossbow', 'ninja', 'archer'].includes(owner.cfg.id)
-    && members.some((h) => h.cfg.id === 'druid')) {
-    const multiplier = synergyDamageMultiplier('piercing', target);
-    if (multiplier > 1) {
-      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, '✦+20%', 'evolve'); target.synergyNoticeT = 1.2; }
-      return damage * multiplier;
-    }
-  }
-  return damage;
+// sinergia vale pelo estado do alvo (lento, preso, marcado…), não por quem está no grupo
+function applySynergy(owner, target, damage) {
+  const active = damageSynergies(owner.cfg.id, target);
+  if (!active.length) return damage;
+  if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, `${active[0].icon}+${Math.round(active[0].bonus * 100)}%`, 'evolve'); target.synergyNoticeT = 1.2; }
+  return damage * synergyDamageMultiplier(owner.cfg.id, target);
 }
 
 function inMeleeArc(owner, target, radius = 2.2) {
@@ -2362,8 +2353,7 @@ function damageArea(center, radius, dmg, owner = null) {
 }
 
 function heroHit(owner, target, dmg, center = owner.pos) {
-  const attack = ['crossbow', 'ninja', 'archer'].includes(owner.cfg.id) ? 'piercing' : owner.cfg.id === 'pyro' ? 'fire' : null;
-  if (attack) dmg = applySynergy(attack, owner, target, dmg);
+  dmg = applySynergy(owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
   target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1), center, owner.summoner || owner, critical);
   return critical;
@@ -3040,7 +3030,7 @@ function updateSentries(dt) {
     sentry.boostT = Math.max(0, sentry.boostT - dt);
     if (owner.dead || !units.includes(owner) || sentry.life <= 0) { removeSentry(sentry); continue; }
     sentry.head.rotation.y += dt * 0.8;
-    sentry.fireT -= dt;
+    sentry.fireT -= dt * synergySummonHaste(sentry.owner);
     if (sentry.fireT > 0 || game.state !== 'fight') continue;
     const context = activeTargetContext || frameTargetContext;
     const enemies = context.skeletons || skeletonsAlive();
@@ -4637,6 +4627,7 @@ class Hero extends Unit {
     this.targetFocusT = 0;
     this.furyT = 0;
     this.guardT = 0;
+    this.stanceT = 0;   // provocação do próprio Guardião (a guarda da Clériga não conta)
     this.dodgeTimer = 2;
     this.bladeDanceT = 0;
     this.meditateT = 0;   // Monge: meditação em curso (cura o grupo)
@@ -4768,7 +4759,7 @@ class Hero extends Unit {
       effect = () => {
         const healed = [];
         for (const h of friends) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
-          const heal = Math.min(h.maxHp - h.hp, healAmount);
+          const heal = Math.min(h.maxHp - h.hp, healAmount * synergyHealMultiplier(id, h));
           h.hp += heal;
           this.stats.cura += heal;
           healed.push(h);
@@ -4790,7 +4781,7 @@ class Hero extends Unit {
         const protection = scaleBranchEffect(this, 'control', 2.5 + (level - 1) * 0.4) * power;
         for (const h of friends) {
           h.guardT = Math.max(h.guardT, protection);
-          const heal = Math.min(h.maxHp - h.hp, healAmount);
+          const heal = Math.min(h.maxHp - h.hp, healAmount * synergyHealMultiplier(id, h));
           if (heal > 0) { h.hp += heal; this.stats.cura += heal; healed.push(h); popText(h.pos, '+' + Math.round(heal), 'heal'); }
         }
         this.guardT = Math.max(this.guardT, protection);
@@ -4848,7 +4839,7 @@ class Hero extends Unit {
     } else if (id === 'guardian') {
       if (!nearby.length) return false;
       effect = () => {
-        this.guardT = scaleBranchEffect(this, 'control', 4 + (level - 1)) * power;
+        this.guardT = this.stanceT = scaleBranchEffect(this, 'control', 4 + (level - 1)) * power;
         for (const s of nearby) if (!s.dead) { s.taunt = this; s.tauntT = this.guardT; s.pendingHit = null; popText(s.pos, '!', 'crit'); }
         for (const s of nearby) if (!s.dead) heroHit(this, s, this.dmg * 0.6);   // pancada de escudo: dano moderado, o foco segue na provocação
         FX.dome(this, radius);
@@ -5231,7 +5222,7 @@ class Hero extends Unit {
         const duration = scaleBranchEffect(this, 'control', skill.duration || 5) * power;
         effect = () => {
           for (const h of party) if (h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5)) h.guardT = Math.max(h.guardT, duration);
-          if (skill.effect === 'bastion') { this.guardT = Math.max(this.guardT, duration); for (const enemy of enemies) control(enemy); }
+          if (skill.effect === 'bastion') { this.guardT = Math.max(this.guardT, duration); this.stanceT = Math.max(this.stanceT, duration); for (const enemy of enemies) control(enemy); }
           if (skill.effect === 'frost-ward') for (const enemy of enemies) { enemy.slowT = Math.max(enemy.slowT, duration * 0.65); damageOne(enemy, 0.35); }
           FX.dome(this, radius);
           if (skill.effect === 'frost-ward') { FX.iceFan(this, target || this); burst(this.pos, color, 18, 4); }
@@ -5240,7 +5231,7 @@ class Hero extends Unit {
       }
       case 'taunt':
         if (!enemies.length) return false;
-        effect = () => { this.guardT = Math.max(this.guardT, scaleBranchEffect(this, 'control', skill.duration) * power); for (const enemy of enemies) control(enemy); FX.dome(this, radius); burst(this.pos, color, 16, 3); };
+        effect = () => { const stance = scaleBranchEffect(this, 'control', skill.duration) * power; this.guardT = Math.max(this.guardT, stance); this.stanceT = Math.max(this.stanceT, stance); for (const enemy of enemies) control(enemy); FX.dome(this, radius); burst(this.pos, color, 16, 3); };
         break;
       case 'holy-nova': {
         const heal = scaleBranchEffect(this, 'support', 28 + level * 5) * power;
@@ -5616,7 +5607,7 @@ class Hero extends Unit {
     this.fell = false;   // uma próxima queda após o revival deve entrar na contagem da missão
     this.aura.visible = this.level > 1;
     this.halo.visible = this.level === 3;
-    this.guardT = 0;
+    this.guardT = this.stanceT = 0;
     this.royalT = 0;
     this.songT = 0;
     this.songHaste = 1;
@@ -5640,6 +5631,7 @@ class Hero extends Unit {
     }
     this.dodgeTimer -= dt;
     this.guardT -= dt;
+    this.stanceT -= dt;
     this.royalT -= dt;
     if (this.royalT <= 0) this.royalBonus = 0;
     this.songT -= dt;
@@ -7830,7 +7822,7 @@ function updateGame(dt) {
           h.revive();
         } else h.hp = Math.min(h.maxHp, h.hp + h.maxHp * difficulty.heal);
         h.gainXp(12);
-        h.guardT = 0;
+        h.guardT = h.stanceT = 0;
         popText(h.pos, '♥', 'heal');
         h.busy = h.once('Cheer');
       }

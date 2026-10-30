@@ -850,6 +850,9 @@
   cursor: help;
 }
 #pick:has(#pickList.grid) .pick-team-bar .party-roles span.priority { box-shadow: inset 0 0 0 2px rgba(255, 212, 74, .75); }
+/* sinergias ativas da equipe: mesmo círculo dos papéis, em lilás */
+#pick:has(#pickList.grid) .pick-team-bar .party-synergies { padding-left: 12px; border-left: 1px solid rgba(174, 202, 237, .18); }
+#pick:has(#pickList.grid) .pick-team-bar .party-roles span.synergy { color: #f1d6ff; background: rgba(196, 140, 255, .18); box-shadow: inset 0 0 0 2px rgba(206, 160, 255, .55); }
 /* papéis que faltam: contorno tracejado pulsando de leve, para chamar a próxima escolha */
 #pick:has(#pickList.grid) .pick-team-bar .party-wanted { padding-left: 12px; border-left: 1px solid rgba(174, 202, 237, .18); }
 #pick:has(#pickList.grid) .pick-team-bar .party-roles span.wanted {
