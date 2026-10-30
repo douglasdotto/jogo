@@ -49,8 +49,9 @@ const el = () => ({ style: { setProperty: noop }, classList: { add: noop, remove
   querySelectorAll: () => [], remove: noop, firstChild: { style: {} }, innerHTML: '', textContent: '', scrollIntoView: noop });
 const color = () => ({ set: noop, setHex: noop, lerpColors: noop, copy: noop });
 const material = () => ({ color: color(), emissive: color(), dispose: noop });
-const root = () => ({ position: new Vector3(), rotation: { x: 0, y: 0, z: 0 }, scale: new Vector3(1, 1, 1), quaternion: { setFromUnitVectors: noop },
-  traverse: noop, add: noop, removeFromParent: noop, getObjectByName: () => ({ add: noop }), material: material(), children: [], rotateZ: noop, clone: root });
+const euler = () => ({ x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } });
+const root = () => ({ position: new Vector3(), rotation: euler(), scale: new Vector3(1, 1, 1), quaternion: { setFromUnitVectors: noop },
+  traverse: noop, add: noop, removeFromParent: noop, getObjectByName: () => ({ rotation: euler(), add: noop }), material: material(), children: [], rotateZ: noop, clone: root });
 const action = () => ({ reset() { return this; }, setLoop() { return this; }, play() { return this; }, crossFadeFrom: noop, getClip: () => ({ duration: 1, name: 'Idle' }) });
 const THREE = new Proxy({ Vector3, Mesh: class { constructor() { Object.assign(this, root()); } }, Group: class { constructor() { Object.assign(this, root()); } },
   MeshBasicMaterial: class { constructor() { Object.assign(this, material()); } }, MeshLambertMaterial: class { constructor() { Object.assign(this, material()); } },
@@ -125,6 +126,7 @@ function play(diff, profile, mission = null) {
   t.setDifficulty(diff);
   let nextProfileHero = 0;
   let initialHeroes = null;
+  let initialParty = null;
   t.startGame();
   if (mission) {
     // Ignora somente a interface do mapa; dificuldade, seleção, startMission e combate são reais.
@@ -149,7 +151,10 @@ function play(diff, profile, mission = null) {
         const wantedId = profile?.[nextProfileHero++];
         const wanted = wantedId ? t.pick.options.findIndex((option) => option.id === wantedId) : -1;
         t.confirmPick(free.includes(wanted) ? wanted : free[Math.floor(Math.random() * free.length)]);
-        if (mission && initialHeroes == null && t.game.picksLeft === 0 && !t.pick.open) initialHeroes = t.heroes().length;
+        if (mission && initialHeroes == null && t.game.picksLeft === 0 && !t.pick.open) {
+          initialParty = t.heroes().map((h) => h.cfg.id);
+          initialHeroes = initialParty.length;
+        }
       } else t.confirmPick(Math.floor(Math.random() * t.pick.cards.length));
       continue;
     }
@@ -186,7 +191,7 @@ function play(diff, profile, mission = null) {
     heroes: t.heroes().map((h) => ({ id: h.cfg.id, dead: h.dead, hp: Math.round(h.hp),
       pos: `${h.pos.x.toFixed(1)},${h.pos.z.toFixed(1)}`, targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
   } : null;
-  return { won, timedOut: mission ? !t.game.over : false, initialHeroes, falls: outcome?.falls ?? t.game.falls,
+  return { won, timedOut: mission ? !t.game.over : false, initialHeroes, initialParty, falls: outcome?.falls ?? t.game.falls,
     villagerRatio, phase: t.game.phase, deaths, kills: t.game.kills, time,
     party: t.heroes().map((h) => h.cfg.id), diagnostic,
     damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo)]), ...(outcome || {}) };
@@ -205,6 +210,10 @@ const profiles = {
   sustentacao: ['guardian', 'cleric', 'druid', 'pyro'],
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
+  fazendas: ['paladin', 'viking', 'guardian', 'cleric'],
+  cacada: ['paladin', 'guardian', 'viking', 'cleric'],
+  chefes: ['paladin', 'guardian', 'viking', 'cleric'],
+  elite: ['paladin', 'guardian', 'pyro', 'viking'],
 };
 const profile = profiles[profileName];
 if (profileName !== 'aleatorio' && !profile) throw new Error(`Grupo desconhecido: ${profileName}. Use: ${Object.keys(profiles).join(', ')}`);
@@ -241,7 +250,7 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
     const incomplete = res.filter((r) => r.timedOut).length;
     console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
     if (details) for (const [i, r] of res.entries())
-      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · ${r.party.join(' + ')}${r.timedOut ? `\n    diagnóstico: ${JSON.stringify(r.diagnostic)}` : ''}`);
+      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}${r.timedOut ? `\n    diagnóstico: ${JSON.stringify(r.diagnostic)}` : ''}`);
   } else {
     console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · fase média ${avg((r) => r.phase)} · quedas ${avg((r) => r.deaths)} · abates ${avg((r) => r.kills)} · derrotas nas fases ${res.filter((r) => !r.won).map((r) => r.phase).sort((x, y) => x - y).join(',') || '-'}`);
     if (details) for (const [i, r] of res.entries())

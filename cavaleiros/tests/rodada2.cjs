@@ -102,7 +102,7 @@ vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,HEROES,CLASSES,VARIANTS,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
@@ -274,6 +274,7 @@ test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>
   const partial=t.teamCoverage(['pyro','arcane'].map(cfg));
   assert.deepEqual(Array.from(partial.missing),['Defesa','Cura','Controle']);
   assert.equal(partial.roles.find(role=>role.name==='Área').count,2);
+  assert.deepEqual(Array.from(t.missionRoleNeeds({type:'win'})),['Defesa','Cura'],'Vila é solo: prioridades devem caber no Paladino recomendado');
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'escort'})),['Defesa','Cura','Controle']);
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'rescue'})),['Defesa','Cura','Área']);
   for(const m of t.MISSIONS)assert.ok(t.missionRoleNeeds(m.goal).length>0,`${m.id} orienta os papéis prioritários`);
@@ -281,6 +282,24 @@ test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>
   assert.deepEqual(Array.from(t.missionRoleNeeds({type:'totems'})),['À distância','Controle','Área']);
   const bossDamage=t.teamCoverage(['champion','assassin','viking'].map(cfg));
   assert.equal(bossDamage.roles.find(role=>role.name==='Dano a chefe').count,3);
+});
+test('composições Pesadelo cobrem os papéis prioritários de todas as missões',()=>{
+  const expected={
+    fazendas:['paladin','viking'],caca:['paladin','guardian','viking'],
+    castelo:['paladin','guardian','viking','cleric'],cripta:['paladin','guardian','pyro','viking'],
+    trono:['paladin','guardian','viking','cleric'],resgate:['paladin','guardian','pyro'],
+  };
+  for(const m of t.MISSIONS){
+    const ids=Array.from(t.nightmareTeamIds(m));
+    const coverage=t.teamCoverage(ids.map(cfg));
+    const covered=new Set(coverage.roles.filter(role=>role.count>0).map(role=>role.name));
+    const missing=t.missionRoleNeeds(m.goal).filter(role=>!covered.has(role));
+    assert.deepEqual(Array.from(missing),[],`${m.id}: a equipe sugerida cobre as prioridades da missão`);
+  }
+  for(const [id,ids] of Object.entries(expected))
+    assert.deepEqual(Array.from(t.nightmareTeamIds(t.MISSIONS.find(m=>m.id===id))),ids,`${id}: composição especializada`);
+  assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='fazendas')),
+    'Equipe para 2 heróis: Paladino (cura) e Viking (dano a chefe).');
 });
 test('Anjo tem asas animadas e paira acima do chão',()=>{
   clear();const angel=new t.Hero(cfg('angel'));
@@ -321,8 +340,9 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
   assert.ok(pickText().includes('Derrote o chefe')&&/class="covered priority" data-role="Dano a chefe"/.test(pickText()));
 
-  t.setMission(t.MISSIONS.find(m=>m.id==='resgate'));t.game.picksLeft=3;t.game.campaignSquadSuggestion=[];t.setDifficulty(3);t.showPick('','');
+  t.setMission(t.MISSIONS.find(m=>m.id==='resgate'));t.game.picksLeft=3;t.game.campaignSquadSuggestion=['berserker','paladin','pyro'];t.setDifficulty(3);t.showPick('','');
   assert.equal(t.pick.sel,at('paladin'),'o primeiro herói sugerido fica em foco');
+  assert.ok(t.pick.cards[at('berserker')].className.includes('suggested'),'a equipe anterior continua identificada');
   assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
   assert.ok(elements.get('pickHint').textContent.includes('Sugestão Pesadelo: Paladino + Guardião + Piromante'));
   assert.deepEqual(wantedRoles(true),['Área'],'com Paladino escolhido como candidato, a prioridade restante é dano em área');
@@ -330,7 +350,7 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   assert.equal(t.pick.sel,at('guardian'),'o segundo herói sugerido fica em foco');
   assert.ok(t.pick.cards[at('guardian')].className.includes('recommended'));
   assert.deepEqual(wantedRoles(true),['Área']);
-  clear();context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);t.setDifficulty(1);
+  clear();t.game.campaignSquadSuggestion=[];context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);t.setDifficulty(1);
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
@@ -877,9 +897,21 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': um interceptador vivo responde ao golpe e mantém a âncora no posto');
     assert.equal(t.chooseHeroTarget(guards[1],[shooter],.016,team),shooter,goalType+': golpe preparado contra o objetivo continua interceptável');
 
+    shooter.pos.set(0,0,8);shooter.pendingHit={target:guards[0]};team=t.makeTargetContext();
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': a âncora mantém o posto enquanto ainda há outros defensores vivos');
+
     for(const h of guards.slice(1))h.dead=true;guards[0].targetFocus=null;guards[0].targetFocusT=0;
     shooter.pos.set(0,0,10.9);team=t.makeTargetContext();
     assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': a âncora responde quando não resta outro defensor vivo');
+
+    shooter.pos.set(0,0,8);shooter.pendingHit={target:guards[0]};guards[0].targetFocus=null;guards[0].targetFocusT=0;
+    team=t.makeTargetContext();
+    assert.equal(t.canHeroReachTarget(guards[0],shooter,team),true,goalType+': a última defensora responde a um golpe iminente contra si');
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': ameaça direta não deixa o último herói parado no posto');
+    guards[0].engagedWith=shooter;shooter.pendingHit=null;
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': mantém o combate enquanto a ameaça fica dentro da corda tática');
+    shooter.pos.set(0,0,11.1);
+    assert.equal(t.canHeroReachTarget(guards[0],shooter,team),false,goalType+': a resposta não persegue além do limite tático');
   }
   clear();t.game.shrine=null;t.game.gate=null;
 });
@@ -1079,7 +1111,7 @@ test('Pesadelo recomenda Guardião para defender e mantém Piromante em metas of
 
   clear();context.localStorage.data={};t.setMission(mission('fazendas'));t.showDifficulty();
   card=t.pick.cards[idx('pesadelo')];card.onfocus();
-  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 2 heróis: Paladino (cura) e Piromante (dano em área).'),'metas ofensivas mantêm a recomendação de dano em área');
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 2 heróis: Paladino (cura) e Viking (dano a chefe).'),'Fazendas recomenda dano adequado ao chefe');
   clear();t.setDifficulty(1);
 });
 test('mapas da campanha ficam estáveis ao voltar da dificuldade e rerrolam na próxima visita',()=>{

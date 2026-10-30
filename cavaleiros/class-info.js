@@ -47,7 +47,7 @@ const TEAM_ROLE_RULES = {
 const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];
 const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe');
 const MISSION_ROLE_NEEDS = {
-  win: ['Defesa', 'Cura', 'Área'],
+  win: ['Defesa', 'Cura'],
   escort: ['Defesa', 'Cura', 'Controle'],
   defend: ['Defesa', 'Cura', 'Controle'],
   breach: ['Defesa', 'Cura', 'Controle'],

@@ -131,14 +131,23 @@ const DIFFICULTIES = [
 ];
 const DIFFICULTY_PICK_HINT = '← → · Enter · Esc';
 const nightmareTeamIds = (mission) => {
+  const goal = mission?.goal?.type;
   if (mission?.heroes === 1) return ['paladin'];
-  if (mission?.heroes === 2) return ['paladin', ['defend', 'breach', 'escort', 'rescue'].includes(mission.goal?.type) ? 'guardian' : 'pyro'];
-  if (mission?.heroes === 3) return ['paladin', 'guardian', 'pyro'];
+  if (mission?.heroes === 2) {
+    if (['defend', 'breach', 'escort', 'rescue'].includes(goal)) return ['paladin', 'guardian'];
+    if (goal === 'boss') return ['paladin', 'viking'];
+    return ['paladin', 'pyro'];
+  }
+  if (mission?.heroes === 3) return goal === 'hunt'
+    ? ['paladin', 'guardian', 'viking']
+    : ['paladin', 'guardian', 'pyro'];
+  if (goal === 'elite') return ['paladin', 'guardian', 'pyro', 'viking'];
+  if (goal === 'boss' || goal === 'twin') return ['paladin', 'guardian', 'viking', 'cleric'];
   return ['paladin', 'guardian', 'pyro', 'cleric'];
 };
 const difficultyTeamRecommendation = (option, mission) => {
   if (option.id !== 'pesadelo') return '';
-  const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', cleric: 'Clériga (suporte/cura)' };
+  const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', viking: 'Viking (dano a chefe)', cleric: 'Clériga (suporte/cura)' };
   const team = nightmareTeamIds(mission).map((id) => labels[id]);
   if (team.length === 1) return mission?.goal?.type === 'duel'
     ? 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.'
@@ -441,7 +450,7 @@ function showPick(title, sub) {
   list.append(filters, rows, pick.team, pick.info);
   const suggestedIndex = previousSuggestion ? pick.options.findIndex((cfg) => cfg.id === previousSuggestion && isFree(cfg)) : -1;
   const recommendedIndex = recommendedId ? pick.options.findIndex((cfg) => cfg.id === recommendedId && isFree(cfg)) : -1;
-  selectCard(suggestedIndex >= 0 ? suggestedIndex : recommendedIndex >= 0 ? recommendedIndex : pick.options.findIndex(isFree));
+  selectCard(recommendedIndex >= 0 ? recommendedIndex : suggestedIndex >= 0 ? suggestedIndex : pick.options.findIndex(isFree));
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
@@ -2234,7 +2243,11 @@ function stillEngaged(hero, target, context = targetContext()) {
     const objectiveAttack = villager && target.pendingHit?.target === villager
       && fromPost <= LEASH + hero.range + plateauBonus + 5
       && !anotherDefenseHeroCanIntercept(hero, target, context);
-    return canCoverFromPost || !!objectiveAttack;
+    const lastDefenderKeepsThreat = hero.engagedWith === target
+      && hero.lastDefenderThreatTarget === target
+      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && context.party.every((ally) => ally === hero || ally.dead);
+    return canCoverFromPost || !!objectiveAttack || lastDefenderKeepsThreat;
   }
   return fromPost <= LEASH + hero.range + ENGAGE_SLACK;
 }
@@ -2279,7 +2292,11 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     const objectiveAttack = villager && target.pendingHit?.target === villager
       && fromPost <= LEASH + hero.range + plateauBonus + 5
       && !anotherDefenseHeroCanIntercept(hero, target, context);
-    return !!objectiveAttack;
+    const lastDefenderThreat = target.pendingHit?.target === hero
+      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && !party.some((ally) => ally !== hero && !ally.dead);
+    if (lastDefenderThreat) hero.lastDefenderThreatTarget = target;
+    return !!objectiveAttack || lastDefenderThreat;
   }
   const normalReach = fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
   const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
