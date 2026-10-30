@@ -354,6 +354,43 @@ const costText = (cost) => RES.filter((r) => cost[r]).map((r) => `${cost[r]} ${R
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const clock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
+// ---------- objetivos guiados: trilha curta na primeira partida; depois fica no botão "?" ----------
+// cada passo marca sozinho (e fica marcado) quando a regra vale; hint = botões a destacar, o primeiro que existir na tela
+export const GUIDE_KEY = 'cavaleiros-reino-tutorial';
+const hasBuilding = (type) => (K) => K.buildings.some((b) => b.kType === type);
+export const GUIDE = [
+  { id: 'select', glyph: '⚒', label: 'Aldeão', tip: 'Clique num aldeão · tecla . pega um parado', hint: ['.k-idle'],
+    done: (K, c) => c.sel.some((u) => u.kKind === 'worker') },
+  { id: 'wood', glyph: ICONS.wood, label: 'Madeira', tip: 'Com o aldeão, clique direito numa árvore',
+    done: (K) => K.stats.gathered.wood > 0 || K.units.some((u) => u.kKind === 'worker' && u.task?.type === 'gather' && u.task.res === 'wood') },
+  { id: 'house', glyph: '⌂', label: 'Casa', tip: 'Aldeão → Casa · +5 de população', hint: ['[data-build="house"]', '.k-idle'], done: hasBuilding('house') },
+  { id: 'farm', glyph: '❀', label: 'Fazenda', tip: 'Aldeão → Fazenda · comida sem fim', hint: ['[data-build="farm"]', '.k-idle'], done: hasBuilding('farm') },
+  { id: 'barracks', glyph: '⚔', label: 'Quartel', tip: 'Aldeão → Quartel · treina tropas', hint: ['[data-build="barracks"]', '.k-idle'], done: hasBuilding('barracks') },
+  { id: 'soldier', glyph: '⚔', label: 'Soldado', tip: 'Selecione o quartel → Soldado', hint: ['[data-kind="soldier"]'],
+    done: (K) => K.units.some((u) => u.kKind === 'soldier') || K.buildings.some((b) => b.queue.some((q) => q.kind === 'soldier')) },
+  { id: 'tower', glyph: '♖', label: 'Torre', tip: 'Aldeão → Torre · atira nos esqueletos', hint: ['[data-build="tower"]', '.k-idle'], done: hasBuilding('tower') },
+  { id: 'wave', glyph: '☠', label: 'Onda 1', tip: 'Aguente a 1ª onda de esqueletos', hint: ['.k-wave'],
+    done: (K, c) => K.waveN >= 2 || (K.waveN >= 1 && !K.pending && !c.foes) },
+  { id: 'portal', glyph: '✹', label: 'Portal', tip: 'Derrube o Portal de Ossos para vencer', hint: ['.k-portal-hp'], done: (K) => !!K.portal?.dead },
+];
+export function createGuide(store = globalThis.localStorage) {
+  let seen = false;
+  try { seen = store?.getItem(GUIDE_KEY) === 'feito'; } catch {}
+  return { done: new Set(), open: !seen, seen };
+}
+export const guideStep = (g) => GUIDE.find((s) => !g.done.has(s.id)) || null;
+export function finishGuide(g, store = globalThis.localStorage) {
+  g.seen = true;
+  try { store?.setItem(GUIDE_KEY, 'feito'); } catch {}
+}
+// ctx: sel = seleção atual; foes = esqueletos das ondas ainda vivos (sem a guarda do portal)
+export function advanceGuide(g, K, ctx = {}, store = globalThis.localStorage) {
+  const c = { sel: [], foes: 0, ...ctx }, fresh = [];
+  for (const s of GUIDE) if (!g.done.has(s.id) && s.done(K, c)) { g.done.add(s.id); fresh.push(s.id); }
+  if (fresh.length && !guideStep(g)) finishGuide(g, store);
+  return fresh;
+}
+
 // ---------- estado da partida em andamento ----------
 let K = null;          // estado do modo (regras + entidades)
 let R = null;          // peças só de tela: cena, seleção, câmera, interface
@@ -721,6 +758,7 @@ function stopKingdom() {
   R.ui?.remove();
   R.waveChip?.remove();
   R.panel?.remove();
+  R.guideEl?.remove();
   R.box?.remove();
   unbindInput();
   const sc = G.sun.shadow.camera;
@@ -759,6 +797,7 @@ function endKingdom(won) {
   $('overlayBtn').onclick = () => G.startGame('reino');
   $('overlayBtn').hidden = false;
   R.panel.hidden = true;
+  R.guideEl.hidden = true;
   $('overlay').classList.add('results');
   $('overlay').classList.toggle('lost', !won);
   $('overlay').classList.remove('hidden');
@@ -1163,6 +1202,32 @@ function buildUI() {
   R.map.addEventListener('pointerdown', mapPointer);
   R.map.addEventListener('pointermove', (e) => { if (e.buttons & 1) mapPointer(e); });
   R.map.addEventListener('contextmenu', (e) => e.preventDefault());
+  // objetivos: aberto na primeira partida; fechar conta como visto
+  R.guide = createGuide();
+  R.guideEl = el('div', 'k-guide', '<button type="button" class="k-guide-btn" data-tip="Objetivos" aria-label="Objetivos">?</button>'
+    + `<ol class="k-guide-list">${GUIDE.map((s) => `<li data-step="${s.id}" data-tip="${esc(s.tip)}" aria-label="${esc(s.tip)}"><span class="k-guide-ic" aria-hidden="true">${s.glyph}</span>${s.label}</li>`).join('')}</ol>`);
+  document.body.appendChild(R.guideEl);
+  R.guideEl.querySelector('.k-guide-btn').onclick = () => {
+    R.guide.open = !R.guide.open;
+    if (!R.guide.open) finishGuide(R.guide);
+    updateGuide();
+  };
+}
+
+function updateGuide() {
+  const g = R.guide;
+  advanceGuide(g, K, { sel: R.sel, foes: G.skeletonsAlive().filter((s) => !s.kGuard).length });
+  const now = g.open ? guideStep(g) : null;
+  R.guideEl.classList.toggle('open', g.open);
+  R.guideEl.querySelector('.k-guide-btn').setAttribute('aria-expanded', String(g.open));
+  for (const li of R.guideEl.querySelectorAll('li')) {
+    li.classList.toggle('done', g.done.has(li.dataset.step));
+    li.classList.toggle('now', li.dataset.step === now?.id);
+  }
+  // destaque no botão do passo atual (os comandos são refeitos a cada seleção)
+  const target = now?.hint?.map((q) => document.querySelector(q)).find(Boolean) || null;
+  if (R.hint !== target) { R.hint?.classList.remove('k-hint'); R.hint = target; }
+  target?.classList.add('k-hint');
 }
 
 function selectionKey() {
@@ -1192,6 +1257,7 @@ function updateUI() {
   const key = selectionKey();
   if (key !== R.selKey) { R.selKey = key; renderSelection(); renderCommands(); }
   refreshPanel();
+  updateGuide();
 }
 
 function unitIcon(u) {
@@ -1327,7 +1393,7 @@ function renderCommands() {
   if (sel.some((u) => u.kKind === 'worker')) {
     for (const type of BUILD_MENU) {
       const def = BUILDINGS[type];
-      add(def.glyph, `${def.name} · ${def.tip} · ${costText(def.cost)}`, def.cost, () => startPlacing(type));
+      add(def.glyph, `${def.name} · ${def.tip} · ${costText(def.cost)}`, def.cost, () => startPlacing(type)).dataset.build = type;
     }
     return;
   }

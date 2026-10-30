@@ -119,3 +119,23 @@ body.k-aiming canvas { cursor: crosshair; }
 .k-alert i { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 .k-alert i::before { content: ''; position: absolute; left: 20px; top: -8px; border: 8px solid transparent; border-left: 12px solid #ff6a55; }
 @keyframes k-alert { to { transform: scale(1.18); box-shadow: 0 0 22px rgba(255, 70, 50, 1); } }
+
+/* ---------- objetivos guiados: tinta do tutorial da campanha (tutorial.css); detalhe na dica ---------- */
+.k-guide { position: absolute; z-index: 21; left: 12px; top: 64px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-family: 'Fredoka', sans-serif; }
+.k-guide[hidden], body.no-battle .k-guide { display: none; }
+.k-guide-btn { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid var(--gold, #ffe27a); background: #101a30ed; color: #fff2c6;
+  font: 400 17px/1 'Lilita One', sans-serif; cursor: pointer; box-shadow: 0 3px 10px #0003; }
+.k-guide.open .k-guide-btn { background: var(--gold, #ffe27a); color: #101a30; }
+.k-guide-list { display: none; margin: 0; padding: 5px; list-style: none; border: 2px solid var(--gold, #ffe27a); border-radius: 14px; background: #101a30e6; box-shadow: 0 5px 16px #0005; }
+.k-guide.open .k-guide-list { display: block; }
+.k-guide-list li { display: flex; align-items: center; gap: 7px; min-width: 112px; padding: 3px 8px 3px 5px; border-radius: 9px; color: #b8c6e0; font-size: 15px; font-weight: 500; opacity: .55; cursor: default; }
+.k-guide-list li.now { opacity: 1; color: #fff2c6; background: #ffe27a24; }
+.k-guide-list li.done { opacity: .9; color: #a9e89b; }
+.k-guide-list li.done::after { content: '✓'; margin-left: auto; padding-left: 8px; color: #7dff8a; font-weight: 700; }
+.k-guide-ic { width: 20px; display: grid; place-items: center; font: 400 16px/1 'Lilita One', sans-serif; }
+.k-guide-ic svg { width: 18px; height: 18px; }
+.k-hint { outline: 2px solid var(--gold, #ffe27a); outline-offset: 2px; animation: tutorial-pulse 1.2s ease-in-out infinite; }
+.k-cmd.k-hint::before { content: '▼'; position: absolute; left: 50%; top: -22px; translate: -50% 0; color: var(--gold, #ffe27a); font-size: 15px;
+  text-shadow: 0 1px 2px #000; pointer-events: none; animation: k-bob .7s ease-in-out infinite alternate; }
+@keyframes k-bob { to { translate: -50% -4px; } }
+@media (prefers-reduced-motion: reduce) { .k-hint, .k-cmd.k-hint::before { animation: none; } }
