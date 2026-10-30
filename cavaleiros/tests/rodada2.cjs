@@ -997,6 +997,23 @@ test('Trono de Ossos espera os dois chefes saírem do surgimento antes de fixar 
   assert.equal(t.chooseHeroTarget(h,[lich,executioner],.016,team),executioner,'o foco válido se mantém após mudar a vida relativa');
   clear();
 });
+test('Trono de Ossos intercepta o Lich móvel preso fora da formação, sem persegui-lo pelo mapa',()=>{
+  clear();
+  const party=[['paladin',0,-284.2],['guardian',-1.7,-283],['viking',1.7,-283],['cleric',0,-281.3]]
+    .map(([id,x,z])=>{const hero=new t.Hero(cfg(id));hero.pos.set(x,0,z);hero.post.set(x,0,z);return hero;});
+  const lich=new t.Skeleton('Lich',12,true);lich.spawning=false;lich.pos.set(-3.2,0,-291);
+  t.game.mission={goal:{type:'twin'}};
+  const team=t.makeTargetContext();
+  const interceptors=party.filter(hero=>t.canHeroReachTarget(hero,lich,team));
+  assert.equal(interceptors.length,2,'dois heróis podem sair um pouco da formação para alcançar o chefe móvel');
+  assert.equal(t.chooseHeroTarget(interceptors[0],[lich],.016,team),lich);
+  assert.equal(t.chooseHeroTarget(interceptors[1],[lich],.016,team),lich);
+  assert.equal(t.chooseHeroTarget(party.find(hero=>!interceptors.includes(hero)),[lich],.016,team),null,'os demais heróis mantêm a formação');
+  lich.pos.z=-301;
+  const distant=t.makeTargetContext();
+  assert.ok(party.every(hero=>!t.canHeroReachTarget(hero,lich,distant)),'o chefe além do limite tático não arrasta a equipe pelo mapa');
+  clear();
+});
 test('Trono de Ossos interrompe o foco coletivo por ameaça urgente e retoma o chefe',()=>{
   clear();
   const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);

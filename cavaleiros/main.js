@@ -34,6 +34,8 @@ const LEASH = 5;            // quanto o herói se afasta do posto para lutar
 const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
 const RANGED_INTERCEPT = 20; // cobre o surgimento à frente e a largura da formação, sem perseguição pelo mapa
 const RANGED_INTERCEPTORS = 2;
+const TWIN_BOSS_INTERCEPT = 16; // dois heróis podem pressionar o chefe móvel sem arrastar a equipe
+const TWIN_BOSS_INTERCEPTORS = 2;
 const DEFENSE_CLEANUP_INTERCEPT = 22; // depois do cronômetro, a âncora pode limpar os inimigos que sobraram
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
 
@@ -2451,6 +2453,11 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   if (huntTarget && !normalReach) {
     if (fromPost > HUNT_PURSUIT_LIMIT) return false;
     return hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS);
+  }
+  // No Trono, o Lich móvel pode parar fora do alcance normal enquanto ataca
+  // o grupo. Dois heróis o interceptam por uma distância curta e o resto guarda posição.
+  if (goal?.type === 'twin' && target.phaseBoss && !normalReach) {
+    return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
   }
   if (normalReach) return true;
 
