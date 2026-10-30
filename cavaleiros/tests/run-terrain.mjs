@@ -104,8 +104,13 @@ for(let seed=0;seed<8;seed++) {
 console.log('Terreno: broadphase de groundHeight equivalente à fórmula anterior em 8 seeds, grade e bordas OK');
 const main=readFileSync(new URL('../main.js',import.meta.url),'utf8');
 const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // anima a locomoção'));
+const gridStart=main.indexOf('const SEPARATION_CELL_SIZE = 3;'),gridEnd=main.indexOf('function separate() {',gridStart);
+if(gridStart<0||gridEnd<0)throw Error('Grade espacial de obstáculos ausente');
 world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));
-const Walker=runInNewContext('class Walker {'+move+'}; Walker',{THREE,world,tmp:new Vector3(),moveDir:new Vector3()});
+const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',{
+  THREE,world,tmp:new Vector3(),moveDir:new Vector3(),gridCellKey:(x,z)=>x*65536+(z&0xffff),
+});
+const {Walker,queryObstacleCandidates}=movementApi;
 function walk(from,to,guard=null) {
   const u=new Walker();Object.assign(u,{pos:from.clone(),vel:new Vector3(),speed:3.2,size:1,face:()=>{}});
   const guards=(Array.isArray(guard)?guard:[guard]).filter(Boolean);
@@ -167,6 +172,41 @@ for(let i=0;i<8;i++) {
 }
 console.log('Navegação: 8 direções contornam a montanha sem órbita ou retorno OK');
 world.obstacles.length=0;
+world.obstacles.push(
+  {x:0,z:0,r:2.2},{x:4.2,z:0.4,r:1.6},{x:-4.8,z:-2.1,r:2.5},
+  {x:8.1,z:5.5,r:2.8},{x:-10.3,z:7.2,r:1.9},{x:2.5,z:-8.4,r:2.1},
+);
+const routeCases=[
+  [new Vector3(-12,0,0),new Vector3(12,0,0)],
+  [new Vector3(-12,0,-10),new Vector3(12,0,10)],
+  [new Vector3(12,0,10),new Vector3(-12,0,-10)],
+  [new Vector3(-10,0,8),new Vector3(12,0,-7)],
+  [new Vector3(0,0,-14),new Vector3(0,0,14)],
+];
+let routeSeed=9137;
+const routeRandom=()=>((routeSeed=(Math.imul(routeSeed,1664525)+1013904223)>>>0)/0x100000000);
+for(let i=0;i<80;i++)routeCases.push([
+  new Vector3((routeRandom()-0.5)*30,0,(routeRandom()-0.5)*30),
+  new Vector3((routeRandom()-0.5)*30,0,(routeRandom()-0.5)*30),
+]);
+for(let i=0;i<routeCases.length;i++) {
+  const [from,to]=routeCases[i],bruteNav={size:1,pathing:null},gridNav={size:1,pathing:null};
+  const brute=world.nextWaypoint(from,to,bruteNav),indexed=world.nextWaypoint(from,to,gridNav,queryObstacleCandidates);
+  if(brute.distanceTo(indexed)>1e-9)throw Error(`Grade alterou waypoint no cenário ${i}`);
+  const a=bruteNav.pathing,b=gridNav.pathing;
+  if(!!a!==!!b)throw Error(`Grade alterou existência da rota no cenário ${i}`);
+  if(a&&b) {
+    if(world.obstacles.indexOf(a.obstacle)!==world.obstacles.indexOf(b.obstacle)||a.side!==b.side||a.stage!==b.stage||a.radius!==b.radius
+      ||a.start.distanceTo(b.start)>1e-9||a.end.distanceTo(b.end)>1e-9)throw Error(`Grade alterou rota tangente no cenário ${i}`);
+  }
+}
+console.log(`Navegação: ${routeCases.length} rotas indexadas equivalem à busca completa OK`);
+world.obstacles.length=0;
+const appendedObstacle={x:0,z:0,r:2};
+world.obstacles.push(appendedObstacle);
+const appendedCandidates=queryObstacleCandidates(-1,1,-1,1,1);
+if(!appendedCandidates.includes(appendedObstacle))throw Error('Grade não percebeu obstáculo adicionado ao array');
+world.obstacles.length=0;
 const mountainPair=[{x:-3.5,z:0,r:2},{x:3.5,z:0,r:2}];world.obstacles.push(...mountainPair);
 const aroundPair=walk(new Vector3(-12,0,0),new Vector3(12,0,0),mountainPair);
 if(aroundPair.minClearance<1.0)throw Error('A rota dupla perdeu margem entre duas montanhas');
@@ -176,7 +216,7 @@ console.log('Movimento real: subida, descida, contorno de platôs e lagos OK');
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
 const Unit=runInNewContext(main.slice(main.indexOf('class Unit {'),main.indexOf('const skeletonsAlive ='))+';Unit',{
-  THREE,world,tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
+  THREE,world,tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),queryObstacleCandidates,game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
 });
 function unit(team='hero') {
   const u=Object.create(Unit.prototype);

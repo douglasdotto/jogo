@@ -1847,12 +1847,17 @@ class Unit {
 
   // anda até o alvo desviando dos obstáculos que estão na frente
   moveTo(target, dt) {
-    target = world.nextWaypoint(this.pos, target, this);
+    target = world.nextWaypoint(this.pos, target, this, queryObstacleCandidates);
     const dir = moveDir.subVectors(target, this.pos).setY(0);
     const d = dir.length();
     if (d < 0.05) return;
     dir.divideScalar(d);
-    for (const o of world.obstacles) {
+    const reach = Math.min(2.6, d);
+    const endX = this.pos.x + dir.x * reach, endZ = this.pos.z + dir.z * reach;
+    for (const o of queryObstacleCandidates(
+      Math.min(this.pos.x, endX), Math.max(this.pos.x, endX),
+      Math.min(this.pos.z, endZ), Math.max(this.pos.z, endZ), 0.5 * this.size,
+    )) {
       const ox = o.x - this.pos.x, oz = o.z - this.pos.z;
       const ahead = ox * dir.x + oz * dir.z;                 // quão à frente está
       if (ahead <= 0 || ahead > 2.6 || ahead > d) continue;
@@ -5546,8 +5551,9 @@ const SEPARATION_CELL_SIZE = 3;
 const separationAlive = [], separationCandidates = [], separationCellX = [], separationCellZ = [];
 const separationGrid = new Map(), separationGridPool = [];
 const obstacleGrid = new Map(), obstacleGridPool = [];
-const obstacleOrder = new Map();
-let obstacleGridWorld = null, obstacleGridSource = null, obstacleGridMargin = -1;
+const obstacleQueryIndexes = [], obstacleQueryCandidates = [], obstacleQuerySeen = new Set();
+const obstacleOrder = new Map(), compareObstacleIndexes = (a, b) => a - b;
+let obstacleGridWorld = null, obstacleGridSource = null, obstacleGridLength = -1, obstacleGridMargin = -1;
 
 function recycleGrid(grid, pool) {
   for (const bucket of grid.values()) { bucket.length = 0; pool.push(bucket); }
@@ -5562,11 +5568,13 @@ function addToGrid(grid, pool, x, z, value) {
 }
 
 function indexObstacles(margin) {
-  if (obstacleGridWorld === world && obstacleGridSource === world.obstacles && obstacleGridMargin >= margin) return;
+  if (obstacleGridWorld === world && obstacleGridSource === world.obstacles
+      && obstacleGridLength === world.obstacles.length && obstacleGridMargin >= margin) return;
   recycleGrid(obstacleGrid, obstacleGridPool);
   obstacleOrder.clear();
   obstacleGridWorld = world;
   obstacleGridSource = world.obstacles;
+  obstacleGridLength = world.obstacles.length;
   obstacleGridMargin = margin;
   for (let i = 0; i < world.obstacles.length; i++) {
     const obstacle = world.obstacles[i];
@@ -5576,8 +5584,28 @@ function indexObstacles(margin) {
     const maxX = Math.floor((obstacle.x + radius) / SEPARATION_CELL_SIZE);
     const minZ = Math.floor((obstacle.z - radius) / SEPARATION_CELL_SIZE);
     const maxZ = Math.floor((obstacle.z + radius) / SEPARATION_CELL_SIZE);
-    for (let x = minX; x <= maxX; x++) for (let z = minZ; z <= maxZ; z++) addToGrid(obstacleGrid, obstacleGridPool, x, z, obstacle);
+    for (let x = minX; x <= maxX; x++) for (let z = minZ; z <= maxZ; z++) addToGrid(obstacleGrid, obstacleGridPool, x, z, i);
   }
+}
+
+function queryObstacleCandidates(minX, maxX, minZ, maxZ, margin = 0) {
+  indexObstacles(Math.max(0, margin));
+  obstacleQueryIndexes.length = 0;
+  obstacleQuerySeen.clear();
+  const minCellX = Math.floor(minX / SEPARATION_CELL_SIZE), maxCellX = Math.floor(maxX / SEPARATION_CELL_SIZE);
+  const minCellZ = Math.floor(minZ / SEPARATION_CELL_SIZE), maxCellZ = Math.floor(maxZ / SEPARATION_CELL_SIZE);
+  for (let x = minCellX; x <= maxCellX; x++) for (let z = minCellZ; z <= maxCellZ; z++) {
+    const bucket = obstacleGrid.get(gridCellKey(x, z));
+    if (!bucket) continue;
+    for (const obstacleIndex of bucket) if (!obstacleQuerySeen.has(obstacleIndex)) {
+      obstacleQuerySeen.add(obstacleIndex);
+      obstacleQueryIndexes.push(obstacleIndex);
+    }
+  }
+  if (obstacleQueryIndexes.length > 1) obstacleQueryIndexes.sort(compareObstacleIndexes);
+  obstacleQueryCandidates.length = 0;
+  for (const obstacleIndex of obstacleQueryIndexes) obstacleQueryCandidates.push(world.obstacles[obstacleIndex]);
+  return obstacleQueryCandidates;
 }
 
 function separate() {
@@ -5617,7 +5645,8 @@ function separate() {
         Math.floor(u.pos.x / SEPARATION_CELL_SIZE),
         Math.floor(u.pos.z / SEPARATION_CELL_SIZE),
       ));
-      if (candidates) for (const o of candidates) {
+      if (candidates) for (const obstacleIndex of candidates) {
+        const o = world.obstacles[obstacleIndex];
         const min = o.r + 0.53 * u.size;
         let dx = u.pos.x - o.x, dz = u.pos.z - o.z;
         if (Math.abs(dx) > min || Math.abs(dz) > min) continue;

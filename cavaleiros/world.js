@@ -251,7 +251,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     const along = radius * radius / distance, side = radius * Math.sqrt(Math.max(0, distanceSq - radius * radius)) / distance * tangentSign;
     return new THREE.Vector3(obstacle.x + ux * along + px * side, 0, obstacle.z + uz * along + pz * side);
   }
-  function obstacleWaypoint(from, to, navigation) {
+  function obstacleWaypoint(from, to, navigation, queryObstacles = null) {
     if (!navigation || !obstacles.length) return to;
     const dx = to.x - from.x, dz = to.z - from.z, distanceSq = dx * dx + dz * dz;
     if (distanceSq < 0.04) { navigation.pathing = null; return to; }
@@ -262,6 +262,9 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
       if ((to.x - obstacle.x) ** 2 + (to.z - obstacle.z) ** 2 <= radius * radius) return false;
       return segmentDistanceSq(from, to, obstacle.x, obstacle.z) < radius * radius * 0.98;
     };
+    const candidatesAlong = (a, b, clearance) => queryObstacles
+      ? queryObstacles(Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.z, b.z), Math.max(a.z, b.z), clearance)
+      : obstacles;
     let route = navigation.pathing;
     if (route) {
       const goalShift = Math.hypot(to.x - route.goalX, to.z - route.goalZ);
@@ -272,7 +275,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     }
     if (!route) {
       let blocker = null, blockerT = Infinity;
-      for (const obstacle of obstacles) {
+      for (const obstacle of candidatesAlong(from, to, margin)) {
         const radius = obstacle.r + margin;
         if ((to.x - obstacle.x) ** 2 + (to.z - obstacle.z) ** 2 <= radius * radius) continue;
         const t = ((obstacle.x - from.x) * dx + (obstacle.z - from.z) * dz) / distanceSq;
@@ -290,28 +293,45 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
       // Tangent points joined by a straight segment form a shallow chord; the extra ring
       // keeps that shortcut outside the real collision radius.
       const radius = blocker.r + margin + 0.5;
-      let side = awaySide, best = Infinity;
+      let side = awaySide, best = Infinity, routeStart = null, routeEnd = null;
+      const options = [];
+      let minX = Math.min(from.x, to.x), maxX = Math.max(from.x, to.x);
+      let minZ = Math.min(from.z, to.z), maxZ = Math.max(from.z, to.z);
       for (const candidateSide of [awaySide, -awaySide]) {
         const nx = sideX * candidateSide, nz = sideZ * candidateSide;
         const start = tangentPoint(from, blocker, radius, nx, nz);
         const end = tangentPoint(to, blocker, radius, nx, nz);
-        let cost = Math.hypot(start.x - from.x, start.z - from.z)
+        const cost = Math.hypot(start.x - from.x, start.z - from.z)
           + Math.hypot(end.x - start.x, end.z - start.z)
           + Math.hypot(to.x - end.x, to.z - end.z);
-        for (const obstacle of obstacles) {
+        options.push({ candidateSide, start, end, cost });
+        minX = Math.min(minX, start.x, end.x); maxX = Math.max(maxX, start.x, end.x);
+        minZ = Math.min(minZ, start.z, end.z); maxZ = Math.max(maxZ, start.z, end.z);
+      }
+      const scoringObstacles = queryObstacles
+        ? queryObstacles(minX, maxX, minZ, maxZ, margin * 0.7)
+        : obstacles;
+      for (const option of options) {
+        let cost = option.cost;
+        for (const obstacle of scoringObstacles) {
           if (obstacle === blocker) continue;
           const clearance = obstacle.r + margin * 0.7;
           const limit = clearance * clearance;
-          if (segmentDistanceSq(from, start, obstacle.x, obstacle.z) < limit) cost += 24;
-          if (segmentDistanceSq(start, end, obstacle.x, obstacle.z) < limit) cost += 24;
-          if (segmentDistanceSq(end, to, obstacle.x, obstacle.z) < limit) cost += 24;
+          if (segmentDistanceSq(from, option.start, obstacle.x, obstacle.z) < limit) cost += 24;
+          if (segmentDistanceSq(option.start, option.end, obstacle.x, obstacle.z) < limit) cost += 24;
+          if (segmentDistanceSq(option.end, to, obstacle.x, obstacle.z) < limit) cost += 24;
         }
-        if (cost < best) { best = cost; side = candidateSide; }
+        if (cost < best) {
+          best = cost;
+          side = option.candidateSide;
+          routeStart = option.start;
+          routeEnd = option.end;
+        }
       }
       route = navigation.pathing = {
         obstacle: blocker, side, radius, stage: 0,
-        start: tangentPoint(from, blocker, radius, sideX * side, sideZ * side),
-        end: tangentPoint(to, blocker, radius, sideX * side, sideZ * side),
+        start: routeStart,
+        end: routeEnd,
         dirX, dirZ, goalX: to.x, goalZ: to.z,
       };
     }
@@ -330,8 +350,8 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     }
     return route.end;
   }
-  function nextWaypoint(from, to, navigation = null) {
-    return obstacleWaypoint(from, terrainWaypoint(from, to), navigation);
+  function nextWaypoint(from, to, navigation = null, queryObstacles = null) {
+    return obstacleWaypoint(from, terrainWaypoint(from, to), navigation, queryObstacles);
   }
 
   // ---------- rio, cruzando a estrada entre as fases 3 e 4 ----------
