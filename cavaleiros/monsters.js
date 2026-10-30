@@ -98,25 +98,29 @@ function disposeFx(f) {
 }
 
 // aviso que enche até o golpe; some sem golpear se o dono morrer ou ficar zonzo
-function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, harmless = false, follow = null, announce = '', notice = 0.6 } = {}) {
+// hole: anel (só machuca entre hole e radius; o centro fica seguro)
+function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, harmless = false, follow = null, announce = '', notice = 0.6, hole = 0 } = {}) {
   const group = new THREE.Group();
   const fillMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide });
   const edgeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: line ? 0.22 : 0.9, depthWrite: false, side: THREE.DoubleSide });
   const flatRot = [-Math.PI / 2, 0, 0];
-  const fill = piece(line ? GEO.strip : GEO.disc, fillMat, [0, 0.01, 0], 0.01, flatRot);
+  const holeGeo = hole > 0 ? new THREE.RingGeometry(hole / radius, 1, 48) : null;
+  const fill = piece(line ? GEO.strip : holeGeo || GEO.disc, fillMat, [0, 0.01, 0], holeGeo ? radius : 0.01, flatRot);
   const edge = line ? piece(GEO.strip, edgeMat, [0, 0, line.len / 2], [radius * 2, line.len, 1], flatRot) : piece(GEO.edge, edgeMat, [0, 0, 0], radius, flatRot);
   fill.castShadow = edge.castShadow = false;
   group.add(fill, edge);
+  if (holeGeo) { const inner = piece(GEO.edge, edgeMat, [0, 0, 0], hole, flatRot); inner.castShadow = false; group.add(inner); }
   group.position.copy(at);
   group.position.y += 0.07;
   if (line) group.rotation.y = Math.atan2(line.dir.x, line.dir.z);
   G.scene.add(group);
-  const effect = track({ owner, at: at.clone(), radius, line, announce: owner?.boss && !harmless ? announce : '', harmless: harmless || !!follow, interruptible: !harmless, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), notice, end,
+  const effect = track({ owner, at: at.clone(), radius, line, announce: owner?.boss && !harmless ? announce : '', harmless: harmless || !!follow, interruptible: !harmless, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), notice, end, hole,
+    cleanup: holeGeo ? () => holeGeo.dispose?.() : undefined,
     step(f) {
       const k = 1 - Math.max(0, f.t) / f.life;
       if (follow && !follow.dead) { f.at.copy(follow.pos); group.position.copy(follow.pos); group.position.y += 0.07; }
       if (line) { fill.scale.set(radius * 2, Math.max(0.01, line.len * k), 1); fill.position.z = (line.len * k) / 2; }
-      else fill.scale.setScalar(Math.max(0.01, radius * k));
+      else if (!holeGeo) fill.scale.setScalar(Math.max(0.01, radius * k));
       fillMat.opacity = 0.25 + 0.25 * k;
     } });
   if (owner?.boss && effect.interruptible) owner.telegraph = effect;
@@ -137,8 +141,9 @@ export function dangerAt(u) {
       return dangerDestination.copy(u.pos).addScaledVector(perp, f.radius + 1.3 - Math.abs(side));
     }
     const d = rel.length();
-    if (d > f.radius + 0.4) continue;
+    if (d > f.radius + 0.4 || f.hole && d < f.hole - 0.4) continue;
     if (d < 0.05) rel.set(1, 0, 0);
+    if (f.hole && d - (f.hole - 1) < f.radius + 1.3 - d) return dangerDestination.copy(f.at).addScaledVector(rel.normalize(), Math.max(0.3, f.hole - 1));   // anel: o centro é mais perto
     return dangerDestination.copy(f.at).addScaledVector(rel.normalize(), f.radius + 1.3);
   }
   return null;
@@ -161,6 +166,64 @@ function knockDown(u, from, push) {
   u.busy = Math.max(u.busy, lie + 0.25 + stand);
   G.popText(u.pos, 'Derrubado!', 'block');
   track({ t: lie + 0.25, end: () => { if (!u.dead && G.units.includes(u)) u.once('Lie_StandUp', 2.8); } });
+}
+
+// ---------- estados nos heróis: veneno (dano por tempo) e lentidão (moveTo já lê slowT) ----------
+// Fonte única: aplica, conta o tempo, mostra a marca e limpa (fim da luta, morte ou cura em área).
+const mAfflicted = new Set();
+const poisonMat = glowMat(0x7dff3a), slowMat = glowMat(0x9a6bff, 0.55);
+function afflictMark(u, key, make) {
+  if (!u.root?.add) return null;
+  if (!u[key]) { u[key] = make(); u[key].castShadow = false; u.root.add(u[key]); }
+  u[key].visible = true;
+  return u[key];
+}
+export function poisonHero(u, time, tick, owner = null) {
+  if (u.dead || u.team === 'skeleton' || !(time > 0)) return;
+  const fresh = !(u.poisonT > 0);
+  if (fresh) { u.poisonTick = 1; u.poisonDmg = 0; G.popText(u.pos, 'Veneno!', 'hurt'); }
+  u.poisonT = Math.max(u.poisonT || 0, time);
+  u.poisonDmg = Math.max(u.poisonDmg, tick);   // reaplicar renova o tempo, não acumula
+  u.poisonBy = owner;
+  afflictMark(u, 'poisonMark', () => piece(GEO.gem, poisonMat, [0, 2.35, 0], [0.11, 0.17, 0.11]));
+  mAfflicted.add(u);
+}
+export function slowHero(u, time) {
+  if (u.dead || u.team === 'skeleton' || !(time > 0)) return;
+  u.slowT = Math.max(u.slowT || 0, time);
+  afflictMark(u, 'slowMark', () => piece(GEO.torus, slowMat, [0, 0.12, 0], 0.55, [Math.PI / 2, 0, 0]));
+  mAfflicted.add(u);
+}
+function cureHero(u, poison = true, slow = true) {
+  if (poison) { u.poisonT = 0; if (u.poisonMark) u.poisonMark.visible = false; }
+  if (slow) { u.slowT = 0; if (u.slowMark) u.slowMark.visible = false; }
+  if (!(u.poisonT > 0) && !(u.slowT > 0)) mAfflicted.delete(u);
+}
+// cura em área (Paladino, Clériga, Druida, Anjo): tira o veneno de quem está no raio
+export function cleanseAround(at, reach) {
+  for (const u of mAfflicted) if (u.poisonT > 0 && !u.dead && flat(u.pos, at) <= reach) {
+    cureHero(u, true, false);
+    G.popText(u.pos, 'Purificado', 'heal');
+  }
+}
+export function clearAfflictions() { for (const u of [...mAfflicted]) cureHero(u); }
+function tickAfflictions(dt) {
+  if (!mAfflicted.size) return;
+  if (G.game && G.game.state !== 'fight') return clearAfflictions();   // fase vencida: ninguém sai envenenado
+  for (const u of [...mAfflicted]) {
+    if (u.dead || !G.units?.includes?.(u)) { cureHero(u); continue; }
+    if (u.slowT > 0 && (u.slowT -= dt) <= 0) cureHero(u, false, true);
+    if (!(u.poisonT > 0)) continue;
+    u.poisonT -= dt;
+    u.poisonTick -= dt;
+    if (u.poisonTick <= 0) {
+      u.poisonTick += 1;
+      u.takeDamage(u.poisonDmg, null, u.poisonBy?.dead === false ? u.poisonBy : null, false, true);   // dot: sem recuo, esquiva ou bloqueio
+      if (u.dead) { cureHero(u); continue; }
+    }
+    if (u.poisonT <= 0) cureHero(u, true, false);
+    else if (u.poisonMark) u.poisonMark.rotation.y += dt * 3;
+  }
 }
 
 function summon(type, at, anim) {
@@ -255,6 +318,38 @@ function giveWard(shaman, o) {
   G.beam(shaman.pos, o.pos, 0x5ff2ff);
   G.ring(o.pos, 1.1 * o.size, 0x5ff2ff, 0.8);
   G.popText(o.pos, 'Escudo de ossos!', 'evolve');
+}
+
+// atirador que fica a meia distância: aproxima, recua de quem encosta e atira
+function keepRange(s, dt, target) {
+  const d = flat(s.pos, target.pos);
+  if (d > 7) s.moveTo(target.pos, dt);
+  else if (d < 4.5) s.moveTo(s.pos.clone().add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+  else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
+  return true;
+}
+
+// lamaçal da bruxa: área marcada que deixa lento quem pisa; some se a bruxa morrer ou ficar zonza
+function bog(owner, at, radius, time) {
+  const group = new THREE.Group();
+  const fillMat = new THREE.MeshBasicMaterial({ color: 0x4a2f6e, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  const edgeMat = new THREE.MeshBasicMaterial({ color: 0xa77bff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+  const flatRot = [-Math.PI / 2, 0, 0];
+  const fill = piece(GEO.disc, fillMat, [0, 0.01, 0], radius, flatRot), edge = piece(GEO.edge, edgeMat, [0, 0, 0], radius, flatRot);
+  fill.castShadow = edge.castShadow = false;
+  group.add(fill, edge);
+  group.position.copy(at);
+  group.position.y += 0.06;
+  G.scene.add(group);
+  G.ring(at, radius, 0xa77bff, 0.7);
+  // conta como aviso: a IA dos heróis tenta sair (dangerAt), mas sem barra de chefe
+  return track({ owner, at: at.clone(), radius, line: null, warning: true, harmless: false, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat],
+    dodge: new Map(), notice: 0.5, bog: true,
+    step(f, dt) {
+      edge.rotation.z += dt * 0.6;
+      fillMat.opacity = 0.35 + Math.sin(f.t * 4) * 0.08;
+      for (const u of liveAllies()) if (!u.dead && flat(u.pos, f.at) <= radius + 0.3 * (u.size || 1)) slowHero(u, 0.6);
+    } });
 }
 
 let mPacking = false;   // crânios do enxame criados pelo líder não criam outro enxame
@@ -527,6 +622,69 @@ export const MONSTER_TYPES = {
       return true;
     } },
 
+  // besteiro venenoso: marca uma linha verde e dispara um virote que envenena quem ficou nela
+  Venomer: { name: 'Besteiro Venenoso', model: 'Rogue', hp: 30, dmg: 7, range: 8, speed: 1.15, cooldown: 2.6, weapon: 'Skeleton_Crossbow', ranged: true, mobile: true,
+    attack: '2H_Ranged_Shoot', priority: 4,
+    dress(s) {
+      paint(s, 0xc9efb4, 0x7dff3a, 0x0c2a04);
+      const hips = boneOf(s, 'hips');
+      for (const x of [-0.18, 0.18]) hips.add(piece(GEO.cyl, MAT.green, [x, 0.02, 0.22], [0.06, 0.16, 0.06]));
+      boneOf(s, 'handslotr').add(piece(GEO.gem, MAT.green, [0, 0.25, 0.25], 0.07));
+      s.boltMat = greenBolt;
+      s.cd = { venom: 2 };
+    },
+    tick(s, dt) { s.cd.venom -= dt; },
+    think(s, dt, target) {
+      if (!target) return true;
+      const d = flat(s.pos, target.pos);
+      if (s.cd.venom <= 0 && d < 9.5) {
+        const dir = new THREE.Vector3(target.pos.x - s.pos.x, 0, target.pos.z - s.pos.z).normalize(), len = d + 1.5;
+        faceNow(s, target.pos);
+        s.vel.set(0, 0, 0);
+        s.once('2H_Ranged_Shoot', 0.9);
+        s.busy = 1.0;
+        s.cd.venom = 7;
+        s.pendingHit = null;
+        const from = s.pos.clone();
+        warn(s, from, 0.55, 0.9, () => {
+          G.beam(from, from.clone().addScaledVector(dir, len), 0x7dff3a);
+          for (const u of liveAllies()) if (!u.dead && inLine(u, from, dir, len, 0.55)) {
+            u.takeDamage(s.dmg * 0.6, from, s);
+            poisonHero(u, 5, s.dmg * 0.4, s);
+          }
+        }, { line: { dir, len }, color: 0x5fe03a });
+        return true;
+      }
+      return keepRange(s, dt, target);
+    } },
+
+  // bruxa de ossos: fica atrás e marca um lamaçal que deixa os heróis lentos
+  Witch: { name: 'Bruxa de Ossos', model: 'Mage', hp: 36, dmg: 5, range: 7.5, speed: 1.2, cooldown: 2.6, weapon: 'Skeleton_Staff', ranged: true, mobile: true,
+    attack: 'Spellcast_Shoot', priority: 4,
+    dress(s) {
+      paint(s, 0xe0d0f0, 0xb07bff, 0x1a0a2a);
+      meshNamed(s, '_Hat', (m) => m.color.set(0x3a2450));
+      const top = boneOf(s, 'handslotr');
+      top.add(piece(GEO.ball, MAT.bone, [-0.15, 1.42, 0], 0.11), piece(GEO.gem, MAT.purple, [-0.15, 1.6, 0], 0.07));
+      s.boltMat = purpleBolt;
+      s.cd = { bog: 2.5 };
+    },
+    tick(s, dt) { s.cd.bog -= dt; },
+    think(s, dt, target) {
+      if (!target) return true;
+      if (s.cd.bog <= 0 && flat(s.pos, target.pos) < 10) {
+        const at = target.pos.clone();
+        faceNow(s, at);
+        s.vel.set(0, 0, 0);
+        s.busy = s.once('Spellcast_Long', 1.2);
+        s.cd.bog = 9;
+        warn(s, at, 2.6, 1.2, () => bog(s, at, 2.6, 6), { color: 0x9a6bff, harmless: true });
+        G.popText(s.pos, 'Lamaçal!', 'evolve');
+        return true;
+      }
+      return keepRange(s, dt, target);
+    } },
+
   // mini-chefe: enorme, espinhos nas costas, pancada em área que derruba
   Golem: { name: 'Golem de Ossos', title: 'Mini-chefe', model: 'Warrior', hp: 250, dmg: 15, range: 2.0, speed: 0.85, cooldown: 2.4, weapon: 'Skeleton_Axe', attack: '2H_Melee_Attack_Chop',
     size: 2.2, heavy: true,
@@ -569,16 +727,48 @@ export const MONSTER_TYPES = {
       crown.position.set(0, 0.62, 0);
       boneOf(s, 'head').add(crown);
       for (const x of [-1, 1]) boneOf(s, 'chest').add(piece(GEO.ball, MAT.gold, [x * 0.36, 0.4, 0], [0.17, 0.12, 0.17]));
-      s.cd = { slam: 3, summon: 6, charge: 4.5 };
+      s.cd = { slam: 3, summon: 6, charge: 4.5, quake: 99 };
       G.showBanner('O Rei Esqueleto chegou!', 2.5);
     },
     tick(s, dt) {
       for (const k in s.cd) s.cd[k] -= dt;
       dashStep(s, dt);
+      if (!s.enraged && s.hp < s.maxHp * 0.5) {   // fase 2: mais rápido e ondas de choque em anel
+        s.enraged = true;
+        s.speed *= 1.2;
+        s.cooldown *= 0.8;
+        s.cd.quake = 1;
+        for (const m of s.mats) if (m.userData) m.userData.glow = 0x4a2a00;
+        G.markEmissiveDirty?.(s);
+        G.showBanner('Fúria do Rei!', 2.5);
+        G.ring(s.pos, 4, 0xffb020, 1);
+      }
     },
     think(s, dt, target) {
       if (!target) return false;
       const d = flat(s.pos, target.pos);
+      if (s.enraged && s.cd.quake <= 0 && d < 7) {   // anel de choque (cole no Rei ou fuja) e depois pisão no centro
+        const at = s.pos.clone(), hole = 2.2, outer = 6.5;
+        s.vel.set(0, 0, 0);
+        s.once('Taunt', 1.1);
+        s.busy = 1.6 + 1.1 + 0.3;
+        s.cd.quake = 12;
+        s.pendingHit = null;
+        warn(s, at, outer, 1.6, () => {
+          s.once('1H_Melee_Attack_Jump_Chop', 1.4);
+          for (const u of liveAllies()) {
+            const k = flat(u.pos, at), pad = 0.3 * (u.size || 1);
+            if (u.dead || k < hole - pad || k > outer + pad) continue;
+            u.takeDamage(s.dmg * 1.1, at, s);
+            u.vel?.add(mV.subVectors(u.pos, at).setY(0).normalize().multiplyScalar(5));
+          }
+          G.ring(at, outer, 0xffb020, 0.8);
+          G.ring(at, hole, 0xffb020, 0.6);
+          warn(s, at, hole + 0.3, 1.1, () => blast(at, hole + 0.3, s.dmg * 1.2, 0xffb020, { owner: s }),
+            { color: 0xff3b30, announce: 'Pisão real — saia do centro' });
+        }, { color: 0xffb020, hole, announce: 'Onda de choque — cole no Rei ou afaste-se' });
+        return true;
+      }
       if (s.cd.summon <= 0 && countAliveSkeletons() < 9) {   // invoca uma onda de lacaios
         s.busy = s.once('Taunt', 1.2);
         s.cd.summon = 18;
@@ -855,10 +1045,12 @@ export function updateMonsterFx(dt) {
   }
   if (!ownedFxCount) mFxUnits.clear();
   for (let i = mGraves.length - 1; i >= 0; i--) if ((mGraves[i].t -= dt) <= 0) mGraves.splice(i, 1);
+  tickAfflictions(dt);   // depois dos efeitos: o lamaçal renova a lentidão antes de contar
   updateBossBar();
 }
 
 export function clearMonsterFx() {
+  clearAfflictions();
   while (mFx.length) releaseFx(mFx.pop());
   ownedFxCount = 0;
   mFxUnits.clear();
@@ -875,7 +1067,7 @@ export function clearMonsterFx() {
 
 // estreia gradual: cada tipo entra numa fase e fica mais comum depois; dificuldades maiores trazem mais variedade
 const ROSTER = [['Shieldbearer', 2, 0.11, 0.025], ['Bomber', 3, 0.1, 0.025], ['Ghost', 4, 0.12, 0.03], ['Priest', 5, 0.07, 0.07],
-  ['Skull', 7, 0.05, 0.02], ['Shaman', 8, 0.05, 0.03], ['DarkKnight', 10, 0.05, 0.025]];   // o enxame já traz 3 crânios por sorteio
+  ['Venomer', 5, 0.06, 0.025], ['Skull', 7, 0.05, 0.02], ['Shaman', 8, 0.05, 0.03], ['Witch', 9, 0.05, 0.025], ['DarkKnight', 10, 0.05, 0.025]];   // o enxame já traz 3 crânios por sorteio
 const BOSS_PHASES = [6, 9, 12, 13];
 export const isBossPhase = (p) => BOSS_PHASES.includes(p);
 // próxima fase de chefe a partir de `p` (inclusive): fonte única para HUD e dica de derrota
@@ -898,6 +1090,7 @@ export function pickMonster(p, type) {
     if (kind === 'Priest' && countOf('Priest') >= (p >= 9 && D.count >= HARD_COUNT ? 2 : 1)) w = 0;
     if (kind === 'Shaman' && countOf('Shaman') >= (p >= 11 && D.count >= HARD_COUNT ? 2 : 1)) w = 0;
     if (kind === 'DarkKnight' && countOf('DarkKnight') >= 2) w = 0;
+    if ((kind === 'Venomer' || kind === 'Witch') && countOf(kind) >= 2) w = 0;
     if (r < w) return kind;
     r -= w;
   }
@@ -913,7 +1106,9 @@ const CAMPAIGN_TACTICS = {
   Ghost: ['☽', 'Atravessa a formação e persegue quem ataca de longe.'],
   Priest: ['✚', 'Cura e revive esqueletos; tente eliminá-lo primeiro.'],
   Golem: ['♟', 'Mini-chefe pesado; saia do círculo antes da pancada.'],
-  King: ['♜', 'Chefe de combate próximo; esquive da pancada anunciada.'],
+  King: ['♜', 'Chefe de combate próximo; esquive da pancada anunciada. Em fúria (<50%), onda de choque em anel: cole nele ou afaste-se.'],
+  Venomer: ['☣', 'Marca uma linha verde e dispara virote venenoso; saia da linha. Cura em área limpa o veneno.'],
+  Witch: ['☄', 'Marca um lamaçal roxo que deixa lento; saia da área ou derrube a bruxa.'],
   Lich: ['☠', 'Chefe final com escudo, invocações e ataques marcados no chão.'],
   Skull: ['❂', 'Bando de crânios voadores e frágeis; cada mergulho marca um círculo laranja. Golpes em área limpam o enxame.'],
   Shaman: ['❖', 'Cobre aliados com escudo de ossos; derrube ou atordoe o xamã e o escudo some.'],
