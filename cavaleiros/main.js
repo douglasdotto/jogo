@@ -3167,7 +3167,9 @@ function dropFx(e) {
 
 function updateSkillFx(dt) {
   tickVfx(dt);   // relógio único de todos os shaders de efeito
-  for (let i = skillFx.length - 1; i >= 0; i--) {
+  const initialLength = skillFx.length;
+  let removed = false;
+  for (let i = initialLength - 1; i >= 0; i--) {
     const e = skillFx[i];
     const previous = e.t;
     e.t += dt;
@@ -3176,7 +3178,18 @@ function updateSkillFx(dt) {
     const k = Math.min(1, e.t / e.life);
     // Um efeito que começou neste quadro recebe apenas o tempo em que esteve ativo.
     e.tick?.(e, Math.max(0, Math.min(e.t, e.life) - Math.max(0, previous)), k);
-    if (k >= 1 || e.done) { dropFx(e); skillFx.splice(i, 1); }
+    if (k >= 1 || e.done) { skillFx[i] = null; dropFx(e); removed = true; }
+  }
+  if (removed) {
+    // Compacta uma vez por quadro com expirações, em vez de deslocar a lista por efeito.
+    // Entradas criadas pelos ticks ficam no fim e só começam a atualizar no quadro seguinte.
+    let write = 0;
+    for (let read = 0; read < initialLength; read++) {
+      const e = skillFx[read];
+      if (e) skillFx[write++] = e;
+    }
+    for (let read = initialLength; read < skillFx.length; read++) skillFx[write++] = skillFx[read];
+    skillFx.length = write;
   }
 }
 
