@@ -671,8 +671,51 @@ const medalSeal = (medal, tip = '') => medal.best
 // DarkKnight só é chefe no Coração do Castelo (goal.bosses); nas outras arenas é inimigo comum
 const BOSSES = ['King', 'Executioner', 'Lich', 'Golem'];
 
+// Mapa da campanha: a estrada serpenteia de baixo (z = 0) para cima (z negativo, rumo ao castelo).
+// As posições saem da ordem das missões e dos capítulos; uma missão nova só alonga a estrada.
+export const CAMPAIGN_ROAD = { amplitude: 6, wavelength: 30, step: 6.5, chapterGap: 3.5, start: 3, end: 10 };
+export const campaignRoadX = (z, road = CAMPAIGN_ROAD) => road.amplitude * Math.sin(-z / road.wavelength * Math.PI * 2);
+export function campaignMapLayout(missions = MISSIONS, road = CAMPAIGN_ROAD) {
+  const chapters = [];
+  const marks = [];
+  let s = road.start, last = -1;
+  missions.forEach((m, i) => {
+    let chapter = chapters.indexOf(m.chapter);
+    if (chapter < 0) chapter = chapters.push(m.chapter) - 1;
+    if (i > 0) s += road.step + (chapter !== last ? road.chapterGap : 0);
+    last = chapter;
+    marks.push({ s, chapter });
+  });
+  const length = s + road.end;
+  // amostras da estrada por comprimento de arco (z sempre diminui)
+  const samples = [{ x: campaignRoadX(0, road), z: 0, s: 0 }];
+  while (samples.at(-1).s < length) {
+    const a = samples.at(-1), z = a.z - 0.2, x = campaignRoadX(z, road);
+    samples.push({ x, z, s: a.s + Math.hypot(x - a.x, z - a.z) });
+  }
+  let k = 0;
+  const nodes = marks.map(({ s: at, chapter }) => {
+    while (samples[k + 1].s < at) k++;
+    const a = samples[k], b = samples[k + 1], t = (at - a.s) / (b.s - a.s || 1);
+    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, s: at, chapter };
+  });
+  const regions = chapters.map((name, index) => {
+    const own = nodes.filter((n) => n.chapter === index);
+    return { name, index, from: Math.min(...own.map((n) => n.s)), to: Math.max(...own.map((n) => n.s)) };
+  });
+  // mapa plano (sem WebGL): zigue-zague de três por linha, da base (94%) ao topo (6%)
+  const rows = Math.max(1, Math.ceil(nodes.length / 3) - 1);
+  nodes.forEach((n, i) => {
+    const row = Math.floor(i / 3), col = i % 3;
+    n.left = row % 2 ? 80 - 30 * col : 20 + 30 * col;
+    n.top = +(94 - 88 * row / rows).toFixed(2);
+  });
+  return { nodes, road: samples, regions, length };
+}
+
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
-export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null, storageWarning = '', getTeamRecommendation = null) {
+// mountMap(mapa, dados), opcional, desenha o mapa 3D e devolve { select(i) }; sem ele fica o mapa plano
+export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null, storageWarning = '', getTeamRecommendation = null, mountMap = null) {
   const total = totalStars();
   const cosmetics = campaignCosmetics();
   const cleared = MISSIONS.every((m) => starsOf(m.id) > 0);
@@ -680,6 +723,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
   if (sel < 0) sel = cleared ? MISSIONS.length - 1 : 0;
   const remainingStars = MISSIONS.length * 3 - total;
   const replayTargetIndex = cleared ? MISSIONS.findIndex((m) => starsOf(m.id) < 3) : -1;
+  const layout = campaignMapLayout(MISSIONS);
   const remainingText = `${remainingStars} estrela${remainingStars === 1 ? '' : 's'}`;
   const remainingLabel = `${remainingText} ${remainingStars === 1 ? 'restante' : 'restantes'}`;
   root.innerHTML = `
@@ -691,7 +735,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     </div>
     ${storageWarning ? `<div class="storage-warning" role="status">${attr(storageWarning)}</div>` : ''}
     <div class="camp-body">
-      <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 50 91 C 43 89, 40 86, 44 82 C 48 78, 54 75, 56 72 C 53 68, 45 65, 36 65 C 42 64, 50 59, 55 56 C 61 53, 67 45, 72 40 C 68 43, 62 45, 58 44 C 50 42, 39 39, 30 39 C 36 35, 48 29, 62 31 C 72 33, 81 44, 86 57 C 82 45, 70 36, 60 31 C 55 27, 50 22, 47 20 C 54 15, 62 10, 67 9 C 73 9, 79 14, 82 20 C 87 16, 89 11, 90 7 C 85 5, 81 5, 77 5" /></svg></div>
+      <div class="camp-map"><svg class="camp-trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M ${layout.nodes.map((n) => `${n.left} ${n.top}`).join(' L ')}" /></svg></div>
       <aside class="camp-info" role="region" aria-label="Detalhes da missão selecionada"></aside>
     </div>`;
   const map = root.querySelector('.camp-map'), info = root.querySelector('.camp-info');
@@ -701,15 +745,13 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
   announcement.setAttribute('aria-live', 'polite');
   announcement.setAttribute('aria-atomic', 'true');
   root.appendChild(announcement);
-  // Marcos seguem a estrada e as referências visuais da ilustração.
-  // Ponte em Chamas fica à beira do rio; o Duelo, na curva da estrada; o capítulo final passa do castelo, no topo.
-  const spots = [[50, 91], [56, 72], [46, 68], [68, 66], [36, 65], [55, 56], [42, 50], [64, 48], [72, 40], [30, 39], [62, 31], [86, 57], [47, 20], [58, 13], [67, 9], [82, 20], [90, 7], [77, 5]];
   const nodes = MISSIONS.map((m, i) => {
     const b = document.createElement('button');
     const open = unlocked(i), stars = starsOf(m.id), medal = missionMedal(m.id);
     b.className = `camp-node${open ? '' : ' locked'}${stars ? ' done' : ''}`;
-    b.style.left = spots[i][0] + '%';
-    b.style.top = spots[i][1] + '%';
+    b.style.left = layout.nodes[i].left + '%';
+    b.style.top = layout.nodes[i].top + '%';
+    b.setAttribute('data-tip', `${i + 1}. ${m.name}`);
     b.setAttribute('aria-label', `${i + 1}. ${m.name}. ${goalText(m.goal)}. ${open ? `${stars} de 3 estrelas.${medal.best ? ` Melhor vitória: ${medal.best.difficultyName}.` : ''}` : `Bloqueada. Conclua ${MISSIONS[i - 1].name} com pelo menos uma estrela para liberar.`}`);
     b.setAttribute('aria-pressed', 'false');
     b.innerHTML = `<span class="medal">${open ? m.icon : '\u{1F512}︎'}</span><span class="num">${i + 1}</span>${open ? starRow(stars, 'small') + medalSeal(medal) : ''}`;
@@ -719,6 +761,12 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     map.appendChild(b);
     return b;
   });
+  let mapView = null;
+  try {
+    mapView = typeof mountMap === 'function'
+      ? mountMap(map, { layout, nodes, missions: MISSIONS, states: MISSIONS.map((m, i) => ({ open: unlocked(i), stars: starsOf(m.id) })), selected: sel })
+      : null;
+  } catch (err) { console.warn('Mapa 3D indisponível', err); mapView = null; }   // sem WebGL: fica o mapa plano
   // Painel enxuto: nome, objetivo, estrelas e ameaças à vista; história, plano, trecho, medalha e recordes ficam nas dicas.
   function select(i, moveFocus = false, focusPlay = false) {
     sel = i;
@@ -726,6 +774,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
       n.classList.toggle('sel', k === i);
       n.setAttribute('aria-pressed', String(k === i));
     });
+    mapView?.select?.(i);
     const m = MISSIONS[i], open = unlocked(i);
     const stars = starsOf(m.id);
     const biome = typeof mapBiome === 'function' ? mapBiome(m) : '';

@@ -73,7 +73,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
-  loadKingdomRecords:()=>context.kingdomRecords||{},kingdomRecordText:r=>r?.bestTime!=null?`♛ ${r.bestTime}`:r?.maxWave?`☠ ${r.maxWave}`:'',
+  mountCampaignMap3D:noop,loadKingdomRecords:()=>context.kingdomRecords||{},kingdomRecordText:r=>r?.bestTime!=null?`♛ ${r.bestTime}`:r?.maxWave?`☠ ${r.maxWave}`:'',
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop, buildBeast:()=>({root:root(),flash:[],materials:[]}), animateBeast:noop,
   renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop},shadow:{camera:{left:-24,right:24},mapSize:{x:1024}}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
@@ -3386,7 +3386,7 @@ test('missões novas: ordem, câmara depois do castelo e nós do mapa sem sobrep
       if(k===i(id))continue;const [x,y]=at(i(id)),[x2,y2]=at(k);
       assert.ok(((x-x2)/9.4)**2+((y-y2)/7.5)**2>1,`${id} não encosta em ${t.MISSIONS[k].id}`);
     }
-    const [cx,cy]=at(i('castelo'));for(const id of ['cripta','trono','coracao-do-castelo'])assert.ok(at(i(id))[0]>cx&&at(i(id))[1]<=cy+12,id+' fica além do castelo, no alto');
+    const [,cy]=at(i('castelo'));for(const id of ['cripta','trono','coracao-do-castelo'])assert.ok(at(i(id))[1]<cy,id+' fica além do castelo, no alto');   // mapa gerado: só a altura importa
   }finally{context.location=previousLocation;context.localStorage.data=previousStorage;}
 });
 // ---------- inimigos novos: enxame, xamã, cavaleiro sombrio e o Carrasco (fase 9) ----------
