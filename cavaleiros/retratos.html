@@ -28,10 +28,11 @@
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
     import { applyLook, buildCharacter, CHARACTERS } from './characters.js';
     import { LOOKS, LOOK_PREVIEW, WEAPONS } from './looks.js';
+    import { loadHeroAssets } from './hero-anims.js';
 
     const loader = new GLTFLoader();
     const assets = {};
-    await Promise.all(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Skeleton_Mage'].map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+    await loadHeroAssets(loader, assets, ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Skeleton_Mage']);
     for (const n of ['Skeleton_Quiver', 'Skeleton_Staff']) assets[n] = await loader.loadAsync(`assets/${n}.gltf`);
 
     const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });

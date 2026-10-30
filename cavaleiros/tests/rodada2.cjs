@@ -90,6 +90,7 @@ vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('e
 vm.runInContext(campaign.replaceAll('export ',''),context);
 vm.runInContext(classInfo.replaceAll('export ',''),context);
 vm.runInContext(skillbook.replace(/^import .*$/gm,'').replaceAll('export ',''),context);
+vm.runInContext(fs.readFileSync(path.join(dir, 'hero-anims.js'), 'utf8').replace(/^export /gm, ''), context);   // HERO_IDLES, HERO_HITS...
 vm.runInContext(skillTargeting.replaceAll('export ',''),context);
 vm.runInContext(synergies.replaceAll('export ',''),context);
 vm.runInContext(upgradeBranches.replaceAll('export ',''),context);
@@ -423,20 +424,25 @@ test('poof reutiliza materiais só depois que as partículas expiram',()=>{
     clear();
   }
 });
+// heróis: clipes do pacote Character Animations (hero-anims.js) + apelidos antigos; demais modelos: clipes do próprio GLB
+const heroAnims=(()=>{const c={};vm.runInNewContext(fs.readFileSync(path.join(dir,'hero-anims.js'),'utf8').replace(/^export /gm,'')+';globalThis.r={HERO_ANIM_FILES,HERO_MODELS,HERO_MODEL_FILES,LEGACY_CLIPS};',c);return c.r})();
+const readGltf=f=>{if(f.endsWith('.gltf'))return JSON.parse(fs.readFileSync(f,'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
+const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS)];
+const modelGltf=n=>{const f=path.join(dir,'assets',heroAnims.HERO_MODEL_FILES[n]||n+'.glb');return readGltf(fs.existsSync(f)?f:path.join(dir,'assets',n+'.gltf'))};
+const clipsOf=n=>heroAnims.HERO_MODELS.includes(n)?heroClipNames:modelGltf(n).animations.map(a=>a.name);
 test('29 variantes, receitas e animações existentes nos GLB',()=>{
   assert.equal(t.VARIANTS.length,29);
-  const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
+  const glb=modelGltf;
   for(const v of t.VARIANTS){
-    const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
+    const clips=clipsOf(v.recipe?.base||v.model);
     for(const clip of [v.idle,...v.attacks,'Death_A','Block_Hit',t.SKILL_MOVES[v.id][0],'Dualwield_Melee_Attack_Stab']) assert.ok(clips.includes(clip),v.id+': '+clip);
     if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
 test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
-  const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
-    const anims=t.SKILL_ANIMS[v.id],clips=glb(v.recipe?.base||v.model).animations.map(a=>a.name);
+    const anims=t.SKILL_ANIMS[v.id],clips=clipsOf(v.recipe?.base||v.model);
     assert.ok(anims,v.id+' sem SKILL_ANIMS');assert.equal(anims.length,t.skillSetFor(v).length,v.id);
     allNames.push(...t.skillSetFor(v).map(skill=>skill.name.trim().toLocaleLowerCase('pt-BR')));
     primaryClips.push({hero:v.id,clip:anims[0].clip});
@@ -2758,7 +2764,7 @@ test('monstros novos usam animações que existem nos GLB',()=>{
   const skel=[...rig,...Object.keys(aliases).filter(k=>rig.includes(aliases[k]))];
   const attacks=Object.values(t.MONSTER_TYPES).flatMap(m=>m.attacks||[]);
   for(const [type,m] of Object.entries(t.MONSTER_TYPES)){assert.ok(fs.existsSync(path.join(dir,'assets/kaykit/skeletons/Characters/gltf/Skeleton_'+m.model+'.glb')),type);for(const c of [...used,...attacks,'Lie_Down','Lie_StandUp','Hit_A','Hit_B','Death_A','Death_B','Idle_Combat','Walking_D_Skeletons','Spawn_Ground_Skeletons','Death_C_Skeletons','Skeletons_Awaken_Floor','Skeletons_Awaken_Floor_Long'])assert.ok(skel.includes(c),type+': '+c)}
-  for(const c of ['Lie_Down','Lie_StandUp'])assert.ok(glb('Knight').includes(c));
+  for(const c of ['Lie_Down','Lie_StandUp'])assert.ok(clipsOf('Knight').includes(c));
 });
 test('escudeiro bloqueia pela frente; pelas costas entra tudo',()=>{
   clear();t.clearMonsterFx();const s=foe('Shieldbearer',0,0);s.root.rotation.y=0;s.hp=s.maxHp=1000;

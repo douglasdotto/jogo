@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createWorld, biomeForSeed } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook, buildBeast, animateBeast } from './characters.js';
 import { LOOKS } from './looks.js';
+import { HERO_ANIM_FILES, HERO_PROP_FILES, heroModelFile, attachHeroAnimations, HERO_HITS, HERO_DEATHS, HERO_DODGES } from './hero-anims.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
@@ -59,31 +60,31 @@ const VARIANTS = [
   { id: 'paladin', names: ['Paladino', 'Paladino Real', 'Santo Guerreiro'], desc: 'Cura os amigos próximos.', ability: 'Círculo de cura', color: ['#a9e9bc', '#55a77b'],
     use: ['1H_Sword', 'Round_Shield'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 }, classId: 0 },
   { id: 'guardian', names: ['Guardião', 'Guardião Real', 'Muralha Viva'], desc: 'Atrai inimigos e reduz o dano.', ability: 'Provocar', color: ['#9fcfff', '#568ccc'],
-    use: ['1H_Sword', 'Rectangle_Shield'], stats: { Vida: 5, Força: 2, Rapidez: 2, Alcance: 1 }, hp: 300, dmg: 28, classId: 0 },
+    use: ['1H_Sword', 'Rectangle_Shield'], stats: { Vida: 5, Força: 2, Rapidez: 2, Alcance: 1 }, hp: 300, dmg: 28, attacks: ['1H_Melee_Attack_Stab', 'Block_Attack', '1H_Melee_Attack_Chop'], classId: 0 },
   { id: 'champion', names: ['Campeão', 'Campeão Real', 'Lâmina Solar'], desc: 'Gira e empurra os inimigos.', ability: 'Turbilhão', color: ['#ffe59b', '#c99a3e'],
-    use: ['2H_Sword'], stats: { Vida: 4, Força: 5, Rapidez: 3, Alcance: 2 }, dmg: 32, cooldown: 1.05, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice'], classId: 0 },
+    use: ['2H_Sword'], stats: { Vida: 4, Força: 5, Rapidez: 3, Alcance: 2 }, dmg: 32, cooldown: 1.05, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice', '2H_Melee_Attack_Chop'], classId: 0 },
   { id: 'berserker', names: ['Berserker', 'Fera Rubra', 'Fúria Titã'], desc: 'Pouca vida, golpes mais rápidos.', ability: 'Fúria', color: ['#ffb2b2', '#ce5f63'],
-    use: ['1H_Axe', '1H_Axe_Offhand'], stats: { Vida: 4, Força: 4, Rapidez: 4, Alcance: 1 }, hp: 220, dmg: 30, cooldown: 0.95, cleave: 0, attacks: ['Dualwield_Melee_Attack_Slice'], classId: 1 },
+    use: ['1H_Axe', '1H_Axe_Offhand'], stats: { Vida: 4, Força: 4, Rapidez: 4, Alcance: 1 }, hp: 220, dmg: 30, cooldown: 0.95, cleave: 0, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 1 },
   { id: 'crusher', names: ['Esmagador', 'Quebra-rochas', 'Abala-terra'], desc: 'Pancada que deixa todos zonzos.', ability: 'Terremoto', color: ['#ffbf8a', '#d88950'],
-    use: ['2H_Axe'], stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, dmg: 31, classId: 1 },
+    use: ['2H_Axe'], stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, dmg: 31, attacks: ['2H_Melee_Attack_Chop', '1H_Melee_Attack_Jump_Chop'], classId: 1 },
   { id: 'viking', names: ['Viking', 'Jarl Valente', 'Rei do Norte'], desc: 'Arremessa um machado à distância.', ability: 'Machado voador', color: ['#b8dfe5', '#5b9dab'],
-    use: ['1H_Axe', 'Barbarian_Round_Shield'], stats: { Vida: 5, Força: 4, Rapidez: 3, Alcance: 3 }, cleave: 0, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop'], classId: 1 },
+    use: ['1H_Axe', 'Barbarian_Round_Shield'], stats: { Vida: 5, Força: 4, Rapidez: 3, Alcance: 3 }, cleave: 0, idle: 'Idle', attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Horizontal'], classId: 1 },
   { id: 'pyro', names: ['Piromante', 'Chama Viva', 'Fênix Solar'], desc: 'Bolas de fogo deixam chamas no chão.', ability: 'Chão em chamas', color: ['#ffc6a4', '#dc8757'],
     use: [], stats: { Vida: 2, Força: 5, Rapidez: 2, Alcance: 5 }, dmg: 22, splash: 1.1, classId: 2 },
   { id: 'arcane', names: ['Arcano', 'Sábio Astral', 'Mestre Estelar'], desc: 'Um raio salta entre os inimigos.', ability: 'Raio em cadeia', color: ['#d4b3ff', '#9a6be0'],
-    use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, dmg: 24, splash: 0, cooldown: 1.05, classId: 2 },
+    use: ['Spellbook_open', '1H_Wand'], stats: { Vida: 2, Força: 4, Rapidez: 3, Alcance: 5 }, dmg: 24, splash: 0, cooldown: 1.05, attacks: ['Spellcast_Shoot', '1H_Ranged_Shoot'], classId: 2 },
   { id: 'cryo', names: ['Criomante', 'Sábio Glacial', 'Coração Polar'], desc: 'Gelo deixa os esqueletos lentinhos.', ability: 'Onda de gelo', color: ['#b9efff', '#58aaca'],
     use: ['1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 170, dmg: 24, splash: 0.8, cooldown: 1.2, classId: 2 },
   { id: 'assassin', names: ['Assassino', 'Sombra Ágil', 'Sombra Real'], desc: 'Golpes críticos e esquivas ligeiras.', ability: 'Passo das sombras', color: ['#d1b7df', '#9974b5'],
     use: ['Knife', 'Knife_Offhand'], stats: { Vida: 3, Força: 5, Rapidez: 5, Alcance: 1 }, dmg: 21, classId: 3 },
   { id: 'crossbow', names: ['Besteiro', 'Mira de Águia', 'Flecha Real'], desc: 'Virotes atravessam a fila.', ability: 'Tiro perfurante', color: ['#c9eaa4', '#84ac50'],
-    use: ['2H_Crossbow'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 }, ranged: true, range: 7, cooldown: 1.05, attacks: ['2H_Ranged_Shoot'], classId: 3 },
+    use: ['2H_Crossbow'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 }, ranged: true, range: 7, cooldown: 1.05, model: 'Ranger', run: 'Running_HoldingRifle', attacks: ['2H_Ranged_Shoot', '2H_Ranged_Shooting'], classId: 3 },
   { id: 'ninja', names: ['Ninja', 'Vento Noturno', 'Lua Silenciosa'], desc: 'Lança três adagas em leque.', ability: 'Leque de adagas', color: ['#b6c5f4', '#768ac6'],
     use: ['Knife', 'Throwable'], stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 4 }, model: 'Rogue_Hooded', classId: 3 },
   { id: 'duelist', names: ['Duelista', 'Lâmina Dupla', 'Mestre das Lâminas'], desc: 'Duas espadas curtas em cortes velozes.', ability: 'Rajada de lâminas', color: ['#dfe6ee', '#8394aa'],
     use: ['1H_Sword', '1H_Sword_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, dmg: 18, cooldown: 0.5, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 3 },
   { id: 'king', names: ['Rei Dourado', 'Rei Radiante', 'Imperador Solar'], desc: 'Seu brado fortalece todo o grupo.', ability: 'Brado real', color: CHARACTERS[2].color,
-    recipe: CHARACTERS[2], classId: 0, dmg: 28, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 } },
+    recipe: CHARACTERS[2], classId: 0, dmg: 28, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice', '2H_Melee_Attack_Stab'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 } },
   { id: 'iceviking', names: ['Viking do Gelo', 'Jarl Glacial', 'Rei das Geleiras'], desc: 'Seu machado congela uma área.', ability: 'Machado glacial', color: CHARACTERS[3].color,
     recipe: CHARACTERS[3], classId: 1, dmg: 29, stats: { Vida: 5, Força: 4, Rapidez: 2, Alcance: 3 } },
   { id: 'necro', names: ['Necromante', 'Senhor dos Ossos', 'Soberano Espectral'], desc: 'Invoca dois esqueletinhos amigos.', ability: 'Amigos do além', color: CHARACTERS[1].color,
@@ -99,7 +100,7 @@ const VARIANTS = [
   { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
     recipe: CHARACTERS[7], classId: 2, splash: 0, hp: 165, dmg: 21, range: 6, speed: 3.5, cooldown: 1.05, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 5 } },
   { id: 'archer', names: ['Arqueira', 'Olho de Falcão', 'Caçadora Lendária'], desc: 'Flechas longas que atravessam a fila.', ability: 'Flecha longa', color: ['#a8e6d6', '#3f9e8a'],
-    use: [], stats: { Vida: 3, Força: 4, Rapidez: 4, Alcance: 5 }, model: 'Rogue_Hooded', hp: 170, dmg: 16, range: 7.5, cooldown: 1, ranged: true, attacks: ['2H_Ranged_Shoot'], classId: 3 },
+    use: [], stats: { Vida: 3, Força: 4, Rapidez: 4, Alcance: 5 }, model: 'Rogue_Hooded', hp: 170, dmg: 16, range: 7.5, cooldown: 1, ranged: true, idle: 'Ranged_Bow_Idle', run: 'Running_HoldingBow', attacks: ['Ranged_Bow_Release'], classId: 3 },
   { id: 'monk', names: ['Monge', 'Punho Sereno', 'Mestre do Vento'], desc: 'Punhos velozes e uma calma que cura.', ability: 'Cem punhos', color: ['#ffd9a0', '#d8902e'],
     use: [], stats: { Vida: 4, Força: 3, Rapidez: 5, Alcance: 1 }, hp: 235, dmg: 20, range: 1.4, speed: 3.4, cooldown: 0.5, cleave: 0, idle: 'Unarmed_Idle',
     attacks: ['Unarmed_Melee_Attack_Punch_A', 'Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], classId: 1, pickGroup: 'monk' },
@@ -108,7 +109,7 @@ const VARIANTS = [
   { id: 'engineer', names: ['Engenheira', 'Inventora de Batalha', 'Mestra das Engrenagens'], desc: 'Constrói uma torre automática e desmonta a formação inimiga.', ability: 'Torreta sentinela', color: ['#9be8db', '#3b9c94'],
     stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 190, dmg: 19, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0.6, attacks: ['1H_Ranged_Shoot'], classId: 2, pickGroup: 'engineer', recipe: CHARACTERS[8] },
   { id: 'beast_tamer', names: ['Domador', 'Guardião da Matilha', 'Lenda Selvagem'], desc: 'Chama uma fera aliada que protege o grupo e caça ameaças.', ability: 'Companheiro feral', color: ['#d2c28e', '#8c6d36'],
-    stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop'], classId: 1, pickGroup: 'beast-tamer', recipe: CHARACTERS[9] },
+    stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal'], classId: 1, pickGroup: 'beast-tamer', recipe: CHARACTERS[9] },
   { id: 'oracle', names: ['Oráculo', 'Vidente do Véu', 'Profeta das Estrelas'], desc: 'Prevê ataques anunciados e interrompe os golpes dos chefes.', ability: 'Estilhaço do augúrio', color: ['#c6b4ff', '#7862c5'],
     stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle', recipe: CHARACTERS[10] },
   // tanque de punhos: mais vida e menos dano que o Guardião, lento; armor tira um pouco de cada golpe (takeDamage)
@@ -118,6 +119,8 @@ const VARIANTS = [
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
+  // quem herda o respiro padrão alterna entre os dois idles do pacote (Idle_A/Idle_B), para o grupo parado não respirar em coro
+  ...(!v.idle && HEROES[v.classId].idle === 'Idle' && v.id.length % 2 && { idle: 'Idle_B' }),
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
 const variantsOf = (classId) => VARIANTS.filter((v) => v.classId === classId);
@@ -1930,8 +1933,9 @@ function withBattleAssets(ready, build = null) {
 }
 
 async function loadAssets() {
-  const files = [...new Set([...VARIANTS.map((h) => `${h.model}.glb`), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
+  const files = [...new Set([...VARIANTS.map((h) => heroModelFile(h.model)), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), ...HERO_ANIM_FILES, ...HERO_PROP_FILES, 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
   await loadAssetFiles(files, (done, total) => loading.progress(0.8 * done / total));
+  attachHeroAnimations(assets);   // clipes do pacote de animações nos modelos de herói (mesmo esqueleto)
   // Monta cada receita uma vez; retratos e unidades reaproveitam suas peças.
   // variantes comuns ganham as cores e acessórios de looks.js
   for (const cfg of VARIANTS) {
@@ -2276,7 +2280,7 @@ class Unit {
       if (this.immuneT > 0) return;   // Meditação do Monge: imune enquanto medita
       if (!dot && this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
-        this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
+        this.busy = this.once(HERO_DODGES[Math.floor(Math.random() * HERO_DODGES.length)], 1.5);   // esquerda, direita ou rolamento para trás
         this.pendingHit = null;
         popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
@@ -2335,14 +2339,14 @@ class Unit {
       this.vel.add(tmp.subVectors(this.pos, from).setY(0).normalize().multiplyScalar(k));
     }
     if (this.hp <= 0) return this.die();
-    if (!dot && !this.pendingHit && !this.boss && this.busy <= 0) { this.busy = this.once(this.team === 'hero' ? 'Hit_A' : 'Hit_B', 1.6) * 0.8; }
+    if (!dot && !this.pendingHit && !this.boss && this.busy <= 0) { this.busy = this.once(this.team === 'hero' ? HERO_HITS[(this.hitCount = (this.hitCount || 0) + 1) % HERO_HITS.length] : 'Hit_B', 1.6) * 0.8; }
   }
 
   die() {
     this.dead = true;
     this.hp = 0;
     this.pendingHit = null;
-    this.once(this.team === 'hero' ? 'Death_A' : 'Death_C_Skeletons');
+    this.once(this.team === 'hero' ? HERO_DEATHS[(this.deathCount = (this.deathCount || 0) + 1) % HERO_DEATHS.length] : 'Death_C_Skeletons');   // herói alterna as duas quedas
     this.deadTime = 0;
     this.bar.style.display = 'none';
     if (this.team === 'hero') {
@@ -6812,7 +6816,7 @@ class Hero extends Unit {
     return;
   }
     const escape = !directControlled && game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
-    const move = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Running_A';
+    const move = this.cfg.id === 'angel' ? 'Jump_Idle' : this.cfg.run || 'Running_A';   // arqueira e besteiro correm com a arma em punho
     const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Walking_A';
     if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const kite = !directControlled && game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
@@ -6913,7 +6917,7 @@ const SKILL_MOVES = {
   bard: ['Cheer', 1.6, 0.3, 'shout'],
   angel: ['Spellcast_Raise', 1.8, 0.42, 'heal'],
   chronist: ['Spellcast_Raise', 1.6, 0.42, 'zap'],
-  archer: ['2H_Ranged_Shoot', 1.2, 0.4, 'arrow'],
+  archer: ['Ranged_Bow_Release', 1.2, 0.3, 'arrow'],
   monk: ['Unarmed_Melee_Attack_Punch_A', 1.6, 0.4, 'hit'],
   alchemist: ['Throw', 1.4, 0.45, 'ice'],
   engineer: ['Use_Item', 1.35, 0.42, 'zap'],
@@ -6932,7 +6936,7 @@ const SKILL_ANIMS = {
   paladin: [
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.12, kick: -0.8 },
     { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: 1 },
-    { clip: '1H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.5, arc: 'chop', hop: 0.45 },
+    { clip: '1H_Melee_Attack_Jump_Chop', hold: 'Spellcasting', f: 0.62, arc: 'chop', hop: 0.2 },   // salta e crava a espada (clipe do pacote 1.1)
     { clip: 'Cheer', hold: 'Blocking', f: 0.4, lean: -0.08 },
   ],
   guardian: [
@@ -7055,10 +7059,10 @@ const SKILL_ANIMS = {
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.35 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.5, spin: -1, float: 0.25 },
   ],
-  archer: [
-    { clip: '2H_Ranged_Shooting', hold: '2H_Ranged_Aiming', f: 0.2, lean: -0.1, kick: -0.8 },
-    { clip: '1H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.3, lean: -0.35 },   // mira para o alto: a chuva cai lá na frente
-    { clip: '2H_Ranged_Shoot', hold: '2H_Ranged_Aiming', f: 0.2, lean: 0.15, hop: 0.25, kick: -1.4 },
+  archer: [   // arco de verdade: puxa a corda (hold) e solta
+    { clip: 'Ranged_Bow_Release', hold: 'Ranged_Bow_Aiming_Idle', f: 0.2, lean: -0.1, kick: -0.8 },
+    { clip: 'Ranged_Bow_Release_Up', hold: 'Ranged_Bow_Draw_Up', f: 0.25, lean: -0.2 },   // mira para o alto: a chuva cai lá na frente
+    { clip: 'Ranged_Bow_Draw', hold: 'Ranged_Bow_Aiming_Idle', f: 0.85, lean: 0.15, hop: 0.25, kick: -1.4 },
     { clip: 'PickUp', f: 0.55, lean: 0.25 },
   ],
   monk: [
@@ -7100,7 +7104,7 @@ const SKILL_ANIMS = {
   summoner: [
     { clip: '2H_Melee_Attack_Stab', hold: 'Spellcasting', f: 0.5, lean: 0.12, float: 0.18 },   // finca o cajado e a fada sai da gema
     { clip: '1H_Melee_Attack_Stab', f: 0.55, arc: 'thrust', lean: 0.22, kick: 0.35 },          // bate no chão e o golem brota
-    { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.6, spin: 1.1, float: 0.5, lean: -0.14 },   // ergue o cajado e chama o dragãozinho
+    { clip: 'Spellcast_Summon', hold: 'Spellcast_Raise', f: 0.6, spin: 1.1, float: 0.5, lean: -0.14 },   // ergue o cajado e invoca o dragãozinho
     { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: -0.5, lean: -0.1, float: 0.12 },   // brada o pacto e atiça as criaturas
   ],
 };

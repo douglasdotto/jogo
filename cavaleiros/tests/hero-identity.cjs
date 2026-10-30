@@ -60,7 +60,7 @@ for (const a of palettes) for (const b of palettes) {
 // Ladinos (9 heróis no mesmo boneco): a roupa principal sozinha precisa se afastar, e o conjunto
 // (túnica + gola + mangas + calça) também; antes todos ficavam no verde-escuro/preto do atlas
 const rogues = palettes.filter((h) => h.model === 'Rogue');
-assert.equal(rogues.length, 9, 'nove heróis no modelo do ladino');
+assert.equal(rogues.length, 8, 'oito heróis no modelo do ladino (o Besteiro passou para o Ranger)');
 const outfitOf = (h) => {
   const body = h.paint.Rogue_Body, arm = h.paint.Rogue_ArmLeft, leg = h.paint.Rogue_LegLeft;
   assert.ok(body.amount >= 0.85 && body.cells?.['1,1'], `${h.id}: roupa com tinta forte e gola/acabamento próprio`);
@@ -80,8 +80,11 @@ assert.deepEqual(darkest, ['assassin'], 'só o Assassino veste couro escuro');
 
 // heróis novos: cada um com o acessório que conta a história (arco e aljava, contas e faixa, óculos e frascos)
 const has = (id, type, bone) => LOOKS[id].extras.some((extra) => extra.type === type && (!bone || extra.bone === bone));
-assert.ok(has('archer', 'bow', 'handslotl') && has('archer', 'quiver', 'chest'), 'Arqueira leva arco na mão e aljava nas costas');
+assert.ok(LOOKS.archer.add.some((piece) => /^kaykit\/weapons\//.test(piece.from) && piece.part.startsWith('bow') && piece.bone === 'handslot.l'), 'Arqueira leva o arco pronto (Fantasy Weapons) na mão esquerda');
+assert.ok(LOOKS.archer.extras.some((extra) => extra.type === 'quiver' && extra.bone === 'chest'), 'Arqueira leva aljava nas costas');
+assert.ok(!(LOOKS.crossbow.hide || []).includes('Ranger_Quiver') && LOOKS.crossbow.add.some((piece) => piece.part === '2H_Crossbow'), 'Besteiro: aljava do Ranger e besta do Ladino');
 assert.equal(LOOK_PREVIEW.find((hero) => hero.id === 'archer')?.model, 'Rogue_Hooded', 'Arqueira usa o capuz');
+assert.equal(LOOK_PREVIEW.find((hero) => hero.id === 'crossbow')?.model, 'Ranger', 'Besteiro usa o modelo Ranger (Adventurers 2.0)');
 assert.ok(has('monk', 'beads') && has('monk', 'sash') && has('monk', 'armWraps', 'lowerarm.r'), 'Monge com contas, faixa e punhos enfaixados');
 assert.deepEqual(Array.from(LOOK_PREVIEW.find((hero) => hero.id === 'monk').use), [], 'Monge luta sem armas');
 assert.ok(has('alchemist', 'goggles', 'head') && has('alchemist', 'flaskBelt', 'hips') && has('alchemist', 'flask', 'handslotr'), 'Alquimista com óculos, cinto de frascos e frasco na mão');

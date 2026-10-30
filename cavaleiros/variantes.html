@@ -34,6 +34,7 @@
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
     import { applyLook, buildCharacter, CHARACTERS } from './characters.js';
     import { LOOKS, LOOK_PREVIEW, WEAPONS } from './looks.js';
+    import { loadHeroAssets } from './hero-anims.js';
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -59,12 +60,12 @@
 
     const loader = new GLTFLoader();
     const assets = {};
-    await Promise.all(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Skeleton_Mage'].map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+    await loadHeroAssets(loader, assets, ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Skeleton_Mage']);
     assets.Skeleton_Quiver = await loader.loadAsync('assets/Skeleton_Quiver.gltf');
     assets.Skeleton_Staff = await loader.loadAsync('assets/Skeleton_Staff.gltf');
 
     // uma coluna por modelo (Cavaleiro, Bárbaro, Mago, Ladino); cada herói a mais abre uma linha na coluna do seu modelo
-    const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', '').replace('Skeleton_', ''));
+    const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', '').replace('Skeleton_', '').replace('Ranger', 'Rogue'));
     const units = LOOK_PREVIEW.map((v, i) => {
       const col = colOf(v), row = LOOK_PREVIEW.slice(0, i).filter((o) => colOf(o) === col).length;
       // variante por receita (characters.js): a receita já esconde e troca as peças
