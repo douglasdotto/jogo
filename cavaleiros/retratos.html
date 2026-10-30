@@ -22,7 +22,7 @@
 <body>
   <div id="grid"></div>
   <script type="module">
-    // vitrine de dev: os 24 heróis com a mesma luz e câmera dos retratos da tela de escolha (renderPortraits em main.js)
+    // vitrine de dev: os heróis com a mesma luz e câmera dos retratos da tela de escolha (renderPortraits em main.js)
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
@@ -52,13 +52,9 @@
     const only = q.get('so')?.split(',');
 
     const recipe = (id) => CHARACTERS.find((c) => c.id === id);
-    const rows = [
-      ['paladin', 'guardian', 'champion', 'rei'],
-      ['berserker', 'crusher', 'viking', 'viking*'],
-      ['pyro', 'arcane', 'cryo', 'necromante', 'cleric', 'angel'],
-      ['assassin', 'crossbow', 'ninja', 'duelist', 'archer', 'druida', 'bard', 'chronist'],
-      ['monk', 'alchemist'],
-    ];
+    // todas as variantes, na ordem da vitrine (8 por linha)
+    const rows = [];
+    for (let i = 0; i < LOOK_PREVIEW.length; i += 8) rows.push(LOOK_PREVIEW.slice(i, i + 8).map((v) => v.id));
     const grid = document.getElementById('grid');
     for (const ids of rows) {
       const row = document.createElement('div');
@@ -68,18 +64,18 @@
         if (only && !only.includes(id)) continue;
         let model, animations, name;
         const preview = LOOK_PREVIEW.find((v) => v.id === id);
-        if (preview) {
+        if (!preview.recipe) {
           model = SkeletonUtils.clone(assets[preview.model].scene);
           model.traverse((o) => { if (WEAPONS[preview.model].includes(o.name) && !preview.use.includes(o.name)) o.visible = false; });
           applyLook(model, assets, LOOKS[id]);
           animations = assets[preview.model].animations;
           name = preview.name;
         } else {
-          const rc = recipe(id.replace('*', ''));
+          const rc = recipe(preview.recipe);
           ({ scene: model, animations } = buildCharacter(assets, rc));
           name = rc.name;
         }
-        const idle = id === 'angel' ? 'Jump_Idle' : id === 'monk' ? 'Unarmed_Idle' : /Barbarian/.test(preview?.model || recipe(id.replace('*', ''))?.base) || id === 'champion' || id === 'rei' ? '2H_Melee_Idle' : 'Idle';
+        const idle = id === 'angel' ? 'Jump_Idle' : id === 'monk' ? 'Unarmed_Idle' : /Barbarian/.test(preview.model) || id === 'champion' || id === 'rei' ? '2H_Melee_Idle' : 'Idle';
         const mixer = new THREE.AnimationMixer(model);
         mixer.clipAction(THREE.AnimationClip.findByName(animations, idle)).play();
         mixer.update(0.4);

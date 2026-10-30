@@ -44,16 +44,18 @@ const palette = (h) => {
   const body = h.paint[`${h.model}_Body`]?.tint;
   const face = Object.entries(h.paint).find(([part]) => /_Head/.test(part))?.[1].face || {};
   assert.ok(body, `${h.id}: roupa com tinta própria`);
-  if (h.model !== 'Skeleton_Mage') assert.ok(face.eyes && (face.hair || face.hood), `${h.id}: rosto com cor de olhos e cabelo/capuz`);
-  return { body, hair: face.hair || face.hood || '#000000', eyes: face.eyes || '#000000' };
+  if (h.model !== 'Skeleton_Mage') assert.ok(face.skin && (face.hair || face.hood), `${h.id}: rosto com pele e cabelo/capuz`);
+  // olhos ficam os originais do KayKit (escuros com brilho): a identidade vem da roupa, pele e cabelo
+  if (h.id !== 'brute') assert.ok(!face.eyes, `${h.id}: olhos sem cor própria`);
+  return { body, hair: face.hair || face.hood || '#000000', skin: face.skin || '#000000' };
 };
 const palettes = heroes.map((h) => ({ ...h, pal: palette(h) }));
 const signatures = new Set(palettes.map((h) => JSON.stringify(h.pal)));
 assert.equal(signatures.size, 29, 'as 29 variantes têm paletas distintas');
-// mesmo modelo base: roupa + cabelo + olhos precisam se afastar bastante (não só um tom vizinho)
+// mesmo modelo base: roupa + cabelo + pele precisam se afastar bastante (não só um tom vizinho)
 for (const a of palettes) for (const b of palettes) {
   if (a.id >= b.id || a.model !== b.model) continue;
-  const gap = dist(a.pal.body, b.pal.body) + dist(a.pal.hair, b.pal.hair) + dist(a.pal.eyes, b.pal.eyes);
+  const gap = dist(a.pal.body, b.pal.body) + dist(a.pal.hair, b.pal.hair) + dist(a.pal.skin, b.pal.skin);
   assert.ok(gap > 150, `${a.id} e ${b.id} têm paletas parecidas demais (${gap.toFixed(0)})`);
 }
 
@@ -98,6 +100,10 @@ const bruteChest = LOOKS.brute.bones?.chest?.scale?.[0] || 1;
 assert.ok(LOOKS.brute.extras.some((extra) => extra.type === 'pauldrons' && extra.size * bruteChest >= 1.5), 'Brutamontes com ombreiras enormes');
 assert.ok(LOOKS.brute.bones['hand.l'].scale > 1.2 && LOOKS.brute.bones.head.scale < 0.8, 'Brutamontes gigante: punhos enormes e cabeça pequena');
 assert.ok(has('brute', 'armWraps', 'lowerarm.l') && has('brute', 'armWraps', 'lowerarm.r'), 'Brutamontes com manoplas nos dois braços');
+// nada solto na frente dos olhos: sobrancelha, cicatriz, pintura e monóculo saíram (o Brutamontes é de outro agente)
+const faceBits = ['brows', 'scar', 'facePaint', 'monocle'];
+for (const [id, look] of Object.entries(LOOKS)) if (id !== 'brute') assert.ok(!look.extras.some((e) => faceBits.includes(e.type)), `${id}: sem peça solta no rosto`);
+for (const c of context.result) assert.ok(!(c.extras || []).some((e) => faceBits.includes(e.type)), `${c.id}: sem peça solta no rosto`);
 for (const id of ['archer', 'monk', 'alchemist', 'brute']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
 
 assert.ok(has('summoner', 'bellStaff', 'handslotr') && !LOOKS.summoner.hide.includes('2H_Staff'), 'Invocador leva cajado com gema e sininhos');

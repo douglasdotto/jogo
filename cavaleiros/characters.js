@@ -18,11 +18,11 @@ export const CHARACTERS = [
     paint: {   // túnica de musgo com gola de folha nova, mangas, cinto e botas de casca
       ...rogueOutfit({ cloth: '#5a9a34', trim: '#d8f070', sleeves: '#7a5230', leather: '#7a5230', pants: '#46702a', boots: '#5a3a1e', gloves: '#7a5230' }),
       Mage_Cape: { tint: '#4a9a40', amount: 0.85, base: 0.6 }, '2H_Staff': { tint: '#8a5a2e', amount: 0.6 },
-      Rogue_Head: { face: { skin: '#c8946a', hair: '#6a9a2a', eyes: '#8ff060' } },   // cabelo de musgo e olhos de folha
+      Rogue_Head: { face: { skin: '#c8946a', hair: '#6a9a2a' } },   // cabelo de musgo
     },
     extras: [
       { type: 'antlers', bone: 'head' }, { type: 'wreath', bone: 'head' }, { type: 'leafMantle', bone: 'chest' }, { type: 'leafSkirt', bone: 'hips' },
-      { type: 'facePaint', bone: 'head', style: 'dots', color: 0x7fd040 }, { type: 'motes', bone: 'root', color: 0xd8ff6a, n: 5, size: 0.045 },
+      { type: 'motes', bone: 'root', color: 0xd8ff6a, n: 5, size: 0.045 },
     ],
   },
   {
@@ -54,7 +54,7 @@ export const CHARACTERS = [
       Knight_Body: { tint: '#ffc93c', amount: 0.75 }, Knight_ArmLeft: { tint: '#ffc93c', amount: 0.75 }, Knight_ArmRight: { tint: '#ffc93c', amount: 0.75 },
       Knight_LegLeft: { tint: '#ffc93c', amount: 0.75 }, Knight_LegRight: { tint: '#ffc93c', amount: 0.75 },
       Barbarian_Cape: { tint: '#8a3fd1', amount: 0.85 }, '2H_Sword': { tint: '#fff2b0', amount: 0.35 },
-      Knight_Head: { face: { skin: '#f2c8a0', hair: '#e8b830', eyes: '#9a5ae0' } },
+      Knight_Head: { face: { skin: '#f2c8a0', hair: '#e8b830' } },
     },
     extras: [
       { type: 'crown', bone: 'head' },
@@ -72,7 +72,7 @@ export const CHARACTERS = [
       Barbarian_Body: { tint: '#7fc4ff', amount: 0.6 }, Barbarian_ArmLeft: { tint: '#7fc4ff', amount: 0.35 }, Barbarian_ArmRight: { tint: '#7fc4ff', amount: 0.35 },
       Barbarian_LegLeft: { tint: '#3f6fa0', amount: 0.7 }, Barbarian_LegRight: { tint: '#3f6fa0', amount: 0.7 },
       Knight_Helmet: { tint: '#d8ecff', amount: 0.4 }, Knight_Cape: { tint: '#ffffff', amount: 0.8 }, '2H_Axe': { tint: '#a8e4ff', amount: 0.5 },
-      Barbarian_Head: { face: { skin: '#dfe8f2', hair: '#eef6ff', eyes: '#9ff4ff' } },   // barba de geada e olhos claros
+      Barbarian_Head: { face: { skin: '#dfe8f2', hair: '#eef6ff' } },   // barba de geada
     },
     extras: [{ type: 'horns', bone: 'head' }, { type: 'furMantle', bone: 'chest', color: 0xd9eafa }],
   },
@@ -86,11 +86,11 @@ export const CHARACTERS = [
       Mage_Body: { tint: '#f4edda', amount: 0.8 }, Mage_ArmLeft: { tint: '#f4edda', amount: 0.76 }, Mage_ArmRight: { tint: '#f4edda', amount: 0.76 },
       Mage_LegLeft: { tint: '#e4d8bb', amount: 0.74 }, Mage_LegRight: { tint: '#e4d8bb', amount: 0.74 },
       Mage_Cape: { tint: '#fff0dc', amount: 0.68 }, '2H_Staff': { tint: '#d3a64a', amount: 0.58 },
-      Mage_Head: { face: { skin: '#a8724e', hair: '#2a1a12', eyes: '#d8a040' } },
+      Mage_Head: { face: { skin: '#a8724e', hair: '#2a1a12' } },
     },
     extras: [
       { type: 'robeSkirt', bone: 'hips' }, { type: 'clericStole', bone: 'chest' }, { type: 'crossBadge', bone: 'chest' },
-      { type: 'circlet', bone: 'head', gem: 0x9fe0ff }, { type: 'brows', bone: 'head', color: 0x2a1a12, angle: -0.15 },
+      { type: 'circlet', bone: 'head', gem: 0x9fe0ff },
     ],
   },
   {
@@ -102,11 +102,10 @@ export const CHARACTERS = [
     paint: {   // roupa de trovador em blocos: gibão amarelo, mangas vermelhas, gola e calça roxas
       ...rogueOutfit({ cloth: '#f0c028', trim: '#8a3ac8', sleeves: '#e0303c', leather: '#7a4a24', pants: '#7a34b0', boots: '#b02a2a', gloves: '#f0c028', metal: '#ffd84a' }),
       Barbarian_Cape: { tint: '#d8283a', amount: 0.85 },
-      Rogue_Head: { face: { skin: '#f0c8a8', hair: '#f0b040', eyes: '#b070e0' } },   // cachos loiros e olhos violeta
+      Rogue_Head: { face: { skin: '#f0c8a8', hair: '#f0b040' } },   // cachos loiros
     },
     extras: [
       { type: 'lute', bone: 'chest', back: true }, { type: 'travelHat', bone: 'head', color: 0x7a34b0, band: 0xf0c028 }, { type: 'feather', bone: 'head', color: 0xff3a3a, y: 1.2 }, { type: 'luteStrap', bone: 'chest', color: 0x8a3ac8 },
-      { type: 'mustache', bone: 'head', color: 0xc8902a, curl: 0.65 }, { type: 'brows', bone: 'head', color: 0xc8902a, angle: -0.1 },
     ],
   },
   {
@@ -118,7 +117,7 @@ export const CHARACTERS = [
     paint: {
       Mage_Body: { tint: '#fff0c2', amount: 0.88 }, Mage_ArmLeft: { tint: '#fff0c2', amount: 0.82 }, Mage_ArmRight: { tint: '#fff0c2', amount: 0.82 },
       Mage_LegLeft: { tint: '#d8d2bd', amount: 0.75 }, Mage_LegRight: { tint: '#d8d2bd', amount: 0.75 }, Mage_Cape: { tint: '#ffe27a', amount: 0.7 },
-      Mage_Head: { face: { skin: '#ffe6d6', hair: '#fff2b8', eyes: '#ffc830' } },   // cabelo platinado e olhos dourados
+      Mage_Head: { face: { skin: '#ffe6d6', hair: '#fff2b8' } },   // cabelo platinado
     },
     extras: [{ type: 'halo', bone: 'head' }, { type: 'wings', bone: 'chest' }, { type: 'motes', bone: 'root', color: 0xffe8a0, n: 5, size: 0.045, y: 1.3 }],
   },
@@ -132,11 +131,11 @@ export const CHARACTERS = [
       ...rogueOutfit({ cloth: '#90d0ff', trim: '#f0c040', leather: '#f0c040', pants: '#4a80c8', boots: '#24407a', gloves: '#f0c040', metal: '#fff0a0' }),
       Mage_Cape: { tint: '#6ab0f0', amount: 0.9, base: 0.85 },
       '2H_Staff': { tint: '#9ddcff', amount: 0.6 },
-      Rogue_Head: { face: { skin: '#e8c8b0', hair: '#9cb8ff', eyes: '#5ad8ff' } },   // cabelo prateado-azul
+      Rogue_Head: { face: { skin: '#e8c8b0', hair: '#9cb8ff' } },   // cabelo prateado-azul
     },
     extras: [
       { type: 'stars', bone: 'head', color: 0xa8d9ff }, { type: 'orb', bone: 'handslotl', color: 0xb9e8ff, glow: 0x5075ff },
-      { type: 'monocle', bone: 'head' }, { type: 'runeRing', bone: 'root', color: 0x75b8ff },
+      { type: 'runeRing', bone: 'root', color: 0x75b8ff },
       { type: 'robeSkirt', bone: 'hips', color: 0x78c0f8, trim: 0xf0c040, height: 0.44, flare: 0.42 }, { type: 'gearPauldrons', bone: 'chest' },
     ],
   },
@@ -147,7 +146,7 @@ export const CHARACTERS = [
     hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '2H_Crossbow', 'Throwable'],   // besta de mão fica: o ataque é 1H_Ranged_Shoot
     paint: {
       ...rogueOutfit({ cloth: '#e37b32', trim: '#f0c779', sleeves: '#d6a16f', leather: '#48332f', pants: '#4b5057', boots: '#332b30', gloves: '#bc783f', metal: '#e6b454' }),
-      Rogue_Head: { face: { skin: '#dca77a', hair: '#493126', eyes: '#f3c46a' } },
+      Rogue_Head: { face: { skin: '#dca77a', hair: '#493126' } },
       '1H_Crossbow': { tint: '#d8a24a', amount: 0.55 },   // besta de latão
     },
     extras: [
@@ -166,7 +165,7 @@ export const CHARACTERS = [
     paint: {
       Barbarian_Body: { tint: '#638c45', amount: 0.78 }, Barbarian_ArmLeft: { tint: '#638c45', amount: 0.65 }, Barbarian_ArmRight: { tint: '#638c45', amount: 0.65 },
       Barbarian_LegLeft: { tint: '#59402c', amount: 0.72 }, Barbarian_LegRight: { tint: '#59402c', amount: 0.72 },
-      Barbarian_Head: { face: { skin: '#c98f62', hair: '#50351f', eyes: '#a6df65' } },
+      Barbarian_Head: { face: { skin: '#c98f62', hair: '#9a6a3a' } },
       '1H_Axe': { tint: '#c8b48a', amount: 0.45 },   // machadinha de osso e couro
     },
     extras: [
@@ -185,7 +184,7 @@ export const CHARACTERS = [
     paint: {
       Mage_Body: { tint: '#6555ac', amount: 0.84 }, Mage_ArmLeft: { tint: '#6555ac', amount: 0.78 }, Mage_ArmRight: { tint: '#6555ac', amount: 0.78 },
       Mage_LegLeft: { tint: '#342e62', amount: 0.8 }, Mage_LegRight: { tint: '#342e62', amount: 0.8 },
-      Mage_Head: { face: { skin: '#e0ba9b', hair: '#302541', eyes: '#a8f1ee' } },
+      Mage_Head: { face: { skin: '#e0ba9b', hair: '#302541' } },
     },
     extras: [
       { type: 'oracleVeil', bone: 'chest', cloth: 0x514184, trim: 0xc7a9ff },
@@ -311,10 +310,12 @@ THREE.Bone.prototype.updateMatrix = function () {
 // ---------- cores: recolore o atlas de cores do modelo ----------
 const recolored = new Map();
 
-// casas do atlas KayKit (grade 8x4) usadas pelo rosto: pele, cabelo/barba, olhos e capuz
-const FACE_CELLS = { skin: [0, 0], hair: [1, 0], eyes: [2, 0], hood: [1, 1] };
-// quanto cada casa do rosto puxa para a cor nova; os olhos clareiam para a íris aparecer
-const FACE_MIX = { skin: [0.35, 0.62], hair: [0.6, 0.88], eyes: [0.95, 0.9], hood: [0.35, 0.85] };
+// casas do atlas KayKit (grade 8x4) usadas pelo rosto: pele, cabelo/barba e capuz.
+// A casa dos olhos (2,0) fica sempre a original: é um degradê escuro com uma faixa de brilho, e tingida
+// de cor clara virava uma mancha esticada no olho
+const FACE_CELLS = { skin: [0, 0], hair: [1, 0], hood: [1, 1] };
+// quanto cada casa do rosto puxa para a cor nova
+const FACE_MIX = { skin: [0.35, 0.62], hair: [0.6, 0.88], hood: [0.35, 0.85] };
 
 // pinta mantendo a luz e a sombra do desenho original
 function tintPixel(r, g, b, tint, a, base = 0.35) {
@@ -334,8 +335,8 @@ export function recolor(tex, op) {
   ctx.drawImage(tex.image, 0, 0, w, h);
   const img = ctx.getImageData(0, 0, w, h), px = img.data;
   const tint = op.tint ? new THREE.Color(op.tint) : null;
-  // face: { skin, hair, eyes, hood } troca só as casas do rosto, sem tingir o resto da cabeça
-  const cells = Object.entries(op.face || {}).map(([part, color]) => [FACE_CELLS[part], new THREE.Color(color), FACE_MIX[part]]);
+  // face: { skin, hair, hood } troca só as casas do rosto, sem tingir o resto da cabeça
+  const cells = Object.entries(op.face || {}).filter(([part]) => FACE_CELLS[part]).map(([part, color]) => [FACE_CELLS[part], new THREE.Color(color), FACE_MIX[part]]);
   // cells: { 'x,y': cor } pinta casas inteiras do atlas (gola, couro, botas) com cor própria no lugar do tint geral;
   // base (padrão 0.35) clareia o resultado: pano escuro do atlas tingido de cor clara não fica apagado
   for (const [cell, color] of Object.entries(op.cells || {})) cells.push([cell.split(',').map(Number), new THREE.Color(color), [op.base ?? 0.35, op.amount ?? 0.9]]);
@@ -941,22 +942,6 @@ const ACCESSORIES = {
     const parts = [-1, 1].map((s) => piece(new THREE.CapsuleGeometry(0.045, 0.16, 3, 6), [s * 0.11, y, 0.52], [0, 0, s * (Math.PI / 2 - curl)]));
     return new THREE.Mesh(merged(parts), lambert(color));
   },
-  // cicatriz atravessando um olho
-  scar({ color = 0xc0605a, side = 1 } = {}) {
-    const parts = [piece(new THREE.BoxGeometry(0.035, 0.32, 0.03), [side * 0.2, 0.38, 0.5], [-0.1, 0, side * 0.35])];
-    for (const k of [-1, 0, 1]) parts.push(piece(new THREE.BoxGeometry(0.09, 0.022, 0.03), [side * (0.2 + k * 0.035), 0.38 - k * 0.09, 0.505], [0, 0, side * 0.35]));
-    return new THREE.Mesh(merged(parts), lambert(color));
-  },
-  // pintura de guerra: stripes = três riscos em cada bochecha, dots = pontinhos de folha/gelo
-  facePaint({ color = 0x2a1010, style = 'stripes', y = 0.27, x = 0.3 } = {}) {
-    const parts = [];
-    for (const s of [-1, 1]) {
-      if (style === 'stripes') for (let i = 0; i < 3; i++) parts.push(piece(new THREE.BoxGeometry(0.15, 0.032, 0.03), [s * (x + i * 0.012), y - i * 0.065, 0.49 - i * 0.02], [0, s * 0.45, s * 0.12]));
-      if (style === 'dots') for (let i = 0; i < 3; i++) parts.push(piece(new THREE.OctahedronGeometry(0.035 - i * 0.006), [s * (0.24 + i * 0.07), 0.24 - i * 0.03, 0.5 - i * 0.04], [0, 0, 0], [1, 1.4, 0.6]));
-    }
-    if (style === 'stripes') parts.push(piece(new THREE.BoxGeometry(0.05, 0.22, 0.03), [0, 0.62, 0.47], [0.1, 0, 0]));   // risco na testa
-    return new THREE.Mesh(merged(parts), lambert(color, style === 'dots' ? { emissive: color, emissiveIntensity: 0.35 } : {}));
-  },
   // diadema fino com uma pedra na testa
   circlet({ color = 0xe8c060, gem = 0xb07aff, y = 0.62 } = {}) {
     const g = new THREE.Group();
@@ -987,16 +972,6 @@ const ACCESSORIES = {
     stone.position.set(0, y + 0.04, radius + 0.03);
     stone.scale.set(0.8, 1.25, 0.6);
     g.add(stone);
-    return g;
-  },
-  // monóculo dourado com corrente: o cronomante "lê o tempo"
-  monocle({ color = 0xe8c060, lens = 0x9fe6ff, side = 1 } = {}) {
-    const g = new THREE.Group();
-    const frame = [piece(new THREE.TorusGeometry(0.11, 0.022, 5, 14), [side * 0.2, 0.37, 0.52]), piece(new THREE.CylinderGeometry(0.008, 0.008, 0.36, 3), [side * 0.33, 0.2, 0.47], [0, 0, side * 0.5])];
-    g.add(new THREE.Mesh(merged(frame), lambert(color, { emissive: 0x5a3a00, emissiveIntensity: 0.3 })));
-    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.1, 12), new THREE.MeshBasicMaterial({ color: lens, transparent: true, opacity: 0.45, depthWrite: false }));
-    glass.position.set(side * 0.2, 0.37, 0.53);
-    g.add(glass);
     return g;
   },
   // faixa amarrada na testa com duas pontas soltas atrás
