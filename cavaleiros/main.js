@@ -109,6 +109,10 @@ const VARIANTS = [
     use: ['1H_Axe'], stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop'], classId: 1, pickGroup: 'beast-tamer' },
   { id: 'oracle', names: ['Oráculo', 'Vidente do Véu', 'Profeta das Estrelas'], desc: 'Prevê ataques anunciados e interrompe os golpes dos chefes.', ability: 'Estilhaço do augúrio', color: ['#c6b4ff', '#7862c5'],
     use: ['Spellbook', '1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle' },
+  // tanque de punhos: mais vida e menos dano que o Guardião, lento; armor tira um pouco de cada golpe (takeDamage)
+  { id: 'brute', names: ['Brutamontes', 'Rocha Viva', 'Colosso'], desc: 'Aguenta a horda na frente do grupo.', ability: 'Pancada', color: ['#c9bba2', '#7d7464'],
+    use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.4, cooldown: 1.6, idle: 'Unarmed_Idle',
+    attacks: ['Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], armor: 3, scale: 1.15, frontline: true, classId: 1 },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -1410,7 +1414,9 @@ function applyUpgrade(h, option) {
 function arrangeParty() {
   const party = heroes(), slots = [0, 1, 2, 3];
   // A ordem de entrada resolve os empates; os arqueiros preferem o fundo.
-  const order = [...party.filter((h) => h.ranged), ...party.filter((h) => !h.ranged)];
+  // quem tem frontline (Brutamontes) pega o primeiro posto, o da frente
+  const melee = party.filter((h) => !h.ranged);
+  const order = [...party.filter((h) => h.ranged), ...melee.filter((h) => h.cfg.frontline), ...melee.filter((h) => !h.cfg.frontline)];
   for (const h of order) {
     const slot = h.ranged ? slots.pop() : slots.shift();
     h.formation = POSTS[slot];
@@ -1575,6 +1581,7 @@ const SKILL_GLYPHS = {
   angel: ['✧', '⛨', '☼'], chronist: ['⌛', '⚡', '◷'],
   archer: ['➹', '⇊', '◎'], monk: ['✊', '≋', '❂'], alchemist: ['⚗', '✸', '♈'],
   engineer: ['⚙', '⚡', '✹'], beast_tamer: ['♞', '≋', '✪'], oracle: ['☼', '◉', '☯'],
+  brute: ['⛰', '⤴', '⬢'],
 };
 
 function buildSkillBar(party) {
@@ -2027,6 +2034,11 @@ class Unit {
       }
       n *= this.damageTaken;
       if (this.guardT > 0) n *= 0.6;
+      if (this.stoneT > 0) {   // Pele de pedra: devolve parte do golpe corpo a corpo e segura quase todo o resto
+        if (owner?.team === 'skeleton' && !owner.ranged && !owner.dead) owner.takeDamage(n * STONE_SKIN.reflect, null, this);
+        n *= STONE_SKIN.taken;
+      }
+      if (this.cfg.armor && n > 1) n = Math.max(1, n - this.cfg.armor);   // couro grosso: golpe pequeno quase não fere
       const protection = synergyDamageTakenMultiplier(this, partyNow());
       if (protection < 1) {
         n *= protection;
@@ -2334,6 +2346,7 @@ function densest(candidates, radius, prefer = null) {
 }
 const BLADE_DANCE_TICK = 0.3;   // intervalo entre as voltas da Dança de lâminas
 const MEDITATE_TICK = 0.5;      // intervalo entre as curas da Meditação
+const STONE_SKIN = { taken: 0.4, reflect: 0.3, grow: 1.22 };   // Pele de pedra do Brutamontes: dano recebido, reflexo e escala
 
 function damageCleave(owner, primary) {
   const count = units.length;
@@ -3313,6 +3326,7 @@ const SKILL_ART = {
   engineer: { color: 0x6df4df, accent: 0xe6fffb, glyph: shellGeo, scale: 1.25 },
   beast_tamer: { color: 0xcbb36f, accent: 0xffe6a1, glyph: crystalGeo, scale: 1.15 },
   oracle: { color: 0xc6b4ff, accent: 0xffffff, glyph: crystalGeo, scale: 1.3 },
+  brute: { color: 0xb8a88a, accent: 0xfff2d8, glyph: rockGeo, scale: 3.2 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0, slowT = 0;
@@ -4641,6 +4655,9 @@ class Hero extends Unit {
     this.bladeDanceT = 0;
     this.meditateT = 0;   // Monge: meditação em curso (cura o grupo)
     this.immuneT = 0;     // Monge: imune a dano
+    this.stoneT = 0;      // Brutamontes: Pele de pedra ativa
+    this.hurl = null;     // Brutamontes: inimigo arremessado em voo
+    this.size = this.heroSize();
     this.age = 0;
     this.hover = cfg.id === 'angel' ? 0.52 : 0;
     for (const relic of game.relics || []) applyRelicToHero(this, relic);
@@ -4696,6 +4713,11 @@ class Hero extends Unit {
     this.root.add(this.masteryAura);
   }
 
+  // escala do corpo: nível, porte da variante (cfg.scale) e a Pele de pedra
+  heroSize() {
+    return (this.cfg.scale || 1) * (1 + (this.level - 1) * 0.08) * (this.stoneT > 0 ? STONE_SKIN.grow : 1);
+  }
+
   gainXp(n) {
     this.xp += n;
     while (this.level < 3 && this.xp >= XP_LEVELS[this.level]) {
@@ -4705,7 +4727,7 @@ class Hero extends Unit {
       this.maxHp = Math.round(this.maxHp * 1.1);
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp - oldHp);
       this.dmg *= 1.1;
-      this.size = 1 + (this.level - 1) * 0.08;
+      this.size = this.heroSize();
       this.levelLabel.textContent = 'Nv' + this.level;
       this.levelLabel.title = this.cfg.names[this.level - 1];
       this.aura.visible = !this.dead;
@@ -4844,6 +4866,26 @@ class Hero extends Unit {
         wave(this.pos, 0x8feaff, 0.2, radius, 0.8);
         burst(this.pos, [0x8feaff, 0xb6a4ff, 0xffffff], 22, 3.5);
         FX.zigzag(this.pos, target?.pos || this.pos, 0.15);
+      };
+    } else if (id === 'brute') {
+      // Pancada: onda curta em volta que atordoa por instantes e provoca quem foi atingido (chefe fica zonzo pela metade)
+      const reach = (2.6 + (level - 1) * 0.3) * power;
+      const inReach = (s) => s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85;
+      const caught = nearby.filter(inReach);
+      const urgent = caught.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
+        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      if (!caught.length || (!force && caught.length < 2 && !urgent)) return false;
+      effect = () => {
+        const stun = scaleBranchEffect(this, 'control', 0.7 + (level - 1) * 0.1) * power;
+        for (const s of skeletonsAlive()) if (!s.spawning && inReach(s)) {
+          heroHit(this, s, this.dmg * 0.5);
+          s.stunT = Math.max(s.stunT || 0, s.boss ? stun * 0.5 : stun);
+          s.pendingHit = null;
+          s.taunt = this;
+          s.tauntT = Math.max(s.tauntT || 0, stun + 2.5 * power);
+        }
+        FX.quake(this, reach * 0.8);
+        wave(this.pos, 0xc9bba2, 0.3, reach, 0.5);
       };
     } else if (id === 'guardian') {
       if (!nearby.length) return false;
@@ -5081,7 +5123,7 @@ class Hero extends Unit {
     if (target && !target.groundTarget && (target.dead || !units.includes(target))) target = null;
 
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -5443,6 +5485,52 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'grab-throw': {
+        // Arremesso: agarra o inimigo comum mais perto (nunca chefe) e o lança no grupo mais denso; o impacto fere em área
+        const grabbable = attackables.filter((s) => s instanceof Skeleton && !s.boss && !s.dead && !s.spawning
+          && s.pos.distanceTo(this.pos) <= radius + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        const victim = force && grabbable.includes(target) ? target : nearest(this.pos, grabbable);
+        if (!victim) return false;
+        const pool = attackables.filter((s) => s !== victim && !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const { center, count } = densest(pool, skill.splash || 2.6);
+        if (!force && count < 2 && !urgentEnemy) return false;
+        target = victim;
+        effect = () => {
+          if (victim.dead || !units.includes(victim)) return;
+          let to = center && !center.dead ? center.pos.clone() : null;
+          if (!to) {   // ninguém para acertar: joga para a frente, se o chão deixar
+            const dir = new THREE.Vector3().subVectors(victim.pos, this.pos).setY(0);
+            if (dir.lengthSq() < 0.01) dir.copy(this.fwd);
+            to = victim.pos.clone().addScaledVector(dir.normalize(), 4);
+            if (!world.canStep(victim.pos, to)) to.copy(victim.pos);
+          }
+          const flight = 0.35 + Math.min(8, victim.pos.distanceTo(to)) * 0.04;
+          victim.stunT = Math.max(victim.stunT || 0, flight + 0.5);
+          victim.pendingHit = null;
+          victim.vel.set(0, 0, 0);
+          this.hurl = { victim, from: victim.pos.clone(), to, t: 0, flight, height: 1.6 + victim.pos.distanceTo(to) * 0.12,
+            area: (skill.splash || 2.6) * (0.9 + 0.1 * power), dmg: this.dmg * power * (skill.power || 1) };
+          popText(victim.pos, 'Upa!', 'crit');
+        };
+        break;
+      }
+      case 'stone-skin': {
+        // Pele de pedra: cresce, segura quase todo o dano, devolve parte dos golpes e chama todos em volta para si
+        if (!force && !enemies.length) return false;
+        effect = () => {
+          this.stoneT = (skill.duration || 8) * (0.9 + 0.1 * power);
+          for (const enemy of enemies) if (!enemy.dead) {
+            enemy.taunt = this;
+            enemy.tauntT = Math.max(enemy.tauntT || 0, scaleBranchEffect(this, 'control', 4) * power);
+            if (!enemy.boss) enemy.pendingHit = null;   // chefe só muda de alvo; o golpe anunciado segue
+          }
+          popText(this.pos, 'Pedra!', 'evolve');
+          FX.quake(this, radius * 0.4);
+          wave(this.pos, color, 0.3, radius, 0.7);
+          column(this.pos, 0xb8a88a, 0.8, 2.6, this.stoneT, { follow: this, opacity: 0.25 });
+        };
+        break;
+      }
       case 'summon':
         effect = () => {
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
@@ -5549,6 +5637,25 @@ class Hero extends Unit {
 
   // pedido do jogador (botão ou tecla): vale por um instante, até o golpe atual terminar
   // Dança de lâminas: a cada volta corta todos ao redor e desliza devagar para o meio dos inimigos
+  // Arremesso do Brutamontes: o inimigo voa em arco até o ponto e fere todos na queda
+  updateHurl(dt) {
+    const h = this.hurl, v = h.victim;
+    h.t += dt;
+    const k = Math.min(1, h.t / h.flight);
+    if (!v.dead && units.includes(v)) {
+      v.pos.x = h.from.x + (h.to.x - h.from.x) * k;
+      v.pos.z = h.from.z + (h.to.z - h.from.z) * k;
+      v.lift = k < 1 ? Math.sin(Math.PI * k) * h.height : 0;
+      v.vel.set(0, 0, 0);
+    } else v.lift = 0;   // morreu no ar: o corpo cai no chão
+    if (k < 1) return;
+    this.hurl = null;
+    damageArea(h.to, h.area, h.dmg, this);
+    wave(h.to, 0xc9bba2, 0.3, h.area, 0.5);
+    burst(h.to, [0x8a6f55, 0xc9bba2, 0xffffff], 16, 5);
+    FX.shake(0.3);
+  }
+
   updateBladeDance(dt) {
     this.bladeDanceT -= dt;
     if (this.dead || game.over) { this.bladeDanceT = 0; return; }
@@ -5623,6 +5730,7 @@ class Hero extends Unit {
     this.furyT = 0;
     this.bladeDanceT = 0;
     this.meditateT = this.immuneT = 0;
+    this.stoneT = 0;
     this.hp = this.maxHp * difficulty.revive;
     this.bar.style.display = '';
     this.current = null;
@@ -5645,6 +5753,8 @@ class Hero extends Unit {
     this.songT -= dt;
     if (this.songT <= 0) this.songHaste = 1;
     this.furyT -= dt;
+    if (this.stoneT > 0) { this.stoneT -= dt; this.size += (this.heroSize() - this.size) * Math.min(1, dt * 6); }
+    else if (this.cfg.scale && this.size !== this.heroSize()) this.size += (this.heroSize() - this.size) * Math.min(1, dt * 6);
     this.noTarget -= dt;
     this.age += dt;
     if (this.cfg.id === 'angel') this.hover = 0.52 + Math.sin(this.age * 2.2) * 0.06;
@@ -5657,7 +5767,7 @@ class Hero extends Unit {
     }
     const rage = !this.dead && this.cfg.id === 'berserker' && (this.hp < this.maxHp * 0.5 || this.furyT > 0);
     this.cooldown = this.cfg.cooldown / this.haste / (this.songT > 0 ? this.songHaste : 1) / (rage ? 1.5 * this.skillPower : 1);
-    this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0 || this.songT > 0);
+    this.aura.visible = !this.dead && (this.level > 1 || rage || this.guardT > 0 || this.songT > 0 || this.stoneT > 0);
     this.aura.material.color.set(rage ? 0xff4242 : this.cfg.color[1]);
     this.aura.scale.setScalar(0.8 + Math.sin(this.age * 4) * 0.06);
     if (this.campaignAura) {
@@ -5668,6 +5778,7 @@ class Hero extends Unit {
     }
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     if (this.bladeDanceT > 0) this.updateBladeDance(dt);
+    if (this.hurl) this.updateHurl(dt);
     this.immuneT -= dt;
     if (this.meditateT > 0) this.updateMeditation(dt);
     this.updateCommon(dt);
@@ -5786,6 +5897,7 @@ const SKILL_MOVES = {
   engineer: ['Use_Item', 1.35, 0.42, 'zap'],
   beast_tamer: ['Unarmed_Melee_Attack_Kick', 1.45, 0.34, 'hit'],
   oracle: ['1H_Ranged_Shoot', 1.3, 0.35, 'zap'],
+  brute: ['Jump_Full_Short', 0.9, 0.7, 'slam'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -5928,6 +6040,11 @@ const SKILL_ANIMS = {
     { clip: 'Spellcasting', hold: 'Spellcast_Raise', f: 0.28, lean: 0.18, kick: -0.7 },
     { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.53, spin: -0.6, float: 0.3, lean: -0.16 },
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.62, spin: 0.9, float: 0.42, kick: -0.2 },
+  ],
+  brute: [
+    { clip: 'Jump_Land', hold: 'Unarmed_Idle', f: 0.3, arc: 'ring', hop: 0.6, lean: 0.2 },
+    { clip: 'Throw', hold: 'Unarmed_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
+    { clip: 'Cheer', hold: 'Block', f: 0.4, lean: -0.2, hop: 0.25 },
   ],
 };
 
