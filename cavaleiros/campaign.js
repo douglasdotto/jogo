@@ -348,9 +348,13 @@ export function missionRecords(id) {
   });
 }
 
+// Objetivos de duração fixa (ou, na horda, em que durar mais é melhor) não têm recorde de tempo.
+const FIXED_TIME_GOALS = ['defend', 'breach', 'survive', 'hunt', 'endless'];
+export const missionHasTimeRecord = (mission) => !!mission?.goal && !FIXED_TIME_GOALS.includes(mission.goal.type);
+
 // Só uma vitória válida atualiza o recorde; tempos de teste e derrotas são descartados.
 export function saveMissionRecord(id, result) {
-  if (!MISSIONS.some((mission) => mission.id === id) || result?.won !== true) return false;
+  if (!missionHasTimeRecord(MISSIONS.find((mission) => mission.id === id)) || result?.won !== true) return false;
   const difficultyId = result.difficultyId;
   if (!RECORD_DIFFICULTIES.some(([known]) => known === difficultyId)) return false;
   const rawSeconds = Number(result.seconds);
@@ -664,6 +668,7 @@ const starRow = (n, size = '', tips = null) => `<span class="stars ${size}"${tip
 const medalSeal = (medal, tip = '') => medal.best
   ? `<span class="camp-seal seal-${medal.best.difficultyId}${medal.challenges.some((c) => c.done) ? ' challenge' : ''}"${tip ? ` data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}"` : ' aria-hidden="true"'}>${medal.best.difficultyName[0]}</span>`
   : '';
+// DarkKnight só é chefe no Coração do Castelo (goal.bosses); nas outras arenas é inimigo comum
 const BOSSES = ['King', 'Executioner', 'Lich', 'Golem'];
 
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
@@ -726,7 +731,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     const biome = typeof mapBiome === 'function' ? mapBiome(m) : '';
     const threats = typeof getThreats === 'function' ? getThreats(m) : [];
     const teamRecommendation = typeof getTeamRecommendation === 'function' ? getTeamRecommendation(m) : '';
-    const records = missionRecords(m.id);
+    const records = missionHasTimeRecord(m) ? missionRecords(m.id) : [];
     const medal = missionMedal(m.id);
     const chapterReward = cosmetics.find((cosmetic) => cosmetic.chapter === m.chapter);
     const rewardTarget = Math.max(1, Number(chapterReward?.requiredArenas) || 1);
@@ -772,7 +777,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
       ${teamRecommendation ? `<div class="camp-team-tip" role="note" aria-label="${attr(teamRecommendation)}"><i aria-hidden="true">✦</i><span>${attr(teamRecommendation)}</span></div>` : ''}
       ${threats.length ? `<div class="camp-threats" role="list" aria-label="Inimigos especiais">${threats.map((threat) => {
         const tip = `${threat.name} · ${threatPhase(threat)} · ${threat.detail}`;
-        return `<span role="listitem" class="camp-threat${threat.optional ? ' optional' : ''}${BOSSES.includes(threat.id) ? ' boss' : ''}" data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}">${threat.icon}</span>`;
+        return `<span role="listitem" class="camp-threat${threat.optional ? ' optional' : ''}${BOSSES.includes(threat.id) || m.goal.bosses?.includes(threat.id) ? ' boss' : ''}" data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}">${threat.icon}</span>`;
       }).join('')}</div>` : ''}
       ${cleared ? `<div class="camp-complete" data-tip="${attr(completeTip)}" tabindex="0" aria-label="${attr(`${remainingStars ? 'Campanha concluída' : 'Campanha perfeita'}. ${completeTip}`)}"><b>${remainingStars ? 'Campanha concluída' : '♛ Campanha perfeita'}</b>${remainingStars ? `<span>★ ${remainingStars}</span>` : ''}</div>${showReplayButton ? `<button class="camp-replay-button" type="button" aria-label="Ver missão recomendada: ${attr(MISSIONS[replayTargetIndex].name)}">★ ${MISSIONS[replayTargetIndex].name}</button>` : ''}` : ''}
       ${open ? '' : `<div class="camp-unlock" aria-label="Como desbloquear: conclua ${attr(MISSIONS[i - 1].name)} com pelo menos uma estrela"><i aria-hidden="true">\u{1F512}︎</i>${MISSIONS[i - 1].name}</div>`}

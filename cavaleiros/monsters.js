@@ -877,6 +877,8 @@ const ROSTER = [['Shieldbearer', 2, 0.11, 0.025], ['Bomber', 3, 0.1, 0.025], ['G
   ['Skull', 7, 0.05, 0.02], ['Shaman', 8, 0.05, 0.03], ['DarkKnight', 10, 0.05, 0.025]];   // o enxame já traz 3 crânios por sorteio
 const BOSS_PHASES = [6, 9, 12, 13];
 export const isBossPhase = (p) => BOSS_PHASES.includes(p);
+// próxima fase de chefe a partir de `p` (inclusive): fonte única para HUD e dica de derrota
+export const nextBossPhase = (p) => BOSS_PHASES.find((phase) => phase >= p) ?? null;
 const GOLEM_PHASES = [4, 8];
 export function pickMonster(p, type) {
   const D = G.difficulty, variety = D.count / 1.1;

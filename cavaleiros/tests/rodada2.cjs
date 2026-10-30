@@ -1829,7 +1829,8 @@ test('dica pós-derrota usa o objetivo e o estado real da missão',()=>{
   assert.match(tip({goal:{type:'nofall'}}),/Todo o grupo caiu.*quedas individuais tiram as estrelas extras/i);
   assert.match(tip({goal:{type:'timer',time:240},time:241}),/limite de tempo acabou/);
   assert.match(tip({goal:{type:'totems',count:3},totemsDown:1}),/Faltaram 2 totens/);
-  assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:false,phase:5}),/antes da estreia do chefe.*fase 6/);
+  assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:false,phase:5,bossPhase:6}),/antes da estreia do chefe.*fase 6/);
+  assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:false,phase:7,bossPhase:9}),/fase 9/,'a dica usa a fase real do chefe, não múltiplos de 6');
   assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:true}),/chefe ainda está ativo/);
   const finalGoal={type:'bosses',bosses:['Lich','Executioner','DarkKnight']};
   const teamSuggestion='Equipe sugerida: Paladino, Guardião, Viking e Clériga.';
@@ -1853,7 +1854,8 @@ test('dica de vitória orienta a próxima arena e a busca por estrelas',()=>{
   assert.doesNotMatch(escortDefeat.text,/Aldeão salvo!/,'a celebração só aparece quando a escolta vence');
   result=report({stars:3,nextMission:'Fazendas'});assert.match(result.text,/Três estrelas! Próxima missão liberada: Fazendas\./);
   result=report({stars:3,nextMission:null,remainingStars:4});assert.match(result.text,/4 estrelas restantes/);
-  result=report({stars:3,nextMission:null,remainingStars:0});assert.match(result.text,/Campanha perfeita/);
+  result=report({stars:3,nextMission:null,remainingStars:0,maxStars:54});assert.match(result.text,/Campanha perfeita! 54 estrelas\./);
+  result=report({stars:3,nextMission:null,remainingStars:0});assert.doesNotMatch(result.text,/24/,'sem o total não inventa número de estrelas');
 });
 test('resultado da campanha encaminha o objetivo para a dica pós-batalha',()=>{
   clear();const previousSummary=context.summaryHTML;let report;
@@ -1871,6 +1873,10 @@ test('resultado da campanha encaminha o objetivo para a dica pós-batalha',()=>{
     clear();t.game.test=true;t.game.roster=[];t.game.phase=6;t.game.bossSeen=true;t.game.mission=t.MISSIONS.find(m=>m.goal.type==='boss');
     t.endGame('Os esqueletos venceram.',false);
     assert.match(report.find(item=>item.id==='next-try').text,/chefe ainda está ativo/);
+
+    clear();t.game.test=true;t.game.roster=[];t.game.phase=11;t.game.bossSeen=false;t.game.mission=t.MISSIONS.find(m=>m.id==='castelo');
+    t.endGame('Os esqueletos venceram.',false);
+    assert.match(report.find(item=>item.id==='next-try').text,/fase 12/,'o castelo aponta o Lich da fase 12');
   } finally { context.summaryHTML=previousSummary;clear(); }
 });
 test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
@@ -1882,6 +1888,11 @@ test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
     const progress=report.find(item=>item.id==='next-try');
     assert.equal(progress.title,'Progresso da campanha');assert.match(progress.text,/Próxima missão liberada: A Ponte do Rio\./);
     assert.equal(t.starsOf('vila'),2);
+    t.game.mission=t.MISSIONS.find(m=>m.id==='vila');
+    context.localStorage.data={};
+    for(const m of t.MISSIONS)context.saveStars(m.id,3);
+    t.game.test=false;t.game.roster=[];t.endGame('Missão cumprida',true);
+    assert.match(report.find(item=>item.id==='next-try').text,new RegExp(`Campanha perfeita! ${t.MISSIONS.length*3} estrelas`),'o total vem das missões reais');
   } finally { context.summaryHTML=previousSummary;context.location=previousLocation;context.localStorage.data=previousStorage;clear(); }
 });
 test('overlay distingue vitória de derrota e identifica resultado em modo de teste',()=>{
@@ -1900,6 +1911,13 @@ test('overlay distingue vitória de derrota e identifica resultado em modo de te
     assert.equal(overlay.classList.contains('won'),true);
     assert.equal(overlay.classList.contains('lost'),false);
     assert.equal(overlay.classList.contains('test-run'),false);
+    // jornada: o botão principal diz o que faz (menu) e "Repetir" mantém a dificuldade
+    assert.equal(elements.get('overlayBtn').textContent,'Menu');
+    assert.ok(elements.get('overlayNext').innerHTML.includes('↻ Repetir'));
+    t.setDifficulty(3);t.startGame('journey');
+    assert.equal(t.game.mission,null);assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);
+    assert.equal(t.getDifficulty().id,t.DIFFICULTIES[3].id,'não volta à escolha de dificuldade');
+    t.setDifficulty(1);
   } finally { context.location=previousLocation;context.localStorage.data=previousStorage;t.progress.recordMatch=previousRecordMatch;clear(); }
 });
 // ---------- campanha ----------
@@ -2177,6 +2195,9 @@ test('recordes de campanha guardam apenas a melhor vitória por missão e dificu
   assert.equal(t.missionRecords('ponte')[0].time,'1:00.0');
   assert.equal(t.saveMissionRecord('ponte',{won:true,seconds:59.94,difficultyId:'normal'}),true,'melhora de um décimo atualiza o recorde');
   assert.equal(t.missionRecords('ponte')[0].time,'0:59.9','a tela mostra a precisão que distingue os recordes');
+  for(const id of ['santuario','chamas','lago','caca','horda'])
+    assert.equal(t.saveMissionRecord(id,{won:true,seconds:50,difficultyId:'normal'}),false,`${id}: duração fixa não tem recorde de tempo`);
+  assert.equal(vm.runInContext('missionHasTimeRecord',context)(mission('castelo')),true);
 });
 test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   const previousAdd=context.addEventListener,previousLocation=context.location,previousStorage=context.localStorage.data;
@@ -2211,6 +2232,18 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   keyHandler({key:'Enter',preventDefault(){prevented=true}});
   assert.equal(started.length,1);assert.equal(prevented,false);
   playButton.onclick();assert.equal(started.length,2);assert.equal(started[1].id,'ponte');
+  // defesa tem duração fixa: um recorde antigo salvo não aparece no mapa
+  context.localStorage.data['cavaleiros-recordes-missao']=JSON.stringify({santuario:{normal:{seconds:50}}});
+  map.children[2].onfocus();
+  assert.ok(info.innerHTML.includes('O Santuário')&&!info.innerHTML.includes('Seus melhores tempos'),'sem recorde de tempo na defesa');
+  // Cavaleiro Sombrio é chefe só no Coração do Castelo
+  const knightMap=el(),knightInfo=el(),knightRoot=el();knightMap.children=[];knightRoot.isConnected=true;knightRoot.closest=()=>null;
+  knightRoot.querySelector=selector=>selector==='.camp-map'?knightMap:knightInfo;
+  context.renderCampaign(knightRoot,noop,()=>'',m=>t.campaignThreats(m.from,m.to,m.goal));
+  knightMap.children[t.MISSIONS.findIndex(m=>m.id==='coracao-do-castelo')].onfocus();
+  assert.match(knightInfo.innerHTML,/camp-threat boss" data-tip="Cavaleiro Sombrio/);
+  knightMap.children[t.MISSIONS.findIndex(m=>m.id==='cemiterio')].onfocus();
+  assert.match(knightInfo.innerHTML,/camp-threat" data-tip="Cavaleiro Sombrio/,'nas outras arenas ele é inimigo comum');
   context.addEventListener=previousAdd;context.location=previousLocation;context.localStorage.data=previousStorage;
 });
 test('intel da campanha acompanha estreias, chefes e golem opcional',()=>{
@@ -2455,8 +2488,15 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
     context.createWorld=()=>t.world;   // a próxima missão recria o cenário; aqui o duplo basta
     t.startGame(mission('ponte'));assert.equal(t.game.mission.id,'ponte');assert.equal(t.pick.mode,'difficulty');
     begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
-    assert.ok(elements.get('overlayNext').innerHTML.includes('Tentar de novo'));
+    assert.ok(elements.get('overlayNext').innerHTML.includes('↻ Repetir'));
     assert.ok(!elements.get('overlayStars').innerHTML.includes('Recompensa'));
+    // "Repetir" volta direto à luta: mesma missão, dificuldade, cenário e equipe, sem mapa nem escolhas
+    const team=t.heroes().map(h=>h.cfg),seed=t.world.seed,played=t.getDifficulty().id;
+    t.startGame({replay:mission('ponte'),team,seed});
+    assert.equal(t.game.mission.id,'ponte');assert.equal(t.getDifficulty().id,played);
+    assert.deepEqual(t.heroes().map(h=>h.cfg.id),team.map(cfg=>cfg.id));
+    assert.equal(t.pick.open,false,'não reabre dificuldade nem heróis');assert.equal(t.game.paused,false);
+    assert.equal(t.game.phase,mission('ponte').from);assert.ok(t.game.villager,'a escolta recomeça com o aldeão');
   }finally{t.setDifficulty(1);}
 });
 test('primeira fase da missão abre com faixa curta, sem a história',()=>{
