@@ -252,11 +252,13 @@ function freshContext() {
   const lich = unit({ phaseBoss: true, enemyKind: 'Lich', kind: { name: 'Lich Supremo', title: 'Coração sombrio' }, maxHp: 100, hp: 62 });
   const executioner = unit({ phaseBoss: true, enemyKind: 'Executioner', kind: { name: 'Carrasco', title: 'Carrasco do trono' }, maxHp: 100, hp: 35 });
   const darkKnight = unit({ phaseBoss: true, enemyKind: 'DarkKnight', kind: { name: 'Cavaleiro Sombrio', title: 'Cavaleiro do Eclipse' }, maxHp: 100, hp: 88 });
+  const squad = [lich, lich, executioner].map((targetFocus) => ({ team: 'hero', dead: false, targetFocus }));
+  context.api.units.push(...squad);
   context.darkKnight = darkKnight;
   vm.runInContext(`G.game = { mission: { goal: { type: 'bosses', bosses: ['Lich', 'Executioner', 'DarkKnight'] } } }`, context);
   const nodes = new Map(), rows = new Map();
   const node = (key) => {
-    if (!nodes.has(key)) nodes.set(key, { hidden: false, textContent: '', style: {}, firstChild: { textContent: '' }, attributes: {},
+    if (!nodes.has(key)) nodes.set(key, { hidden: key.includes('.boss-member-focus'), textContent: '', style: {}, firstChild: { textContent: '' }, attributes: {},
       setAttribute(name, value) { this.attributes[name] = value; } });
     return nodes.get(key);
   };
@@ -279,6 +281,9 @@ function freshContext() {
   assert.match(html, /Coração sombrio[\s\S]*Carrasco do trono[\s\S]*Cavaleiro do Eclipse/, 'a barra separa a vida dos três guardiões por nome');
   assert.equal(node('Lich:.boss-member-fill').style.width, '62%', 'a barra individual mostra a vida atual do Lich');
   assert.equal(node('Executioner:.boss-member-hp').textContent, '35%', 'cada guardião tem seu próprio percentual');
+  assert.equal(node('Lich:.boss-member-focus').textContent, 'Foco · 2', 'o cartão mostra quantos heróis focam no Lich');
+  assert.equal(node('Executioner:.boss-member-focus').textContent, 'Foco · 1', 'o foco dividido também fica visível');
+  assert.equal(node('DarkKnight:.boss-member-focus').hidden, true, 'chefes sem heróis focando não recebem o destaque');
   assert.equal(node('.boss-warning-owner').textContent, 'Cavaleiro do Eclipse', 'o aviso identifica qual chefe vai atacar');
   const hudCss = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(hudCss, /boss-roster[^}]*grid-template-columns: repeat\(3/, 'os três indicadores cabem lado a lado no HUD');
@@ -286,6 +291,10 @@ function freshContext() {
   vm.runInContext('updateMonsterFx(0.016)', context);
   assert.equal(htmlWrites, 1, 'a troca de chefe em foco preserva a barra e evita reconstruir o HUD');
   assert.equal(node('Lich:.boss-member-hp').textContent, 'Derrotado', 'a barra marca o Lich derrotado');
+  assert.equal(node('Lich:.boss-member-focus').hidden, true, 'não mostra foco num chefe que já caiu');
+  squad[0].targetFocus = squad[1].targetFocus = executioner;
+  vm.runInContext('updateMonsterFx(0.016)', context);
+  assert.equal(node('Executioner:.boss-member-focus').textContent, 'Foco · 3', 'o indicador acompanha a troca coordenada de alvo');
   darkKnight.dead = true;
   vm.runInContext('updateMonsterFx(0.016)', context);
   assert.equal(node('DarkKnight:.boss-member-hp').textContent, 'Derrotado', 'a barra marca o chefe abatido');

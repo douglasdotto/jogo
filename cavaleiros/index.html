@@ -528,6 +528,9 @@
     #bossBar .boss-member-hp { flex: 0 0 auto; color: #fff0b3; font: 600 10px 'Lilita One', sans-serif; font-variant-numeric: tabular-nums; }
     #bossBar .boss-member-track { height: 7px; margin-top: 4px; overflow: hidden; background: #0e1729; border-radius: 5px; box-shadow: inset 0 1px 2px #0009; }
     #bossBar .boss-member-fill { display: block; width: 100%; height: 100%; transition: width .18s ease; }
+    #bossBar .boss-member-focus { display: block; margin-top: 3px; color: #ffe27a; font: 600 9px 'Lilita One', sans-serif; letter-spacing: .04em; }
+    #bossBar .boss-member-focus[hidden] { display: none; }
+    #bossBar .boss-member.focused { border-color: rgba(255, 226, 122, .9); box-shadow: 0 0 9px rgba(255, 196, 69, .3), inset 0 0 0 1px rgba(255, 226, 122, .16); }
     #bossBar .boss-member.lich .boss-member-fill { background: linear-gradient(90deg, #bf7cff, #7738bd); }
     #bossBar .boss-member.executioner .boss-member-fill { background: linear-gradient(90deg, #ffc16e, #d65a32); }
     #bossBar .boss-member.darkknight .boss-member-fill { background: linear-gradient(90deg, #75c9ff, #4266c7); }

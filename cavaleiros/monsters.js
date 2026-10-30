@@ -974,13 +974,13 @@ function updateBossBar() {
       const unit = units?.find((candidate) => candidate.phaseBoss && candidate.enemyKind === id);
       const title = bossTitle(unit || { enemyKind: id });
       const kindClass = String(id).toLowerCase().replace(/[^a-z0-9-]/g, '');
-      return `<div class="boss-member ${kindClass}" data-boss="${id}"><div class="boss-member-label"><span class="boss-member-name">${title}</span><b class="boss-member-hp">100%</b></div><div class="boss-member-track" role="meter" aria-label="Vida: ${title}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i class="boss-member-fill"></i></div></div>`;
+      return `<div class="boss-member ${kindClass}" data-boss="${id}"><div class="boss-member-label"><span class="boss-member-name">${title}</span><b class="boss-member-hp">100%</b></div><div class="boss-member-track" role="meter" aria-label="Vida: ${title}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i class="boss-member-fill"></i></div><span class="boss-member-focus" hidden></span></div>`;
     }).join('') : '';
     el.innerHTML = `<span class="boss-name">${groupedGoal ? 'Guardiões do coração' : b.kind.name} <small>${groupedGoal ? '' : b.kind.title}</small></span><div class="boss-track"><i class="boss-fill"></i><i class="boss-shield"></i></div>${groupedGoal ? `<div class="boss-roster" aria-label="Vida individual dos guardiões">${roster}</div>` : ''}<div class="boss-telegraph" role="status" aria-live="polite" hidden><span class="boss-warning-owner"></span><span class="boss-warning-text"></span><span class="warning-countdown"></span><i class="warning-progress"></i></div>`;
     mBar = { unit: b, fill: el.querySelector('.boss-fill'), shield: el.querySelector('.boss-shield'), hp: -1, sh: -1,
       roster: groupedGoal && typeof el.querySelectorAll === 'function' ? Array.from(el.querySelectorAll('.boss-member'), (row) => ({
         id: row.dataset?.boss || row.getAttribute?.('data-boss') || '', row, fill: row.querySelector?.('.boss-member-fill'), hpLabel: row.querySelector?.('.boss-member-hp'),
-        track: row.querySelector?.('.boss-member-track'), hp: -1, defeated: null, labelDefeated: null,
+        track: row.querySelector?.('.boss-member-track'), focusLabel: row.querySelector?.('.boss-member-focus'), hp: -1, defeated: null, labelDefeated: null, focus: 0, nextFocus: 0,
       })) : [],
       telegraph: el.querySelector('.boss-telegraph'), warningOwner: el.querySelector('.boss-warning-owner'), warningText: el.querySelector('.boss-warning-text'), countdown: el.querySelector('.warning-countdown'), progress: el.querySelector('.warning-progress'), second: -1,
       name: el.querySelector('.boss-name'), subtitle: el.querySelector('.boss-name small'), grouped: groupedGoal, rosterKey, enraged: null, warningVisible: null };
@@ -989,21 +989,33 @@ function updateBossBar() {
   let currentHp = Math.max(0, b.hp), maxHp = b.maxHp, shieldHp = (b.shieldHp || 0) + (b.ward?.hp || 0), standing = b.dead ? 0 : 1;
   if (groupedGoal) {
     currentHp = maxHp = shieldHp = standing = 0;
-    for (const unit of units || []) if (unit.phaseBoss) {
-      maxHp += unit.maxHp;
-      if (!unit.dead) { standing++; currentHp += Math.max(0, unit.hp); shieldHp += (unit.shieldHp || 0) + (unit.ward?.hp || 0); }
-      for (const row of mBar.roster) if (row.id === unit.enemyKind) {
-        const defeated = unit.dead;
-        const percent = defeated ? 0 : Math.round(Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp))) * 100);
-        if (percent !== row.hp || defeated !== row.labelDefeated) {
-          row.fill.style.width = percent + '%';
-          row.hpLabel.textContent = defeated ? 'Derrotado' : percent + '%';
-          row.track.setAttribute('aria-valuenow', String(percent));
-          row.hp = percent;
-          row.labelDefeated = defeated;
-        }
-        if (row.defeated !== defeated) { row.row.classList.toggle('defeated', defeated); row.defeated = defeated; }
+    for (const row of mBar.roster) row.nextFocus = 0;
+    for (const unit of units || []) {
+      if (unit.team === 'hero' && !unit.dead && unit.targetFocus?.phaseBoss && !unit.targetFocus.dead) {
+        for (const row of mBar.roster) if (row.id === unit.targetFocus.enemyKind) row.nextFocus++;
       }
+      if (unit.phaseBoss) {
+        maxHp += unit.maxHp;
+        if (!unit.dead) { standing++; currentHp += Math.max(0, unit.hp); shieldHp += (unit.shieldHp || 0) + (unit.ward?.hp || 0); }
+        for (const row of mBar.roster) if (row.id === unit.enemyKind) {
+          const defeated = unit.dead;
+          const percent = defeated ? 0 : Math.round(Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp))) * 100);
+          if (percent !== row.hp || defeated !== row.labelDefeated) {
+            row.fill.style.width = percent + '%';
+            row.hpLabel.textContent = defeated ? 'Derrotado' : percent + '%';
+            row.track.setAttribute('aria-valuenow', String(percent));
+            row.hp = percent;
+            row.labelDefeated = defeated;
+          }
+          if (row.defeated !== defeated) { row.row.classList.toggle('defeated', defeated); row.defeated = defeated; }
+        }
+      }
+    }
+    for (const row of mBar.roster) if (row.focus !== row.nextFocus) {
+      row.focus = row.nextFocus;
+      row.focusLabel.textContent = row.focus ? `Foco · ${row.focus}` : '';
+      row.focusLabel.hidden = row.focus === 0;
+      row.row.classList.toggle('focused', row.focus > 0);
     }
     const total = G.game?.mission?.goal?.bosses?.length || 3;
     mBar.name.firstChild.textContent = 'Guardiões do coração ';
