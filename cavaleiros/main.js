@@ -1172,7 +1172,12 @@ function relicExtraShot(hero, target) {
 function relicBounce(b) {
   if (!hasRelic('ricochet-sling') || b.skill || b.bounced || b.owner?.team !== 'hero') return;
   const from = b.target;
-  const next = nearest(from.pos, skeletonsAlive().filter((s) => s !== from && !s.spawning && s.pos.distanceTo(from.pos) <= 6));
+  let next = null, nearestDistance = Infinity;
+  for (const enemy of units) {
+    if (enemy.team !== 'skeleton' || enemy.dead || enemy.spawning || enemy === from) continue;
+    const distance = enemy.pos.distanceToSquared(from.pos);
+    if (distance <= 36 && distance < nearestDistance) { next = enemy; nearestDistance = distance; }
+  }
   if (!next) return;
   fireBolt(b.owner, next, b.kind);
   const bolt = bolts.at(-1);

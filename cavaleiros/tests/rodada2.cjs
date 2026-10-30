@@ -2298,6 +2298,13 @@ test('Funda ricocheteante salta o tiro comum e o Prisma dá +1 alvo aos magos',(
   t.fireBolt(h,a,'magic');for(let i=0;i<40&&!t.bolts.some(x=>x.bounced);i++)t.updateBolts(.05);
   const bounce=t.bolts.find(x=>x.bounced);assert.ok(bounce,'o tiro ricocheteia');assert.equal(bounce.target,b);assert.ok(Math.abs(bounce.dmg-h.dmg*.6)<1e-6);
   for(let i=0;i<40&&t.bolts.length;i++)t.updateBolts(.05);assert.ok(b.hp<1000);assert.ok(!t.bolts.length,'ricocheteia só uma vez');
+  clear();t.bolts.length=0;relics('ricochet-sling');
+  const owner=hero('pyro',0,0),from=foe('Warrior',0,-5),near=foe('Warrior',1,-5),far=foe('Warrior',-2,-5);
+  const unitFilter=t.units.filter;t.units.filter=()=>{throw new Error('o ricochete não deve reconstruir a lista de esqueletos');};
+  try { context.relicBounce({target:from,owner,kind:'magic',dmg:owner.dmg}); }
+  finally { t.units.filter=unitFilter; }
+  assert.equal(t.bolts.length,1);assert.equal(t.bolts[0].target,near,'o ricochete escolhe o inimigo mais próximo sem filtrar a unidade inteira');
+  for(const bolt of t.bolts)context.scene.remove(bolt.mesh);t.bolts.length=0;
   clear();t.bolts.length=0;relics('archmage-prism');
   const mage=hero('pyro',0,0),knight=hero('paladin',1,0);
   assert.equal(mage.extraTargets,1);assert.ok(!knight.extraTargets,'só magos ganham alvo extra');
