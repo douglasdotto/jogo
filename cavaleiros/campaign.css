@@ -366,16 +366,37 @@
 .camp-node.done { background: linear-gradient(145deg, #a8da7c, #558e53); }
 .camp-node.locked { filter: saturate(.35) brightness(.78); }
 .camp-node.sel { scale: 1.12; box-shadow: 0 0 0 3px rgba(255, 236, 174, .9), 0 0 17px 3px rgba(255, 207, 98, .42), 0 4px 10px rgba(7, 20, 31, .42); }
-/* mapa 3D (campaign-map3d.js): o diorama desenha estrada e marcos; os botões viram alvos invisíveis sobre cada estandarte */
-.camp-map.is-3d { height: 100%; box-sizing: border-box; aspect-ratio: auto; background: #a9d6f0; cursor: grab; touch-action: none; user-select: none; }   /* ocupa a altura do painel em vez de vazar sobre o título */
+/* mapa 3D (campaign-map3d.js): o diorama ocupa a maior parte da tela; cada missão ganha um selo flutuante com número e estrelas sobre o estandarte */
+.camp-head, .camp-body { width: min(1680px, calc(100vw - 36px)); }
+.camp-body:has(.camp-map.is-3d) { flex: 1 1 auto; height: auto; min-height: 420px; gap: 18px; }
+.camp-body:has(.camp-map.is-3d) .camp-info { width: clamp(300px, 26vw, 380px); flex: none; }
+.camp-map.is-3d { flex: 1 1 auto; width: auto; height: 100%; align-self: stretch; box-sizing: border-box; aspect-ratio: auto; background: #a9d6f0; cursor: grab; touch-action: none; user-select: none; }
 .camp-map.is-3d.dragging { cursor: grabbing; }
+.camp-map.is-3d.pointing { cursor: pointer; }
 .camp-map.is-3d::after { z-index: 0; }
 .camp-map3d { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; }
 .camp-map.is-3d .camp-trail { display: none; }
-.camp-map.is-3d .camp-node { width: 46px; height: 46px; border: 0; background: transparent; box-shadow: none; filter: none; scale: 1; animation: none; transition: none; }
-.camp-map.is-3d .camp-node > * { display: none; }
-.camp-map.is-3d .camp-node.locked { cursor: not-allowed; }
+.camp-map.is-3d .camp-node { width: 46px; height: 46px; border-width: 3px; animation: none; transition: scale .14s, filter .14s, box-shadow .14s, opacity .2s; }
+.camp-map.is-3d .camp-node::after { position: absolute; top: 100%; left: 50%; translate: -50% 0; width: 0; height: 0; content: ''; border: 6px solid transparent; border-top: 8px solid rgba(255, 239, 190, .92); }   /* bico apontando o estandarte */
+.camp-map.is-3d .camp-node .medal, .camp-map.is-3d .camp-node .camp-seal { display: none; }
+.camp-map.is-3d .camp-node .num { position: static; width: auto; height: auto; border: 0; background: none; box-shadow: none; color: #fff; font: 700 21px/1 'Fredoka', sans-serif; -webkit-text-stroke: 0; text-shadow: 0 1px 0 rgba(60, 34, 14, .8), 0 0 6px rgba(60, 34, 14, .45); }
+.camp-map.is-3d .camp-node .stars { bottom: -11px; padding: 0 4px; }
+.camp-map.is-3d .camp-node .stars i { font-size: 10px; }
+.camp-map.is-3d .camp-node:hover, .camp-map.is-3d .camp-node.hover { scale: 1.2; filter: brightness(1.15); box-shadow: 0 0 0 3px rgba(255, 245, 205, .95), 0 0 16px 4px rgba(255, 220, 120, .65), 0 4px 10px rgba(7, 20, 31, .45); }
+.camp-map.is-3d .camp-node.sel { scale: 1.32; filter: brightness(1.12); box-shadow: 0 0 0 3px #fff4c2, 0 0 0 7px rgba(247, 179, 45, .85), 0 0 26px 8px rgba(255, 210, 75, .7), 0 5px 12px rgba(7, 20, 31, .5); }
+.camp-map.is-3d .camp-node.next:not(.sel) { animation: camp-next 1.3s ease-in-out infinite; }
+@keyframes camp-next { 50% { scale: 1.14; box-shadow: 0 0 0 4px rgba(255, 240, 170, .95), 0 0 22px 8px rgba(255, 214, 90, .75); } }
+.camp-map.is-3d .camp-node.locked { opacity: .62; cursor: pointer; filter: saturate(.15) brightness(.78); }
+.camp-map.is-3d .camp-node.locked.sel { opacity: .9; }
 .camp-map.is-3d.dragging .camp-node { cursor: grabbing; }
+/* faixa de capítulos no cabeçalho: I–VI, um clique leva ao capítulo */
+.camp-chapters { margin-left: 8px; display: inline-flex; gap: 6px; }
+.camp-chap { -webkit-text-stroke: 0; text-shadow: none; min-width: 40px; height: 36px; padding: 0 8px; border: 1px solid rgba(219, 235, 255, .22); border-radius: 10px; color: #dbe8f5; font: 600 15px/1 'Fredoka', sans-serif; background: rgba(14, 34, 54, .62); cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.camp-chap:hover { border-color: rgba(244, 201, 107, .7); background: rgba(34, 69, 100, .8); }
+.camp-chap.sel { border-color: #f4c96b; color: #2b1a06; background: linear-gradient(180deg, #ffe08a, #e0a83e); }
+.camp-chap.locked { opacity: .45; }
+.camp-chap:focus-visible { outline: 2px solid #fff4b2; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .camp-map.is-3d .camp-node.next:not(.sel) { animation: none; box-shadow: 0 0 0 4px rgba(255, 240, 170, .95); } }
 /* painel da missão: poucas linhas, muito respiro e o Batalhar sempre no rodapé */
 .camp-info { width: min(380px, 38vw); height: 100%; max-height: 100%; padding: 26px 24px 22px; gap: 20px; align-items: stretch; text-align: left; border: 1px solid rgba(229, 240, 251, .14); border-radius: 18px;
   background: linear-gradient(155deg, rgba(34, 71, 103, .94), rgba(16, 40, 64, .96)); box-shadow: 0 18px 42px rgba(0, 0, 0, .28); backdrop-filter: blur(14px); }
