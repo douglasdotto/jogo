@@ -353,7 +353,7 @@ export const LOOK_PREVIEW = [
   { id: 'engineer', name: 'Engenheira', model: 'Rogue', recipe: 'engineer' },
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
-  { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [] },   // luta de punhos (manoplas de pedra)
+  { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6 },   // luta de punhos (manoplas de pedra)
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
 ];
 export const WEAPONS = {

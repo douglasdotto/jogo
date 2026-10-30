@@ -75,6 +75,7 @@
         applyLook(model, assets, LOOKS[v.id]);
       }
       model.position.set((col - 1.5) * 4.2, 0, row * 2.6 - 6);
+      if (v.scale) model.scale.multiplyScalar(v.scale);   // porte da variante (ex.: Brutamontes gigante)
       scene.add(model);
       const mixer = new THREE.AnimationMixer(model);
       const tag = document.createElement('div');

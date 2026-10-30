@@ -113,7 +113,7 @@ const VARIANTS = [
   // tanque de punhos: mais vida e menos dano que o Guardião, lento; armor tira um pouco de cada golpe (takeDamage)
   { id: 'brute', names: ['Brutamontes', 'Rocha Viva', 'Colosso'], desc: 'Aguenta a horda na frente do grupo.', ability: 'Pancada', color: ['#c9bba2', '#7d7464'],
     use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.4, cooldown: 1.6, idle: 'Unarmed_Idle',
-    attacks: ['Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], armor: 3, scale: 1.15, frontline: true, classId: 1 },
+    attacks: ['Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], armor: 3, scale: 1.6, frontline: true, classId: 1 },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],

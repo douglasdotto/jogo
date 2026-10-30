@@ -10,7 +10,7 @@
     {
       "name": "variantes",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["-e", "process.env.PORT = 8081; require('C:/ProjetosBAT/jogo-rodada2/cavaleiros/server.js')"],
+      "runtimeArgs": ["-e", "process.env.PORT = 8081; require('C:/ProjetosBAT/jogo/cavaleiros/server.js')"],
       "port": 8081
     }
   ]
