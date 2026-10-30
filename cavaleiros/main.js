@@ -2354,7 +2354,7 @@ class Unit {
   }
 
   takeDamage(n, from, owner = null, critical = false, dot = false) {   // dot: veneno e afins, sem esquiva, bloqueio nem tropeço
-    if (this.dead || game.over) return;
+    if (this.dead || game.over || this.untargetable) return;   // dragãozinho voando: fora do alcance de golpes e áreas
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
     if (this.ward) { n = absorbWard(this, n); if (!(n > 0)) return; }   // escudo de ossos do xamã
@@ -2545,7 +2545,7 @@ const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', archer: 'arrow', pyro
 
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
-const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued));   // o prisioneiro preso não é alvo
+const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued) && !u.untargetable);   // o prisioneiro preso e o dragãozinho voando não são alvo
 const enemyTargetAllies = () => {
   const list = allies();
   return game.mission?.goal?.type === 'defend' && game.shrine
@@ -7394,7 +7394,7 @@ class BeastCompanion extends Unit {
 const SUMMON_RULES = {
   fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 2.15, color: 0xffb8dc },
   golem: { hp: 240, dmg: 14, range: 1.6, speed: 2.7, cooldown: 1.5, every: 6, life: 15, size: 1.05, bar: 2.95, color: 0xd8c29a },
-  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 2.75, color: 0xff7a3a },
+  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 3.75, color: 0xff7a3a, flying: true },   // voa alto: inimigos não o miram nem acertam
 };
 const SUMMON_TAUNT = 3, SUMMON_SLAM_RADIUS = 2.4, SUMMON_STUN = 0.9, SUMMON_BOSS_CONTROL = 0.35;   // chefes: controle mais curto
 const EMPTY_GLTF = { scene: new THREE.Group(), animations: [] };
@@ -7415,6 +7415,7 @@ class SummonedCreature extends Unit {
     this.age = 0;
     this.size = rule.size;
     this.barHeight = rule.bar;
+    this.untargetable = !!rule.flying;
     this.goal = new THREE.Vector3();
     this.popT = 0;
     this.bar.classList.add('ally');

@@ -290,7 +290,7 @@ const SUMMON_BODIES = {
       pivot.userData.side = side;
       return pivot;
     });
-    return { core, head, jaw, mouth, tail, wings, hover: 1.2, shellY: 0.15, shellR: 1.1, auraR: 1.0 };
+    return { core, head, jaw, mouth, tail, wings, hover: 2.2, shellY: 0.15, shellR: 1.1, auraR: 1.0 };
   },
 };
 
