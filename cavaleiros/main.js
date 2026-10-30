@@ -156,13 +156,13 @@ Object.assign(SKELETONS, MONSTER_TYPES);   // escudeiro, bombardeiro, sacerdote,
 // behind/behindFrom = chance e fase mínima de virem por trás, shooters = chance de um atirador na estrada.
 const DIFFICULTIES = [
   { id: 'facil', name: 'Fácil', icon: '❀', desc: 'Um passeio pelo reino.', color: ['#cdf0b4', '#6aa84f'],
-    hp: 0.85, dmg: 0.8, count: 0.9, interval: 1.15, boss: 0.8, heal: 0.5, revive: 0.5, reviveDelay: 0, behind: 0.15, behindFrom: 5, shooters: 0 },
+    hp: 0.8, dmg: 0.77, count: 0.9, interval: 1.2, boss: 0.72, heal: 0.6, revive: 0.5, reviveDelay: 0, behind: 0.15, behindFrom: 5, shooters: 0 },
   { id: 'normal', name: 'Normal', icon: '⚔︎', desc: 'Os esqueletos vêm com tudo.', color: ['#bfe0ff', '#5a8fd0'],
-    hp: 1, dmg: 1, count: 1, interval: 1, boss: 1, heal: 0.4, revive: 0.4, reviveDelay: 0, behind: 0.25, behindFrom: 4, shooters: 0.03 },
+    hp: 1, dmg: 1, count: 1, interval: 1, boss: 1, heal: 0.2, revive: 0.25, reviveDelay: 0, behind: 0.3, behindFrom: 4, shooters: 0.07 },
   { id: 'dificil', name: 'Difícil', icon: '♜', desc: 'Escolha bem cada herói.', color: ['#ffd29e', '#d17a2a'],
-    hp: 1.18, dmg: 1.12, count: 1.12, interval: 0.92, boss: 1.1, heal: 0.28, revive: 0.32, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.08 },
+    hp: 1.1, dmg: 1.08, count: 1.15, interval: 0.92, boss: 1.1, heal: 0.15, revive: 0.25, reviveDelay: 0, behind: 0.35, behindFrom: 3, shooters: 0.08 },
   { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
-    hp: 1.28, dmg: 1.18, count: 1.18, interval: 0.86, boss: 1.15, heal: 0.2, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
+    hp: 1.18, dmg: 1.14, count: 1.25, interval: 0.86, boss: 1.15, heal: 0.15, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
 const DIFFICULTY_PICK_HINT = '← → · Enter · Esc';
 const nightmareTeamIds = (mission) => {
@@ -7323,8 +7323,8 @@ class Skeleton extends Unit {
   constructor(type, phase, boss = false) {
     const base = SKELETONS[type];
     const D = difficulty;
-    const hpScale = (1 + (phase - 1) * 0.12) * D.hp * (boss ? 9 * D.boss : 1);
-    const dmgScale = (1 + (phase - 1) * 0.06) * D.dmg * (boss ? 2.5 * D.boss : 1);
+    const hpScale = (1 + (phase - 1) * 0.19) * D.hp * (boss ? 9 * D.boss : 1);
+    const dmgScale = (1 + (phase - 1) * 0.14) * D.dmg * (boss ? 2.5 * D.boss : 1);
     super(assets[`Skeleton_${base.model || type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss || !!base.heavy;   // o golem é pesado como um chefe, mas sem a vida de chefe
     this.phaseBoss = !!boss;             // só o chefe da fase encerra objetivos de chefe na campanha

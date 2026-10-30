@@ -251,7 +251,7 @@ function play(diff, profile, mission = null) {
   return { won, timedOut: mission ? !t.game.over : false, initialHeroes, initialParty, falls: outcome?.falls ?? t.game.falls,
     villagerRatio, shrineRatio: outcome?.shrineRatio ?? null, phase: t.game.phase, deaths, kills: t.game.kills, time,
     party: t.heroes().map((h) => h.cfg.id), diagnostic,
-    damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo)]), ...(outcome || {}) };
+    damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo), h.stats.cura]), ...(outcome || {}) };
 }
 
 const campaignMode = process.argv[2] === 'campanha';
@@ -290,6 +290,18 @@ const profile = campaignMode && profileName === 'recomendado'
   : profiles[profileName];
 if (profileName !== 'aleatorio' && !profile) throw new Error(`Grupo desconhecido: ${profileName}. Use: recomendado (campanha), ${Object.keys(profiles).join(', ')}`);
 const vmMath = vm.runInContext('Math', context);
+// Métricas das técnicas extras: usos por herói/slot; SIM_SEM_SLOT=3 (ou 3:paladin,cleric) desliga o slot para medir o impacto
+const HeroClass = vm.runInContext('Hero', context);
+const extraUses = {};
+const [offSlot, offHeroes] = (process.env.SIM_SEM_SLOT || '').split(':');
+const offIds = offHeroes ? offHeroes.split(',') : null;
+const useExtra = HeroClass.prototype.useExtraSkill;
+HeroClass.prototype.useExtraSkill = function (slot, target, force) {
+  if (offSlot && +offSlot === slot && (!offIds || offIds.includes(this.cfg.id))) return false;
+  const ok = useExtra.call(this, slot, target, force);
+  if (ok) { const k = this.cfg.id; (extraUses[k] ||= [0, 0, 0, 0])[slot]++; }
+  return ok;
+};
 function useSeed(seed) {
   let state = seed >>> 0 || 1;
   const random = () => {
@@ -311,7 +323,7 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
     useSeed(runSeed);
     res.push(play(diff, profile, campaignMission));
   }
-  for (const r of res) for (const [id, dmg, dps] of r.damage) (damage[id] ||= []).push([dmg, dps]);
+  for (const r of res) for (const [id, dmg, dps, heal] of r.damage) (damage[id] ||= []).push([dmg, dps, heal, r.won ? 1 : 0]);
   const avg = (f) => (res.reduce((s, r) => s + f(r), 0) / res.length).toFixed(1);
   if (campaignMode) {
     const stars = [0, 1, 2, 3].map((n) => res.filter((r) => r.stars === n).length);
@@ -330,8 +342,8 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
   }
 }
 console.log(`${campaignMode ? `Missão: ${campaignMission.name} · vagas iniciais: ${campaignMission.heroes} · grupo: ${profileName} · mapa: ${straightMode ? 'reta' : 'curvo + terreno + obstáculos'}` : `Grupo: ${profileName}`} · semente: ${baseSeed}`);
-if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate');
+if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate · cura média · vitórias · usos slot 1/2/3 por partida');
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
 if (!campaignMode) for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
-  console.log(`  ${id.padEnd(10)} ${String(Math.round(mean(list, 0))).padStart(6)} · ${mean(list, 1).toFixed(1).padStart(5)}/s (${list.length})`);
+  console.log(`  ${id.padEnd(10)} ${String(Math.round(mean(list, 0))).padStart(6)} · ${mean(list, 1).toFixed(1).padStart(5)}/s · cura ${String(Math.round(mean(list, 2))).padStart(5)} · vit ${Math.round(mean(list, 3) * 100)}% · usos ${(extraUses[id] || [0, 0, 0, 0]).slice(1).map((n) => (n / list.length).toFixed(1)).join('/')} (${list.length})`);
 if (JSON.stringify(t.progress.snapshot()) !== progressAtStart) throw new Error('A simulação não pode acumular progressão entre partidas');
