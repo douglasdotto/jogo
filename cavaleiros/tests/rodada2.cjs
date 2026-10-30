@@ -3042,6 +3042,9 @@ test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abat
 });
 test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s ainda vence',()=>{
   context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({torre:2,'lago-sombrio':1,cemiterio:1,castelo:1})};
+  begin('horda',['paladin','guardian','pyro','cleric']);
+  assert.ok(t.heroes().every(h=>h.pos.distanceTo(h.post)<.01),'o grupo inicia alinhado nos postos depois de rearranjar a equipe');
+  t.updateGame(.01);assert.equal(t.game.state,'fight','a primeira onda não fica presa no estado de avanço');
   begin('horda',party(4));t.startPhase();Object.assign(t.game,{toSpawn:0});for(const s of t.skeletonsAlive())s.die();
   t.updateGame(.5);assert.ok(t.game.toSpawn>0,'a horda repõe esqueletos');assert.ok(t.game.endlessT>0);
   const goal=mission('horda').goal;

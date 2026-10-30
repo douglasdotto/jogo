@@ -6819,6 +6819,7 @@ function startMission() {
     if (m.goal.type === 'defend') game.shrine = new Shrine(world.along(world.anchorS(m.from) - 5, 0));
     if (m.goal.type === 'breach') game.gate = new Gate(world.along(world.anchorS(m.from) - GATE_BACK, 0));
     if (m.goal.type === 'duel') for (const h of heroes()) h.maxHp = h.hp = Math.round(h.maxHp * m.goal.heroHp);   // o campeão do duelo aguenta por dois
+    for (const h of heroes()) { h.pos.copy(h.post); h.vel.set(0, 0, 0); }   // a seleção rearranja os postos; começa já alinhado para não travar na montagem da formação
     musterMilitia();
     document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
