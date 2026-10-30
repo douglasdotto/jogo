@@ -425,6 +425,7 @@ export const CHALLENGE_COSMETICS = [
   { id: 'pesadelo', chapter: 'Desafio 3★ · Pesadelo', name: 'Espiral do Pesadelo', icon: '☾', auraStyle: 'nightmare', color: 0xb882ff, difficultyId: 'pesadelo', difficultyName: 'Pesadelo', track: 'challenge' },
 ];
 const CHAPTER_COSMETIC_RULE_VERSION = 2;
+const CHALLENGE_MISSION_RULE_VERSION = 1;
 const LEGACY_CHALLENGE_MISSIONS = ['vila', 'ponte', 'santuario', 'chamas', 'fazendas', 'lago', 'duelo', 'caca', 'resgate', 'ruinas', 'torre', 'lago-sombrio', 'cemiterio', 'horda', 'castelo', 'cripta', 'trono'];
 export function campaignCosmetics() {
   const starsByMission = new Map(MISSIONS.map((mission) => [mission.id, starsOf(mission.id)]));
@@ -442,6 +443,18 @@ export function campaignCosmetics() {
     legacyUnlocked = [...new Set([...legacyUnlocked, ...previouslyUnlocked])];
     writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...storedVisuals, rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
   }
+  const savedMedals = readMissionMedals();
+  if (!(Number(storedVisuals.challengeRulesVersion) >= CHALLENGE_MISSION_RULE_VERSION)) {
+    const previousChallengeMissions = LEGACY_CHALLENGE_MISSIONS.map((id) => MISSIONS.find((mission) => mission.id === id)).filter(Boolean);
+    const previousChallengeRewards = CHALLENGE_COSMETICS.filter((cosmetic) => {
+      return previousChallengeMissions.length > 0
+        && previousChallengeMissions.every((mission) => savedMedals[mission.id]?.challenges?.[cosmetic.difficultyId] === true);
+    }).map((cosmetic) => cosmetic.id);
+    legacyUnlocked = [...new Set([...legacyUnlocked, ...previousChallengeRewards])];
+    writeCampaignObject(CAMPAIGN_COSMETIC_KEY, {
+      ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), challengeRulesVersion: CHALLENGE_MISSION_RULE_VERSION, legacyUnlocked,
+    });
+  }
   const legacyUnlockSet = new Set(legacyUnlocked);
   const chapters = CHAPTER_COSMETICS.map((cosmetic) => {
     const missions = MISSIONS.filter((mission) => mission.chapter === cosmetic.chapter);
@@ -453,26 +466,24 @@ export function campaignCosmetics() {
     const unlocked = (requiredArenas > 0 && completedArenas === requiredArenas) || legacyUnlockSet.has(cosmetic.id);
     return { ...cosmetic, stars, maxStars, completedArenas, requiredArenas, requiredStars, unlocked };
   });
-  const savedMedals = readMissionMedals();
   const challenges = CHALLENGE_COSMETICS.map((cosmetic) => {
-    // Os visuais de desafio mantêm o requisito das 17 arenas originais, para
-    // que o capítulo extra não retire uma recompensa já conquistada.
-    const challengeMissions = LEGACY_CHALLENGE_MISSIONS.map((id) => MISSIONS.find((mission) => mission.id === id)).filter(Boolean);
+    // As missões atuais entram no domínio 3★; a migração acima preserva quem já
+    // havia concluído todas as arenas antes da chegada do Coração do Castelo.
+    const challengeMissions = MISSIONS;
     const completedMissions = challengeMissions.filter((mission) => savedMedals[mission.id]?.challenges?.[cosmetic.difficultyId] === true);
     const completedArenas = completedMissions.length;
     const completedIds = new Set(completedMissions.map((mission) => mission.id));
     const pendingMissions = challengeMissions.filter((mission) => !completedIds.has(mission.id)).map(({ id, name }) => ({ id, name }));
     const requiredArenas = challengeMissions.length;
-    // Cosméticos de desafio já conquistados nas 17 arenas originais continuam liberados
-    // depois que novos capítulos são adicionados à campanha.
-    const legacyChallengeComplete = completedArenas === requiredArenas;
-    if (legacyChallengeComplete && !legacyUnlocked.includes(cosmetic.id)) {
+    const currentChallengeComplete = requiredArenas > 0 && completedArenas === requiredArenas;
+    if (currentChallengeComplete && !legacyUnlocked.includes(cosmetic.id)) {
       legacyUnlocked.push(cosmetic.id);
       writeCampaignObject(CAMPAIGN_COSMETIC_KEY, { ...readCampaignObject(CAMPAIGN_COSMETIC_KEY), rulesVersion: CHAPTER_COSMETIC_RULE_VERSION, legacyUnlocked });
     }
     const stickyUnlock = legacyUnlocked.includes(cosmetic.id);
     return { ...cosmetic, stars: completedArenas, maxStars: requiredArenas, completedArenas, requiredArenas,
-      requiredStars: requiredArenas, pendingMissions, unlocked: stickyUnlock || requiredArenas > 0 && completedArenas === requiredArenas };
+      requiredStars: requiredArenas, pendingMissions, legacyEntitlement: stickyUnlock && !currentChallengeComplete,
+      unlocked: stickyUnlock || currentChallengeComplete };
   });
   return [...chapters, ...challenges];
 }

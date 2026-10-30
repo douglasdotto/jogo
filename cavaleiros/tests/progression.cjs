@@ -303,6 +303,13 @@ test('acampamento explica e acompanha os cosméticos opcionais de domínio 3★'
   P.renderCamp(root, P.createProgression(null), { cosmetics: [unlocked], tab: 'cosmeticos', equippedCosmetic: unlocked });
   assert.match(root.innerHTML, /Desafio completo · 17 de 17 missões com 3★ no Pesadelo/);
   assert.match(root.innerHTML, /cosmetic-item unlocked equipped challenge-cosmetic/);
+  const preserved = { ...unlocked, requiredArenas: 18, completedArenas: 17, legacyEntitlement: true,
+    pendingMissions: [{ id: 'coracao-do-castelo', name: 'Coração do Castelo' }] };
+  P.renderCamp(root, P.createProgression(null), { cosmetics: [preserved], tab: 'cosmeticos', equippedCosmetic: preserved });
+  assert.match(root.innerHTML, /Recompensa anterior preservada · 17 de 18 missões com 3★ no Pesadelo/);
+  assert.match(root.innerHTML, /Ver arenas adicionais \(1\)/);
+  assert.match(root.innerHTML, /<li>Coração do Castelo<\/li>/, 'o jogador com cosmético legado pode localizar a nova arena do desafio');
+  assert.match(root.innerHTML, /aria-valuemax="18" aria-valuenow="17"/);
 });
 
 test('acampamento avisa que o progresso está só na sessão', () => {

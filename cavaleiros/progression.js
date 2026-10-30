@@ -410,16 +410,19 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
         const challengeProgress = `${completedArenas} de ${requiredArenas} missões com 3★ no ${cosmetic.difficultyName}`;
         const starProgress = `${stars}/${maxStars} estrelas do capítulo`;
         const requirement = challenge
-          ? cosmetic.unlocked ? `Desafio completo · ${challengeProgress}` : challengeProgress
+          ? cosmetic.legacyEntitlement ? `Recompensa anterior preservada · ${challengeProgress}`
+            : cosmetic.unlocked ? `Desafio completo · ${challengeProgress}` : challengeProgress
           : cosmetic.unlocked ? starProgress : arenaProgress;
         const tip = cosmetic.unlocked
-          ? `${cosmetic.chapter} · visual desbloqueado · ${challenge ? challengeProgress : `${starProgress} · ${arenaProgress}`}`
+          ? `${cosmetic.chapter} · visual desbloqueado · ${challenge ? `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada · ' : ''}${challengeProgress}` : `${starProgress} · ${arenaProgress}`}`
           : `${cosmetic.chapter} · ${challenge ? challengeProgress : `${arenaProgress} · faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear`}`;
         const progressLabel = cosmetic.unlocked
-          ? `${cosmetic.name}: visual desbloqueado. ${challenge ? challengeProgress : `${starProgress}; ${arenaProgress}`}.`
+          ? `${cosmetic.name}: visual desbloqueado. ${challenge ? `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada. ' : ''}${challengeProgress}` : `${starProgress}; ${arenaProgress}`}.`
           : `${cosmetic.name}: ${challenge ? challengeProgress : `${arenaProgress}; faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear`}.`;
-        const pendingMissionList = !cosmetic.unlocked && pendingMissions.length
-          ? `<details class="cosmetic-missions"><summary>Ver missões pendentes (${pendingMissions.length})</summary><ul>${pendingMissions.map((mission) => `<li>${escapeProgressText(mission.name)}</li>`).join('')}</ul></details>`
+        const showPendingMissions = (!cosmetic.unlocked || cosmetic.legacyEntitlement) && pendingMissions.length;
+        const pendingSummary = cosmetic.legacyEntitlement ? `Ver arenas adicionais (${pendingMissions.length})` : `Ver missões pendentes (${pendingMissions.length})`;
+        const pendingMissionList = showPendingMissions
+          ? `<details class="cosmetic-missions"><summary>${pendingSummary}</summary><ul>${pendingMissions.map((mission) => `<li>${escapeProgressText(mission.name)}</li>`).join('')}</ul></details>`
           : '';
         return `<article class="cosmetic-item${cosmetic.unlocked ? ' unlocked' : ''}${selected ? ' equipped' : ''}${challenge ? ' challenge-cosmetic' : ''}" data-track="${challenge ? 'challenge' : 'chapter'}" style="--cosmetic-color:#${cosmetic.color.toString(16).padStart(6, '0')}" data-tip="${escapeProgressText(tip)}">
           <span class="cosmetic-icon" aria-hidden="true">${cosmetic.icon}</span><div class="cosmetic-copy"><small>${escapeProgressText(cosmetic.chapter)}</small><b>${escapeProgressText(cosmetic.name)}</b>

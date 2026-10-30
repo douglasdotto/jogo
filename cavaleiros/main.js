@@ -1853,15 +1853,22 @@ class Unit {
     this.root = SkeletonUtils.clone(gltf.scene);
     this.mats = [];   // materiais próprios para piscar ao levar golpe sem afetar os outros
     const skinned = [];
+    const materialCopies = new Map();
     this.root.traverse((o) => {
       if (!o.isMesh) return;
       if (o.material.userData?.vfx) { o.castShadow = o.frustumCulled = false; return; }   // chama em shader: material compartilhado, sem sombra
       o.castShadow = true;
       o.frustumCulled = true;
       if (o.isSkinnedMesh) skinned.push(o);
-      o.material = o.material.clone();
-      this.mats.push(o.material);
-      rememberUnitEmissive(o.material);
+      const sourceMaterial = o.material;
+      let unitMaterial = materialCopies.get(sourceMaterial);
+      if (!unitMaterial) {
+        unitMaterial = sourceMaterial.clone();
+        materialCopies.set(sourceMaterial, unitMaterial);
+        this.mats.push(unitMaterial);
+        rememberUnitEmissive(unitMaterial);
+      }
+      o.material = unitMaterial;
     });
     fitCullingSphere(skinned);
     this.vel = new THREE.Vector3();   // velocidade atual: acelera e freia aos poucos

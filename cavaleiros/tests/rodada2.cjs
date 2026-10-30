@@ -155,6 +155,30 @@ test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   hero.pos.z=-4;t.updateBars();assert.equal(hero.bar.style.display,'');
   clear();
 });
+test('unidade clona cada material-fonte uma vez e mantém os bonecos isolados',()=>{
+  clear();
+  const clones=[],disposed=[];
+  const cloneMaterial=()=>{const copy=material();copy.dispose=()=>disposed.push(copy);clones.push(copy);return copy;};
+  const sharedSource=material(),accentSource=material();
+  sharedSource.clone=accentSource.clone=cloneMaterial;
+  const scenes=[];
+  const originalClone=context.SkeletonUtils.clone;
+  context.SkeletonUtils.clone=()=>{
+    const meshes=[{isMesh:true,material:sharedSource},{isMesh:true,material:sharedSource},{isMesh:true,material:accentSource}];
+    const sceneRoot=root();sceneRoot.traverse=fn=>meshes.forEach(fn);scenes.push({sceneRoot,meshes});return sceneRoot;
+  };
+  try{
+    const gltf={scene:{},animations:[]},stats={hp:100,dmg:1,range:1,speed:1,cooldown:1};
+    const first=new t.Unit(gltf,stats,'skeleton'),second=new t.Unit(gltf,stats,'skeleton');
+    assert.equal(clones.length,4,'duas fontes de material geram dois clones por unidade');
+    assert.equal(first.mats.length,2);assert.equal(second.mats.length,2,'a lista de flash e descarte também não duplica referências');
+    assert.strictEqual(scenes[0].meshes[0].material,scenes[0].meshes[1].material,'malhas que compartilham a fonte reutilizam o clone da unidade');
+    assert.notStrictEqual(scenes[0].meshes[0].material,scenes[0].meshes[2].material,'fontes distintas continuam visualmente independentes');
+    assert.notStrictEqual(scenes[0].meshes[0].material,scenes[1].meshes[0].material,'unidades diferentes nunca compartilham material mutável');
+    first.remove();second.remove();
+    assert.equal(disposed.length,4,'cada material próprio é descartado uma vez');
+  }finally{context.SkeletonUtils.clone=originalClone;clear();}
+});
 test('cache de emissive preserva glow base e só atualiza quando a cor muda',()=>{
   const wasOver=t.game.over;t.game.over=true;
   const tracked=glow=>{const writes=[];let current=glow;return {userData:{glow},writes,emissive:{getHex:()=>current,setHex(hex){current=hex;writes.push(hex)}}};};
@@ -998,6 +1022,28 @@ test('Coração do Castelo mantém foco coletivo nos três chefes, troca ao cair
   assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),threat,'um ataque prestes a atingir o grupo interrompe o foco');
   threat.pendingHit=null;team=t.makeTargetContext();
   assert.equal(t.chooseHeroTarget(party[0],[darkKnight,executioner,threat],.016,team),executioner,'depois do perigo, a equipe retoma o chefe escolhido');
+  clear();
+});
+test('Coração limita interceptores na formação real e troca de foco quando um chefe se afasta',()=>{
+  clear();
+  const anchorS=t.world.anchorS(13);
+  const party=[['paladin',0,-1.2],['guardian',-1.7,0],['viking',1.7,0],['cleric',0,1.7]].map(([id,lateral,forward])=>{
+    const hero=new t.Hero(cfg(id));hero.post.copy(t.world.along(anchorS+forward,lateral));hero.pos.copy(hero.post);return hero;
+  });
+  const lich=new t.Skeleton('Lich',13,true),executioner=new t.Skeleton('Executioner',13,true),darkKnight=new t.Skeleton('DarkKnight',13,true);
+  lich.pos.copy(t.world.along(anchorS+8,0));executioner.pos.copy(t.world.along(anchorS+11,-6));darkKnight.pos.copy(t.world.along(anchorS+15,6));
+  const bosses=[lich,executioner,darkKnight];
+  for(const boss of bosses)boss.spawning=false;
+  lich.hp=lich.maxHp*.4;executioner.hp=executioner.maxHp*.3;darkKnight.hp=darkKnight.maxHp*.1;
+  t.game.mission={goal:t.MISSIONS.find(item=>item.id==='coracao-do-castelo').goal};
+  let team=t.makeTargetContext();
+  const interceptors=party.filter(hero=>t.canHeroReachTarget(hero,darkKnight,team));
+  assert.equal(interceptors.length,2,'só os dois melhores interceptores deixam a formação para alcançar o guardião distante');
+  for(const hero of interceptors)assert.equal(t.chooseHeroTarget(hero,bosses,.016,team),darkKnight,'interceptores mantêm o foco coletivo no chefe acessível mais vulnerável');
+  for(const hero of party.filter(hero=>!interceptors.includes(hero)))assert.equal(t.chooseHeroTarget(hero,bosses,.016,team),null,'os demais mantêm o posto em vez de atravessar a arena');
+  darkKnight.pos.copy(t.world.along(anchorS+22,6));team=t.makeTargetContext();
+  assert.ok(party.every(hero=>!t.canHeroReachTarget(hero,darkKnight,team)),'o chefe além da corda não arrasta a equipe pelo mapa');
+  assert.equal(t.chooseHeroTarget(interceptors[0],bosses,.016,team),executioner,'quando o foco fica inalcançável, a equipe troca ao próximo guardião');
   clear();
 });
 test('Trono de Ossos desempata com ordem determinística e troca foco inacessível',()=>{
