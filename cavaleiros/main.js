@@ -237,11 +237,11 @@ scene.fog = new THREE.Fog(0xa9d6f0, 45, 110);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 300);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.maxPolarAngle = Math.PI * 0.45;
-controls.minDistance = 12;
+controls.minDistance = 8;
 controls.maxDistance = 50;
 const follow = new THREE.Vector3();   // ponto que a câmera persegue
 // zoom cinematográfico: multiplica a distância escolhida pelo jogador (roda do mouse) conforme a situação
-const cam = { zoom: 1, userDist: 0, wheel: false, fit: 0 };
+const cam = { zoom: 1, userDist: 0, wheel: false, fit: 0, manual: false };
 renderer.domElement.addEventListener('wheel', () => (cam.wheel = true), { passive: true });
 
 const hemi = new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8);   // sombras mais suaves
@@ -8016,7 +8016,7 @@ function frame() {
     selectRing.rotation.z += real * 1.5;
   }
   tickHeroPanel(real);
-  if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; }   // o jogador mudou o zoom
+  if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; cam.manual = true; }   // o jogador mudou o zoom
   const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
   camera.position.add(kick);
   renderer.render(scene, camera);
@@ -8081,7 +8081,9 @@ function followParty(real) {
   if (cam.userDist === 0) cam.userDist = offset.length();
   const fit = Math.max(CAM_MIN_FIT, frameSpread * 2.6);   // distância que ainda mostra todo mundo
   cam.fit = (cam.fit || fit) + (fit - (cam.fit || fit)) * Math.min(1, real * 2);
-  offset.setLength(Math.min(controls.maxDistance, Math.max(cam.userDist * cam.zoom, cam.fit)));
+  // depois que o jogador usa a roda, o zoom dele vale mesmo que alguém fique fora do quadro
+  const want = cam.manual ? cam.userDist * cam.zoom : Math.max(cam.userDist * cam.zoom, cam.fit);
+  offset.setLength(Math.min(controls.maxDistance, Math.max(controls.minDistance, want)));
   camera.position.copy(controls.target).add(offset);
 }
 
