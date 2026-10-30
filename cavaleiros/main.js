@@ -250,8 +250,14 @@ controls.minDistance = 8;
 controls.maxDistance = 50;
 const follow = new THREE.Vector3();   // ponto que a câmera persegue
 // zoom cinematográfico: multiplica a distância escolhida pelo jogador (roda do mouse) conforme a situação
-const cam = { zoom: 1, userDist: 0, wheel: false, fit: 0, manual: false };
-renderer.domElement.addEventListener('wheel', () => (cam.wheel = true), { passive: true });
+const cam = { zoom: 1, userDist: 0, fit: 0, manual: false };
+// o OrbitControls aplica a roda já no evento (registrado antes deste): guarda a distância aqui mesmo,
+// antes que o followParty do próximo quadro a sobrescreva com o userDist antigo
+renderer.domElement.addEventListener('wheel', () => {
+  if (!controls.enabled || !controls.enableZoom) return;
+  cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom;
+  cam.manual = true;
+}, { passive: true });
 
 const hemi = new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.8);   // sombras mais suaves
 scene.add(hemi);
@@ -9738,7 +9744,6 @@ function frame() {
     selectRing.rotation.z += real * 1.5;
   }
   tickHeroPanel(real);
-  if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; cam.manual = true; }   // o jogador mudou o zoom
   const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
   camera.position.add(kick);
   if (!loading.visible) renderer.render(scene, camera);   // atrás da tela de carregamento não desenha: compileAsync compila sem travar
