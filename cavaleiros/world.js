@@ -1780,19 +1780,21 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
     }
     for (const { mesh, entries } of wispBatches) {
       if (!isInstancedBandVisible(camera && animationFrustum, mesh)) continue;
-      entries.forEach((w, i) => {
+      for (let i = 0; i < entries.length; i++) {
+        const w = entries[i];
         const t = time * w.speed + w.phase;
         wispTransform.position.set(w.home.x + Math.sin(t) * 1.4, w.home.y + 0.9 + Math.sin(t * 1.7) * 0.5, w.home.z + Math.cos(t * 0.8) * 1.4);
         wispTransform.scale.setScalar(0.8 + Math.sin(time * 5 + w.phase) * 0.35);
         wispTransform.updateMatrix();
         mesh.setMatrixAt(i, wispTransform.matrix);
-      });
+      }
       mesh.instanceMatrix.needsUpdate = true;
     }
     cloudMat.color.lerpColors(cloudDay, cloudGloom, gloomAt(viewZ));
     for (const { entries, left, right } of butterflyBatches) {   // voo em laço e asas instanciadas por faixa
       if (!isInstancedBandVisible(camera && animationFrustum, left)) continue;
-      entries.forEach((b, i) => {
+      for (let i = 0; i < entries.length; i++) {
+        const b = entries[i];
         const t = time * b.speed + b.phase;
         butterflyRoot.position.set(b.home.x + Math.sin(t) * 2.2, b.home.y + 1 + Math.sin(t * 2.3) * 0.4, b.home.z + Math.sin(t * 0.7) * 2.2);
         butterflyRoot.rotation.set(0, Math.atan2(Math.cos(t) * 2.2, Math.cos(t * 0.7) * 1.5), 0);
@@ -1806,7 +1808,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
         butterflyWing.updateMatrix();
         butterflyMatrix.multiplyMatrices(butterflyRoot.matrix, butterflyWing.matrix);
         right.setMatrixAt(i, butterflyMatrix);
-      });
+      }
       left.instanceMatrix.needsUpdate = true;
       right.instanceMatrix.needsUpdate = true;
     }
