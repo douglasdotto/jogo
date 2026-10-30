@@ -2301,8 +2301,16 @@ test('Funda ricocheteante salta o tiro comum e o Prisma dá +1 alvo aos magos',(
   clear();t.bolts.length=0;relics('archmage-prism');
   const mage=hero('pyro',0,0),knight=hero('paladin',1,0);
   assert.equal(mage.extraTargets,1);assert.ok(!knight.extraTargets,'só magos ganham alvo extra');
-  const x=foe('Warrior',0,-4),y=foe('Warrior',1,-4);context.relicExtraShot(mage,x);
-  assert.equal(t.bolts.length,1);assert.equal(t.bolts[0].target,y);assert.ok(Math.abs(t.bolts[0].dmg-mage.dmg*.7)<1e-6);
+  const x=foe('Warrior',0,-4),y=foe('Warrior',1,-4),z=foe('Warrior',-2,-4),w=foe('Warrior',3,-4);
+  const filter=t.units.filter;t.units.filter=()=>{throw new Error('o tiro extra não deve reconstruir a lista de esqueletos');};
+  try {
+    context.relicExtraShot(mage,x);
+    assert.equal(t.bolts.length,1);assert.equal(t.bolts[0].target,y);assert.ok(Math.abs(t.bolts[0].dmg-mage.dmg*.7)<1e-6);
+    for(const bolt of t.bolts)context.scene.remove(bolt.mesh);t.bolts.length=0;
+    mage.extraTargets=2;context.relicExtraShot(mage,x);
+  } finally { t.units.filter=filter; }
+  assert.deepEqual(t.bolts.map(b=>b.target),[y,z],'sem repetição, do inimigo mais próximo ao próximo mais próximo');
+  assert.ok(t.bolts.every(b=>Math.abs(b.dmg-mage.dmg*.7)<1e-6));
   for(const bolt of t.bolts)context.scene.remove(bolt.mesh);t.bolts.length=0;clear();
 });
 test('projéteis reutilizam o vetor de destino sem clonar a posição do alvo a cada quadro',()=>{

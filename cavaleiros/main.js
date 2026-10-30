@@ -1142,12 +1142,26 @@ function relicOnKill(foe) {
 }
 
 // tiro comum de mago com o prisma: um segundo projétil vai para outro inimigo ao alcance
+const relicExtraCandidates = [];
 function relicExtraShot(hero, target) {
   if (!hero.extraTargets) return;
-  const others = skeletonsAlive().filter((s) => s !== target && !s.spawning && s.pos.distanceTo(hero.pos) <= hero.range + 1);
+  const others = relicExtraCandidates;
+  others.length = 0;
+  const reach = hero.range + 1, reachSq = reach * reach;
+  for (const enemy of units) {
+    if (enemy.team === 'skeleton' && !enemy.dead && !enemy.spawning && enemy !== target
+      && enemy.pos.distanceToSquared(hero.pos) <= reachSq) others.push(enemy);
+  }
   for (let k = 0; k < hero.extraTargets && others.length; k++) {
-    const other = nearest(target.pos, others);
-    others.splice(others.indexOf(other), 1);
+    let nearestIndex = -1, nearestDistance = Infinity;
+    for (let i = 0; i < others.length; i++) {
+      const distance = others[i].pos.distanceToSquared(target.pos);
+      if (distance < nearestDistance) { nearestDistance = distance; nearestIndex = i; }
+    }
+    if (nearestIndex < 0) break;
+    const other = others[nearestIndex];
+    others[nearestIndex] = others[others.length - 1];
+    others.pop();
     fireBolt(hero, other, 'magic');
     const bolt = bolts.at(-1);
     if (bolt?.owner === hero) bolt.dmg *= 0.7;
