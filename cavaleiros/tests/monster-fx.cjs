@@ -247,4 +247,53 @@ function freshContext() {
   units.find = nativeFind;
 }
 
+{
+  const { context, unit } = freshContext();
+  const lich = unit({ phaseBoss: true, enemyKind: 'Lich', kind: { name: 'Lich Supremo', title: 'Coração sombrio' }, maxHp: 100, hp: 62 });
+  const executioner = unit({ phaseBoss: true, enemyKind: 'Executioner', kind: { name: 'Carrasco', title: 'Carrasco do trono' }, maxHp: 100, hp: 35 });
+  const darkKnight = unit({ phaseBoss: true, enemyKind: 'DarkKnight', kind: { name: 'Cavaleiro Sombrio', title: 'Cavaleiro do Eclipse' }, maxHp: 100, hp: 88 });
+  context.darkKnight = darkKnight;
+  vm.runInContext(`G.game = { mission: { goal: { type: 'bosses', bosses: ['Lich', 'Executioner', 'DarkKnight'] } } }`, context);
+  const nodes = new Map(), rows = new Map();
+  const node = (key) => {
+    if (!nodes.has(key)) nodes.set(key, { hidden: false, textContent: '', style: {}, firstChild: { textContent: '' }, attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; } });
+    return nodes.get(key);
+  };
+  let html = '', htmlWrites = 0;
+  const bar = { hidden: true, classList: { toggle(name, value) { this[name] = value; } },
+    querySelector: node,
+    querySelectorAll(selector) {
+      assert.equal(selector, '.boss-member');
+      return [...html.matchAll(/data-boss="([^"]+)"/g)].map((match) => {
+        const id = match[1];
+        const row = { dataset: { boss: id }, classList: { toggle(name, value) { this[name] = value; } },
+          querySelector: (child) => node(`${id}:${child}`) };
+        rows.set(id, row);
+        return row;
+      });
+    } };
+  Object.defineProperty(bar, 'innerHTML', { get() { return html; }, set(value) { html = value; htmlWrites++; nodes.clear(); rows.clear(); } });
+  context.document = { getElementById(id) { assert.equal(id, 'bossBar'); return bar; } };
+  vm.runInContext(`mBossWarnings.add({alive:true,warning:true,owner:darkKnight,announce:'Investida — saia da linha',t:0.8,life:1.1}); updateMonsterFx(0.016)`, context);
+  assert.match(html, /Coração sombrio[\s\S]*Carrasco do trono[\s\S]*Cavaleiro do Eclipse/, 'a barra separa a vida dos três guardiões por nome');
+  assert.equal(node('Lich:.boss-member-fill').style.width, '62%', 'a barra individual mostra a vida atual do Lich');
+  assert.equal(node('Executioner:.boss-member-hp').textContent, '35%', 'cada guardião tem seu próprio percentual');
+  assert.equal(node('.boss-warning-owner').textContent, 'Cavaleiro do Eclipse', 'o aviso identifica qual chefe vai atacar');
+  const hudCss = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(hudCss, /boss-roster[^}]*grid-template-columns: repeat\(3/, 'os três indicadores cabem lado a lado no HUD');
+  lich.dead = true;
+  vm.runInContext('updateMonsterFx(0.016)', context);
+  assert.equal(htmlWrites, 1, 'a troca de chefe em foco preserva a barra e evita reconstruir o HUD');
+  assert.equal(node('Lich:.boss-member-hp').textContent, 'Derrotado', 'a barra marca o Lich derrotado');
+  darkKnight.dead = true;
+  vm.runInContext('updateMonsterFx(0.016)', context);
+  assert.equal(node('DarkKnight:.boss-member-hp').textContent, 'Derrotado', 'a barra marca o chefe abatido');
+  assert.equal(rows.get('DarkKnight').classList.defeated, true, 'o chefe derrotado perde destaque visual');
+  assert.equal(node('.boss-warning-owner').textContent, '', 'avisos de um chefe derrotado deixam de ser atribuídos a ele');
+  executioner.dead = true;
+  vm.runInContext('updateMonsterFx(0.016)', context);
+  assert.equal(bar.hidden, true, 'a barra some quando o trio foi derrotado');
+}
+
 console.log('OK: escudo de ossos e avisos do Carrasco saem da cena e descartam materiais');
