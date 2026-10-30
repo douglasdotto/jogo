@@ -914,6 +914,9 @@ test('criar projéteis só copia a direção que precisa persistir e não aloca 
     assert.notStrictEqual(first,second,'direções de projéteis ativos não são compartilhadas');
     assert.equal(first.z,firstZ,'reutilizar o vetor de trabalho não muda um projétil já voando');
     assert.ok(second.x>0.99,'o ângulo do segundo disparo continua correto');
+    assert.ok(t.bolts[0].hit && typeof t.bolts[0].hit.has==='function' && typeof t.bolts[0].hit.add==='function','flechas perfurantes mantêm histórico de alvos próprios');
+    t.fireBolt(shooter,target,'magic',0,false);
+    assert.equal(t.bolts.at(-1).hit,null,'tiros que não atravessam inimigos dispensam o conjunto não usado');
   } finally {
     Vector.prototype.clone=originalClone;context.THREE.Vector3=Vector;t.bolts.length=0;
   }

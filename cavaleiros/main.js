@@ -2838,7 +2838,8 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   const dir = fireBoltDirectionScratch.subVectors(target.pos, from.pos).normalize().applyAxisAngle(fireBoltAxis, angle).clone();
   mesh.quaternion.setFromUnitVectors(fireBoltAxis, dir);
   scene.add(mesh);
-  const bolt = { mesh, target, owner: from, kind, dir, hit: new Set(), life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
+  const piercing = kind === 'crossbow' || kind === 'ninja' || kind === 'archer';
+  const bolt = { mesh, target, owner: from, kind, dir, hit: piercing ? new Set() : null, life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
   if (skill && (kind === 'pyro' || kind === 'flask' || kind === 'tonic')) {   // a bola grande e os frascos fazem um arco no ar até o alvo
     bolt.base = mesh.position.clone();
