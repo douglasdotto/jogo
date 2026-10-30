@@ -665,11 +665,10 @@ const MODES = [
   { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
   { name: 'Jornada', icon: '♛', desc: 'Jornada completa: as 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
   { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
-  { name: 'Reino', icon: '♜', desc: 'Construa a vila, colete recursos, treine soldados e heróis e destrua o Portal de Ossos.', color: ['#b9f0a8', '#4f9a3a'] },
 ];
-// Menu inicial estilo Clash: barra de perfil em cima, um botão grande de batalha (Campanha) com a equipe ao lado
-// e Jornada, Acampamento e Reino como botões menores embaixo. Pouco texto: os detalhes ficam na dica e no aria-label.
-// A ordem de pick.cards segue MODES (atalhos 1–4 e setas ← →).
+// Menu inicial estilo Clash: barra de perfil em cima, logo, a equipe em 3D no meio do cenário (menuStage)
+// e uma doca embaixo: o botão grande de batalha (Campanha) entre Jornada e Acampamento. Pouco texto: os detalhes ficam na dica e no aria-label.
+// A ordem de pick.cards segue MODES (atalhos 1–3 e setas ← →).
 const SEEN_ACHIEVEMENTS_KEY = 'cavaleiros-conquistas-vistas';
 const seenAchievements = () => { try { return +localStorage.getItem(SEEN_ACHIEVEMENTS_KEY) || 0; } catch { return 0; } };
 // missão sugerida: a primeira ainda sem estrelas; com todas jogadas, a primeira que ainda rende estrela
@@ -738,32 +737,18 @@ function showMenu() {
   bar.querySelector('.menu-gfx').onclick = () => { $('quality').onclick?.(); paintMenuBar(bar); };
   paintMenuBar(bar);
 
-  // palco: equipe dos dois lados do botão de batalha
-  const stage = document.createElement('div');
-  stage.className = 'menu-stage';
-  const squad = menuSquad();
-  const crew = (side, from) => {
-    const box = document.createElement('div');
-    box.className = `menu-crew ${side}`;
-    box.setAttribute('aria-hidden', 'true');
-    box.innerHTML = squad.slice(from, from + 2).map((cfg, k) => `<span class="menu-hero" data-tip="${attrText(cfg.name)}" data-glyph="${PICK_CLASS_GLYPHS[cfg.classId] || '♜'}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]};--d:${380 + (from + k) * 110}ms;--bob:${(from + k) * 0.7}s"><img src="${cfg.portrait || ''}" alt=""></span>`).join('');
-    return box;
-  };
-  const row = document.createElement('div');
-  row.className = 'menu-row';
-  const label = ['Batalhar', 'Jornada', 'Acampamento', 'Reino'];
+  // doca embaixo: Jornada · Batalhar · Acampamento (a equipe 3D no meio também leva ao Acampamento)
+  const dock = document.createElement('div');
+  dock.className = 'menu-dock';
+  const label = ['Batalhar', 'Jornada', 'Acampamento'];
   const extra = [
     `<small class="menu-next">${next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : '♛'}</small><span class="menu-badge-stars">★ ${stars}/${maxStars}</span>`,
     journey ? `<small>${journey}</small>` : '',
     `<small class="menu-gold">${GOLD.icon} ${progress.gold}</small>${shopReady || newAchievements ? '<span class="menu-new" aria-hidden="true">!</span>' : ''}`,
-    '',
   ];
   const spoken = [`${stars} de ${maxStars} estrelas${next ? `. Próxima: ${next.name}` : ''}`,
     records.some((r) => r.won) ? 'Jornada vencida' : best ? `Recorde: fase ${best}` : 'Sem recorde ainda',
-    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`,
-    'Estratégia: vila, recursos e ondas'];
-  const realmRecords = loadKingdomRecords();
-  const realmBest = DIFFICULTIES.map((d) => (kingdomRecordText(realmRecords[d.id]) ? `${d.icon} ${kingdomRecordText(realmRecords[d.id])}` : '')).filter(Boolean).join(' · ');
+    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = `menu-btn ${i === 0 ? 'menu-battle' : 'menu-side'}`;
@@ -771,19 +756,18 @@ function showMenu() {
     b.setAttribute('role', 'button');
     b.setAttribute('aria-keyshortcuts', String(i + 1));
     b.setAttribute('aria-label', `${m.name}: ${m.desc} ${spoken[i]}.`);
-    b.setAttribute('data-tip', i === 0 ? `${m.name} · ${m.desc}` : i === 3 && realmBest ? `${m.desc} · ${realmBest}` : m.desc);
+    b.setAttribute('data-tip', i === 0 ? `${m.name} · ${m.desc}` : m.desc);
     b.style.setProperty('--c', m.color[0]);
     b.style.setProperty('--cd', m.color[1]);
-    b.style.setProperty('--d', `${i === 0 ? 160 : 260 + i * 80}ms`);
+    b.style.setProperty('--d', `${i === 0 ? 220 : 300 + i * 70}ms`);
     b.innerHTML = `<span class="menu-icon" aria-hidden="true">${i === 0 ? '⚔' : m.icon}</span><b>${label[i]}</b>${extra[i]}`;
     b.onclick = () => confirmPick(i);
     b.onfocus = () => selectCard(i);
     b.onmouseenter = () => selectCard(i);
     return b;
   });
-  stage.append(crew('left', 0), pick.cards[0], crew('right', 2));
-  row.append(...pick.cards.slice(1));
-  home.append(bar, stage, row);
+  dock.append(pick.cards[1], pick.cards[0], pick.cards[2]);
+  home.append(bar, dock);
   list.appendChild(home);
   selectCard(0);
   pick.open = true;
@@ -794,7 +778,7 @@ function showMenu() {
 function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : i === 3 ? (game.mission = null, showDifficulty(true)) : (game.mission = null, showDifficulty())), 450);
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : (game.mission = null, showDifficulty())), 450);
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
@@ -8500,9 +8484,6 @@ function startGame(view = 'menu') {
   syncDirectControlUI();
 }
 
-// balanço da câmera no menu inicial (orbitMenu); placeParty o zera junto com a câmera
-const menuOrbit = { t: 0, angle: 0 };
-
 // põe o grupo (e a câmera) na fase inicial e zera a partida; game.mission continua
 function placeParty(first) {
   const m = game.mission;
@@ -8515,7 +8496,6 @@ function placeParty(first) {
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
   aimCamera(game.guideS);
-  menuOrbit.t = menuOrbit.angle = 0;   // o balanço do menu recomeça do ângulo de jogo
   $('goal').classList.toggle('hidden', !m);
   if (m) {
     $('goal').setAttribute('data-icon', GOAL_ICONS[m.goal.type] || '⚑');
@@ -9726,10 +9706,7 @@ function frame() {
   showEvolution();
   // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez; no Reino a câmera é livre
   if (game.realm) game.realm.camera(real);
-  else {
-    followParty(real);
-    if (pick.open && pick.mode === 'mode') orbitMenu(real);
-  }
+  else if (typeof menuStage === 'undefined' || !menuStage.tick(real)) followParty(real);   // no menu inicial: câmera de cinema e equipe em 3D
   controls.update();
   placeSun(follow);
   world.update(real, follow.z, camera);
@@ -9763,17 +9740,6 @@ function frame() {
   updateSkillBar();
   updateAim();
   audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
-}
-
-// menu inicial: a câmera balança devagar em volta da vila (vai e volta, sem sair do cenário);
-// a partida reposiciona a câmera em placeParty
-const MENU_ORBIT_AXIS = new THREE.Vector3(0, 1, 0);
-function orbitMenu(real) {
-  menuOrbit.t += real;
-  const angle = Math.sin(menuOrbit.t * 0.12) * 0.32;
-  tmp.subVectors(camera.position, controls.target).applyAxisAngle(MENU_ORBIT_AXIS, angle - menuOrbit.angle);
-  camera.position.copy(controls.target).add(tmp);
-  menuOrbit.angle = angle;
 }
 
 // enquadra o grupo e a briga por perto (Campanha e Jornada)
@@ -10052,6 +10018,150 @@ function frameView() {
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(frameView).observe($('skills'));
+
+// ---------- palco 3D do menu inicial ----------
+// Câmera baixa na estrada olhando a vila ao longe, com a equipe da campanha parada na frente (modelos reais em idle).
+// Só existe enquanto o menu de modos está aberto; ao sair, a câmera volta ao ângulo de jogo (aimCamera).
+// Clicar num herói abre o Acampamento (maestria e oficina dos heróis). Custo: 4 modelos e 4 mixers, sem física.
+const menuStage = (() => {
+  const pickEl = $('pick');
+  const group = new THREE.Group();
+  group.visible = false;
+  scene.add(group);
+  const ringGeo = new THREE.RingGeometry(0.62, 0.8, 40);
+  let actors = [], squadKey = '', active = false, t = 0, hover = -1;
+  const camBase = new THREE.Vector3(), lookBase = new THREE.Vector3(), side = new THREE.Vector3();
+  const pointer = { x: 0, y: 0, on: false };
+  const tag = document.createElement('div');
+  tag.className = 'menu-hero-tag';
+  tag.hidden = true;
+  pickEl.appendChild(tag);
+  const p1 = new THREE.Vector3(), p2 = new THREE.Vector3();
+
+  const free = (e) => !e.target.closest?.('.menu-btn, .menu-bar, button, [role="button"]');
+  pickEl.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.on = active && free(e); });
+  pickEl.addEventListener('pointerleave', () => { pointer.on = false; });
+  pickEl.addEventListener('click', (e) => {
+    if (!active || hover < 0 || !free(e) || !pick.open || pick.mode !== 'mode') return;
+    audio.play('click');
+    confirmPick(2);   // Acampamento: maestria e melhorias da equipe
+  });
+
+  function build(squad) {
+    for (const a of actors) { group.remove(a.root); disposeSkeletons(a.root); }
+    actors = squad.map((cfg) => {
+      const model = SkeletonUtils.clone(cfg.built.scene);
+      model.traverse((o) => {
+        if (cfg.hide.includes(o.name)) o.visible = false;
+        if (o.isMesh) { o.castShadow = !/_Eyes$/.test(o.name); o.frustumCulled = false; }
+      });
+      const root = new THREE.Group();
+      model.scale.setScalar(cfg.scale || 1);
+      model.position.y = cfg.id === 'angel' ? 0.52 : 0;
+      const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: cfg.color[0], transparent: true, opacity: 0, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.06;
+      root.add(model, ring);
+      const mixer = new THREE.AnimationMixer(model);
+      const clip = THREE.AnimationClip.findByName(cfg.built.animations, cfg.idle);
+      if (clip) mixer.clipAction(clip).play();
+      mixer.update(Math.random() * 2);   // cada um num ponto do idle
+      group.add(root);
+      return { cfg, root, model, ring, mixer, lift: 0, height: 2.1 * (cfg.scale || 1) };
+    });
+  }
+
+  // posições a partir da estrada do mundo atual: heróis em leque, câmera atrás deles na altura do peito
+  function place() {
+    const s0 = game.guideS + 2;
+    const base = world.pointAt(s0), fwd = world.tangentAt(s0);
+    side.copy(world.sideOf(fwd));
+    const lat = [-2.9, -0.95, 0.95, 2.9].slice(0, actors.length);
+    if (actors.length < 4) lat.forEach((_, i) => { lat[i] = (i - (actors.length - 1) / 2) * 1.9; });
+    actors.forEach((a, i) => {
+      const p = world.along(s0 + Math.abs(lat[i]) * 0.28, lat[i]);
+      p.y = world.groundHeight(p.x, p.z);
+      a.root.position.copy(p);
+      a.baseY = p.y;
+      // de frente para a câmera, um pouco virados para o meio
+      a.root.rotation.y = Math.atan2(-fwd.x, -fwd.z) - lat[i] * 0.07;
+    });
+    camBase.copy(base).addScaledVector(fwd, -11.5);
+    camBase.y = world.groundHeight(camBase.x, camBase.z) + 3.4;
+    lookBase.copy(base).addScaledVector(fwd, 5);
+    lookBase.y = base.y + 1.15;
+  }
+
+  function enter() {
+    active = true;
+    t = 0;
+    const squad = menuSquad();
+    const key = squad.map((cfg) => cfg.id).join();
+    if (key !== squadKey) { squadKey = key; build(squad); }
+    place();
+    group.visible = true;
+    camera.position.copy(camBase);
+    controls.target.copy(lookBase);
+  }
+
+  function leave() {
+    active = false;
+    hover = -1;
+    pointer.on = false;
+    group.visible = false;
+    tag.hidden = true;
+    pickEl.style.cursor = '';
+    aimCamera(game.guideS);   // volta ao ângulo de jogo
+  }
+
+  // quem está sob o cursor: caixa do herói projetada na tela (sem raycast em malha com esqueleto)
+  function pickHover() {
+    if (!pointer.on) return -1;
+    let best = -1, bestDist = Infinity;
+    actors.forEach((a, i) => {
+      p1.copy(a.root.position).project(camera);
+      p2.copy(a.root.position).setY(a.root.position.y + a.height).project(camera);
+      const x = (p1.x + 1) / 2 * innerWidth, yFoot = (1 - p1.y) / 2 * innerHeight, yHead = (1 - p2.y) / 2 * innerHeight;
+      const half = (yFoot - yHead) * 0.3;
+      const dx = Math.abs(pointer.x - x);
+      if (dx < half && pointer.y > yHead && pointer.y < yFoot && dx < bestDist) { best = i; bestDist = dx; }
+    });
+    return best;
+  }
+
+  return {
+    tick(real) {
+      const on = pick.mode === 'mode' && !pickEl.classList.contains('hidden') && !game.mission;
+      if (!on) { if (active) leave(); return false; }
+      if (!active) enter();
+      t += real;
+      const calm = calmMotion?.matches;
+      // câmera: deslize lento de um lado ao outro e respiração de aproximação
+      const sway = calm ? 0 : Math.sin(t * 0.11) * 1.6, breathe = calm ? 0 : Math.sin(t * 0.07) * 0.6;
+      camera.position.copy(camBase).addScaledVector(side, sway).addScaledVector(tmp.subVectors(lookBase, camBase).setY(0).normalize(), breathe);
+      controls.target.copy(lookBase).addScaledVector(side, sway * 0.35);
+      hover = pick.open ? pickHover() : -1;
+      pickEl.style.cursor = hover >= 0 ? 'pointer' : '';
+      actors.forEach((a, i) => {
+        a.mixer.update(real);
+        const want = i === hover ? 1 : 0;
+        a.lift += (want - a.lift) * Math.min(1, real * 10);
+        a.root.position.y = a.baseY + a.lift * 0.18;
+        a.root.scale.setScalar(1 + a.lift * 0.06);
+        a.ring.material.opacity = a.lift * 0.85;
+      });
+      if (hover >= 0) {
+        const a = actors[hover];
+        p1.copy(a.root.position).setY(a.root.position.y + a.height + 0.35).project(camera);
+        tag.textContent = a.cfg.name;
+        tag.style.left = `${(p1.x + 1) / 2 * innerWidth}px`;
+        tag.style.top = `${(1 - p1.y) / 2 * innerHeight}px`;
+      }
+      tag.hidden = hover < 0;
+      return true;
+    },
+  };
+})();
 
 // modo Reino (kingdom.js): recebe as peças do jogo sem importar o main.js, como o monsters.js
 linkKingdom({ Unit, Hero, Skeleton, units, scene, camera, controls, renderer, sun, follow, assets, HEROES, VARIANTS, variantOpen, militiaWeapon,
