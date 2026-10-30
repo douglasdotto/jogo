@@ -104,7 +104,7 @@ vm.runInContext(`
     const villager = game.villager;
     const currentVillagerRatio = villager && villager.maxHp > 0
       ? Math.max(0, Math.min(1, villager.hp / villager.maxHp)) : null;
-    const villagerRatio = game.mission?.goal?.type === 'escort'
+    const villagerRatio = ['escort', 'rescue'].includes(game.mission?.goal?.type)
       ? (game.missionVillagerRatio ?? currentVillagerRatio)
       : currentVillagerRatio;
     const stars = __missionEndOriginal(won);
