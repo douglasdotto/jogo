@@ -698,6 +698,18 @@ test('evoluções simultâneas pausam em fila e oferecem três opções distinta
   t.confirmPick(0);assert.equal(t.evolutions.length,2);assert.equal(t.game.paused,true);
   t.confirmPick(0);t.confirmPick(0);assert.equal(t.evolutions.length,0);assert.equal(t.game.paused,false);
 });
+test('tela de evolução mostra quem evolui, ganhos em número, rota sugerida e fila',()=>{
+  clear();const p=new t.Hero(cfg('paladin')),a=new t.Hero(cfg('arcane'));p.gainXp(90);a.gainXp(90);
+  t.showEvolution();const card=()=>elements.get('pickList').children.at(-1).innerHTML,sub=card();
+  assert.match(sub,/evo-hero/);assert.ok(sub.includes(p.cfg.names[0])&&sub.includes(p.cfg.names[1]),'nome antigo → novo');
+  assert.match(sub,/Nv1<\/s>.*Nv2/);assert.match(sub,/<b>1\/2<\/b>/,'fila 1/2');
+  const html=t.pick.cards.map(c=>c.innerHTML).join('');assert.match(html,/DPS/);assert.match(html,/<small>Cura<\/small>.*<s>\d+<\/s>/,'cura antes → depois no Paladino');
+  const rec=t.pick.cards.findIndex(c=>c.className.includes('recommended'));
+  assert.equal(t.pick.upgrades[rec].id,t.chooseAutoEvolution(p).id);assert.equal(t.pick.sel,rec,'Enter confirma a sugerida');
+  t.confirmPick(0);assert.match(card(),/<b>2\/2<\/b>/);
+  assert.ok(t.pick.cards.some(c=>c.className.includes('weak')),'mago sem cura vê Apoio apagado');
+  t.confirmPick(0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.evoDone.length,0);
+});
 test('autoevolução só liga com permissão e resolve as escolhas automaticamente',()=>{
   clear();const key='cavaleiros-auto-evoluir',saved=context.localStorage.data[key];delete context.localStorage.data[key];
   const button=elements.get('autoEvolve');assert.equal(button.textContent,'Evolução: você escolhe');

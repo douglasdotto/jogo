@@ -1382,37 +1382,102 @@ function showEvolution() {
     return;
   }
   const entry = evolutions[0], h = entry.hero, cfg = h.cfg;
+  const done = pick.evoDone?.length || 0, total = done + evolutions.length;
   pick.mode = 'evolution';
   $('banner').style.opacity = 0;
   pick.open = true;
   game.paused = true;
   pick.upgrades = availableEvolutionBranches(h);
+  const recommended = chooseAutoEvolution(h)?.id;
   $('pickTitle').textContent = 'Evolução!';
-  $('pickSub').textContent = `${cfg.names[entry.level - 1]} · Nv${entry.level}`;
+  $('pickSub').textContent = '';   // tudo vai num cartão só, dentro da lista
   $('pickHint').textContent = `1–${pick.upgrades.length} · Enter`;
   $('pickList').innerHTML = '';
   $('pickList').classList.remove('grid');
+  const card = document.createElement('div');
+  card.className = 'evo-card';
+  card.style.setProperty('--c', cfg.color[0]);
+  card.style.setProperty('--cd', cfg.color[1]);
+  card.innerHTML = `<header class="evo-top"><b class="evo-title">⬆︎ Evolução</b>${total > 1 ? evolutionQueueHTML(done + 1, total) : ''}</header>${evolutionHeroHTML(entry)}`;
+  const routes = document.createElement('div');
+  routes.className = 'evo-routes';
+  card.appendChild(routes);
+  $('pickList').appendChild(card);
   pick.cards = pick.upgrades.map((option, i) => {
+    const gain = evolutionGain(h, option.id);
+    const rec = option.id === recommended;
+    const tip = `${option.name}: ${option.desc}${gain.weak ? ' Pouco efeito neste herói.' : ''}${rec ? ' ★ Sugerida para este herói e esta equipe.' : ''}`;
     const b = document.createElement('div');
-    b.className = 'card relic evolution';
+    b.className = `evo-route${gain.weak ? ' weak' : ''}${rec ? ' recommended' : ''}`;
     b.setAttribute('role', 'button');
     b.setAttribute('tabindex', '0');
-    b.setAttribute('aria-label', `${option.name}: ${option.desc}`);
-    b.setAttribute('data-tip', option.desc);
-    b.style.setProperty('--c', cfg.color[0]);
-    b.style.setProperty('--cd', cfg.color[1]);
-    b.style.setProperty('--d', `${i * 90}ms`);
-    b.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon" aria-hidden="true">${option.icon}</div><div class="ribbon">${option.name}</div><p>${option.short || option.desc}</p>`;
+    b.setAttribute('aria-label', `${option.name}: ${gain.label} ${gain.from ? `${gain.from} para ${gain.to}` : gain.to}. ${tip}`);
+    b.setAttribute('data-tip', tip);
+    b.innerHTML = `<kbd aria-hidden="true">${i + 1}</kbd><span class="evo-route-icon" aria-hidden="true">${option.icon}</span>`
+      + `<span class="evo-route-name" aria-hidden="true">${option.name}<small>${gain.label}</small></span>`
+      + `<span class="evo-gain" aria-hidden="true">${gain.from ? `<s>${gain.from}</s><em>→</em>` : ''}<b>${gain.to}</b></span>`
+      + (rec ? '<span class="evo-rec" aria-hidden="true">★</span>' : '');
     b.onclick = () => confirmPick(i);
-    bindCard(b, i);
-    $('pickList').appendChild(b);
+    b.onmouseenter = () => selectCard(i);
+    routes.appendChild(b);
     return b;
   });
-  selectCard(0);
+  selectCard(Math.max(0, pick.upgrades.findIndex((option) => option.id === recommended)));
   $('pick').classList.remove('hidden');
 }
 
-function chooseAutoEvolution(hero) {
+// destaque de quem evolui: retrato com raios, nome e nível antes → depois e o ganho de vida/dano do nível
+function evolutionHeroHTML(entry) {
+  const h = entry.hero, cfg = h.cfg, level = entry.level;
+  const hp = entry.hp || [Math.round(h.maxHp / 1.1), h.maxHp], dmg = entry.dmg || [h.dmg / 1.1, h.dmg];
+  const img = cfg.portraits?.[level - 1] || cfg.portrait || '';
+  const oldName = cfg.names?.[level - 2] || cfg.name, newName = cfg.names?.[level - 1] || cfg.name;
+  const stat = (glyph, tip, [a, b]) => `<span class="evo-stat" data-tip="${tip} +10%"><i aria-hidden="true">${glyph}</i>${Math.round(a)}<em>→</em><b>${Math.round(b)}</b></span>`;
+  return `<span class="evo-hero" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" aria-label="${attrText(`${oldName} evolui para ${newName}, nível ${level}`)}">
+    <span class="evo-portrait"><span class="evo-rays" aria-hidden="true"></span><img src="${img}" alt=""><span class="evo-class" aria-hidden="true">${PICK_CLASS_GLYPHS[cfg.classId] || '♜'}</span></span>
+    <span class="evo-info">
+      <span class="evo-names">${oldName === newName ? '' : `<s>${attrText(oldName)}</s><em>→</em>`}<b>${attrText(newName)}</b></span>
+      <span class="evo-level"><s>Nv${level - 1}</s><em>→</em><b>Nv${level}</b></span>
+      <span class="evo-stats">${stat('♥', 'Vida máxima', hp)}${stat('⚔', 'Dano', dmg)}</span>
+    </span></span>`;
+}
+
+// vários heróis subindo juntos: posição na fila e o retrato de cada um (feitos ✓, o atual em destaque, os que esperam)
+function evolutionQueueHTML(position, total) {
+  const faces = [...(pick.evoDone || []), ...evolutions].map((entry, k) => {
+    const cfg = entry.hero.cfg, state = k < position - 1 ? ' done' : k === position - 1 ? ' now' : '';
+    return `<span class="evo-face${state}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="${attrText(`${cfg.names?.[entry.level - 1] || cfg.name} · Nv${entry.level}`)}"><img src="${cfg.portraits?.[entry.level - 1] || cfg.portrait || ''}" alt=""></span>`;
+  }).join('');
+  return `<span class="evo-queue"><b>${position}/${total}</b>${faces}</span>`;
+}
+
+// o que cada rota faz por ESTE herói, em número (antes → depois); weak = quase nada a ganhar
+const SIGNATURE_HEAL = { paladin: (level) => 32 + level * 10, cleric: (level) => 24 + level * 8, angel: (level) => 18 + level * 5 };
+function evolutionGain(hero, id) {
+  const branch = EVOLUTION_BRANCHES.find((b) => b.id === id), bonus = branch?.bonus || {};
+  const power = hero.skillPower || 1, { controlSkills, supportSkills, control, support } = evolutionAffinity(hero);
+  if (id === 'damage') {
+    const dps = hero.dmg * (hero.haste || 1) / (hero.cfg.cooldown || 1);
+    return { label: 'DPS', from: Math.round(dps), to: Math.round(dps * (1 + (bonus.damage || 0)) * (1 + (bonus.haste || 0))) };
+  }
+  const k = 1 + (bonus[id] || 0), percent = `+${Math.round((k - 1) * 100)}%`;
+  if (id === 'support' && SIGNATURE_HEAL[hero.cfg.id]) {
+    const heal = scaleBranchEffect(hero, 'support', SIGNATURE_HEAL[hero.cfg.id](hero.level)) * power;
+    return { label: 'Cura', from: Math.round(heal), to: Math.round(heal * k) };
+  }
+  const skills = id === 'control' ? controlSkills : supportSkills;
+  if (!(id === 'control' ? control : support)) return { label: '—', to: percent, weak: true };   // quase nada no kit: apagado
+  const timed = skills.find((skill) => skill.duration);
+  if (timed) {
+    const seconds = scaleBranchEffect(hero, id, timed.duration);
+    const sec = (n) => `${(Math.round(n * 10) / 10).toLocaleString('pt-BR')}s`;
+    return { label: timed.name, from: sec(seconds), to: sec(seconds * k) };
+  }
+  return { label: skills[0]?.name || (id === 'control' ? 'Controle' : 'Apoio'), to: percent };
+}
+
+// quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
+function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
@@ -1420,10 +1485,17 @@ function chooseAutoEvolution(hero) {
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner']);
   const skills = skillSetFor(hero.cfg);
-  const control = skills.filter((skill) => skill.control || controlEffects.has(skill.effect)).length
-    + Number(controlSignatures.has(hero.cfg.id));
-  const support = skills.filter((skill) => supportEffects.has(skill.effect)).length
-    + Number(supportSignatures.has(hero.cfg.id));
+  const controlSkills = skills.filter((skill) => skill.control || controlEffects.has(skill.effect));
+  const supportSkills = skills.filter((skill) => supportEffects.has(skill.effect));
+  return {
+    controlSkills, supportSkills,
+    control: controlSkills.length + Number(controlSignatures.has(hero.cfg.id)),
+    support: supportSkills.length + Number(supportSignatures.has(hero.cfg.id)),
+  };
+}
+
+function chooseAutoEvolution(hero) {
+  const { control, support } = evolutionAffinity(hero);
   const available = availableEvolutionBranches(hero);
   if (!available.length) return null;
   const ranks = hero.evolutionBranches || {};
@@ -1458,6 +1530,7 @@ function confirmEvolution(i) {
   pick.open = false;
   $('pick').classList.add('hidden');
   game.paused = false;
+  pick.evoDone = evolutions.length ? [...(pick.evoDone || []), entry] : [];   // quem já evoluiu nesta fila ("1/2")
   showEvolution();
 }
 
@@ -5158,12 +5231,12 @@ class Hero extends Unit {
   gainXp(n) {
     this.xp += n;
     while (this.level < 3 && this.xp >= XP_LEVELS[this.level]) {
-      const oldHp = this.maxHp;
+      const oldHp = this.maxHp, oldDmg = this.dmg;
       this.level++;
-      evolutions.push({ hero: this, level: this.level });
       this.maxHp = Math.round(this.maxHp * 1.1);
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp - oldHp);
       this.dmg *= 1.1;
+      evolutions.push({ hero: this, level: this.level, hp: [oldHp, this.maxHp], dmg: [oldDmg, this.dmg] });   // antes → depois, para a tela de evolução
       this.size = this.heroSize();
       this.levelLabel.textContent = 'Nv' + this.level;
       this.levelLabel.title = this.cfg.names[this.level - 1];
@@ -8364,6 +8437,7 @@ function startGame(view = 'menu') {
   $('banner').style.opacity = 0;
   pick.open = false;
   evolutions.length = 0;
+  pick.evoDone = [];
   pick.upgrades = [];
   while (enemyBolts.length) scene.remove(enemyBolts.pop().mesh);
   for (const list of [bolts, blasts, flames]) while (list.length) {
