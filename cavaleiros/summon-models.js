@@ -1,23 +1,35 @@
-// Invocador: corpos low-poly da fada, do golem e do dragãozinho (sem GLB).
-// As peças paradas de cada parte são mescladas numa geometria só, com cor por vértice; geometrias e materiais são
-// criados uma vez e compartilhados por todas as criaturas (userData.keep: os efeitos não os descartam).
+// Invocador: corpos low-poly da fada, do golem e do dragãozinho (sem GLB), no estilo dos bonecos KayKit:
+// formas arredondadas/chanfradas, sombreado suave, cores sólidas e saturadas e silhueta legível de longe.
+// As peças paradas de cada parte são mescladas numa geometria só, com cor por vértice (mais escura embaixo, como
+// oclusão suave); geometrias e materiais são criados uma vez e compartilhados por todas as criaturas
+// (userData.keep: os efeitos não os descartam).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const TAU = Math.PI * 2;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const SIDES = [-1, 1];
 let summonParts = null;
 
-// peças [geometria, cor, posição, escala (número ou [x, y, z]), rotação [x, y, z] (ordem YXZ)] → uma geometria com cor por vértice
-function summonMerge(pieces) {
-  const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), euler = new THREE.Euler();
+// peças [geometria, cor, posição, escala (número ou [x, y, z]), rotação [x, y, z] (ordem YXZ)] → uma geometria com cor por vértice.
+// cor null mantém a cor por vértice da própria peça (degradês). shade escurece a base de cada peça (0 = cor chapada).
+function summonMerge(pieces, shade = 0.26) {
+  const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), euler = new THREE.Euler(), c = new THREE.Color();
   const parts = pieces.map(([geo, color, pos = [0, 0, 0], scale = 1, rot = [0, 0, 0]]) => {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
-    g.deleteAttribute('uv');
+    if (g.attributes.uv) g.deleteAttribute('uv');
     const s = typeof scale === 'number' ? [scale, scale, scale] : scale;
     g.applyMatrix4(matrix.compose(V(...pos), quat.setFromEuler(euler.set(rot[0], rot[1], rot[2], 'YXZ')), V(...s)));
-    const c = new THREE.Color(color), n = g.attributes.position.count, rgb = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { rgb[i * 3] = c.r; rgb[i * 3 + 1] = c.g; rgb[i * 3 + 2] = c.b; }
+    const p = g.attributes.position, n = p.count, rgb = new Float32Array(n * 3), own = color === null ? g.attributes.color : null;
+    g.computeBoundingBox();
+    const y0 = g.boundingBox.min.y, dy = Math.max(1e-4, g.boundingBox.max.y - y0);
+    if (!own) c.set(color);
+    for (let i = 0; i < n; i++) {
+      if (own) c.fromBufferAttribute(own, i);
+      const f = 1 - shade + shade * 1.25 * ((p.getY(i) - y0) / dy);
+      rgb[i * 3] = Math.min(1, c.r * f); rgb[i * 3 + 1] = Math.min(1, c.g * f); rgb[i * 3 + 2] = Math.min(1, c.b * f);
+    }
     g.setAttribute('color', new THREE.BufferAttribute(rgb, 3));
     return g;
   });
@@ -26,155 +38,196 @@ function summonMerge(pieces) {
   merged.computeBoundingSphere();
   return merged;
 }
-// cilindro afinando de a até b (ossos das asas)
+// cilindro afinando de a até b (ossos das asas, antenas)
 function summonRod(a, b, r0, r1 = r0) {
   const from = V(...a), dir = V(...b).sub(from), len = dir.length();
-  const g = new THREE.CylinderGeometry(r1, r0, len, 5).translate(0, len / 2, 0);
+  const g = new THREE.CylinderGeometry(r1, r0, len, 6).translate(0, len / 2, 0);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.normalize()));
   return g.translate(from.x, from.y, from.z);
 }
-// asa de luz da fada: forma plana com degradê da raiz (inner) até a ponta (outer)
-function summonLightWing(shape, inner, outer, reach) {
-  const g = new THREE.ShapeGeometry(shape, 6), p = g.attributes.position, a = new THREE.Color(inner), b = new THREE.Color(outer), c = new THREE.Color(), rgb = [];
-  for (let i = 0; i < p.count; i++) { c.lerpColors(a, b, Math.min(1, Math.hypot(p.getX(i), p.getY(i)) / reach)); rgb.push(c.r, c.g, c.b); }
+// forma plana com degradê de três cores pela distância à raiz (asas)
+function summonGradientShape(shape, stops, reach) {
+  const g = new THREE.ShapeGeometry(shape, 10), p = g.attributes.position, cs = stops.map((s) => new THREE.Color(s)), c = new THREE.Color(), rgb = [];
+  for (let i = 0; i < p.count; i++) {
+    const t = Math.min(1, Math.hypot(p.getX(i), p.getY(i)) / reach);
+    if (t < 0.5) c.lerpColors(cs[0], cs[1], t / 0.5); else c.lerpColors(cs[1], cs[2], (t - 0.5) / 0.5);
+    rgb.push(c.r, c.g, c.b);
+  }
   g.setAttribute('color', new THREE.Float32BufferAttribute(rgb, 3));
   return g;
 }
-const SIDES = [-1, 1];
+// brilho radial (aura da fada, coração do golem)
+function summonGlowTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d'), grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.22, 'rgba(255,255,255,0.7)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
 
 function summonKit() {
   if (summonParts) return summonParts;
-  const ball = new THREE.IcosahedronGeometry(0.5, 1), round = new THREE.IcosahedronGeometry(0.5, 2), gem = new THREE.IcosahedronGeometry(0.5, 0);
-  const rock = new THREE.DodecahedronGeometry(0.5, 0), block = new THREE.BoxGeometry(1, 1, 1), dot = new THREE.SphereGeometry(0.5, 8, 6);
-  const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 6), cone4 = new THREE.ConeGeometry(0.5, 1, 4), cone5 = new THREE.ConeGeometry(0.5, 1, 5);
-  const ink = 0x2a1830, white = 0xffffff, blush = 0xff9cbc;
+  const round = new THREE.IcosahedronGeometry(0.5, 3), dot = new THREE.SphereGeometry(0.5, 12, 8), gem = new THREE.OctahedronGeometry(0.5, 0);
+  const box = new RoundedBoxGeometry(1, 1, 1, 2, 0.16), boxSoft = new RoundedBoxGeometry(1, 1, 1, 3, 0.3), block = new THREE.BoxGeometry(1, 1, 1);
+  const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 8), cone4 = new THREE.ConeGeometry(0.5, 1, 4), cone6 = new THREE.ConeGeometry(0.5, 1, 6);
+  const ink = 0x2a1830, white = 0xffffff, blush = 0xff8fb4;
 
-  // fada: vestido de pétalas, cabeça grande com coque verde-água e flor, varinha de estrela
-  const skin = 0xf6d2b8, petal = 0xff8ad8, petalLight = 0xffc4e2, hair = 0x5fd6c0;
+  // ---------- fada: cabeçona, coque dourado, vestido em sino magenta, antenas de luz e asas de borboleta ----------
+  const skin = 0xffd6bd, dress = 0xff3d9e, dressLight = 0xffa3d4, hair = 0xffc43a, hairLight = 0xffdc6e, light = 0xfff27a;
+  const bell = new THREE.LatheGeometry([V(0, 0.17, 0), V(0.11, 0.16, 0), V(0.13, 0.07, 0), V(0.19, -0.06, 0), V(0.28, -0.18, 0), V(0.32, -0.25, 0), V(0.29, -0.28, 0), V(0, -0.28, 0)].map((v) => new THREE.Vector2(v.x, v.y)), 14);
   const fairy = [
-    [ball, 0xfff0f6, [0, 0.06, 0], [0.2, 0.24, 0.17]],
-    [round, skin, [0, 0.42, 0], [0.44, 0.42, 0.42]],
-    [round, hair, [0, 0.49, -0.05], [0.48, 0.4, 0.44]],
-    [ball, hair, [0, 0.58, 0.14], [0.16, 0.09, 0.12]],
-    [ball, hair, [0, 0.7, -0.12], 0.2],
-    [ball, 0xfff6a0, [0.16, 0.62, 0.08], 0.06],
-    [dot, blush, [0, 0.325, 0.19], [0.035, 0.018, 0.02]],
-    [cyl, 0xf0c040, [0.2, 0.0, 0.1], [0.022, 0.3, 0.022], [0.5, 0, -0.25]],
-    [gem, 0xfff6a0, [0.24, 0.14, 0.17], 0.09],
+    [round, skin, [0, 0.44, 0], [0.5, 0.47, 0.46]],
+    [round, hair, [0, 0.5, -0.05], [0.55, 0.5, 0.48]],
+    [round, hairLight, [0, 0.62, 0.1], [0.44, 0.17, 0.3], [-0.2, 0, 0]],
+    [round, hair, [0, 0.78, -0.07], [0.26, 0.24, 0.26]],
+    [dot, ink, [0, 0.335, 0.235], [0.05, 0.02, 0.02]],
+    [round, dress, [0, 0.13, 0], [0.22, 0.24, 0.2]],
+    [bell, dress, [0, 0, 0], 1],
+    [cyl, 0xf0c040, [0.22, 0.02, 0.13], [0.025, 0.32, 0.025], [0.45, 0, -0.25]],
+    [gem, light, [0.27, 0.18, 0.2], [0.13, 0.13, 0.08]],
   ];
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * TAU, b = a + TAU / 10;
-    fairy.push([ball, petal, [Math.sin(a) * 0.12, -0.14, Math.cos(a) * 0.12], [0.17, 0.32, 0.08], [-0.55, a, 0]]);
-    fairy.push([ball, petalLight, [Math.sin(b) * 0.08, -0.06, Math.cos(b) * 0.08], [0.14, 0.26, 0.07], [-0.4, b, 0]]);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * TAU;
+    fairy.push([round, dressLight, [Math.sin(a) * 0.29, -0.25, Math.cos(a) * 0.29], [0.13, 0.07, 0.13]]);
   }
-  for (let i = 0; i < 4; i++) fairy.push([ball, white, [0.16 + Math.cos(i * 1.57) * 0.05, 0.62 + Math.sin(i * 1.57) * 0.05, 0.07], [0.05, 0.05, 0.03]]);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * TAU;
+    fairy.push([round, 0x8af0ff, [-0.18 + Math.cos(a) * 0.055, 0.66 + Math.sin(a) * 0.055, 0.13], [0.07, 0.07, 0.04]]);
+  }
+  fairy.push([round, light, [-0.18, 0.66, 0.15], 0.05]);
   for (const s of SIDES) fairy.push(
-    [cyl, skin, [s * 0.05, -0.36, 0], [0.05, 0.16, 0.05]],
-    [ball, petal, [s * 0.05, -0.45, 0.02], [0.07, 0.05, 0.09]],
-    [ball, skin, [s * 0.13, 0.04, 0.03], [0.06, 0.17, 0.06], [0, 0, s * 0.5]],
-    [ball, hair, [s * 0.1, 0.56, 0.12], [0.18, 0.1, 0.14], [0.3, 0, s * 0.3]],
-    [dot, ink, [s * 0.085, 0.41, 0.188], [0.075, 0.1, 0.05]],
-    [dot, white, [s * 0.085 - 0.018, 0.44, 0.212], [0.03, 0.03, 0.02]],
-    [dot, blush, [s * 0.13, 0.36, 0.16], [0.06, 0.035, 0.03]],
+    [round, hair, [s * 0.23, 0.42, -0.03], [0.14, 0.32, 0.2]],
+    [summonRod([s * 0.07, 0.7, 0], [s * 0.17, 0.95, -0.03], 0.016, 0.012), 0x8a5a2a],
+    [round, light, [s * 0.17, 0.97, -0.03], 0.09],
+    [dot, ink, [s * 0.095, 0.41, 0.215], [0.085, 0.12, 0.05]],
+    [dot, white, [s * 0.095 - 0.02, 0.44, 0.24], [0.035, 0.04, 0.02]],
+    [dot, blush, [s * 0.155, 0.35, 0.195], [0.075, 0.04, 0.03]],
+    [round, skin, [s * 0.16, 0.08, 0.04], [0.075, 0.18, 0.075], [0, 0, s * 0.45]],
+    [cyl, skin, [s * 0.06, -0.37, 0], [0.06, 0.2, 0.06]],
+    [round, dress, [s * 0.06, -0.47, 0.03], [0.09, 0.07, 0.12]],
   );
-  const upper = new THREE.Shape().moveTo(0, 0).quadraticCurveTo(0.12, 0.5, 0.42, 0.6).quadraticCurveTo(0.68, 0.62, 0.6, 0.36).quadraticCurveTo(0.42, 0.08, 0, 0);
-  const lower = new THREE.Shape().moveTo(0, 0).quadraticCurveTo(0.3, -0.04, 0.4, -0.28).quadraticCurveTo(0.36, -0.44, 0.2, -0.34).quadraticCurveTo(0.05, -0.15, 0, 0);
+  // asa de borboleta: parte de cima grande e de baixo menor, degradê branco → rosa → azul-claro
+  const upper = new THREE.Shape().moveTo(0, 0).bezierCurveTo(0.08, 0.45, 0.42, 0.85, 0.76, 0.8).bezierCurveTo(0.98, 0.76, 0.96, 0.44, 0.72, 0.3).bezierCurveTo(0.46, 0.14, 0.2, 0.03, 0, 0);
+  const lower = new THREE.Shape().moveTo(0, 0).bezierCurveTo(0.3, -0.02, 0.6, -0.2, 0.56, -0.44).bezierCurveTo(0.52, -0.62, 0.28, -0.6, 0.17, -0.4).bezierCurveTo(0.08, -0.24, 0.02, -0.1, 0, 0);
+  const wingStops = [0xfff6fc, 0xff6cc8, 0x6fe6ff];
+  const fairyWing = mergeGeometries([summonGradientShape(upper, wingStops, 1.05).rotateZ(0.12), summonGradientShape(lower, wingStops, 0.72).rotateZ(-0.08)]).scale(0.82, 0.82, 0.82);
+  fairyWing.deleteAttribute('uv');
 
-  // golem: rocha arredondada com musgo, cristais e olhos acesos; pernas e braços à parte para andar e socar
-  const stone = 0xa89c8c, stoneLight = 0xbcb2a2, stoneDark = 0x7a7068, moss = 0x6aae7a, pink = 0xff8ad8, aqua = 0x7ff0e0;
+  // ---------- golem: ombros e punhos enormes, pernas curtas e grossas, cabeça afundada, pedra quente com musgo ----------
+  const stone = 0x9e8c84, stoneLight = 0xc6b6a6, stoneDark = 0x5f514c, moss = 0x56b844, mossLight = 0x8fdc52, pink = 0xff4fc0, aqua = 0x4ff0ff;
   const golemTorso = [
-    [block, stoneDark, [0, 0.1, 0], [0.72, 0.3, 0.5]],
-    [ball, stone, [0, 0.66, 0], [1.25, 0.95, 0.86]],
-    [rock, stoneLight, [0, 1.26, 0.16], [0.8, 0.7, 0.66]],
-    [block, stoneDark, [0, 1.42, 0.44], [0.6, 0.11, 0.14]],
-    [ball, moss, [0, 1.58, 0.1], [0.52, 0.14, 0.46]],
-    [ball, moss, [0.2, 0.36, 0.36], [0.22, 0.08, 0.12]],
-    [rock, stoneDark, [-0.3, 0.42, 0.36], [0.2, 0.16, 0.12]],
-    [rock, stoneDark, [0.34, 0.86, 0.3], [0.16, 0.14, 0.1]],
+    [box, stoneDark, [0, 0.12, -0.02], [0.86, 0.36, 0.6]],
+    [boxSoft, stone, [0, 0.44, 0.04], [1.0, 0.52, 0.72]],
+    [boxSoft, stone, [0, 0.94, 0], [1.5, 0.82, 0.96], [0.12, 0, 0]],
+    [box, stoneLight, [0, 0.96, 0.43], [0.86, 0.5, 0.2], [0.12, 0, 0]],
+    [boxSoft, stone, [0, 1.14, -0.3], [1.1, 0.56, 0.62], [-0.15, 0, 0]],
+    [round, moss, [0.08, 1.4, -0.34], [0.86, 0.18, 0.52]],
+    [box, stoneLight, [0, 1.33, 0.32], [0.5, 0.42, 0.44]],
+    [box, stoneDark, [0, 1.48, 0.52], [0.58, 0.12, 0.13]],
+    [box, stone, [0, 1.16, 0.42], [0.44, 0.14, 0.28]],
+    [round, moss, [0, 1.56, 0.26], [0.46, 0.12, 0.4]],
+    [round, moss, [-0.3, 0.32, 0.4], [0.34, 0.14, 0.06]],
   ];
-  for (const s of SIDES) golemTorso.push([ball, moss, [s * 0.44, 1.08, -0.02], [0.46, 0.16, 0.44]]);
+  for (const s of SIDES) golemTorso.push(
+    [box, stoneLight, [s * 0.8, 1.18, 0], [0.72, 0.62, 0.78], [0, 0, s * -0.15]],
+    [round, moss, [s * 0.82, 1.5, 0], [0.72, 0.2, 0.78], [0, 0, s * -0.15]],
+    [round, mossLight, [s * 0.74, 1.6, 0.1], [0.32, 0.12, 0.32]],
+  );
   const golemGlow = [
-    [gem, pink, [0, 0.76, 0.42], [0.16, 0.22, 0.08]],
-    [cone5, pink, [0.28, 1.12, -0.3], [0.14, 0.38, 0.14], [-0.5, 0, -0.3]],
-    [cone5, aqua, [-0.18, 1.08, -0.34], [0.12, 0.3, 0.12], [-0.6, 0, 0.35]],
-    [cone5, pink, [0.02, 1.0, -0.42], [0.1, 0.24, 0.1], [-0.9, 0, 0]],
-    [cone5, aqua, [0.5, 1.2, -0.08], [0.09, 0.22, 0.09], [0, 0, -0.4]],
-    [cone5, pink, [-0.52, 1.18, -0.06], [0.08, 0.2, 0.08], [0, 0, 0.5]],
+    [gem, pink, [0, 0.98, 0.55], [0.32, 0.42, 0.2]],
+    [gem, aqua, [-0.98, 1.78, -0.12], [0.26, 0.78, 0.26], [-0.15, 0, 0.35]],
+    [gem, pink, [0.32, 1.66, -0.46], [0.22, 0.62, 0.22], [-0.55, 0, -0.25]],
   ];
-  for (const s of SIDES) golemGlow.push([block, 0x8ff4ff, [s * 0.15, 1.31, 0.46], [0.14, 0.1, 0.06]]);
+  for (const s of SIDES) golemGlow.push([block, 0xd6ffff, [s * 0.12, 1.37, 0.545], [0.14, 0.1, 0.04]]);
 
-  // dragãozinho: verde-água de barriga creme, cabeça grande, olhões, chifrinhos dourados, asas de membrana rosa
-  const teal = 0x46b8a8, tealLight = 0x6cd0c0, cream = 0xffe6b0, plum = 0x8a3a6e, gold = 0xf0c040, membrane = 0xff9ccf;
+  // ---------- dragãozinho: violeta de barriga creme, cabeçona, olhões, chifres creme e asas de membrana cor de fogo ----------
+  const body = 0x8a5cf0, bodyLight = 0xae8cff, belly = 0xffe08a, bone = 0x55309e, horn = 0xfff0c4, spine = 0xff8a3d;
   const dragonBody = [
-    [round, teal, [0, 0, 0], [0.66, 0.6, 0.74]],
-    [round, cream, [0, -0.06, 0.15], [0.48, 0.46, 0.5]],
-    [cone4, plum, [0, 0.3, -0.08], [0.1, 0.16, 0.1], [-0.3, 0, 0]],
-    [cone4, plum, [0, 0.22, -0.28], [0.09, 0.14, 0.09], [-0.8, 0, 0]],
-    [ball, teal, [0, 0.26, 0.26], [0.3, 0.34, 0.3], [0.4, 0, 0]],
+    [round, body, [0, 0, 0], [0.7, 0.72, 0.66]],
+    [round, body, [0, -0.12, 0.02], [0.74, 0.56, 0.66]],
+    [round, belly, [0, -0.06, 0.17], [0.5, 0.62, 0.42]],
+    [round, body, [0, 0.28, 0.12], [0.36, 0.36, 0.34]],
+    [cone4, spine, [0, 0.38, -0.12], [0.12, 0.2, 0.12], [-0.5, 0, 0]],
+    [cone4, spine, [0, 0.22, -0.3], [0.13, 0.2, 0.13], [-0.9, 0, 0]],
+    [cone4, spine, [0, 0.0, -0.37], [0.11, 0.18, 0.11], [-1.3, 0, 0]],
   ];
   for (const s of SIDES) dragonBody.push(
-    [ball, teal, [s * 0.2, -0.26, 0.18], [0.18, 0.22, 0.2]],
-    [ball, cream, [s * 0.2, -0.36, 0.24], [0.14, 0.07, 0.12]],
-    [ball, teal, [s * 0.24, -0.22, -0.14], [0.24, 0.26, 0.28]],
-    [ball, cream, [s * 0.25, -0.34, -0.08], [0.16, 0.08, 0.14]],
+    [round, body, [s * 0.25, 0.02, 0.24], [0.15, 0.24, 0.15], [0.6, 0, s * 0.3]],
+    [round, belly, [s * 0.28, -0.09, 0.33], [0.11, 0.08, 0.11]],
+    [round, body, [s * 0.27, -0.24, 0.06], [0.3, 0.3, 0.32]],
+    [round, belly, [s * 0.29, -0.4, 0.16], [0.19, 0.1, 0.23]],
   );
   const dragonHead = [
-    [round, teal, [0, 0.18, 0.06], [0.62, 0.54, 0.56]],
-    [round, tealLight, [0, 0.08, 0.32], [0.4, 0.26, 0.32]],
-    [cone4, plum, [0, 0.46, -0.06], [0.07, 0.12, 0.07], [-0.4, 0, 0]],
+    [round, body, [0, 0.16, 0], [0.7, 0.62, 0.62]],
+    [round, bodyLight, [0, 0.04, 0.27], [0.46, 0.3, 0.36]],
+    [cone4, spine, [0, 0.46, -0.16], [0.09, 0.16, 0.09], [-0.6, 0, 0]],
   ];
   for (const s of SIDES) dragonHead.push(
-    [dot, ink, [s * 0.07, 0.15, 0.44], [0.04, 0.03, 0.03]],
-    [dot, white, [s * 0.15, 0.27, 0.3], [0.15, 0.18, 0.08], [0, s * 0.35, 0]],
-    [dot, ink, [s * 0.158, 0.26, 0.33], [0.1, 0.13, 0.05], [0, s * 0.35, 0]],
-    [dot, white, [s * 0.135, 0.31, 0.355], [0.04, 0.04, 0.02]],
-    [dot, blush, [s * 0.22, 0.1, 0.24], [0.08, 0.05, 0.04], [0, s * 0.6, 0]],
-    [cone5, gold, [s * 0.13, 0.44, -0.02], [0.09, 0.24, 0.09], [-0.5, 0, s * -0.35]],
-    [cone4, plum, [s * 0.29, 0.24, -0.02], [0.07, 0.2, 0.05], [0, 0, s * -1.1]],
+    [dot, ink, [s * 0.08, 0.1, 0.44], [0.04, 0.03, 0.03]],
+    [dot, white, [s * 0.16, 0.22, 0.24], [0.2, 0.24, 0.1], [0, s * 0.4, 0]],
+    [dot, ink, [s * 0.17, 0.21, 0.28], [0.14, 0.18, 0.06], [0, s * 0.4, 0]],
+    [dot, white, [s * 0.15, 0.27, 0.31], [0.05, 0.05, 0.02]],
+    [dot, white, [s * 0.2, 0.16, 0.3], [0.025, 0.025, 0.015]],
+    [dot, blush, [s * 0.24, 0.07, 0.2], [0.09, 0.05, 0.04], [0, s * 0.7, 0]],
+    [cone6, horn, [s * 0.15, 0.48, -0.12], [0.1, 0.32, 0.1], [-0.6, 0, s * -0.3]],
+    [cone4, spine, [s * 0.32, 0.22, -0.08], [0.08, 0.26, 0.05], [0, 0, s * -1.2]],
   );
   const dragonTail = [
-    [ball, teal, [0, 0, -0.12], [0.28, 0.26, 0.34]],
-    [ball, teal, [0, 0.03, -0.34], [0.2, 0.18, 0.28]],
-    [ball, teal, [0, 0.07, -0.52], [0.13, 0.12, 0.22]],
-    [cone4, plum, [0, 0.16, -0.3], [0.06, 0.1, 0.06], [-0.6, 0, 0]],
-    [cone4, plum, [0, 0.1, -0.7], [0.2, 0.22, 0.06], [-Math.PI / 2, 0, 0]],
+    [round, body, [0, 0, -0.08], [0.38, 0.34, 0.42]],
+    [round, body, [0, 0.04, -0.32], [0.27, 0.24, 0.34]],
+    [round, body, [0, 0.1, -0.52], [0.18, 0.17, 0.28]],
+    [cone4, spine, [0, 0.2, -0.28], [0.08, 0.14, 0.08], [-0.8, 0, 0]],
+    [cone4, spine, [0, 0.13, -0.74], [0.32, 0.28, 0.07], [-Math.PI / 2, 0, 0]],
   ];
-  // asa: membrana (no plano XZ, para trás é −z) com ossos ameixa na borda da frente e dois dedos
-  const wingShape = new THREE.Shape().moveTo(0, -0.08).lineTo(0.42, -0.12).lineTo(0.88, 0.02)
-    .quadraticCurveTo(0.74, 0.12, 0.66, 0.26).quadraticCurveTo(0.52, 0.16, 0.4, 0.3).quadraticCurveTo(0.26, 0.18, 0.04, 0.22).lineTo(0, -0.08);
+  // asa: membrana (no plano XZ, para trás é −z) com braço grosso na borda da frente e três dedos; borda recortada
+  const wingShape = new THREE.Shape().moveTo(0, -0.05).lineTo(0.5, -0.14).lineTo(1.2, 0)
+    .quadraticCurveTo(0.98, 0.14, 0.92, 0.42).quadraticCurveTo(0.68, 0.3, 0.55, 0.5).quadraticCurveTo(0.34, 0.3, 0.18, 0.42).quadraticCurveTo(0.06, 0.3, 0, 0.18).lineTo(0, -0.05);
   const dragonWing = [
-    [new THREE.ShapeGeometry(wingShape, 4).rotateX(-Math.PI / 2), membrane],
-    [summonRod([0, 0, 0.08], [0.42, 0, 0.12], 0.04, 0.03), plum],
-    [summonRod([0.42, 0, 0.12], [0.9, 0, -0.02], 0.03, 0.012), plum],
-    [summonRod([0.42, 0, 0.12], [0.66, 0, -0.26], 0.018, 0.008), plum],
-    [summonRod([0.42, 0, 0.12], [0.4, 0, -0.3], 0.018, 0.008), plum],
-    [cone4, gold, [0.44, 0.02, 0.16], [0.05, 0.1, 0.05], [0.6, 0, 0]],
+    [summonGradientShape(wingShape, [0xff5a4a, 0xff8a3d, 0xffd25a], 1.2).rotateX(-Math.PI / 2), null],
+    [summonRod([0, 0, 0.05], [0.5, 0, 0.14], 0.07, 0.055), bone],
+    [summonRod([0.5, 0, 0.14], [1.22, 0, 0], 0.05, 0.016), bone],
+    [summonRod([0.5, 0, 0.14], [0.92, 0, -0.42], 0.028, 0.012), bone],
+    [summonRod([0.5, 0, 0.14], [0.55, 0, -0.5], 0.028, 0.012), bone],
+    [summonRod([0.5, 0, 0.14], [0.18, 0, -0.42], 0.028, 0.012), bone],
+    [cone4, horn, [0.52, 0.03, 0.2], [0.07, 0.14, 0.07], [0.6, 0, 0]],
   ];
 
   const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
+  const glowMap = summonGlowTexture();
   summonParts = {
-    solid: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
-    membrane: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }),
+    solid: new THREE.MeshLambertMaterial({ vertexColors: true }),
+    membrane: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
     lit: new THREE.MeshBasicMaterial({ vertexColors: true }),   // olhos e cristais acesos
-    lightWing: new THREE.MeshBasicMaterial({ vertexColors: true, opacity: 0.6, side: THREE.DoubleSide, ...additive }),
-    halo: new THREE.MeshBasicMaterial({ color: 0xff9ce0, opacity: 0.15, ...additive }),
+    lightWing: new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.86, depthWrite: false, side: THREE.DoubleSide }),
+    fairyGlow: new THREE.SpriteMaterial({ map: glowMap, color: 0xff7ad0, opacity: 0.85, ...additive }),
+    golemGlow: new THREE.SpriteMaterial({ map: glowMap, color: 0xff5ac8, opacity: 0.7, ...additive }),
+    groundGlow: new THREE.MeshBasicMaterial({ map: glowMap, color: 0xff8ad8, opacity: 0.55, ...additive }),
     furyRing: new THREE.MeshBasicMaterial({ color: 0xff5ab0, opacity: 0.6, side: THREE.DoubleSide, ...additive }),
     furyShell: new THREE.MeshBasicMaterial({ color: 0xff7ac8, opacity: 0.16, ...additive }),
-    ball, ring: new THREE.RingGeometry(0.72, 1, 32).rotateX(-Math.PI / 2),
-    fairyBody: summonMerge(fairy),
-    fairyUpper: summonLightWing(upper, 0xffb8dc, 0xb8fff0, 0.7), fairyLower: summonLightWing(lower, 0xffb8dc, 0xb8fff0, 0.45),
-    golemTorso: summonMerge(golemTorso), golemGlow: summonMerge(golemGlow),
-    golemLeg: summonMerge([[block, stoneDark, [0, -0.2, 0], [0.4, 0.36, 0.42]], [block, 0x6a6058, [0, -0.41, 0.06], [0.48, 0.18, 0.54]]]),
+    ball: new THREE.IcosahedronGeometry(0.5, 1), ring: new THREE.RingGeometry(0.72, 1, 32).rotateX(-Math.PI / 2),
+    plane: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    fairyBody: summonMerge(fairy), fairyWing,
+    golemTorso: summonMerge(golemTorso), golemGlow: summonMerge(golemGlow, 0.35),
+    golemLeg: summonMerge([[box, stoneDark, [0, -0.18, 0], [0.46, 0.42, 0.5]], [boxSoft, stone, [0, -0.46, 0.06], [0.62, 0.32, 0.74]]]),
     golemArm: summonMerge([
-      [rock, stone, [0, 0, 0], 0.5], [ball, moss, [0, 0.2, 0], [0.36, 0.12, 0.36]],
-      [block, stoneDark, [0, -0.34, 0], [0.3, 0.42, 0.32]], [rock, stoneLight, [0, -0.74, 0.04], [0.54, 0.5, 0.54]],
+      [boxSoft, stone, [0, -0.22, 0], [0.5, 0.52, 0.52]],
+      [boxSoft, stone, [0, -0.62, 0.04], [0.6, 0.5, 0.62]],
+      [box, stoneDark, [0, -0.82, 0.06], [0.68, 0.14, 0.68]],
+      [boxSoft, stoneLight, [0, -1.04, 0.06], [0.8, 0.56, 0.8]],
     ]),
     dragonBody: summonMerge(dragonBody), dragonHead: summonMerge(dragonHead), dragonTail: summonMerge(dragonTail),
-    dragonJaw: summonMerge([[ball, cream, [0, -0.02, 0.14], [0.3, 0.1, 0.26]]]),
-    dragonWing: summonMerge(dragonWing),
+    dragonJaw: summonMerge([[round, belly, [0, -0.04, 0.14], [0.34, 0.12, 0.28]]]),
+    dragonWing: summonMerge(dragonWing, 0.12),
   };
   for (const value of Object.values(summonParts)) if (value?.isMaterial) value.userData.keep = true;
-  for (const g of [round, gem, rock, block, dot, cyl, cone4, cone5]) g.dispose();   // só serviram de molde
+  for (const g of [round, dot, gem, box, boxSoft, block, cyl, cone4, cone6, bell]) g.dispose();   // só serviram de molde
   return summonParts;
 }
 // malha (ou grupo vazio, sem geometria) dentro de um grupo: posição e rotação [x, y, z]
@@ -186,51 +239,64 @@ function summonMesh(parent, geometry, material, pos = [0, 0, 0], rot) {
   parent.add(o);
   return o;
 }
+// brilho aditivo que sempre olha para a câmera
+function summonSprite(parent, material, pos, size) {
+  const s = new THREE.Sprite(material);
+  s.position.set(...pos);
+  s.scale.setScalar(size);
+  s.userData.size = size;
+  parent.add(s);
+  return s;
+}
 // core: grupo que leva a aura da Fúria; legs/arms/wings: pivôs animados (userData.side = −1 esquerda, 1 direita)
 const SUMMON_BODIES = {
-  fairy(g, k) {
+  fairy(g, k, root) {
     const core = summonMesh(g, null);
     summonMesh(core, k.fairyBody, k.solid);
-    summonMesh(core, k.ball, k.halo, [0, 0.2, 0]).scale.setScalar(0.95);
+    const glow = summonSprite(core, k.fairyGlow, [0, 0.25, -0.05], 1.9);
+    const groundGlow = summonMesh(root, k.plane, k.groundGlow, [0, 0.05, 0]);
+    groundGlow.scale.setScalar(1.5);
     const wings = SIDES.map((side) => {
-      const pivot = summonMesh(core, null, null, [side * 0.04, 0.16, -0.12]);
+      const pivot = summonMesh(core, null, null, [side * 0.05, 0.2, -0.14]);
       pivot.scale.x = side;   // a esquerda é o espelho da direita
       pivot.userData.side = side;
-      summonMesh(pivot, k.fairyUpper, k.lightWing, [0, 0, 0], [0, 0, 0.15]);
-      summonMesh(pivot, k.fairyLower, k.lightWing, [0, -0.02, 0], [0, 0, -0.1]);
+      summonMesh(pivot, k.fairyWing, k.lightWing);
       return pivot;
     });
-    return { core, wings, hover: 1.15, shellY: 0.2, shellR: 0.65, auraR: 0.7 };
+    return { core, wings, glow, groundGlow, hover: 1.1, shellY: 0.2, shellR: 0.75, auraR: 0.8 };
   },
   golem(g, k) {
-    const core = summonMesh(g, null, null, [0, 0.5, 0]);
+    const hip = 0.62;
+    g.scale.setScalar(1.1);
+    const core = summonMesh(g, null, null, [0, hip, 0]);
     summonMesh(core, k.golemTorso, k.solid);
     summonMesh(core, k.golemGlow, k.lit).castShadow = false;
-    const legs = SIDES.map((side) => summonMesh(g, k.golemLeg, k.solid, [side * 0.26, 0.5, 0]));
-    const arms = SIDES.map((side) => summonMesh(core, k.golemArm, k.solid, [side * 0.66, 1.0, 0]));
-    return { core, legs, arms, hover: 0, shellY: 0.7, shellR: 1.25, auraR: 1.2 };
+    const glow = summonSprite(core, k.golemGlow, [0, 0.98, 0.62], 0.9);
+    const legs = SIDES.map((side) => summonMesh(g, k.golemLeg, k.solid, [side * 0.34, hip, 0]));
+    const arms = SIDES.map((side) => summonMesh(core, k.golemArm, k.solid, [side * 1.02, 1.12, 0]));
+    return { core, legs, arms, glow, hip, hover: 0, shellY: 0.9, shellR: 1.45, auraR: 1.4 };
   },
   dragon(g, k) {
     const core = summonMesh(g, null);
     summonMesh(core, k.dragonBody, k.solid);
-    const head = summonMesh(core, null, null, [0, 0.4, 0.34]);
+    const head = summonMesh(core, null, null, [0, 0.42, 0.2]);
     summonMesh(head, k.dragonHead, k.solid);
-    const jaw = summonMesh(head, k.dragonJaw, k.solid, [0, 0.02, 0.18]);
-    const mouth = summonMesh(head, null, null, [0, 0.06, 0.5]);
-    const tail = summonMesh(core, k.dragonTail, k.solid, [0, -0.04, -0.34]);
+    const jaw = summonMesh(head, k.dragonJaw, k.solid, [0, 0, 0.14]);
+    const mouth = summonMesh(head, null, null, [0, 0.02, 0.48]);
+    const tail = summonMesh(core, k.dragonTail, k.solid, [0, -0.18, -0.3]);
     const wings = SIDES.map((side) => {
-      const pivot = summonMesh(core, k.dragonWing, k.membrane, [side * 0.24, 0.24, -0.02]);
+      const pivot = summonMesh(core, k.dragonWing, k.membrane, [side * 0.24, 0.26, -0.1]);
       pivot.scale.x = side;
       pivot.userData.side = side;
       return pivot;
     });
-    return { core, head, jaw, mouth, tail, wings, hover: 1.2, shellY: 0.15, shellR: 1.05, auraR: 0.9 };
+    return { core, head, jaw, mouth, tail, wings, hover: 1.2, shellY: 0.15, shellR: 1.1, auraR: 1.0 };
   },
 };
 
 // monta a criatura: corpo em visual (grupo que flutua/pula), anel da Fúria em root (fica no chão) e brilho da Fúria no core
 export function buildSummon(kind, root, visual) {
-  const kit = summonKit(), parts = SUMMON_BODIES[kind](visual, kit);
+  const kit = summonKit(), parts = SUMMON_BODIES[kind](visual, kit, root);
   parts.aura = summonMesh(root, kit.ring, kit.furyRing, [0, 0.06, 0]);
   parts.shell = summonMesh(parts.core, kit.ball, kit.furyShell, [0, parts.shellY, 0]);
   parts.aura.visible = parts.shell.visible = false;
