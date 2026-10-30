@@ -1959,13 +1959,15 @@ async function warmStage(onProgress = () => {}, battle = true) {
   };
   if (battle) {
     for (const file of BATTLE_ASSET_FILES) {
-      const gltf = assets[assetKey(file)];
+      if (file.includes('/Animations/')) continue;   // só clipes: não há malha para aquecer
+      const skel = /Skeleton_(w+).glb$/.exec(file);
+      const gltf = skel ? skeletonModel(skel[1]) : assets[assetKey(file)];
       if (!gltf.animations?.length) { add(gltf.scene.clone(), true); continue; }
       mergeSkeletonLimbs(gltf.scene);   // o mesmo corte que Unit faz: já sobe a malha final
       add(SkeletonUtils.clone(gltf.scene), true);
     }
     // fantasma: o mesmo esqueleto com material transparente é outro shader (as cópias ficam vivas para ele não sair do cache)
-    const ghost = SkeletonUtils.clone(assets.Skeleton_Minion.scene);
+    const ghost = SkeletonUtils.clone(skeletonModel('Minion').scene);
     ghost.traverse((m) => {
       if (!m.isMesh) return;
       if (!warmGhostMats.has(m.material)) warmGhostMats.set(m.material, Object.assign(m.material.clone(), { transparent: true, opacity: 0.5, depthWrite: false }));
