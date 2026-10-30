@@ -1,5 +1,7 @@
 // node tests/camera-wheel-fit.cjs — depois da roda do mouse (cam.manual) o enquadramento automático
 // (cam.fit) não força mais a distância; sem a roda, ele afasta a câmera para mostrar o grupo todo.
+// O OrbitControls (r170) aplica a roda já dentro do evento; o teste reproduz essa ordem
+// (roda -> listener -> followParty do próximo quadro) para pegar o zoom sendo desfeito.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,9 +11,11 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
 const start = source.indexOf('function followParty(real) {');
 const end = source.indexOf('\n// Mira manual', start);
 assert.ok(start >= 0 && end > start, 'followParty precisa existir');
-// A troca para zoom manual acontece no fim do quadro, dentro do loop.
-const wheelLine = source.match(/^\s*if \(cam\.wheel\) \{[^\n]*cam\.manual = true;[^\n]*$/m);
-assert.ok(wheelLine, 'o loop marca cam.manual quando o jogador usa a roda');
+// listener da roda no canvas, registrado depois do OrbitControls
+const wheelSrc = source.match(/renderer\.domElement\.addEventListener\('wheel', (\(\) => \{[\s\S]*?\n\}), \{ passive: true \}\);/);
+assert.ok(wheelSrc, 'main.js registra o listener da roda no canvas');
+assert.ok(source.indexOf('new OrbitControls(') < wheelSrc.index, 'o listener roda depois do OrbitControls (que já aplicou o zoom)');
+assert.ok(!/cam\.wheel/.test(source), 'a distância da roda não pode esperar o fim do quadro (followParty a sobrescreve antes)');
 const minFit = Number(source.match(/const CAM_MIN_FIT = ([\d.]+)/)?.[1]);
 assert.ok(minFit > 0, 'CAM_MIN_FIT precisa existir');
 
@@ -34,9 +38,9 @@ function harness() {
     Math, Vector3,
     units: [],
     game: { state: 'camp' },
-    controls: { target: new Vector3(), minDistance: 8, maxDistance: 50 },
+    controls: { target: new Vector3(), minDistance: 8, maxDistance: 50, enabled: true, enableZoom: true },
     camera: { position: new Vector3(0, 12, 16) },   // 20 m do alvo
-    cam: { zoom: 1, userDist: 0, wheel: false, fit: 0, manual: false },
+    cam: { zoom: 1, userDist: 0, fit: 0, manual: false },
     follow: new Vector3(),
     tmp: new Vector3(),
   });
@@ -47,7 +51,7 @@ function harness() {
     let frameSpread = 0;
     ${source.slice(start, end)}
     this.followParty = followParty;
-    this.endFrame = () => { ${wheelLine[0].replace(/\/\/.*$/, '')} };
+    this.onWheel = ${wheelSrc[1]};
   `, context);
   // grupo bem espalhado: o enquadramento automático quer bem mais que 20 m
   const hero = (x) => ({ team: 'hero', dead: false, pos: new Vector3(x, 0, 3) });
@@ -56,7 +60,16 @@ function harness() {
 }
 
 const distance = (c) => c.camera.position.distanceTo(c.controls.target);
-const frames = (c, n) => { for (let i = 0; i < n; i++) { c.followParty(1 / 30); c.endFrame(); } };
+const frames = (c, n) => { for (let i = 0; i < n; i++) c.followParty(1 / 30); };
+// como o OrbitControls: com controles ligados, aplica o zoom na hora e depois chegam os outros listeners
+const wheel = (c, dist) => {
+  if (c.controls.enabled && c.controls.enableZoom) {
+    const offset = new Vector3().subVectors(c.camera.position, c.controls.target);
+    offset.setLength(Math.min(c.controls.maxDistance, Math.max(c.controls.minDistance, dist)));
+    c.camera.position.copy(c.controls.target).add(offset);
+  }
+  c.onWheel();
+};
 
 // Sem a roda: o enquadramento automático força a distância mínima que mostra todos.
 const auto = harness();
@@ -66,24 +79,35 @@ assert.ok(auto.cam.fit > 30, `fit deveria crescer com o grupo espalhado (fit=${a
 assert.ok(Math.abs(distance(auto) - auto.cam.fit) < 0.5, `sem a roda a câmera segue o fit (dist=${distance(auto)}, fit=${auto.cam.fit})`);
 assert.ok(distance(auto) > auto.cam.userDist * auto.cam.zoom + 5, 'o fit vence o zoom guardado do jogador');
 
-// Com a roda: o jogador aproxima para 12 m e o fit não empurra a câmera de volta.
+// Com a roda: o jogador aproxima para 12 m e nem o próximo quadro nem o fit empurram a câmera de volta.
 const manual = harness();
 frames(manual, 240);
-manual.camera.position.copy(manual.controls.target).add(new Vector3(0, 7.2, 9.6));   // 12 m
-manual.cam.wheel = true;
-manual.endFrame();
+wheel(manual, 12);
 assert.equal(manual.cam.manual, true, 'a roda marca o zoom como manual');
-assert.equal(manual.cam.wheel, false, 'o pedido da roda é consumido');
-assert.ok(Math.abs(manual.cam.userDist - 12) < 1e-6, 'guarda a distância escolhida pelo jogador');
+assert.ok(Math.abs(manual.cam.userDist - 12) < 1e-6, `guarda a distância escolhida pelo jogador (userDist=${manual.cam.userDist})`);
+frames(manual, 1);
+assert.ok(Math.abs(distance(manual) - 12) < 0.01, `o quadro seguinte não desfaz a roda (dist=${distance(manual)})`);
 frames(manual, 240);
 assert.ok(manual.cam.fit > 30, 'o fit continua calculado');
 assert.ok(Math.abs(distance(manual) - 12) < 0.01, `com a roda a distância fica a do jogador (dist=${distance(manual)})`);
 
+// Afastar também vale, e vários giros seguidos antes do quadro acumulam.
+wheel(manual, 18);
+wheel(manual, 24);
+frames(manual, 30);
+assert.ok(Math.abs(distance(manual) - 24) < 0.01, `afastar com a roda vale (dist=${distance(manual)})`);
+
 // O zoom manual continua limitado por minDistance/maxDistance.
-manual.camera.position.copy(manual.controls.target).add(new Vector3(0, 3, 4));   // 5 m < minDistance
-manual.cam.wheel = true;
-manual.endFrame();
+wheel(manual, 5);   // < minDistance
 frames(manual, 5);
 assert.ok(Math.abs(distance(manual) - 8) < 0.01, `respeita controls.minDistance (dist=${distance(manual)})`);
+
+// Com os controles desligados (mira manual), a roda não mexe no zoom guardado.
+manual.controls.enabled = false;
+const before = manual.cam.userDist;
+wheel(manual, 30);
+frames(manual, 5);
+assert.equal(manual.cam.userDist, before, 'roda com controles desligados não muda o zoom');
+assert.ok(Math.abs(distance(manual) - 8) < 0.01, `distância mantida com controles desligados (dist=${distance(manual)})`);
 
 console.log('OK: câmera respeita a roda do jogador e só força o enquadramento automático sem ela');
