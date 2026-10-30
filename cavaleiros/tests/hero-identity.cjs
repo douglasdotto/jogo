@@ -29,7 +29,7 @@ assert.ok(LOOKS.ninja.hide.includes('Knife') && LOOKS.ninja.hide.includes('Throw
 assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'shuriken' && extra.bone === 'handslotr'), 'Ninja segura uma shuriken');
 assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'shurikenBelt'), 'Ninja leva shurikens no cinto');
 
-// ---------- paletas: as 24 variantes (16 de looks.js + 8 receitas de characters.js) ----------
+// ---------- paletas: as 27 variantes (16 de looks.js + 11 receitas de characters.js) ----------
 const recipes = fs.readFileSync(path.join(__dirname, '..', 'characters.js'), 'utf8');
 const slice = recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '');
 vm.runInNewContext(`${slice}\nglobalThis.result = CHARACTERS;`, context);
@@ -37,7 +37,7 @@ const heroes = [
   ...LOOK_PREVIEW.map((v) => ({ id: v.id, model: v.model === 'Rogue_Hooded' ? 'Rogue' : v.model, paint: LOOKS[v.id].paint })),
   ...context.result.map((c) => ({ id: c.id, model: c.base, paint: c.paint })),
 ];
-assert.equal(heroes.length, 24, '24 variantes com aparência própria');
+assert.equal(heroes.length, 27, '27 variantes com aparência própria');
 const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
 const dist = (a, b) => Math.hypot(...hex(a).map((v, i) => v - hex(b)[i]));
 const palette = (h) => {
@@ -49,7 +49,7 @@ const palette = (h) => {
 };
 const palettes = heroes.map((h) => ({ ...h, pal: palette(h) }));
 const signatures = new Set(palettes.map((h) => JSON.stringify(h.pal)));
-assert.equal(signatures.size, 24, 'as 24 variantes têm paletas distintas');
+assert.equal(signatures.size, 27, 'as 27 variantes têm paletas distintas');
 // mesmo modelo base: roupa + cabelo + olhos precisam se afastar bastante (não só um tom vizinho)
 for (const a of palettes) for (const b of palettes) {
   if (a.id >= b.id || a.model !== b.model) continue;
@@ -57,10 +57,10 @@ for (const a of palettes) for (const b of palettes) {
   assert.ok(gap > 150, `${a.id} e ${b.id} têm paletas parecidas demais (${gap.toFixed(0)})`);
 }
 
-// Ladinos (8 heróis no mesmo boneco): a roupa principal sozinha precisa se afastar, e o conjunto
+// Ladinos (9 heróis no mesmo boneco): a roupa principal sozinha precisa se afastar, e o conjunto
 // (túnica + gola + mangas + calça) também; antes todos ficavam no verde-escuro/preto do atlas
 const rogues = palettes.filter((h) => h.model === 'Rogue');
-assert.equal(rogues.length, 8, 'oito heróis no modelo do ladino');
+assert.equal(rogues.length, 9, 'nove heróis no modelo do ladino');
 const outfitOf = (h) => {
   const body = h.paint.Rogue_Body, arm = h.paint.Rogue_ArmLeft, leg = h.paint.Rogue_LegLeft;
   assert.ok(body.amount >= 0.85 && body.cells?.['1,1'], `${h.id}: roupa com tinta forte e gola/acabamento próprio`);
@@ -88,4 +88,4 @@ assert.ok(has('alchemist', 'goggles', 'head') && has('alchemist', 'flaskBelt', '
 assert.ok(['Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'].every((w) => LOOKS.alchemist.hide.includes(w)), 'Alquimista não mostra livro, varinha nem cajado');
 for (const id of ['archer', 'monk', 'alchemist']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
 
-console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge e Alquimista com acessórios próprios; 24 paletas distintas');
+console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador e Oráculo com identidades próprias; 27 paletas distintas');

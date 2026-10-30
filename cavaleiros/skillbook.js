@@ -99,6 +99,18 @@ const EXTRA_SKILLS = {
     { name: 'Frasco Volátil', description: 'Um frasco explode no grupo de inimigos, empurra e deixa uma poça de veneno.', effect: 'volatile', cooldown: 19, radius: 2.6, range: 7.5, power: 1.4, color: 0x9cff3a },
     { name: 'Grande Transmutação', description: 'Inimigos comuns próximos viram ovelhas por alguns segundos; chefes ficam lentos.', effect: 'transmute', cooldown: 70, radius: 6, duration: 4, control: 'sheep', color: 0xff8ad8 },
   ],
+  engineer: [
+    { name: 'Pulso Eletromagnético', description: 'Descarrega energia no alvo e interrompe inimigos próximos.', effect: 'emp-pulse', targeting: 'enemy', cooldown: 20, radius: 3.8, range: 8, power: 1.15, control: 'stun', color: 0x6df4df },
+    { name: 'Sobrecarga', description: 'Acelera e fortalece uma torre ativa; se não houver nenhuma, instala uma nova.', effect: 'sentry-overcharge', cooldown: 68, duration: 8, radius: 6, power: 1.7, color: 0x8affeb },
+  ],
+  beast_tamer: [
+    { name: 'Rugido da Matilha', description: 'A fera provoca inimigos próximos e protege os aliados ao redor.', effect: 'pack-roar', cooldown: 21, radius: 6, duration: 4, color: 0xcbb36f },
+    { name: 'Alfa Ancestral', description: 'Fortalece a fera, recupera parte de sua vida e a faz golpear em uma onda de impacto.', effect: 'alpha-beast', cooldown: 70, radius: 5.5, duration: 8, power: 2.1, color: 0xe5ca75 },
+  ],
+  oracle: [
+    { name: 'Passo Previsto', description: 'Durante os avisos de chefes, garante que os aliados tentem escapar das áreas anunciadas.', effect: 'oracle-dodge', cooldown: 22, radius: 12, color: 0xc6b4ff },
+    { name: 'Destino Reescrito', description: 'Cancela os golpes anunciados por chefes próximos e os atordoa por um breve instante.', effect: 'rewrite-fate', cooldown: 72, radius: 9, duration: 1.1, control: 'stun', color: 0xe3d7ff },
+  ],
 };
 
 export function cooldownForSkill(cfg, slot = 0, level = 1, rate = 1) {

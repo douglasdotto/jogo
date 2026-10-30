@@ -32,6 +32,7 @@ class Vector3 {
   divideScalar(k) { return this.multiplyScalar(1/k); }
   setLength(l) { const n=Math.hypot(this.x,this.y,this.z)||1; return this.multiplyScalar(l/n); }
   length() { return Math.hypot(this.x,this.y,this.z); }
+  lengthSq() { return this.x*this.x+this.y*this.y+this.z*this.z; }
   normalize() { return this.divideScalar(this.length() || 1); }
   dot(v) { return this.x*v.x+this.y*v.y+this.z*v.z; }
   distanceTo(v) { return this.clone().sub(v).length(); }
@@ -42,6 +43,7 @@ class Vector3 {
   setScalar(k) { return this.set(k,k,k); }
 }
 const noop=()=>{};
+const rendererListeners=new Map();
 const el=()=>{ const cls=new Set(); return { style:{setProperty:noop}, classList:{add:(...c)=>c.forEach(x=>cls.add(x)),remove:(...c)=>c.forEach(x=>cls.delete(x)),
   toggle:(c,on)=>((on??!cls.has(c))?cls.add(c):cls.delete(c)),contains:c=>cls.has(c)}, children:[], attributes:{}, setAttribute(name,value){this.attributes[name]=String(value)},
   append(...c){ this.children.push(...c); }, prepend:noop,
@@ -54,7 +56,7 @@ const root=()=>({position:new Vector3(),rotation:{y:0,set:noop},scale:new Vector
   traverse:noop,add:noop,removeFromParent:noop,getObjectByName:()=>({add:noop,rotation:{z:0}}),material:material(),children:[],rotateZ:noop});
 const geometry=()=>({attributes:{position:{needsUpdate:false,setXYZ:noop}},setFromPoints(){return this},computeBoundingSphere:noop,dispose:noop});
 const action=()=>({reset(){return this},setLoop(){return this},play(){return this},crossFadeFrom:noop,getClip:()=>({duration:1,name:'Idle'})});
-const THREE = new Proxy({ Vector3, Mesh:class {constructor(){Object.assign(this,root())}}, Group:class {constructor(){Object.assign(this,root())}},
+const THREE = new Proxy({ Vector3, Vector2:class{set(x,y){this.x=x;this.y=y;return this;}}, Raycaster:class{constructor(){this.ray={origin:new Vector3(),direction:new Vector3(),at(distance,target){return target.copy(this.origin).addScaledVector(this.direction,distance);}};}setFromCamera(){this.ray.origin.set(0,5,0);this.ray.direction.set(0,-1,0);}}, Mesh:class {constructor(){Object.assign(this,root())}}, Group:class {constructor(){Object.assign(this,root())}},
   Line:class {constructor(geometry,material){Object.assign(this,root(),{geometry,material,visible:false})}},
   BufferGeometry:class {constructor(){Object.assign(this,geometry())}setFromPoints(){return this}},
   LineBasicMaterial:class {constructor(){Object.assign(this,material())}},
@@ -72,10 +74,10 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop,
-  renderer:{render:noop,domElement:{addEventListener:noop}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
+  renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
-  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],fx:[],updateFx:noop,
+  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],sentries:[],fx:[],updateFx:noop,
   wave:noop,burst:noop,column:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
@@ -102,15 +104,41 @@ vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos fofos'),context);
 vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
+const directControlListeners=new Map();
+const directControlLegacyListeners=[];
+const addEventListenerBeforeHeroSlice=context.addEventListener;
+context.addEventListener=(type,handler,options)=>{
+  if(options===true||options?.capture){
+    const listeners=directControlListeners.get(type)||[];
+    listeners.push(handler);directControlListeners.set(type,listeners);
+  }
+  return addEventListenerBeforeHeroSlice(type,handler,options);
+};
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
+context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
 const t=context.t;
+const dispatchDirectControl=(type,key,extra={})=>{
+  const event={key,code:key.startsWith('Arrow')?key:key.toLowerCase().replace(/^q$/,'KeyQ').replace(/^w$/,'KeyW').replace(/^e$/,'KeyE'),
+    repeat:false,ctrlKey:false,metaKey:false,altKey:false,target:{closest:()=>false},defaultPrevented:false,
+    preventDefault(){this.defaultPrevented=true;},stopPropagation(){this.propagationStopped=true;},
+    stopImmediatePropagation(){this.immediateStopped=true;this.propagationStopped=true;},...extra};
+  for(const handler of directControlListeners.get(type)||[]){handler(event);if(event.immediateStopped)break;}
+  if(!event.propagationStopped)for(const handler of directControlLegacyListeners){handler(event);if(event.immediateStopped)break;}
+  return event;
+};
+const dispatchDirectPointer=(type,clientX,clientY,button=0)=>{
+  const event={clientX,clientY,button,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;},stopImmediatePropagation(){this.immediateStopped=true;}};
+  for(const handler of rendererListeners.get(type)||[]){handler(event);if(event.immediateStopped)break;}
+  return event;
+};
+vm.runInContext('t.setDirectControlMode=setDirectControlMode;t.directControl=directControl;t.directControlPointerTarget=directControlPointerTarget',context);
 vm.runInContext('t.inMeleeArc=inMeleeArc',context);
 vm.runInContext('t.goalShort=goalShort;',context);
 vm.runInContext('t.findGroundAimHit=findGroundAimHit;',context);
@@ -129,10 +157,21 @@ const pickText=()=>t.pick.info.innerHTML+t.pick.team.innerHTML;
 const wantedRoles=(priority)=>[...t.pick.team.innerHTML.matchAll(/class="wanted( priority)?" data-role="([^"]+)"/g)].filter(m=>!!m[1]===priority).map(m=>m[2]);
 // barra de habilidades (glifos usados também na ficha da escolha)
 vm.runInContext(part(source,'let skillItems','function pressSkill'),context);
+vm.runInContext(part(source,'function syncSkillControlKeys()','function syncDirectControlUI'),context);
 const skillBarUpdate=part(source,'function updateSkillBar','// dica rica das habilidades')
   .replace(/^function updateSkillBar\(\)/,'globalThis.skillBarUpdateTest = function updateSkillBar()');
 vm.runInContext(skillBarUpdate,context);
 vm.runInContext('t.buildSkillBar=buildSkillBar;t.updateSkillBar=skillBarUpdateTest;t.skillItems=()=>skillItems;',context);
+vm.runInContext(part(source,'function pressSkill(it)','function updateSkillBar'),context);
+const addEventListenerBeforeLegacySkillHotkey=context.addEventListener;
+context.addEventListener=(type,handler,options)=>{
+  if(type==='keydown'&&!(options===true||options?.capture))directControlLegacyListeners.push(handler);
+  return addEventListenerBeforeLegacySkillHotkey(type,handler,options);
+};
+const legacyHotkeyStart=source.indexOf("addEventListener('keydown', (e) => {",source.indexOf('const SKILL_KEYS'));
+const legacyHotkeyEnd=source.indexOf('// o navegador só libera o som',legacyHotkeyStart);
+vm.runInContext(source.slice(legacyHotkeyStart,legacyHotkeyEnd),context);
+context.addEventListener=addEventListenerBeforeLegacySkillHotkey;
 for(const v of t.VARIANTS) v.built={scene:{},animations:[]},v.portraits=['1','2','3'];
 for(const n of ['Minion','Warrior','Rogue','Mage']) context.assets['Skeleton_'+n]={scene:{},animations:[]};
 context.assets.Barbarian={scene:{},animations:[]};
@@ -141,7 +180,7 @@ for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skele
 const results=[];
 const failures=[];
 function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.stack||e.message)}}
-function clear(){for(const u of [...t.units])u.remove();t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,rescueRunner:null,test:false,twinFocus:null});}
+function clear(){for(const u of [...t.units])u.remove();while(t.sentries?.length)t.removeSentry(t.sentries[0]);t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,rescueRunner:null,test:false,twinFocus:null});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.barHeight=0;hero.pos.set(0,0,-4);t.updateBars();
   const transform=hero.bar.style.transform,width=hero.bar.firstChild.style.width;
@@ -381,8 +420,8 @@ test('poof reutiliza materiais só depois que as partículas expiram',()=>{
     clear();
   }
 });
-test('24 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,24);
+test('27 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,27);
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
@@ -390,7 +429,7 @@ test('24 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('72 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('81 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
@@ -408,15 +447,15 @@ test('72 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes no
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,3,v.id+': as três habilidades devem ter corpos diferentes');
     assert.equal(new Set(anims.map(a=>a.clip)).size,3,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,72);
-  assert.equal(new Set(allNames).size,72,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,81);
+  assert.equal(new Set(allNames).size,81,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
   assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,72,
-    `cada uma das 72 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,81,
+    `cada uma das 81 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -558,7 +597,7 @@ test('seletor separa as classes especiais sem alterar os arquétipos de combate'
   clear();t.showPick('','');
   assert.equal(t.pick.classRows.filter(row=>!row.hidden).length,1,'só a categoria selecionada aparece ao abrir o seletor');
   assert.deepEqual(Array.from(t.pick.classFilters,filter=>filter.innerHTML.match(/<span>(.*?)<\/span>/)?.[1]),
-    ['Cavaleiro','Bárbaro','Mago','Ladino','Monge','Druida','Clérigo','Bardo','Anjo','Alquimista']);
+    ['Cavaleiro','Bárbaro','Mago','Ladino','Monge','Druida','Clérigo','Bardo','Anjo','Alquimista','Engenheira','Domador','Oráculo']);
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.deepEqual(Array.from(rowFor('Bárbaro').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking']);
   assert.deepEqual(Array.from(rowFor('Monge').children,card=>card.attributes['data-hero-id']),['monk']);
@@ -575,7 +614,7 @@ test('seletor separa as classes especiais sem alterar os arquétipos de combate'
 });
 test('navegação respeita as linhas de classe, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,24);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,27);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -852,6 +891,199 @@ test('manual espera o jogador; pedido sem alvo avisa e não gasta a recarga',()=
   assert.ok(h.noTarget>0);assert.equal(h.wantSkill,0);assert.ok(h.skillTimer<=0);
   h.die();assert.equal(h.requestSkill(),'off');
 });
+test('controle direto move só o herói escolhido com clique direito e devolve o grupo à IA',()=>{
+  clear();const controlled=new t.Hero(cfg('paladin')),ally=new t.Hero(cfg('pyro'));
+  controlled.pos.set(4,0,0);controlled.post.copy(controlled.pos);
+  ally.pos.set(8,0,0);ally.post.set(6,0,0);
+  const start=controlled.pos.clone(),allyStart=ally.pos.clone();
+  try {
+    t.setDirectControlMode(true,controlled);
+    const down=dispatchDirectPointer('pointerdown',500,500,2);
+    assert.equal(down.defaultPrevented,true,'clique direito não aciona pan da câmera');
+    assert.equal(down.immediateStopped,true,'clique direito é capturado antes dos controles da câmera');
+    const up=dispatchDirectPointer('pointerup',500,500,2);
+    assert.equal(up.defaultPrevented,true,'comando de movimento é consumido');
+    assert.ok(t.directControl.moveTarget,'clique direito no chão registra o destino');
+    controlled.update(.2);controlled.update(.2);ally.update(.2);ally.update(.2);
+    assert.ok(controlled.pos.distanceTo(start)>.01,'o herói controlado caminha até o ponto clicado');
+    assert.ok(ally.pos.distanceTo(allyStart)>.01,'os aliados seguem atualizando pela IA');
+    assert.equal(t.directControl.hero,controlled,'o modo aponta para o herói escolhido');
+    t.setDirectControlMode(false);
+    assert.equal(t.directControl.hero,null,'desligar limpa o herói selecionado');
+    assert.equal(t.directControl.commandDownAt,null,'desligar limpa o clique mantido');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
+test('setas movem continuamente apenas o herói assumido',()=>{
+  clear();const controlled=new t.Hero(cfg('paladin')),ally=new t.Hero(cfg('pyro'));
+  controlled.pos.set(4,0,0);controlled.post.copy(controlled.pos);
+  ally.pos.set(8,0,0);ally.post.copy(ally.pos);
+  const controlledStart=controlled.pos.clone(),allyStart=ally.pos.clone();
+  try {
+    t.setDirectControlMode(true,controlled);
+    const down=dispatchDirectControl('keydown','ArrowUp');
+    assert.equal(down.defaultPrevented,true,'setas são capturadas no combate para não rolar a página');
+    assert.equal(down.immediateStopped,true,'setas não chegam aos atalhos da seleção');
+    assert.ok(t.directControl.moveKeys.has('ArrowUp'),'a tecla pressionada fica ativa até o keyup');
+    controlled.update(.2);controlled.update(.2);
+    assert.ok(controlled.pos.z<controlledStart.z-.01,'seta para cima move o herói no sentido da câmera');
+    assert.ok(ally.pos.distanceTo(allyStart)<.01,'a seta não assume o controle dos outros heróis');
+    dispatchDirectControl('keyup','ArrowUp');
+    controlled.update(.2);
+    assert.equal(t.directControl.moveKeys.size,0,'soltar a seta encerra o movimento contínuo');
+    assert.equal(controlled.moving,false,'o herói para após soltar a tecla');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
+test('controle direto cancela comandos de movimento se o clique for interrompido ou pausado',()=>{
+  clear();const h=new t.Hero(cfg('paladin'));
+  const $=id=>context.document.getElementById(id);$('resume').focus=noop;
+  try {
+    t.setDirectControlMode(true,h);
+    dispatchDirectPointer('pointerdown',500,500,2);
+    assert.ok(t.directControl.commandDownAt,'pressionar o botão direito inicia o comando');
+    dispatchDirectPointer('pointercancel',500,500,2);
+    assert.equal(t.directControl.commandDownAt,null,'pointercancel descarta a ordem incompleta');
+    dispatchDirectPointer('pointerup',500,500,2);
+    assert.equal(t.directControl.moveTarget,null,'um clique interrompido não cria movimento');
+
+    dispatchDirectPointer('pointerdown',500,500,2);
+    t.setUserPause(true);
+    assert.equal(t.directControl.commandDownAt,null,'pausar limpa o botão mantido');
+    assert.equal(t.directControl.moveTarget,null,'pausar cancela ordens pendentes');
+    dispatchDirectPointer('pointerup',500,500,2);
+    assert.equal(t.directControl.moveTarget,null,'soltar após retomar não emite um comando antigo');
+    t.setUserPause(false);
+  } finally { if(t.game.userPaused)t.setUserPause(false);t.setDirectControlMode(false);clear(); }
+});
+test('clique esquerdo seleciona inimigo para atacar e perseguir',()=>{
+  clear();const controlled=new t.Hero(cfg('paladin'));controlled.pos.set(0,0,0);
+  const enemy=new t.Skeleton('Minion',1);enemy.spawning=false;enemy.busy=99;enemy.pos.set(.5,0,0);
+  try {
+    t.setDirectControlMode(true,controlled);
+    dispatchDirectPointer('pointermove',1080,0);
+    dispatchDirectPointer('pointerdown',1080,0,0);
+    const click=dispatchDirectPointer('pointerup',1080,0,0);
+    assert.equal(click.immediateStopped,undefined,'o clique esquerdo ainda deixa OrbitControls encerrar o gesto');
+    assert.strictEqual(t.directControl.attackTarget,enemy,'o inimigo clicado vira o alvo do herói');
+    assert.equal(t.directControl.moveTarget,null,'atacar substitui um comando de movimento anterior');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
+test('QWE ativa as três skills do herói controlado sem disparar os atalhos globais',()=>{
+  clear();const legacy=[new t.Hero(cfg('guardian')),new t.Hero(cfg('pyro')),new t.Hero(cfg('bard'))];
+  const controlled=new t.Hero(cfg('paladin'));
+  assert.equal(directControlLegacyListeners.length,1,'o listener real de atalhos foi carregado no harness');
+  for(const h of legacy)h.skillTimers.fill(0);
+  controlled.skillTimers.fill(0);
+  controlled.autoSkills.fill(false);
+  t.skillItems().length=0;
+  for(const [h,key] of legacy.map((h,i)=>[h,['Q','W','E'][i]]))t.skillItems().push({h,key,slot:1});
+  try {
+    t.setDirectControlMode(true,controlled);
+    for(const [key,slot] of [['q',0],['w',1],['e',2]]){
+      const event=dispatchDirectControl('keydown',key);
+      assert.equal(event.defaultPrevented,true,key.toUpperCase()+' é consumida pelo controle direto');
+      assert.equal(event.immediateStopped,true,key.toUpperCase()+' bloqueia o listener antigo');
+      assert.equal(controlled.skillRequests[slot],2,key.toUpperCase()+' enfileira o slot '+slot);
+      assert.deepEqual(legacy.map(h=>Array.from(h.skillRequests)),[[0,0,0],[0,0,0],[0,0,0]],'nenhuma skill global do grupo dispara');
+      controlled.skillRequests.fill(0);
+    }
+    t.skillItems().push({h:legacy[0],key:'1',slot:0});
+    const hiddenLegacy=dispatchDirectControl('keydown','1');
+    assert.equal(hiddenLegacy.immediateStopped,true,'atalhos antigos ficam bloqueados enquanto um herói é controlado');
+    assert.equal(legacy[0].skillRequests[0],0,'o atalho 1 não ativa a skill de outro herói');
+    t.setDirectControlMode(false);
+    const legacyEvent=dispatchDirectControl('keydown','q');
+    assert.equal(legacyEvent.immediateStopped,undefined,'o atalho antigo volta a propagar fora do controle');
+    assert.equal(legacy[0].skillRequests[1],2,'Q continua ativando a skill do primeiro herói fora do modo direto');
+  } finally { t.setDirectControlMode(false);t.skillItems().length=0;clear(); }
+});
+test('skills marcadas como Auto continuam automáticas no herói assumido',()=>{
+  clear();const h=new t.Hero(cfg('pyro'));h.autoSkills=[true,false,false];h.skillTimers.fill(0);
+  const casts=[];h.useSkill=(_target,_manual,_force,slot)=>{casts.push(slot);return true;};
+  try {
+    t.setDirectControlMode(true,h);
+    h.update(.016);
+    assert.deepEqual(casts,[0],'a habilidade Auto dispara mesmo com o herói sob controle direto');
+    assert.ok(h.skillRequests[0]<=0,'Auto não consome a fila do comando manual QWE');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
+test('mira do mouse direciona habilidade para inimigo ou chão',()=>{
+  clear();const assassin=new t.Hero(cfg('assassin'));assassin.pos.set(0,0,0);
+  const enemy=new t.Skeleton('Minion',1);enemy.spawning=false;enemy.busy=99;enemy.pos.set(.1,0,0);
+  try {
+    t.setDirectControlMode(true,assassin);
+    dispatchDirectPointer('pointermove',792,0);
+    assert.equal(t.directControl.pointerX,792);assert.equal(t.directControl.pointerY,0,'o ponteiro atualiza a mira');
+    assert.strictEqual(t.directControlPointerTarget(assassin,0),enemy,'mirar sobre inimigo escolhe esse alvo');
+    assert.ok(t.directControl.aimDirection.lengthSq()>.9,'a direção de mira fica apontada ao alvo');
+    assassin.skillTimers[0]=0;dispatchDirectControl('keydown','q');
+    assert.strictEqual(assassin.skillTargets[0],enemy,'Q encaminha o alvo apontado para a habilidade');
+    assert.equal(assassin.skillManuals[0],true,'a habilidade dirigida preserva o alvo manual');
+
+    const pyro=new t.Hero(cfg('pyro'));pyro.pos.set(0,0,4);t.setDirectControlMode(true,pyro);
+    dispatchDirectPointer('pointermove',720,500);
+    const ground=t.directControlPointerTarget(pyro,0);
+    assert.ok(ground?.groundTarget,'habilidade de área mira o ponto do terreno');
+    assert.ok(Math.abs(ground.pos.y)<.001,'o ponto dirigido acompanha a altura lógica do terreno');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
+test('controle direto mira a técnica da Engenheira e mantém a ultimate de área sem alvo manual',()=>{
+  clear();const engineer=new t.Hero(cfg('engineer'));engineer.pos.set(0,0,0);engineer.skillTimers.fill(0);
+  const enemy=new t.Skeleton('Minion',1);enemy.spawning=false;enemy.busy=99;enemy.pos.set(.1,0,0);
+  try {
+    t.setDirectControlMode(true,engineer);
+    dispatchDirectPointer('pointermove',792,0);
+    dispatchDirectControl('keydown','w');
+    assert.strictEqual(engineer.skillTargets[1],enemy,'W encaminha ao pulso o inimigo apontado pelo mouse');
+    assert.equal(engineer.skillManuals[1],true,'a técnica preserva o comando manual de alvo');
+    engineer.skillRequests[1]=0;engineer.skillTargets[1]=null;engineer.skillManuals[1]=false;
+    dispatchDirectControl('keydown','e');
+    assert.equal(engineer.skillTargets[2],null,'a ultimate da torre não recebe o inimigo sob o cursor');
+    assert.equal(engineer.skillManuals[2],false,'a ultimate de área continua com seleção automática de contexto');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
+test('controle direto usa o ponto do chão escolhido para áreas da Arqueira',()=>{
+  clear();t.bolts.length=0;context.flames.length=0;
+  const archer=new t.Hero(cfg('archer'));archer.pos.set(4,0,0);archer.skillTimers.fill(0);
+  const enemy=new t.Skeleton('Minion',1);enemy.spawning=false;enemy.busy=99;enemy.pos.set(.5,0,0);
+  try {
+    t.setDirectControlMode(true,archer);
+    dispatchDirectPointer('pointermove',720,500);
+    const point=t.directControlPointerTarget(archer,1);
+    assert.ok(point?.groundTarget,'W da Arqueira aponta para o terreno');
+    dispatchDirectControl('keydown','w');
+    assert.ok(archer.skillTargets[1]?.groundTarget,'o comando Q/W/E preserva o ponto escolhido');
+    assert.equal(archer.useSkill(archer.skillTargets[1],true,true,1),true);
+    archer.pendingHit.effect();
+    const rain=context.flames.at(-1);
+    assert.ok(rain,'a Chuva de Flechas deixa a área no chão');
+    assert.ok(Math.abs(rain.mesh.position.x-point.pos.x)<.001,'a chuva cai no ponto do cursor, não no centro do inimigo');
+  } finally { t.setDirectControlMode(false);context.flames.length=0;clear(); }
+});
+test('controle direto respeita pausa, fim de fase, morte e recarga',()=>{
+  clear();const h=new t.Hero(cfg('paladin'));
+  try {
+    t.setDirectControlMode(true,h);
+    h.skillTimers[1]=5;
+    let event=dispatchDirectControl('keydown','w');
+    assert.equal(event.immediateStopped,true,'a skill em recarga ainda não vaza para o atalho global');
+    assert.equal(h.skillRequests[1],0,'W não enfileira enquanto o slot está em recarga');
+    h.skillTimers[1]=0;t.game.paused=true;
+    event=dispatchDirectControl('keydown','q');
+    assert.equal(h.skillRequests[0],0,'pausa bloqueia skills');
+    t.game.paused=false;h.dead=true;
+    event=dispatchDirectControl('keydown','e');
+    assert.equal(h.skillRequests[2],0,'herói caído não recebe skill');
+    h.dead=false;t.game.over=true;
+    event=dispatchDirectControl('keydown','q');
+    assert.equal(h.skillRequests[0],0,'fim da partida bloqueia skills');
+    t.game.over=false;t.game.state='cleared';
+    event=dispatchDirectControl('keydown','w');
+    assert.equal(h.skillRequests[1],0,'fora do combate não enfileira skill');
+    t.game.state='fight';t.pick.open=true;
+    event=dispatchDirectControl('keydown','e');
+    assert.equal(h.skillRequests[2],0,'seletor de herói bloqueia skills');
+  } finally { t.setDirectControlMode(false);clear(); }
+});
 test('automático/manual fica salvo por variante',()=>{
   clear();context.localStorage.data={};t.saveAuto('ninja',false);
   assert.equal(new t.Hero(cfg('ninja')).auto,false);assert.equal(new t.Hero(cfg('cryo')).auto,true);
@@ -883,7 +1115,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas e ultimates das 24 variantes executam seus efeitos sem erro',()=>{
+test('técnicas e ultimates das 27 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -906,8 +1138,31 @@ test('habilidades principais dos quatro novos heróis têm efeitos funcionais',(
   assert.equal(chronist.useSkill(enemy,false,true),true);chronist.pendingHit.effect();assert.ok(enemy.rootT>0);
   clear();
 });
+test('Engenheira, Domador e Oráculo têm habilidades principais próprias e efeitos distintos',()=>{
+  clear();
+  const engineer=new t.Hero(cfg('engineer')),tamer=new t.Hero(cfg('beast_tamer')),oracle=new t.Hero(cfg('oracle'));
+  for(const h of [engineer,tamer,oracle])h.pos.set(0,0,0);
+  const enemy=new t.Skeleton('Minion',1);enemy.spawning=false;enemy.busy=99;enemy.pos.set(0,0,2);enemy.hp=enemy.maxHp=10000;
+
+  assert.equal(t.aimSpec(engineer).mode,'ground');assert.equal(t.validAim(engineer,{pos:new Vector3(3,0,0),groundTarget:true,dead:false}),true);
+  assert.equal(engineer.useSkill(enemy,false,true),true);engineer.pendingHit.effect();assert.equal(t.sentries.length,1,'Q instala uma torre persistente');
+  t.frameTargetContext.skeletons.push(enemy);const beforeTurret=enemy.hp;t.updateSentries(1);assert.ok(enemy.hp<beforeTurret,'a torre dispara automaticamente contra inimigos no alcance');
+
+  assert.equal(tamer.useSkill(enemy,false,true),true);tamer.pendingHit.effect();
+  const beast=t.units.find(unit=>unit.beastCompanion&&unit.summoner===tamer);assert.ok(beast,'Q chama uma fera aliada');
+  assert.equal(tamer.useSkill(enemy,false,true,1),true);tamer.pendingHit.effect();assert.strictEqual(enemy.taunt,beast,'o rugido faz a fera interceptar a ameaça');
+  assert.equal(tamer.useSkill(enemy,false,true,2),true);tamer.pendingHit.effect();assert.ok(beast.empowerT>0,'a ultimate fortalece a fera');
+
+  enemy.telegraph={interruptible:true,t:2,dodge:new Map(),at:enemy.pos.clone(),owner:enemy};
+  assert.equal(t.aimSpec(oracle).mode,'enemy');
+  assert.equal(oracle.useSkill(enemy,false,true),true);oracle.pendingHit.effect();t.frameTargetContext.skeletons.length=0;t.frameTargetContext.skeletons.push(enemy);t.updateBolts(1);
+  assert.ok(enemy.stunT>0,'Q interrompe um golpe anunciado do chefe');
+  enemy.stunT=0;assert.equal(oracle.useSkill(enemy,false,true,1),true);oracle.pendingHit.effect();assert.equal(enemy.telegraph.dodge.get(oracle),true,'W garante a esquiva da aliada no aviso ativo');
+  assert.equal(oracle.useSkill(enemy,false,true,2),true);oracle.pendingHit.effect();assert.ok(enemy.stunT>0,'a ultimate reescreve e interrompe o aviso');
+  clear();t.frameTargetContext.skeletons.length=0;
+});
 test('virotes perfurantes reutilizam vetores e acertam vários inimigos no quadro',()=>{
-  clear();t.bolts.length=0;
+  clear();assert.equal(t.sentries.length,0,'o cenário do tiro começa sem torres');t.bolts.length=0;
   const shooter=new t.Hero(cfg('crossbow'));shooter.pos.set(0,0,0);shooter.dmg=120;
   const first=new t.Skeleton('Minion',1),second=new t.Skeleton('Minion',1);
   first.spawning=second.spawning=false;first.pos.set(0,0,-1);second.pos.set(0,0,-2);first.hp=second.hp=10000;
@@ -1209,6 +1464,24 @@ test('Coração do Castelo mantém foco coletivo nos três chefes, troca ao cair
   team=t.makeTargetContext();
   for(const hero of party)assert.equal(t.chooseHeroTarget(hero,[darkKnight,executioner,lich,threat],.016,team),executioner,
     'ao cancelar o telegráfico, todos retomam o foco coletivo em vez do alvo antigo');
+  clear();
+});
+test('chefe único cede o foco a uma ameaça alcançável prestes a acertar um herói',()=>{
+  clear();
+  const hero=new t.Hero(cfg('paladin'));hero.pos.set(0,0,0);hero.post.copy(hero.pos);
+  const boss=new t.Skeleton('Lich',12,true);boss.spawning=false;boss.pos.set(0,0,6);
+  const threat=new t.Skeleton('Warrior',12);threat.spawning=false;threat.pos.set(0,0,2);
+  t.game.mission={goal:{type:'boss'}};
+  let team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(hero,[boss,threat],.016,team),boss,'sem ameaça urgente, mantém o foco no chefe');
+
+  threat.pendingHit={target:hero};team=t.makeTargetContext();
+  assert.equal(t.canHeroReachTarget(hero,boss,team),true);
+  assert.equal(t.canHeroReachTarget(hero,threat,team),true);
+  assert.equal(t.chooseHeroTarget(hero,[boss,threat],.016,team),threat,'ameaça alcançável prestes a acertar interrompe o bônus de foco no chefe');
+
+  threat.pos.set(0,0,100);team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(hero,[boss,threat],.016,team),boss,'ameaça urgente fora do alcance não desvia a equipe do chefe');
   clear();
 });
 test('Coração limita interceptores na formação real e troca de foco quando um chefe se afasta',()=>{
@@ -1746,7 +2019,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
 test('18 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,18);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,24);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,27);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

@@ -672,6 +672,7 @@
     </div>
     <span class="chip hidden" id="goal" data-tip="Objetivo da missão"></span>
     <div class="hud-right">
+      <button id="directControlToggle" class="hud-icon direct-control-toggle" type="button" aria-pressed="false" aria-label="Assumir o controle do herói (C)" data-tip="Controle direto · C">🎮</button>
       <button id="pause" class="hud-icon" type="button" aria-pressed="false" aria-label="Pausar (P ou Espaço)" data-tip="Pausar · P ou Espaço">⏸&#xFE0E;</button>
       <button id="speed" class="hud-icon" type="button" aria-label="Velocidade 1x" data-tip="Velocidade do jogo · clique para alternar 1x, 2x, 3x">⏩&#xFE0E;<small>1x</small></button>
       <button id="mute" class="hud-icon" type="button" aria-label="Desligar o som" data-tip="Som · liga e desliga"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -686,6 +687,14 @@
   </div>
   <div id="soundHint" role="status" hidden>Som desligado · ligue no alto-falante ↗</div>
   <div id="skills" role="group" aria-label="Habilidades dos heróis"></div>
+  <div id="directControlHint" class="is-hidden" role="status" aria-label="Controles do herói">
+    <span class="direct-control-title" id="directControlHero">Controle direto</span>
+    <span><kbd>C</kbd> devolver à IA</span>
+    <span><kbd>Setas</kbd> ou <kbd>botão direito</kbd> mover</span>
+    <span><kbd>Botão esquerdo</kbd> atacar</span>
+    <span><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> usar quando Auto estiver desligado</span>
+    <span><kbd>Mouse</kbd> mirar habilidades</span>
+  </div>
   <div id="banner" aria-live="polite"></div>
   <div id="bossBar" hidden></div>
   <div id="pick" class="hidden">

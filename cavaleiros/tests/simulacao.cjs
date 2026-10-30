@@ -37,6 +37,7 @@ class Vector3 {
   lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
   length() { return Math.sqrt(this.lengthSq()); }
   normalize() { return this.divideScalar(this.length() || 1); }
+  setLength(length) { return this.multiplyScalar(length / (this.length() || 1)); }
   dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
   distanceToSquared(v) { const x = this.x - v.x, y = this.y - v.y, z = this.z - v.z; return x * x + y * y + z * z; }
   distanceTo(v) { return Math.sqrt(this.distanceToSquared(v)); }
@@ -75,7 +76,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
   newStats: stats, openHeroPanel: noop, closeHeroPanel: noop, panelHero: () => null, tickHeroPanel: noop, summaryHTML: () => '', LOOKS: {}, applyLook: noop,
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
-  blasts: simBlasts,
+  blasts: simBlasts, sentries: [],
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
     along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
   poof: noop, ring: simRing, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], flames: [], wave: noop, burst: noop, column: noop,

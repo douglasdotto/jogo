@@ -121,7 +121,7 @@ const movementSandbox={
 };
 const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',movementSandbox);
 const {Walker,queryObstacleCandidates}=movementApi;
-const separationStart=main.indexOf('const collisionFrom = { x: 0, z: 0 }'),separationEnd=main.indexOf('// ---------- fases ----------',separationStart);
+const separationStart=main.indexOf('const collisionFrom = { x: 0, z: 0 }'),separationEnd=main.indexOf('const directControl = {',separationStart);
 if(separationStart<0||separationEnd<0)throw Error('Solver de colisão ausente');
 const separationSandbox={THREE,world,units:[],gridCellKey:(x,z)=>x*65536+(z&0xffff)};
 const {separate}=runInNewContext(main.slice(separationStart,separationEnd)+';({separate})',separationSandbox);
@@ -307,16 +307,16 @@ if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alte
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};
 const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:world.zoneOf(3).top[0]}];
 const tick=runInNewContext(main.slice(main.indexOf('function updateGame('),main.indexOf('function endGame('))+';updateGame',{
-  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},tutorial:{on(){},wants:()=>false},showBanner:()=>{},popText:()=>{},setText:()=>{},setTip:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
+  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},clearDirectControlOrders:()=>{},syncDirectControlUI:()=>{},tutorial:{on(){},wants:()=>false},showBanner:()=>{},popText:()=>{},setText:()=>{},setTip:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
   units:[],militiaAlive:()=>0,$:()=>({hidden:true,classList:{toggle(){}}})
 });
 tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador vivo');
 living=[];tick(0.1);if(phaseGame.state!=='cleared')throw Error('Fase não terminou após último inimigo');
 const removed=[],enemyBolts=[{mesh:{id:'tiro'}}],resetGame={};let chose=false;
 const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.indexOf('function startPhase()'))+';startGame',{
-  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},setUserPause:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},clearFx:()=>{},popTextPool:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
+  clearTimeout:()=>{},showBanner:()=>{},pick:{variants:[0,0,0,0]},THREE,evolutions:[],aiming:null,cancelAim:()=>{},setDirectControlMode:()=>{},syncDirectControlUI:()=>{},setUserPause:()=>{},audio:{stopMusic:()=>{}},FX:{clear:()=>{}},clearFx:()=>{},popTextPool:{clear:()=>{}},battleGateId:0,battleLoadingVisible:false,
   closeHeroPanel:()=>{},clearMonsterFx:()=>{},document:{body:{classList:{add:()=>{}}}},PHASES:12,location:{search:''},URLSearchParams,$:()=>({style:{},classList:{add:()=>{},remove:()=>{},toggle:()=>{}},innerHTML:''}),
-  enemyBolts,bolts:[],blasts:[],flames:[],fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
+  enemyBolts,bolts:[],blasts:[],flames:[],sentries:[],removeSentry:()=>{},fx:[],scene:{remove:m=>removed.push(m)},bars:{querySelectorAll:()=>[]},units:[],game:resetGame,world,
   follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;},progress:{rerolls:()=>0},renderRelicTray:()=>{}
 });
 reset();if(enemyBolts.length||removed[0]?.id!=='tiro'||resetGame.phase!==1||!chose)throw Error('Reinício deixou projétil ou não abriu escolha');

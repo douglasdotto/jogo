@@ -140,6 +140,60 @@ export const CHARACTERS = [
       { type: 'robeSkirt', bone: 'hips', color: 0x78c0f8, trim: 0xf0c040, height: 0.44, flare: 0.42 }, { type: 'gearPauldrons', bone: 'chest' },
     ],
   },
+  {
+    id: 'engineer', name: 'Engenheira', desc: 'Inventora de campo equipada para montar dispositivos.', color: ['#f2b36b', '#a95331'],
+    base: 'Rogue',
+    shape: silhouette('Rogue', { torso: 1.04, arms: 1.02, legs: 1, height: 1, depth: 1.04 }),
+    hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
+    paint: {
+      ...rogueOutfit({ cloth: '#e37b32', trim: '#f0c779', sleeves: '#d6a16f', leather: '#48332f', pants: '#4b5057', boots: '#332b30', gloves: '#bc783f', metal: '#e6b454' }),
+      Rogue_Head: { face: { skin: '#dca77a', hair: '#493126', eyes: '#f3c46a' } },
+    },
+    extras: [
+      { type: 'goggles', color: 0xc88937, lens: 0x8df1de, strap: 0x593b2c, y: 0.63 },
+      { type: 'toolPack', bone: 'chest', body: 0x754a3b, metal: 0xd5a349 },
+      { type: 'toolBelt', bone: 'hips', leather: 0x46312d, metal: 0xe4bd5a },
+      { type: 'wrench', bone: 'handslotr', metal: 0xdba84e, grip: 0x593b2c },
+      { type: 'motes', bone: 'root', color: 0xf2b36b, n: 3, size: 0.04, y: 0.9 },
+    ],
+  },
+  {
+    id: 'beast_tamer', name: 'Domador', desc: 'Batedor que luta em sintonia com sua fera companheira.', color: ['#a6d77a', '#477c45'],
+    base: 'Barbarian',
+    shape: silhouette('Barbarian', { torso: 0.96, arms: 0.96, legs: 1, height: 1.02, depth: 0.96 }),
+    hide: ['Barbarian_Hat', 'Barbarian_Cape', '1H_Axe', '1H_Axe_Offhand', '2H_Axe', 'Barbarian_Round_Shield', 'Mug'],
+    paint: {
+      Barbarian_Body: { tint: '#638c45', amount: 0.78 }, Barbarian_ArmLeft: { tint: '#638c45', amount: 0.65 }, Barbarian_ArmRight: { tint: '#638c45', amount: 0.65 },
+      Barbarian_LegLeft: { tint: '#59402c', amount: 0.72 }, Barbarian_LegRight: { tint: '#59402c', amount: 0.72 },
+      Barbarian_Head: { face: { skin: '#c98f62', hair: '#50351f', eyes: '#a6df65' } },
+    },
+    extras: [
+      { type: 'animalEars', bone: 'head', fur: 0x705039, inner: 0xd59a75 },
+      { type: 'furMantle', bone: 'chest', color: 0x766147 },
+      { type: 'trailPouch', bone: 'chest', leather: 0x59402c, trim: 0xb28a50 },
+      { type: 'whistle', bone: 'chest', metal: 0xd6b85d, cord: 0x365b38 },
+      { type: 'motes', bone: 'root', color: 0xb3e77b, n: 3, size: 0.04, y: 0.8 },
+    ],
+  },
+  {
+    id: 'oracle', name: 'Oráculo', desc: 'Vidente que lê os sinais antes que a ameaça ataque.', color: ['#c2b4ff', '#6555ac'],
+    base: 'Mage',
+    shape: silhouette('Mage', { torso: 0.98, arms: 0.96, legs: 0.98, height: 1.03, depth: 0.97 }),
+    hide: ['Mage_Hat', 'Mage_Cape', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    paint: {
+      Mage_Body: { tint: '#6555ac', amount: 0.84 }, Mage_ArmLeft: { tint: '#6555ac', amount: 0.78 }, Mage_ArmRight: { tint: '#6555ac', amount: 0.78 },
+      Mage_LegLeft: { tint: '#342e62', amount: 0.8 }, Mage_LegRight: { tint: '#342e62', amount: 0.8 },
+      Mage_Head: { face: { skin: '#e0ba9b', hair: '#302541', eyes: '#a8f1ee' } },
+    },
+    extras: [
+      { type: 'oracleVeil', bone: 'chest', cloth: 0x514184, trim: 0xc7a9ff },
+      { type: 'oracleDiadem', bone: 'head', metal: 0xd7c8ff, gem: 0x83eee5 },
+      { type: 'astrolabe', bone: 'handslotl', metal: 0xd7c16f, crystal: 0x8cf0e8 },
+      { type: 'starMantle', bone: 'chest', cloth: 0x392e63, stars: 0xbdaaff },
+      { type: 'runeRing', bone: 'root', color: 0x8b7ce0 },
+      { type: 'motes', bone: 'root', color: 0x9cf4ed, n: 4, size: 0.04, y: 1.15 },
+    ],
+  },
 ];
 
 // proporções leves nas malhas de corpo, braços e pernas; mantém os ossos livres para as animações
@@ -1064,6 +1118,138 @@ const ACCESSORIES = {
     g.add(new THREE.Mesh(merged([-1, 1].map((s) => piece(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10), [s * 0.17, y + 0.03, 0.52], [Math.PI / 2 - 0.3, 0, 0]))), lambert(color, { emissive: 0x4a3000, emissiveIntensity: 0.3 })));
     const glass = merged([-1, 1].map((s) => piece(new THREE.CircleGeometry(0.09, 10), [s * 0.17, y + 0.045, 0.575], [-0.3, 0, 0])));
     g.add(new THREE.Mesh(glass, new THREE.MeshLambertMaterial({ color: lens, emissive: lens, emissiveIntensity: 0.5 })));
+    return g;
+  },
+  // mochila compacta com bobinas e tubos: marca a silhueta da engenheira de costas
+  toolPack({ body = 0x347b73, metal = 0xd5a349 } = {}) {
+    const g = new THREE.Group(), leather = lambert(0x49382c), enamel = lambert(body), brass = lambert(metal, { emissive: 0x49320a, emissiveIntensity: 0.2 });
+    g.add(new THREE.Mesh(merged([
+      piece(new THREE.BoxGeometry(0.48, 0.5, 0.2), [0, 0.12, -0.36]),
+      piece(new THREE.BoxGeometry(0.58, 0.12, 0.22), [0, 0.42, -0.34]),
+      piece(new THREE.BoxGeometry(0.13, 0.46, 0.035), [-0.2, 0.12, -0.245]),
+      piece(new THREE.BoxGeometry(0.13, 0.46, 0.035), [0.2, 0.12, -0.245]),
+    ]), enamel));
+    // bobina lateral com cubo e pequenas engrenagens visíveis
+    for (const s of [-1, 1]) {
+      const coil = new THREE.Group();
+      coil.add(new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.12, 10), brass));
+      coil.add(new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 5, 12), leather));
+      coil.rotation.z = Math.PI / 2;
+      coil.position.set(s * 0.31, 0.14, -0.3);
+      g.add(coil);
+    }
+    const tubeParts = [piece(new THREE.CylinderGeometry(0.035, 0.035, 0.24, 7), [0.12, 0.48, -0.37], [0, 0, -0.35]), piece(new THREE.CylinderGeometry(0.035, 0.035, 0.18, 7), [-0.15, 0.46, -0.36], [0, 0, 0.3])];
+    g.add(new THREE.Mesh(merged(tubeParts), brass));
+    g.add(new THREE.Mesh(merged([piece(new THREE.BoxGeometry(0.24, 0.1, 0.035), [0, 0.08, -0.225])]), leather));
+    return g;
+  },
+  // cinto de ferramentas com bolsas de couro e fivelas de latão
+  toolBelt({ leather = 0x573729, metal = 0xe4bd5a } = {}) {
+    const g = ACCESSORIES.wideBelt({ color: leather, buckle: metal, y: 0.12 });
+    for (const [x, y, z, w] of [[-0.34, -0.06, 0.27, 0.16], [0.34, -0.03, 0.26, 0.18]]) {
+      const pouch = new THREE.Mesh(new THREE.BoxGeometry(w, 0.22, 0.14), lambert(leather));
+      pouch.position.set(x, y, z);
+      g.add(pouch);
+    }
+    const rivets = [-0.34, 0.34].map((x) => piece(new THREE.BoxGeometry(0.08, 0.035, 0.02), [x, 0.04, 0.35]));
+    g.add(new THREE.Mesh(merged(rivets), lambert(metal)));
+    return g;
+  },
+  // chave inglesa curta na mão dominante
+  wrench({ metal = 0xdba84e, grip = 0x593b2c } = {}) {
+    const g = new THREE.Group();
+    const handle = [piece(new THREE.CylinderGeometry(0.045, 0.055, 0.38, 8), [0, -0.03, 0]), piece(new THREE.CylinderGeometry(0.065, 0.065, 0.11, 8), [0, -0.18, 0])];
+    g.add(new THREE.Mesh(merged(handle), lambert(grip)));
+    const jaw = [
+      piece(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 7), [-0.075, 0.22, 0], [0, 0, -0.55]),
+      piece(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 7), [0.075, 0.22, 0], [0, 0, 0.55]),
+      piece(new THREE.BoxGeometry(0.14, 0.045, 0.06), [0, 0.3, 0]),
+      piece(new THREE.BoxGeometry(0.08, 0.045, 0.06), [0, 0.15, 0]),
+    ];
+    g.add(new THREE.Mesh(merged(jaw), lambert(metal)));
+    return g;
+  },
+  // orelhas de lobo sobre a testa, para diferenciar o batedor sem barba ou elmo
+  animalEars({ fur = 0x705039, inner = 0xd59a75 } = {}) {
+    const g = new THREE.Group(), outers = [], inners = [];
+    for (const s of [-1, 1]) {
+      outers.push(piece(new THREE.ConeGeometry(0.18, 0.42, 6), [s * 0.34, 0.62, -0.01], [0, 0, -s * 0.18], [1, 1, 0.62]));
+      inners.push(piece(new THREE.ConeGeometry(0.09, 0.25, 5), [s * 0.34, 0.65, 0.085], [0, 0, -s * 0.18], [1, 1, 0.35]));
+    }
+    g.add(new THREE.Mesh(merged(outers), lambert(fur)), new THREE.Mesh(merged(inners), lambert(inner)));
+    return g;
+  },
+  // bolsa de trilha atravessada no peito, com mapas e tiras de couro
+  trailPouch({ leather = 0x59402c, trim = 0xb28a50 } = {}) {
+    const g = new THREE.Group(), strap = lambert(leather), brass = lambert(trim);
+    g.add(new THREE.Mesh(merged([
+      piece(new THREE.BoxGeometry(0.08, 0.74, 0.035), [-0.04, 0, 0.31], [0, 0, -0.55]),
+      piece(new THREE.BoxGeometry(0.25, 0.25, 0.15), [-0.32, -0.2, 0.26]),
+      piece(new THREE.BoxGeometry(0.2, 0.17, 0.13), [0.32, -0.24, 0.24]),
+    ]), strap));
+    g.add(new THREE.Mesh(merged([
+      piece(new THREE.BoxGeometry(0.09, 0.055, 0.025), [-0.32, -0.14, 0.345]),
+      piece(new THREE.BoxGeometry(0.07, 0.05, 0.025), [0.32, -0.19, 0.315]),
+    ]), brass));
+    return g;
+  },
+  // apito de chamada pendurado no peito
+  whistle({ metal = 0xd6b85d, cord = 0x365b38 } = {}) {
+    const g = new THREE.Group();
+    const cordArc = new THREE.TorusGeometry(0.17, 0.018, 4, 12, Math.PI);
+    g.add(new THREE.Mesh(merged([piece(cordArc, [0, 0.08, 0.34], [0, 0, Math.PI])]), lambert(cord)));
+    g.add(new THREE.Mesh(merged([
+      piece(new THREE.CylinderGeometry(0.04, 0.04, 0.25, 8), [0, -0.07, 0.35], [0, 0, Math.PI / 2]),
+      piece(new THREE.CylinderGeometry(0.052, 0.052, 0.045, 8), [0.12, -0.07, 0.35], [0, 0, Math.PI / 2]),
+    ]), lambert(metal, { emissive: 0x4a390a, emissiveIntensity: 0.2 })));
+    return g;
+  },
+  // véu curto sobre os ombros com uma linha luminosa no contorno
+  oracleVeil({ cloth = 0x514184, trim = 0xc7a9ff } = {}) {
+    const g = new THREE.Group(), span = Math.PI * 1.2, start = Math.PI - span / 2;
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.48, 0.54, 12, 1, true, start, span).translate(0, -0.1, -0.08), lambert(cloth, { side: THREE.DoubleSide })));
+    g.add(new THREE.Mesh(rim(0.48, 0.025, start, span).translate(0, -0.37, -0.08), lambert(trim)));
+    const stars = [];
+    for (const s of [-1, 1]) stars.push(piece(new THREE.OctahedronGeometry(0.06), [s * 0.38, -0.27, 0.18]));
+    g.add(new THREE.Mesh(merged(stars), lambert(trim, { emissive: trim, emissiveIntensity: 0.25 })));
+    return g;
+  },
+  // diadema fino e gema frontal para a vidente
+  oracleDiadem({ metal = 0xd7c8ff, gem = 0x83eee5 } = {}) {
+    const g = new THREE.Group();
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.39, 0.025, 5, 18, Math.PI), lambert(metal));
+    band.rotation.x = Math.PI / 2;
+    band.position.y = 0.48;
+    g.add(band);
+    const gems = [-1, 1].map((s) => piece(new THREE.OctahedronGeometry(0.07), [s * 0.27, 0.49, 0.32]));
+    gems.push(piece(new THREE.OctahedronGeometry(0.12), [0, 0.51, 0.4]));
+    g.add(new THREE.Mesh(merged(gems), lambert(gem, { emissive: gem, emissiveIntensity: 0.4 })));
+    return g;
+  },
+  // astrolábio portátil com três anéis e um cristal central
+  astrolabe({ metal = 0xd7c16f, crystal = 0x8cf0e8 } = {}) {
+    const g = new THREE.Group(), brass = lambert(metal, { emissive: 0x534214, emissiveIntensity: 0.2 });
+    const rings = [new THREE.TorusGeometry(0.22, 0.018, 5, 18), new THREE.TorusGeometry(0.15, 0.015, 5, 16)];
+    const a = new THREE.Mesh(rings[0], brass); a.rotation.set(0.45, 0.2, 0.1); g.add(a);
+    const b = new THREE.Mesh(rings[1], brass); b.rotation.set(-0.55, 0.35, 0.65); g.add(b);
+    g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.105), lambert(crystal, { emissive: crystal, emissiveIntensity: 0.5 })));
+    for (const s of [-1, 1]) {
+      const pin = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), brass);
+      pin.position.set(s * 0.25, 0, 0);
+      g.add(pin);
+    }
+    g.position.set(0, 0.2, 0.08);
+    return g;
+  },
+  // manto escuro de astróloga com pequenos pontos estelares
+  starMantle({ cloth = 0x392e63, stars = 0xbdaaff } = {}) {
+    const g = new THREE.Group(), span = Math.PI * 1.25, start = Math.PI - span / 2;
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 0.22, 12, 1, true, start, span), lambert(cloth, { side: THREE.DoubleSide })));
+    const points = [];
+    for (const [x, y, z] of [[-0.25, 0.07, 0.25], [0, -0.02, 0.35], [0.25, 0.06, 0.25], [-0.34, -0.08, -0.02], [0.34, -0.08, -0.02]]) {
+      points.push(piece(new THREE.OctahedronGeometry(0.045), [x, y, z]));
+    }
+    g.add(new THREE.Mesh(merged(points), lambert(stars, { emissive: stars, emissiveIntensity: 0.25 })));
     return g;
   },
   // frasco redondo com gargalo, rolha e líquido que brilha (na mão ou no cinto)

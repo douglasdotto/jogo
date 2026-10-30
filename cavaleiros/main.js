@@ -103,6 +103,12 @@ const VARIANTS = [
     attacks: ['Unarmed_Melee_Attack_Punch_A', 'Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], classId: 1, pickGroup: 'monk' },
   { id: 'alchemist', names: ['Alquimista', 'Mestre dos Frascos', 'Grão-Transmutador'], desc: 'Frascos de veneno e de tônico.', ability: 'Frasco', color: ['#d8f59a', '#8cb83f'],
     use: [], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 200, dmg: 14, range: 6, speed: 3, cooldown: 1.15, ranged: true, splash: 0.6, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'alchemist' },
+  { id: 'engineer', names: ['Engenheira', 'Inventora de Batalha', 'Mestra das Engrenagens'], desc: 'Constrói uma torre automática e desmonta a formação inimiga.', ability: 'Torreta sentinela', color: ['#9be8db', '#3b9c94'],
+    use: ['1H_Wand', 'Spellbook'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 190, dmg: 19, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['1H_Ranged_Shoot'], classId: 2, pickGroup: 'engineer' },
+  { id: 'beast_tamer', names: ['Domador', 'Guardião da Matilha', 'Lenda Selvagem'], desc: 'Chama uma fera aliada que protege o grupo e caça ameaças.', ability: 'Companheiro feral', color: ['#d2c28e', '#8c6d36'],
+    use: ['1H_Axe'], stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop'], classId: 1, pickGroup: 'beast-tamer' },
+  { id: 'oracle', names: ['Oráculo', 'Vidente do Véu', 'Profeta das Estrelas'], desc: 'Prevê ataques anunciados e interrompe os golpes dos chefes.', ability: 'Estilhaço do augúrio', color: ['#c6b4ff', '#7862c5'],
+    use: ['Spellbook', '1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -118,6 +124,9 @@ const PICK_GROUPS = [
   { id: 'bard', name: 'Bardo', icon: '♫', classId: 4 },
   { id: 'angel', name: 'Anjo', icon: '✧', classId: 4 },
   { id: 'alchemist', name: 'Alquimista', icon: '⚗', classId: 4 },
+  { id: 'engineer', name: 'Engenheira', icon: '⚙', classId: 2 },
+  { id: 'beast-tamer', name: 'Domador', icon: '♞', classId: 1 },
+  { id: 'oracle', name: 'Oráculo', icon: '☼', classId: 2 },
 ];
 const pickGroupId = (cfg) => cfg.pickGroup || `class-${cfg.classId}`;
 const variantsInPickGroup = (groupId) => VARIANTS.filter((cfg) => pickGroupId(cfg) === groupId);
@@ -306,6 +315,9 @@ function setUserPause(on) {
   if (on && (game.paused || game.over || pick.open || (!heroes().length && !game.realm))) return;
   game.userPaused = on;
   game.paused = on;
+  if (on && typeof directControl !== 'undefined') {
+    clearDirectControlOrders();
+  }
   $('pauseOverlay').hidden = !on;
   $('pause').setAttribute('aria-pressed', String(on));
   $('pause').textContent = on ? '▶\uFE0E' : '⏸\uFE0E';
@@ -1591,13 +1603,14 @@ function buildSkillBar(party) {
       // dois botões irmãos (usar e auto): botão dentro de botão não é acessível; nome e tipo ficam na dica
       b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" data-tip="Uso automático: liga e desliga" aria-label="Uso automático de ${skill.name}" aria-pressed="true">↻</button>
         <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : slot === 0 ? 'assinatura' : 'técnica'}. Tecla ${key}."><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span></button>`;
-      const it = { h, skill, slot, key, b, img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0, classStates: {} };
+      const it = { h, skill, slot, key, b, keyEl: b.querySelector('.key'), use: b.querySelector('.use'), img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0, controlKey: null, classStates: {} };
       b.querySelector('.use').onclick = () => pressSkill(it);
       it.auto.onclick = (e) => {
         e.stopPropagation();
         h.autoSkills[slot] = !h.autoSkills[slot];
         h.skillTargets[slot] = null;
         h.skillRequests[slot] = 0;
+        h.skillManuals[slot] = false;
         if (aiming?.hero === h && slot === 0) cancelAim();
         saveAuto(h.cfg.id, h.autoSkills[slot], slot);
         audio.play('click');
@@ -1641,6 +1654,7 @@ function updateSkillBar() {
     skillRoster.length = skillParty.length;
     for (let i = 0; i < skillParty.length; i++) skillRoster[i] = skillParty[i];
   }
+  syncSkillControlKeys();
   const now = performance.now();
   for (const it of skillItems) {
     const { h, slot } = it;
@@ -1709,7 +1723,8 @@ registerTooltip('relic', relicTooltip);
 initTooltips();
 
 addEventListener('keydown', (e) => {
-  if (pick.open || game.over || game.realm || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
+  if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')
+    || pick.open || game.over || game.realm || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdf]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
@@ -2062,6 +2077,10 @@ class Unit {
     if (this.team === 'hero') {
       this.diedIn = game.phase;   // no Pesadelo, decide quando volta
       game.fallLog.push({ name: this.cfg.names?.[this.level - 1] || this.cfg.name, phase: game.phase, time: game.runTime });
+      if (directControl?.hero === this) {
+        clearDirectControlOrders();
+        syncDirectControlUI();
+      }
     }
     if (this.team === 'skeleton' && !this.dissolved) {
       audio.play('bones');
@@ -2711,7 +2730,7 @@ function twinBossFocus(context) {
   return game.twinFocus;
 }
 
-function isUrgentTwinThreat(target, context) {
+function isUrgentBossThreat(target, context) {
   return target.pendingHit?.target?.team === 'hero' || target.pendingHit?.target?.team === 'villager'
     || target.enemyKind === 'Priest' || !!target.kind?.priority
     || (target.phaseBoss && target.telegraph?.alive && target.telegraph.interruptible && target.telegraph.t > 0.2)
@@ -2721,26 +2740,26 @@ function isUrgentTwinThreat(target, context) {
 function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
   let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
-  let urgentTwinTarget = null, urgentTwinScore = Infinity;
+  let urgentBossTarget = null, urgentBossScore = Infinity;
   for (const target of candidates) {
     if (target.dead || target.spawning || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target, context))) continue;
     const score = heroTargetScore(hero, target, hero.pos, context);
     if (target === hero.targetFocus) { focused = target; focusedScore = score; }
     if (score < bestScore) { best = target; bestScore = score; }
-    if (groupedBossGoal(context.goal) && isUrgentTwinThreat(target, context) && score < urgentTwinScore) {
-      urgentTwinTarget = target;
-      urgentTwinScore = score;
+    if (bossGoal(context.goal) && isUrgentBossThreat(target, context) && score < urgentBossScore) {
+      urgentBossTarget = target;
+      urgentBossScore = score;
     }
   }
   const { goal, villager, party, friends } = context;
   if (groupedBossGoal(goal)) {
     const focus = twinBossFocus(context);
-    if (urgentTwinTarget) { best = urgentTwinTarget; bestScore = urgentTwinScore; }
-    else if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus, context))) {
+    if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus, context))) {
       best = focus;
       bestScore = heroTargetScore(hero, focus, hero.pos, context);
     } else if (focus) { best = null; bestScore = Infinity; }
   } else if (game.twinFocus) game.twinFocus = null;
+  if (bossGoal(goal) && urgentBossTarget) { best = urgentBossTarget; bestScore = urgentBossScore; }
   if (!best) {
     hero.targetFocus = null;
     hero.targetFocusT = 0;
@@ -2792,7 +2811,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
 }
 
 // projéteis e áreas usam geometrias compartilhadas, sem luzes extras.
-const bolts = [], blasts = [], flames = [];
+const bolts = [], blasts = [], flames = [], sentries = [];
 const boltGeo = new THREE.SphereGeometry(0.2, 10, 10);
 const bladeGeo = new THREE.ConeGeometry(0.09, 0.65, 4);
 const axeGeo = new THREE.BoxGeometry(0.45, 0.12, 0.3);
@@ -2806,7 +2825,7 @@ const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THR
 const beamMaterials = materialPool(() => new THREE.MeshBasicMaterial({ transparent: true }), 32);
 const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false }), 128);
 const beamDirection = new THREE.Vector3(), beamUp = new THREE.Vector3(0, 1, 0), beamLift = new THREE.Vector3(0, 1.3, 0);
-const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
+const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, oracle: 0xc6b4ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
@@ -2890,7 +2909,9 @@ function updateBolts(dt) {
       if (b.base) b.mesh.position.copy(at).setY(at.y + Math.sin(Math.PI * THREE.MathUtils.clamp(1 - d / b.dist0, 0, 1)) * b.arc);
       if (d <= 14 * dt + 0.25 && (b.kind === 'flask' || b.kind === 'tonic')) { alchemyPool(b.owner, b.target.pos, b.kind === 'tonic'); b.life = 0; }
       else if (d <= 14 * dt + 0.25) {
-        const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0 : b.kind === 'viking' ? 0 : (b.kind === 'pyro' ? 1.1 + (b.level - 1) * 0.2 : 1.3 + (b.level - 1) * 0.25) * b.power;
+        const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0
+          : b.kind === 'pyro' ? (1.1 + (b.level - 1) * 0.2) * b.power
+            : b.kind === 'cryo' || b.kind === 'iceviking' ? (1.3 + (b.level - 1) * 0.25) * b.power : 0;
         if (radius) damageArea(b.target.pos, radius, b.dmg, b.owner);
         else if (!b.target.dead) heroHit(b.owner, b.target, b.dmg * (b.kind === 'viking' ? 1.8 * b.power : 1));
         relicBounce(b);
@@ -2907,6 +2928,12 @@ function updateBolts(dt) {
         if (b.kind === 'cryo' || b.kind === 'iceviking') {
           if (targetSnapshot === null) targetSnapshot = frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive();
           for (const s of targetSnapshot) if (!s.dead && s.pos.distanceTo(b.target.pos) <= radius) s.slowT = scaleBranchEffect(b.owner, 'control', 3 + (b.level - 1) * 0.5) * b.power;
+        }
+        if (b.kind === 'oracle' && !b.target.dead && b.target.telegraph?.interruptible && b.target.telegraph.t > 0) {
+          b.target.stunT = Math.max(b.target.stunT || 0, scaleBranchEffect(b.owner, 'control', 1.15 + (b.level - 1) * 0.15) * b.power);
+          b.target.pendingHit = null;
+          popText(b.target.pos, 'Previsto!', 'crit');
+          FX.stasis(b.target);
         }
         ring(b.target.pos, Math.max(0.5, radius), colors[b.kind] || 0xc999ff);
         if (b.skill || b.look) FX.impact(b.skill ? b.kind : 'basic', b.target.pos, Math.max(0.6, radius), b.look);
@@ -2934,6 +2961,85 @@ function updateBolts(dt) {
     if (bl.ripple) bl.mesh.scale.addScalar(dt * 1.2);
     bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
     if (bl.t <= 0) { scene.remove(bl.mesh); releaseFxMaterial(bl.mesh.material); blasts.splice(i, 1); }
+  }
+  updateSentries(dt);
+}
+
+function removeSentry(sentry) {
+  scene.remove(sentry.root);
+  sentry.root.traverse((object) => {
+    object.geometry?.dispose?.();
+    if (Array.isArray(object.material)) object.material.forEach((material) => material.dispose?.());
+    else object.material?.dispose?.();
+  });
+  const index = sentries.indexOf(sentry);
+  if (index >= 0) sentries.splice(index, 1);
+}
+
+function deploySentry(owner, at, duration = 10, power = owner.skillPower || 1) {
+  let sentry = sentries.find((item) => item.owner === owner);
+  if (sentry) {
+    sentry.root.position.copy(at);
+    sentry.root.position.y = world.groundHeight(at.x, at.z) + 0.06;
+    sentry.life = Math.max(sentry.life, duration);
+    sentry.power = Math.max(sentry.power, power);
+    ring(sentry.root.position, 1.3, 0x6df4df, 0.5);
+    return sentry;
+  }
+  const root = new THREE.Group();
+  root.position.copy(at);
+  root.position.y = world.groundHeight(at.x, at.z) + 0.06;
+  const metal = new THREE.MeshStandardMaterial({ color: 0x3d5662, metalness: 0.72, roughness: 0.34 });
+  const accent = new THREE.MeshStandardMaterial({ color: 0x65e6d2, emissive: 0x1c998a, metalness: 0.35, roughness: 0.25 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.58, 0.25, 8), metal);
+  base.position.y = 0.2;
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 0.72, 7), accent);
+  mast.position.y = 0.66;
+  const head = new THREE.Group();
+  head.position.y = 1.08;
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.42, 0.54), metal);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), accent);
+  eye.position.set(0, 0.02, 0.3);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.09, 0.7, 6), metal);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, -0.08, 0.55);
+  head.add(housing, eye, barrel);
+  const footRing = new THREE.Mesh(new THREE.TorusGeometry(0.54, 0.045, 5, 20), accent);
+  footRing.rotation.x = -Math.PI / 2;
+  footRing.position.y = 0.08;
+  root.add(base, mast, head, footRing);
+  root.traverse((object) => { object.castShadow = false; object.receiveShadow = false; });
+  scene.add(root);
+  sentry = { owner, root, head, life: duration, power, fireT: 0.3, rate: 0.82, boostT: 0 };
+  sentries.push(sentry);
+  wave(root.position, 0x6df4df, 0.2, 1.35, 0.5);
+  return sentry;
+}
+
+function updateSentries(dt) {
+  for (let i = sentries.length - 1; i >= 0; i--) {
+    const sentry = sentries[i], owner = sentry.owner;
+    sentry.life -= dt;
+    sentry.boostT = Math.max(0, sentry.boostT - dt);
+    if (owner.dead || !units.includes(owner) || sentry.life <= 0) { removeSentry(sentry); continue; }
+    sentry.head.rotation.y += dt * 0.8;
+    sentry.fireT -= dt;
+    if (sentry.fireT > 0 || game.state !== 'fight') continue;
+    const context = activeTargetContext || frameTargetContext;
+    const enemies = context.skeletons || skeletonsAlive();
+    let target = null, bestScore = Infinity;
+    for (const enemy of enemies) {
+      if (enemy.dead || enemy.spawning || enemy.pos.distanceTo(sentry.root.position) > 8 + 0.4 * (enemy.size - 1)) continue;
+      const score = heroTargetScore(owner, enemy, sentry.root.position, context);
+      if (score < bestScore) { target = enemy; bestScore = score; }
+    }
+    if (!target) continue;
+    sentry.head.rotation.y = Math.atan2(target.pos.x - sentry.root.position.x, target.pos.z - sentry.root.position.z) - sentry.root.rotation.y;
+    const boosted = sentry.boostT > 0;
+    sentry.fireT = sentry.rate * (boosted ? 0.58 : 1);
+    heroHit(owner, target, owner.dmg * 0.46 * sentry.power * (boosted ? 1.45 : 1));
+    FX.zigzag(sentry.root.position.clone().setY(sentry.root.position.y + 1.08), target.pos.clone().setY(target.pos.y + 0.95));
+    if (typeof particle === 'function') particle(sparkGeo, boosted ? 0xe6fffb : 0x6df4df, target.pos.clone().setY(target.pos.y + 0.9), V(rnd(0.35), 0.5, rnd(0.35)), 0.25, { size: 1.2 });
   }
 }
 
@@ -2984,7 +3090,8 @@ function arrowRain(owner, at, radius, total) {
 function volatileFlask(owner, at, radius, dmg) {
   const mesh = groundMark(at, radius, 0x9cff3a, 0.2);
   flames.push({ mesh, radius, owner, wait: 0.4, t: 0.05, tick: 0, every: 1, dmg, onTick: (f) => {
-    for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1))
+    const targets = activeTargetContext?.skeletons || (frameTargetContext.skeletons.length ? frameTargetContext.skeletons : skeletonsAlive());
+    for (const s of targets) if (!s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1))
       s.vel.add(new THREE.Vector3().subVectors(s.pos, f.mesh.position).setY(0).normalize().multiplyScalar(s.boss ? 1.5 : 4.5));
     FX.flaskBlast(f.mesh.position, f.radius);
     alchemyPool(owner, f.mesh.position, false, 0.6);
@@ -3153,6 +3260,7 @@ const BOLT_LOOKS = {
   crossbow: { size: [1.4, 2] },
   archer: { size: [1.3, 2.2] },
   alchemist: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.4], size: [1.3, 1.3], spin: true },
+  oracle: { geo: boltGeo, core: hiddenCore, shells: [[glow(0xc6b4ff, 0.52), 1.8]], orb: ['arcane', 0.34], size: [1.35, 2], spin: true },
 };
 for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells || []).map((x) => x[0])]) if (m) m.userData.keep = true;
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
@@ -3185,8 +3293,11 @@ const SKILL_ART = {
   archer:    { color: 0x3fe0b0, accent: 0xe8f6ee, glyph: shardGeo, scale: 1.8 },
   monk:      { color: 0xffc85a, accent: 0xfff2c8, glyph: thinRingGeo, scale: 0.45 },
   alchemist: { color: 0x9cff3a, accent: 0xff8ad8, glyph: shellGeo, scale: 2.2 },
+  engineer: { color: 0x6df4df, accent: 0xe6fffb, glyph: shellGeo, scale: 1.25 },
+  beast_tamer: { color: 0xcbb36f, accent: 0xffe6a1, glyph: crystalGeo, scale: 1.15 },
+  oracle: { color: 0xc6b4ff, accent: 0xffffff, glyph: crystalGeo, scale: 1.3 },
 };
-const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel']);
+const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0;
 const jolt = new THREE.Vector3();
 
@@ -3883,6 +3994,19 @@ function summon(h, minions) {
   for (const u of minions) column(u.pos, 0x6dff8a, 0.5, 3, 0.8);
 }
 
+function beastCall(h, beast) {
+  const at = beast.pos.clone();
+  wave(at, 0xcbb36f, 0.25, 2.1, 0.6);
+  column(at, 0xffe6a1, 0.3, 2.3, 0.75);
+  for (let i = 0; i < fewer(14); i++) {
+    const angle = Math.random() * TAU, radius = Math.random() * 1.7;
+    particle(sparkGeo, i % 2 ? 0xcbb36f : 0xffe6a1,
+      V(at.x + Math.cos(angle) * radius, at.y + 0.2, at.z + Math.sin(angle) * radius),
+      V(rnd(0.6), 1.5 + Math.random() * 1.3, rnd(0.6)), 0.65, { size: 1.15, gravity: -0.5 });
+  }
+  popText(at, h.cfg.id === 'beast_tamer' ? 'Matilha!' : 'Alfa!', 'evolve');
+}
+
 // Assassino: rastro de sombra entre a saída e a chegada
 function shadowStep(from, to) {
   for (let i = 0; i <= 8; i++) {
@@ -4419,7 +4543,7 @@ function stasis(enemy) {
 
 const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
-Object.assign(FX, { rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep });   // Arqueira, Monge e Alquimista
+Object.assign(FX, { rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -4443,6 +4567,7 @@ class Hero extends Unit {
     this.autoSkills = [0, 1, 2].map((slot) => loadAutoSlot(cfg.id, slot));
     this.skillRequests = [0, 0, 0];
     this.skillTargets = [null, null, null];
+    this.skillManuals = [false, false, false];
     // aliases preservam compatibilidade com código e salvamentos da habilidade original.
     Object.defineProperties(this, {
       skillTimer: { get: () => this.skillTimers[0], set: (value) => { this.skillTimers[0] = value; } },
@@ -4541,14 +4666,43 @@ class Hero extends Unit {
 
   useSkill(target, manual = false, force = false, slot = 0) {
     if (slot > 0) return this.useExtraSkill(slot, target, force);
-    if (manual && !validAim(this, target)) return false;
+    if (manual && !(slot === 0 && validAim(this, target) || validDirectControlTarget(this, target, slot))) return false;
     const id = this.cfg.id, level = this.level;
     const power = this.skillPower;
     const radius = (3 + (level - 1) * 0.5) * power;
     const attackables = activeTargetContext?.skeletons ?? skeletonsAlive();
     const nearby = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= radius);
     let effect;
-    if (id === 'paladin') {
+    if (id === 'engineer') {
+      if (!manual) target ||= bestSkillTarget(this, attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(this.pos) <= 8));
+      if (!force && game.state !== 'fight') return false;
+      const placement = (manual && target?.groundTarget ? target.pos : target?.pos || this.pos).clone();
+      const offset = placement.clone().sub(this.pos).setY(0);
+      if (offset.length() > 8) placement.copy(this.pos).add(offset.setLength(8));
+      placement.y = world.groundHeight(placement.x, placement.z);
+      effect = () => {
+        deploySentry(this, placement, 9 + level * 1.5, power);
+        popText(placement, 'Torreta!', 'evolve');
+        burst(placement, [0x6df4df, 0xe6fffb], 14, 3.5);
+      };
+    } else if (id === 'beast_tamer') {
+      if (!force && game.state !== 'fight') return false;
+      effect = () => {
+        let companion = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
+        if (companion) {
+          companion.life = Math.max(companion.life, 13 + level);
+          companion.hp = Math.min(companion.maxHp, companion.hp + companion.maxHp * 0.25);
+          popText(companion.pos, 'De volta!', 'heal');
+        } else companion = new BeastCompanion(this);
+        FX.beastCall(this, companion);
+      };
+    } else if (id === 'oracle') {
+      const candidates = attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(this.pos) <= this.range);
+      if (!manual) target = candidates.find((enemy) => enemy.telegraph?.interruptible && enemy.telegraph.t > 0)
+        || highestPriorityHeroTarget(this, candidates);
+      if (!target || target.pos.distanceTo(this.pos) > this.range) return false;
+      effect = () => fireBolt(this, target, 'oracle', 0, true);
+    } else if (id === 'paladin') {
       const reach = (5 + level) * power;
       const friends = partyNow().filter((h) => !h.dead && h.hp < h.maxHp && h.pos.distanceTo(this.pos) <= reach);
       const healAmount = scaleBranchEffect(this, 'support', 32 + level * 10) * power;
@@ -4865,15 +5019,20 @@ class Hero extends Unit {
     const missingHp = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
     const criticalAlly = friends.some((h) => h.hp / h.maxHp <= 0.42);
     const urgentEnemy = enemies.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
+      || s.telegraph?.interruptible && s.telegraph.t > 0
       || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
     target ||= highestPriorityHeroTarget(this, targetPool);
-    if (target && (target.dead || !units.includes(target))) target = null;
+    if (target && !target.groundTarget && (target.dead || !units.includes(target))) target = null;
 
-    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate'].includes(skill.effect);
+    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
-    if (!force && slot === 1 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35) return false;
+    const ownSentry = sentries.find((item) => item.owner === this);
+    const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
+    if (!force && slot === 1 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
+      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !(skill.effect === 'alpha-beast' && ownBeast)) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
-    const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain'].includes(skill.effect);
+    const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
     const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
     if (areaEffects.includes(skill.effect) && !enemies.length && !(supportSkill && (criticalAlly || missingHp > this.maxHp * 0.35))) return false;
@@ -4910,6 +5069,108 @@ class Hero extends Unit {
     };
     let effect;
     switch (skill.effect) {
+      case 'emp-pulse': {
+        if (!target || target.team !== 'skeleton') return false;
+        const center = target.pos.clone();
+        const caught = attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius + 0.35 * (enemy.size - 1));
+        if (!caught.length) return false;
+        effect = () => {
+          for (const enemy of caught) {
+            damageOne(enemy);
+            enemy.stunT = Math.max(enemy.stunT || 0, scaleBranchEffect(this, 'control', 1.1 + (level - 1) * 0.15) * power);
+            enemy.pendingHit = null;
+          }
+          FX.zigzag(this.pos.clone().setY(this.pos.y + 1.2), center.clone().setY(center.y + 0.7));
+          wave(center, color, 0.25, radius, 0.65);
+          burst(center, [color, 0xe6fffb, 0xffffff], 22, 5);
+        };
+        break;
+      }
+      case 'sentry-overcharge': {
+        effect = () => {
+          const sentry = ownSentry || deploySentry(this, this.pos, 9 + level, power);
+          sentry.life = Math.max(sentry.life, skill.duration || 8);
+          sentry.boostT = Math.max(sentry.boostT, skill.duration || 8);
+          const center = sentry.root.position.clone();
+          for (const enemy of attackables) if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius) {
+            damageOne(enemy, 0.75);
+            enemy.stunT = Math.max(enemy.stunT || 0, 0.45 * power);
+            enemy.pendingHit = null;
+          }
+          wave(center, color, 0.25, radius, 0.8);
+          burst(center.clone().setY(center.y + 0.8), [color, 0xe6fffb, 0xffffff], 28, 5);
+        };
+        break;
+      }
+      case 'pack-roar': {
+        const companion = ownBeast;
+        const center = (companion || this).pos;
+        const caught = attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius);
+        effect = () => {
+          const protector = companion || this;
+          for (const enemy of caught) { enemy.taunt = protector; enemy.tauntT = (skill.duration || 4) * power; enemy.pendingHit = null; }
+          for (const ally of party) if (ally.pos.distanceTo(center) <= radius) ally.guardT = Math.max(ally.guardT, 2.5 * power);
+          wave(center, color, 0.25, radius, 0.75);
+          burst(center.clone().setY(center.y + 0.8), [color, 0xffe6a1, 0xffffff], 24, 4.5);
+          popText(center, 'Matilha!', 'evolve');
+        };
+        break;
+      }
+      case 'alpha-beast': {
+        effect = () => {
+          const companion = ownBeast || new BeastCompanion(this);
+          companion.life = Math.max(companion.life, skill.duration || 8);
+          companion.empowerT = Math.max(companion.empowerT || 0, skill.duration || 8);
+          companion.hp = Math.min(companion.maxHp, companion.hp + companion.maxHp * 0.4);
+          const center = companion.pos.clone();
+          for (const enemy of attackables) if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius) {
+            heroHit(this, enemy, this.dmg * power * (skill.power || 1) * 0.45);
+            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, center).setY(0).normalize().multiplyScalar(enemy.boss ? 1.8 : 4));
+          }
+          for (const ally of party) if (ally.pos.distanceTo(center) <= radius) {
+            const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', 8 + level * 2) * power);
+            ally.hp += heal;
+            if (heal) { this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
+          }
+          FX.beastCall(this, companion);
+          wave(center, color, 0.25, radius, 0.8);
+          burst(center.clone().setY(center.y + 0.8), [color, 0xffe6a1, 0xffffff], 30, 5);
+        };
+        break;
+      }
+      case 'oracle-dodge': {
+        const warnings = [...new Set(attackables.map((enemy) => enemy.telegraph).filter((warning) => warning?.interruptible && warning.t > 0 && warning.dodge))];
+        if (!warnings.length && !force) return false;
+        effect = () => {
+          for (const warning of warnings) {
+            if (warning.alive === false || warning.t <= 0 || !warning.dodge || warning.owner?.telegraph !== warning) continue;
+            for (const ally of party) if (ally.pos.distanceTo(warning.at) <= radius + 1) warning.dodge.set(ally, true);
+          }
+          wave(this.pos, color, 0.2, radius, 0.7);
+          if (typeof rays === 'function') for (const ally of party) if (ally.pos.distanceTo(this.pos) <= radius) rays(ally.pos, 'arcane', 0.45, 2.4, 0.55, { follow: ally });
+          burst(this.pos, [color, 0xffffff], 20, 4);
+        };
+        break;
+      }
+      case 'rewrite-fate': {
+        const warnings = [...new Set(attackables.map((enemy) => enemy.telegraph).filter((warning) => warning?.interruptible && warning.t > 0
+          && warning.owner?.pos.distanceTo(this.pos) <= radius))];
+        if (!warnings.length && !force) return false;
+        effect = () => {
+          for (const warning of warnings) {
+            const owner = warning.owner;
+            if (!owner || owner.dead || warning.alive === false || warning.t <= 0 || owner.telegraph !== warning) continue;
+            owner.stunT = Math.max(owner.stunT || 0, scaleBranchEffect(this, 'control', skill.duration || 1.1) * power);
+            owner.pendingHit = null;
+            popText(owner.pos, 'Destino reescrito!', 'crit');
+            FX.stasis(owner);
+          }
+          for (const ally of party) if (ally.pos.distanceTo(this.pos) <= radius) ally.guardT = Math.max(ally.guardT, 1.5 * power);
+          wave(this.pos, color, 0.25, radius, 0.8);
+          burst(this.pos, [color, 0xffffff, 0x8feaff], 34, 5);
+        };
+        break;
+      }
       case 'ward': case 'frost-ward': case 'bastion': {
         const duration = scaleBranchEffect(this, 'control', skill.duration || 5) * power;
         effect = () => {
@@ -5043,8 +5304,11 @@ class Hero extends Unit {
       case 'arrow-storm': case 'volatile': {
         // Arqueira e Alquimista: área no grupo mais denso ao alcance; a IA espera juntar dois inimigos
         const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
-        const { center, count } = densest(pool, skill.radius || 3, force ? target : null);
-        if (!center || (!force && count < 2 && !urgentEnemy)) return false;
+        const directGround = force && target?.groundTarget ? target : null;
+        const { center: denseCenter, count } = densest(pool, skill.radius || 3, force && !directGround ? target : null);
+        const center = directGround || denseCenter;
+        const hasTargetsAtGroundPoint = !directGround || pool.some((enemy) => enemy.pos.distanceTo(directGround.pos) <= (skill.radius || 3));
+        if (!center || !hasTargetsAtGroundPoint || (!directGround && !force && count < 2 && !urgentEnemy)) return false;
         target = center;
         const at = center.pos.clone(), area = (skill.radius || 3) * (0.9 + 0.1 * power), total = this.dmg * power * (skill.power || 1);
         effect = () => (skill.effect === 'arrow-storm' ? arrowRain(this, at, area, total) : volatileFlask(this, at, area, total));
@@ -5267,11 +5531,13 @@ class Hero extends Unit {
     FX.calmPulse(this, radius, healed);
   }
 
-  requestSkill(target = null, slot = 0) {
+  requestSkill(target = null, slot = 0, manual = false) {
     if (this.dead || game.over || game.paused) return 'off';
+    if (slot < 0 || slot > 2) return 'none';
     if (this.skillTimers[slot] > 0) return 'wait';
     if (game.state !== 'fight') { this.missSkill(); return 'none'; }
     this.skillTargets[slot] = target;
+    this.skillManuals[slot] = !!manual;
     this.skillRequests[slot] = 2;
     return 'ok';
   }
@@ -5313,7 +5579,7 @@ class Hero extends Unit {
     for (let slot = 0; slot < 3; slot++) {
       this.skillTimers[slot] -= dt;
       this.skillRequests[slot] -= dt;
-      if (this.skillRequests[slot] <= 0) this.skillTargets[slot] = null;
+      if (this.skillRequests[slot] <= 0) { this.skillTargets[slot] = null; this.skillManuals[slot] = false; }
     }
     this.dodgeTimer -= dt;
     this.guardT -= dt;
@@ -5349,12 +5615,17 @@ class Hero extends Unit {
     if (this.meditateT > 0) this.updateMeditation(dt);
     this.updateCommon(dt);
     this.tickSkillBody(dt);
-    if (this.dead || this.busy > 0 || game.over) return;
-    const escape = game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
+  if (this.dead || game.over) return;
+  const directControlled = isDirectControlActive(this);
+  if (this.busy > 0) {
+    if (directControlled) moveDirectControlled(this, dt);
+    return;
+  }
+    const escape = !directControlled && game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
     const move = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Running_A';
     const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Walking_A';
     if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
-    const kite = game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
+    const kite = !directControlled && game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
     if (kite) { this.moveTo(kite, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const targeting = game.state === 'fight' ? targetContext() : null;
     const captive = targeting?.captive || null;
@@ -5372,9 +5643,11 @@ class Hero extends Unit {
       }
       if (requested >= 0) {
         const chosen = this.skillTargets[requested];
+        const manual = this.skillManuals[requested] || !!chosen;
         this.skillRequests[requested] = 0;
         this.skillTargets[requested] = null;
-        if (this.useSkill(chosen || target, !!chosen, true, requested)) return;
+        this.skillManuals[requested] = false;
+        if (this.useSkill(chosen || target, manual, true, requested)) return;
         this.missSkill();
       } else {
         // A IA reserva a ultimate para chefes, perigo real, grupo cercado ou aliados feridos.
@@ -5383,6 +5656,25 @@ class Hero extends Unit {
           if (this.useSkill(target, false, false, slot)) return;
         }
       }
+    }
+    if (directControlled) {
+      const command = moveDirectControlled(this, dt);
+      const attackTarget = command.target;
+      this.engagedWith = attackTarget || null;
+      if (attackTarget) {
+        const d = attackTarget.pos.distanceTo(this.pos) - 0.4 * ((attackTarget.size || 1) - 1) - (attackTarget.reach || 0);
+        if (d <= this.range && (this.ranged || Math.abs(attackTarget.pos.y - this.pos.y) < 0.85)) {
+          const turn = this.face(attackTarget.pos, dt);
+          if (this.attackTimer <= 0 && turn < 0.5) {
+            const attacks = this.cfg.attacks;
+            this.attack(attackTarget, attacks[Math.floor(Math.random() * attacks.length)]);
+          }
+        }
+      } else if (!command.moving && directControl.aimDirection.lengthSq() > 0.001) {
+        this.face(tmp.copy(this.pos).add(directControl.aimDirection), dt);
+      }
+      if (this.busy <= 0) this.locomote(move, walk, this.cfg.idle);
+      return;
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
     // margem para não pipocar: quem já está brigando só larga o alvo quando ele se afasta bem do posto
@@ -5434,6 +5726,9 @@ const SKILL_MOVES = {
   archer: ['2H_Ranged_Shoot', 1.2, 0.4, 'arrow'],
   monk: ['Unarmed_Melee_Attack_Punch_A', 1.6, 0.4, 'hit'],
   alchemist: ['Throw', 1.4, 0.45, 'ice'],
+  engineer: ['Use_Item', 1.35, 0.42, 'zap'],
+  beast_tamer: ['Unarmed_Melee_Attack_Kick', 1.45, 0.34, 'hit'],
+  oracle: ['1H_Ranged_Shoot', 1.3, 0.35, 'zap'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -5562,6 +5857,21 @@ const SKILL_ANIMS = {
     { clip: 'Throw', hold: 'Use_Item', f: 0.45, hop: 0.2, lean: 0.2 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.62, arc: 'ring', spin: -0.8, float: 0.22, lean: -0.12 },
   ],
+  engineer: [
+    { clip: '1H_Ranged_Reload', hold: '1H_Ranged_Aiming', f: 0.38, lean: 0.22, kick: 0.25 },
+    { clip: 'Throw', hold: 'Use_Item', f: 0.48, hop: 0.15, lean: 0.3 },
+    { clip: '2H_Ranged_Reload', hold: '2H_Ranged_Aiming', f: 0.62, spin: -0.5, kick: -0.6 },
+  ],
+  beast_tamer: [
+    { clip: 'Unarmed_Melee_Attack_Kick', hold: 'Unarmed_Idle', f: 0.32, lean: -0.2, hop: 0.2 },
+    { clip: '2H_Melee_Attack_Chop', f: 0.64, arc: 'chop', hop: 0.55, lean: 0.24 },
+    { clip: 'Jump_Full_Long', hold: 'Unarmed_Idle', f: 0.58, arc: 'ring', spin: 0.7, hop: 0.72 },
+  ],
+  oracle: [
+    { clip: 'Spellcasting', hold: 'Spellcast_Raise', f: 0.28, lean: 0.18, kick: -0.7 },
+    { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.53, spin: -0.6, float: 0.3, lean: -0.16 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.62, spin: 0.9, float: 0.42, kick: -0.2 },
+  ],
 };
 
 class Minion extends Unit {
@@ -5595,6 +5905,116 @@ class Minion extends Unit {
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) this.attack(target, '1H_Melee_Attack_Chop');
     } else if (this.pos.distanceTo(this.summoner.pos) > 1.5) this.moveTo(this.summoner.pos, dt);
     if (this.busy <= 0) this.locomote('Walking_D_Skeletons', 'Walking_D_Skeletons', 'Idle_Combat');
+  }
+}
+
+class BeastCompanion extends Unit {
+  constructor(summoner) {
+    super(summoner.cfg.built, { hp: 125 * summoner.skillPower, dmg: 18 * summoner.skillPower, range: 1.5, speed: 3.5, cooldown: 0.95 }, 'ally');
+    this.summoner = summoner;
+    this.cfg = { id: 'beast_companion' };
+    this.level = summoner.level;
+    this.life = scaleBranchEffect(summoner, 'support', 13 + summoner.level) * summoner.skillPower;
+    this.empowerT = 0;
+    this.beastCompanion = true;
+    this.threatScratch = [];
+    this.size = 1.12;
+    this.root.scale.setScalar(this.size);
+    this.pos.copy(summoner.pos).add(new THREE.Vector3(-0.9, 0, 0.6));
+    this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
+    this.bar.classList.add('ally');
+    this.root.traverse((object) => { if (object.isMesh) object.visible = false; });
+
+    this.beastVisual = new THREE.Group();
+    this.root.add(this.beastVisual);
+    this.beastMaterials = {
+      fur: new THREE.MeshStandardMaterial({ color: 0x80613f, roughness: 0.86, flatShading: true }),
+      dark: new THREE.MeshStandardMaterial({ color: 0x443629, roughness: 0.9, flatShading: true }),
+      eyes: new THREE.MeshBasicMaterial({ color: 0xffd578 }),
+      spirit: new THREE.MeshBasicMaterial({ color: 0xcbb36f, transparent: true, opacity: 0.75 }),
+    };
+    this.beastGeometries = [];
+    const piece = (geometry, material, position, scale = null) => {
+      this.beastGeometries.push(geometry);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...position);
+      if (scale) mesh.scale.set(...scale);
+      mesh.castShadow = true;
+      this.beastVisual.add(mesh);
+      return mesh;
+    };
+    piece(new THREE.IcosahedronGeometry(0.52, 1), this.beastMaterials.fur, [0, 0.68, -0.02], [1.05, 0.78, 1.45]);
+    const head = new THREE.Group();
+    head.position.set(0, 1.05, 0.55);
+    this.beastVisual.add(head);
+    const headMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), this.beastMaterials.fur);
+    headMesh.scale.set(1, 0.88, 1.06); headMesh.castShadow = true; head.add(headMesh); this.beastGeometries.push(headMesh.geometry);
+    const muzzle = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), this.beastMaterials.dark);
+    muzzle.position.set(0, -0.12, 0.35); muzzle.scale.set(1.2, 0.7, 0.9); head.add(muzzle); this.beastGeometries.push(muzzle.geometry);
+    for (const side of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.32, 5), this.beastMaterials.dark);
+      ear.position.set(side * 0.3, 0.32, 0.08); ear.rotation.z = side * -0.3; head.add(ear); this.beastGeometries.push(ear.geometry);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), this.beastMaterials.eyes);
+      eye.position.set(side * 0.17, -0.03, 0.32); head.add(eye); this.beastGeometries.push(eye.geometry);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.5, 6), this.beastMaterials.dark);
+      leg.position.set(side * 0.32, 0.28, 0.28); leg.rotation.x = 0.14; this.beastVisual.add(leg); this.beastGeometries.push(leg.geometry);
+      const backLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.52, 6), this.beastMaterials.dark);
+      backLeg.position.set(side * 0.32, 0.27, -0.48); backLeg.rotation.x = -0.14; this.beastVisual.add(backLeg); this.beastGeometries.push(backLeg.geometry);
+    }
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.07, 5, 12), this.beastMaterials.spirit);
+    collar.rotation.x = Math.PI / 2; collar.position.set(0, 0.7, 0.02); this.beastVisual.add(collar); this.beastGeometries.push(collar.geometry);
+    this.beastHead = head;
+    this.beastLegs = this.beastVisual.children.filter((object) => object.geometry?.type === 'CylinderGeometry');
+    poof(this.pos, 0.9);
+    wave(this.pos, 0xcbb36f, 0.2, 1.7, 0.55);
+  }
+
+  remove() {
+    super.remove();
+    for (const geometry of this.beastGeometries || []) geometry?.dispose?.();
+    for (const material of Object.values(this.beastMaterials || {})) material.dispose?.();
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.updateCommon(dt);
+    this.life -= dt;
+    this.empowerT = Math.max(0, this.empowerT - dt);
+    this.age = (this.age || 0) + dt;
+    if (this.dead || this.life <= 0 || this.summoner.dead || !units.includes(this.summoner)) {
+      poof(this.pos, 0.9); this.remove(); return;
+    }
+    if (game.over || game.state !== 'fight' || this.busy > 0) return;
+    const targets = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((enemy) => !enemy.spawning);
+    const threats = this.threatScratch;
+    threats.length = 0;
+    for (const enemy of targets) {
+      if (!enemy.dead && enemy.pendingHit?.target?.team === 'hero' && enemy.pendingHit.target.pos.distanceTo(this.pos) < 10) threats.push(enemy);
+    }
+    const target = threats.length ? highestPriorityHeroTarget(this.summoner, threats, this.pos) : nearest(this.pos, targets);
+    if (target) {
+      const distance = target.pos.distanceTo(this.pos);
+      if (distance > this.range || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt);
+      else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) {
+        const duration = this.once('1H_Melee_Attack_Chop', 1.25);
+        this.busy = duration * 0.9;
+        this.attackTimer = this.cooldown;
+        const enemy = target;
+        this.pendingHit = { target: enemy, t: duration * 0.36, effect: () => {
+          if (enemy.dead || !units.includes(enemy)) return;
+          heroHit(this.summoner, enemy, this.dmg * (this.empowerT > 0 ? 1.75 : 1), this.pos);
+          burst(enemy.pos.clone().setY(enemy.pos.y + 0.6), [0xcbb36f, 0xffe6a1], 7, 2.4);
+          if (this.empowerT > 0) enemy.stunT = Math.max(enemy.stunT || 0, 0.45);
+        } };
+      }
+      for (const enemy of threats) if (enemy.pos.distanceTo(this.pos) <= 2.8 && enemy.tauntT <= 0.35) {
+        enemy.taunt = this; enemy.tauntT = 0.65; enemy.pendingHit = null;
+      }
+    } else if (this.pos.distanceTo(this.summoner.pos) > 2) this.moveTo(this.summoner.pos, dt);
+    const gait = this.moving ? Math.sin(this.age * 13) * 0.09 : Math.sin(this.age * 2.6) * 0.025;
+    this.beastVisual.position.y = Math.abs(gait) * (this.moving ? 0.9 : 0.3);
+    this.beastVisual.rotation.z = this.moving ? gait * 0.4 : 0;
+    this.beastHead.rotation.x = this.moving ? Math.sin(this.age * 13 + 0.4) * 0.07 : 0;
   }
 }
 
@@ -5977,12 +6397,345 @@ function separate() {
   }
 }
 
+// Controle direto opcional no estilo MOBA: o herói escolhido responde ao mouse; a IA cuida do resto do grupo.
+const directControl = {
+  enabled: false, hero: null, pointerX: null, pointerY: null, commandDownAt: null,
+  moveTarget: null, attackTarget: null, moveKeys: new Set(), aimDirection: new THREE.Vector3(),
+};
+const DIRECT_SKILL_SLOTS = { q: 0, w: 1, e: 2 };
+const DIRECT_BLOCKED_LEGACY_KEYS = new Set('1234qwerasdf'.split(''));
+const DIRECT_MOVE_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const DIRECT_AIM_EFFECTS = new Set(['charge', 'volley', 'execute', 'shadow', 'chain', 'cross-dash', 'arrow-storm', 'volatile', 'hunter-mark', 'wind-palm', 'emp-pulse']);
+const DIRECT_GROUND_AIM_EFFECTS = new Set(['arrow-storm', 'volatile']);
+const directAimScreen = new THREE.Vector3(), directMoveForward = new THREE.Vector3(), directMoveRight = new THREE.Vector3();
+const directMoveVector = new THREE.Vector3(), directMoveDestination = new THREE.Vector3();
+
+function clearDirectControlOrders() {
+  directControl.moveTarget = directControl.attackTarget = null;
+  directControl.commandDownAt = null;
+  directControl.moveKeys.clear();
+  if (directControl.hero) {
+    directControl.hero.moving = false;
+    directControl.hero.vel.set(0, 0, 0);
+  }
+}
+
+function isDirectControlActive(hero) {
+  return directControl.enabled && directControl.hero === hero && !hero.dead
+    && !game.paused && !game.over && !pick.open && !game.realm && game.state === 'fight';
+}
+
+function syncSkillControlKeys() {
+  for (const item of skillItems) {
+    if (!item.b) continue;
+    const key = directControl.enabled
+      ? item.h === directControl.hero ? ['Q', 'W', 'E'][item.slot] : ''
+      : item.key;
+    if (item.controlKey === key) continue;
+    item.controlKey = key;
+    if (item.keyEl) { item.keyEl.textContent = key; item.keyEl.hidden = !key; }
+    if (key) item.b.setAttribute('data-key', key);
+    else item.b.removeAttribute?.('data-key');
+    if (item.use) item.use.setAttribute('aria-label', `${item.h.cfg.name}: ${item.skill.name}, ${item.skill.ultimate ? 'ultimate' : item.slot === 0 ? 'assinatura' : 'técnica'}${key ? `. Tecla ${key}.` : '.'}`);
+  }
+}
+
+function syncDirectControlUI() {
+  const toggle = $('directControlToggle'), hint = $('directControlHint');
+  if (!toggle || !hint) return;
+  const party = heroes(), hero = directControl.hero;
+  toggle.hidden = !party.length || game.over || !!game.realm;
+  toggle.disabled = !directControl.enabled && game.state !== 'fight';
+  const selected = hero || panelHero() || party.find((unit) => !unit.dead);
+  const label = directControl.enabled
+    ? `Devolver ${hero?.cfg.name || 'herói'} à IA (C)`
+    : `Assumir ${selected?.cfg.name || 'controle'} (C)`;
+  toggle.setAttribute('aria-label', label);
+  toggle.setAttribute('aria-pressed', String(directControl.enabled));
+  toggle.setAttribute('data-tip', `${label} · setas ou botão direito movem · esquerdo ataca · Q/W/E habilidades manuais`);
+  if (toggle.textContent !== '🎮') toggle.textContent = '🎮';
+  hint.classList.toggle('is-hidden', !directControl.enabled);
+  const title = $('directControlHero');
+  const status = game.paused ? 'pausado' : game.state !== 'fight' ? 'aguarde a próxima fase' : hero?.dead ? 'herói caído · clique em outro' : hero?.cfg.name;
+  if (title) title.textContent = hero ? `Controle direto · ${status}` : 'Controle direto';
+  syncSkillControlKeys();
+}
+
+function setDirectControlMode(on, hero = null, announce = true) {
+  if (!on) {
+    if (!directControl.enabled) return false;
+    if (aiming) cancelAim();
+    const oldHero = directControl.hero;
+    if (oldHero) { oldHero.moving = false; oldHero.vel.set(0, 0, 0); }
+    directControl.enabled = false;
+    directControl.hero = null;
+    clearDirectControlOrders();
+    directControl.aimDirection.set(0, 0, 0);
+    directControl.pointerX = directControl.pointerY = null;
+    syncDirectControlUI();
+    if (announce) showBanner('A equipe voltou ao controle da IA', 1.5);
+    return !!oldHero;
+  }
+  if (game.over || game.paused || game.realm || pick.open || game.state !== 'fight') return false;
+  const party = heroes();
+  const selected = hero && party.includes(hero) ? hero : directControl.hero || panelHero() || party.find((unit) => !unit.dead);
+  if (!selected || selected.dead) return false;
+  const changed = !directControl.enabled || directControl.hero !== selected;
+  if (changed && aiming) cancelAim();
+  if (changed) clearDirectControlOrders();
+  directControl.enabled = true;
+  directControl.hero = selected;
+  directControl.commandDownAt = null;
+  syncDirectControlUI();
+  if (announce && changed) showBanner(`Controle direto · ${selected.cfg.name} · setas ou botão direito movem · esquerdo ataca · Q/W/E habilidades`, 2.7);
+  return true;
+}
+
+function directControlAimSpec(hero, slot = 0) {
+  if (!hero) return null;
+  if (slot === 0) return aimSpec(hero);
+  const skill = skillSetFor(hero.cfg).find((item) => item.slot === slot);
+  if (!skill) return null;
+  const mode = skill.targeting || (DIRECT_GROUND_AIM_EFFECTS.has(skill.effect) ? 'ground'
+    : DIRECT_AIM_EFFECTS.has(skill.effect) ? 'enemy' : null);
+  return mode ? { mode, range: skill.range || Math.max(hero.range, 7), min: skill.minRange || 0, radius: skill.radius || 0 } : null;
+}
+
+function validDirectControlTarget(hero, target, slot = 0) {
+  if (!isDirectControlActive(hero) || !target || target.dead || target.spawning || target.phasing) return false;
+  const skill = skillSetFor(hero.cfg).find((item) => item.slot === slot);
+  const spec = directControlAimSpec(hero, slot);
+  const reach = spec?.range ?? Math.max(hero.range, skill?.range || 0, skill?.radius || 0, slot === 0 ? 7 : 9);
+  const distance = hero.pos.distanceTo(target.pos);
+  if (target.groundTarget) return spec?.mode === 'ground' && distance <= reach && distance > (spec.min || 0);
+  if (target.team !== 'skeleton' || spec?.mode === 'ground') return false;
+  return distance > (spec?.min || 0) && distance <= reach + 0.4 * Math.max(0, (target.size || 1) - 1)
+    && (hero.ranged || Math.abs(target.pos.y - hero.pos.y) < 1.5);
+}
+
+function directControlPointerTarget(hero, slot = 0) {
+  if (!hero || directControl.pointerX == null || directControl.pointerY == null) return null;
+  const spec = directControlAimSpec(hero, slot);
+  if (slot > 0 && !spec) return null;
+  const setRayFromPointer = () => {
+    aimPointer.set(directControl.pointerX / innerWidth * 2 - 1, -(directControl.pointerY / innerHeight) * 2 + 1);
+    aimRay.setFromCamera(aimPointer, camera);
+  };
+  if (spec?.mode === 'ground') {
+    setRayFromPointer();
+    if (!findGroundAimHit(aimRay.ray, world.groundHeight, aimGroundHit)) return null;
+    aimGroundTarget.pos.copy(aimGroundHit);
+    directControl.aimDirection.subVectors(aimGroundTarget.pos, hero.pos).setY(0);
+    if (directControl.aimDirection.lengthSq() > 0.001) directControl.aimDirection.normalize();
+    return slot === 0 ? validAim(hero, aimGroundTarget) ? aimGroundTarget : null
+      : validDirectControlTarget(hero, aimGroundTarget, slot) ? aimGroundTarget : null;
+  }
+  let best = null, bestDistance = Infinity;
+  for (const enemy of units) {
+    if (enemy.team !== 'skeleton' || enemy.dead || enemy.spawning || enemy.phasing) continue;
+    directAimScreen.copy(enemy.pos);
+    directAimScreen.y += enemy.size || 1;
+    directAimScreen.project(camera);
+    if (directAimScreen.z < -1 || directAimScreen.z > 1) continue;
+    const distance = Math.hypot((directAimScreen.x + 1) * innerWidth / 2 - directControl.pointerX,
+      (1 - directAimScreen.y) * innerHeight / 2 - directControl.pointerY);
+    const radius = Math.max(42, Math.min(110, 42 + (enemy.size || 1) * 5));
+    if (distance < radius && distance < bestDistance) { best = enemy; bestDistance = distance; }
+  }
+  if (best) {
+    directControl.aimDirection.subVectors(best.pos, hero.pos).setY(0);
+    if (directControl.aimDirection.lengthSq() > 0.001) directControl.aimDirection.normalize();
+    if (spec?.mode === 'enemy' && slot === 0 ? validAim(hero, best) : validDirectControlTarget(hero, best, slot)) return best;
+    return null;
+  }
+  if (spec?.mode === 'enemy') return null;
+  setRayFromPointer();
+  if (findGroundAimHit(aimRay.ray, world.groundHeight, aimGroundHit)) {
+    directControl.aimDirection.subVectors(aimGroundHit, hero.pos).setY(0);
+    if (directControl.aimDirection.lengthSq() > 0.001) directControl.aimDirection.normalize();
+  }
+  return null;
+}
+
+function directControlEnemyUnderPointer() {
+  if (directControl.pointerX == null || directControl.pointerY == null) return null;
+  let best = null, bestDistance = Infinity;
+  for (const enemy of units) {
+    if (enemy.team !== 'skeleton' || enemy.dead || enemy.spawning || enemy.phasing) continue;
+    directAimScreen.copy(enemy.pos);
+    directAimScreen.y += enemy.size || 1;
+    directAimScreen.project(camera);
+    if (directAimScreen.z < -1 || directAimScreen.z > 1) continue;
+    const distance = Math.hypot((directAimScreen.x + 1) * innerWidth / 2 - directControl.pointerX,
+      (1 - directAimScreen.y) * innerHeight / 2 - directControl.pointerY);
+    const radius = Math.max(42, Math.min(110, 42 + (enemy.size || 1) * 5));
+    if (distance < radius && distance < bestDistance) { best = enemy; bestDistance = distance; }
+  }
+  return best;
+}
+
+function directControlGroundUnderPointer() {
+  if (directControl.pointerX == null || directControl.pointerY == null) return null;
+  aimPointer.set(directControl.pointerX / innerWidth * 2 - 1, -(directControl.pointerY / innerHeight) * 2 + 1);
+  aimRay.setFromCamera(aimPointer, camera);
+  if (!findGroundAimHit(aimRay.ray, world.groundHeight, aimGroundHit)) return null;
+  return aimGroundHit.clone();
+}
+
+function issueDirectAttackCommand(hero, target) {
+  if (!isDirectControlActive(hero) || !target || target.team !== 'skeleton'
+    || target.dead || target.spawning || target.phasing || !units.includes(target)) return false;
+  directControl.attackTarget = target;
+  directControl.moveTarget = null;
+  directControl.aimDirection.subVectors(target.pos, hero.pos).setY(0);
+  if (directControl.aimDirection.lengthSq() > 0.001) directControl.aimDirection.normalize();
+  return true;
+}
+
+function issueDirectMoveCommand(hero, destination) {
+  if (!isDirectControlActive(hero) || !destination) return false;
+  directControl.moveTarget = destination.clone();
+  directControl.attackTarget = null;
+  directControl.aimDirection.subVectors(destination, hero.pos).setY(0);
+  if (directControl.aimDirection.lengthSq() > 0.001) directControl.aimDirection.normalize();
+  return true;
+}
+
+function moveDirectControlled(hero, dt) {
+  const vertical = (directControl.moveKeys.has('ArrowUp') ? 1 : 0) - (directControl.moveKeys.has('ArrowDown') ? 1 : 0);
+  const horizontal = (directControl.moveKeys.has('ArrowRight') ? 1 : 0) - (directControl.moveKeys.has('ArrowLeft') ? 1 : 0);
+  if (vertical || horizontal) {
+    directControl.attackTarget = directControl.moveTarget = null;
+    directMoveForward.set(0, 0, -1);
+    camera.getWorldDirection?.(directMoveForward);
+    directMoveForward.y = 0;
+    if (directMoveForward.lengthSq() < 0.0001) directMoveForward.set(0, 0, -1);
+    directMoveForward.normalize();
+    directMoveRight.set(-directMoveForward.z, 0, directMoveForward.x);
+    directMoveVector.copy(directMoveForward).multiplyScalar(vertical).addScaledVector(directMoveRight, horizontal);
+    if (directMoveVector.lengthSq() > 1) directMoveVector.normalize();
+    directControl.aimDirection.copy(directMoveVector);
+    directMoveDestination.copy(hero.pos).addScaledVector(directMoveVector, Math.max(2.5, hero.speed * 1.5));
+    directMoveDestination.y = world.groundHeight(directMoveDestination.x, directMoveDestination.z);
+    hero.moveTo(directMoveDestination, dt);
+    return { target: null, moving: true };
+  }
+  let target = directControl.attackTarget;
+  if (target && (target.dead || target.spawning || target.phasing || !units.includes(target))) {
+    directControl.attackTarget = target = null;
+    directControl.moveTarget = null;
+  }
+  if (target) {
+    const d = target.pos.distanceTo(hero.pos) - 0.4 * ((target.size || 1) - 1) - (target.reach || 0);
+    if (d > hero.range || (!hero.ranged && Math.abs(target.pos.y - hero.pos.y) >= 0.85)) {
+      hero.moveTo(target.pos, dt);
+      return { target, moving: true };
+    }
+    hero.moving = false;
+    hero.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
+    return { target, moving: false };
+  }
+  const destination = directControl.moveTarget;
+  if (destination && destination.distanceTo(hero.pos) > 0.45) {
+    hero.moveTo(destination, dt);
+    return { target: null, moving: true };
+  }
+  directControl.moveTarget = null;
+  hero.moving = false;
+  hero.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
+  return { target: null, moving: false };
+}
+
+const directControlToggle = $('directControlToggle');
+directControlToggle.onclick = () => {
+  const selected = panelHero();
+  if (directControl.enabled) setDirectControlMode(false);
+  else setDirectControlMode(true, selected);
+  audio.play('click');
+};
+addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  const editing = e.target?.closest?.('input, textarea, select, [contenteditable="true"]');
+  if (directControl.enabled && editing && DIRECT_SKILL_SLOTS[key] !== undefined) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return;
+  }
+  if (editing || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (pick.open || game.over || game.realm) return;
+  if (DIRECT_MOVE_KEYS.has(e.key)) {
+    if (!directControl.enabled) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (isDirectControlActive(directControl.hero)) directControl.moveKeys.add(e.key);
+    return;
+  }
+  if (key === 'c') {
+    if (e.repeat || (!directControl.enabled && !heroes().length)) return;
+    if (!directControl.enabled && game.state !== 'fight') return;
+    if (directControl.enabled) setDirectControlMode(false);
+    else setDirectControlMode(true);
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return;
+  }
+  if (!directControl.enabled) return;
+  const slot = DIRECT_SKILL_SLOTS[key];
+  if (slot === undefined) {
+    if (DIRECT_BLOCKED_LEGACY_KEYS.has(key)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+    return;
+  }
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (e.repeat || !isDirectControlActive(directControl.hero)) return;
+  const hero = directControl.hero;
+  if (hero.skillTimers[slot] > 0) {
+    const item = skillItems.find((entry) => entry.h === hero && entry.slot === slot);
+    if (item) item.nopeT = performance.now() + 400;
+    return;
+  }
+  const aimed = directControlPointerTarget(hero, slot);
+  const skill = skillSetFor(hero.cfg).find((entry) => entry.slot === slot);
+  const hasPointer = directControl.pointerX != null && directControl.pointerY != null;
+  const requiresAim = !!directControlAimSpec(hero, slot);
+  if (hasPointer && requiresAim && !aimed) {
+    hero.missSkill();
+    const item = skillItems.find((entry) => entry.h === hero && entry.slot === slot);
+    if (item) item.nopeT = performance.now() + 400;
+    showBanner(`Aponte um alvo válido para ${skill?.name || 'a habilidade'}`, 1.3);
+    return;
+  }
+  const target = aimed?.groundTarget ? { pos: aimed.pos.clone(), dead: false, size: 1, groundTarget: true } : aimed;
+  const manual = !!target && (slot > 0 || validAim(hero, target) || validDirectControlTarget(hero, target, slot));
+  const result = hero.requestSkill(manual ? target : null, slot, manual);
+  if (result !== 'ok') {
+    const item = skillItems.find((entry) => entry.h === hero && entry.slot === slot);
+    if (item) item.nopeT = performance.now() + 400;
+  }
+  audio.play('click');
+}, true);
+addEventListener('keyup', (e) => {
+  if (!DIRECT_MOVE_KEYS.has(e.key) || !directControl.moveKeys.has(e.key)) return;
+  directControl.moveKeys.delete(e.key);
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+addEventListener('blur', () => { directControl.commandDownAt = null; directControl.moveKeys.clear(); });
+addEventListener('pointermove', (e) => {
+  directControl.pointerX = e.clientX;
+  directControl.pointerY = e.clientY;
+});
+
 // ---------- fases ----------
 // state: 'fight' (onda) -> 'cleared' (comemoração + escolha de herói) -> 'advance' (sobe a estrada) -> 'fight'
 const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: 0, over: false, paused: false };
 
 // view: 'menu' (tela inicial) ou 'map' (mapa da campanha)
 function startGame(view = 'menu') {
+  setDirectControlMode(false, null, false);
   game.realm?.stop();   // saindo do modo Reino: some a arena e volta a estrada
   battleGateId++;
   battleLoadingVisible = false;
@@ -6001,6 +6754,7 @@ function startGame(view = 'menu') {
     scene.remove(effect.mesh);
     if (list !== bolts) releaseFxMaterial(effect.mesh.material);
   }
+  while (sentries.length) removeSentry(sentries[0]);
   clearFx();
   FX.clear();
   audio.stopMusic();
@@ -6024,6 +6778,7 @@ function startGame(view = 'menu') {
   else if (view?.goal) showCampaign(view);   // "Próxima missão" / "Tentar de novo" vão direto à dificuldade
   else if (view === 'reino') startKingdom();
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
+  syncDirectControlUI();
 }
 
 // balanço da câmera no menu inicial (orbitMenu); placeParty o zera junto com a câmera
@@ -6073,6 +6828,7 @@ function startMission() {
 
 function startPhase() {
   game.state = 'fight';
+  syncDirectControlUI();
   tutorial.on('battleStart');
   for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
@@ -7023,6 +7779,8 @@ function updateGame(dt) {
       if (v && !v.dead) v.hp = Math.min(v.maxHp, v.hp + v.maxHp * difficulty.heal);
       for (const u of units) if (u.militia && !u.dead) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * difficulty.heal);
       game.state = 'cleared';
+      clearDirectControlOrders();
+      syncDirectControlUI();
       game.timer = 2.2;
     }
   } else if (game.state === 'cleared') {
@@ -7031,6 +7789,8 @@ function updateGame(dt) {
       if (game.phase >= game.last) return endGame(game.mission ? game.mission.ending || `Missão cumprida: ${game.mission.name}!` : 'O grupo chegou ao castelo!', true);
       game.phase++;
       game.state = 'advance';
+      clearDirectControlOrders();
+      syncDirectControlUI();
       showRelicPick();
     }
   } else if (game.state === 'advance') {
@@ -7074,8 +7834,10 @@ function matchSummary(won, stars) {
 }
 
 function endGame(text, won = false) {
+  setDirectControlMode(false, null, false);
   tutorial.on('leave');
   game.over = true;
+  syncDirectControlUI();
   closeHeroPanel();
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
@@ -7234,9 +7996,17 @@ function frame() {
   hemi.intensity = 1.35 - gloom * 0.3;   // menos luz ambiente e sol mais forte: sombras marcadas
   sun.color.lerpColors(SUN[0], SUN[1], gloom);
   sun.intensity = 3.1 - gloom * 1.4;
-  const sel = panelHero();   // anel embaixo do herói com o cartão aberto
-  selectRing.visible = !!sel && !sel.dead && units.includes(sel);
-  if (selectRing.visible) { selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06); selectRing.rotation.z += real * 1.5; }
+  const moveMarker = directControl.enabled ? directControl.moveTarget : null;
+  const attackMarker = directControl.enabled ? directControl.attackTarget : null;
+  const sel = attackMarker || (moveMarker ? null : panelHero() || directControl.hero);
+  selectRing.visible = !!moveMarker || !!sel && !sel.dead && units.includes(sel);
+  if (selectRing.visible) {
+    if (moveMarker) selectRing.position.copy(moveMarker).setY(world.groundHeight(moveMarker.x, moveMarker.z) + 0.06);
+    else selectRing.position.copy(sel.pos).setY(sel.pos.y + 0.06);
+    selectRing.material.color.setHex(attackMarker ? 0xff655e : moveMarker ? 0x71e6ff : 0xffe066);
+    selectRing.scale.setScalar(attackMarker ? Math.max(1, attackMarker.size || 1) : 1);
+    selectRing.rotation.z += real * 1.5;
+  }
   tickHeroPanel(real);
   if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; }   // o jogador mudou o zoom
   const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
@@ -7441,15 +8211,26 @@ function updateAim() {
 }
 
 renderer.domElement.addEventListener('pointermove', (e) => {
+  directControl.pointerX = e.clientX;
+  directControl.pointerY = e.clientY;
   if (aiming) { aiming.pointerX = e.clientX; aiming.pointerY = e.clientY; }
 });
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!aiming || e.button !== 2) return;
+  if (e.button !== 2) return;
+  if (aiming) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    cancelAim();
+    return;
+  }
+  if (!isDirectControlActive(directControl.hero)) return;
   e.preventDefault();
   e.stopImmediatePropagation();
-  cancelAim();
+  directControl.commandDownAt = [e.clientX, e.clientY];
+  renderer.domElement.setPointerCapture?.(e.pointerId);
 }, true);
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+renderer.domElement.addEventListener('pointercancel', () => { directControl.commandDownAt = null; });
 
 // clicar num herói abre o cartão dele (clique sem arrastar, para não brigar com o giro da câmera)
 const selectRing = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 6), new THREE.MeshBasicMaterial({ color: 0xffe066, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false }));
@@ -7459,8 +8240,25 @@ scene.add(selectRing);
 let downAt = null;
 renderer.domElement.addEventListener('pointerdown', (e) => (downAt = [e.clientX, e.clientY]));
 renderer.domElement.addEventListener('pointerup', (e) => {
+  const hero = directControl.hero;
+  if (e.button === 2 && directControl.commandDownAt) {
+    const start = directControl.commandDownAt;
+    directControl.commandDownAt = null;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!isDirectControlActive(hero) || Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 6) return;
+    directControl.pointerX = e.clientX;
+    directControl.pointerY = e.clientY;
+    const destination = directControlGroundUnderPointer();
+    if (destination) issueDirectMoveCommand(hero, destination);
+    return;
+  }
+});
+renderer.domElement.addEventListener('pointerup', (e) => {
   if (e.button !== 0) return;
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+  directControl.pointerX = e.clientX;
+  directControl.pointerY = e.clientY;
   if (aiming) {
     aiming.pointerX = e.clientX;
     aiming.pointerY = e.clientY;
@@ -7476,13 +8274,20 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     if (result === 'ok') cancelAim();
     return;
   }
+  if (isDirectControlActive(directControl.hero)) {
+    const enemy = directControlEnemyUnderPointer();
+    if (enemy && issueDirectAttackCommand(directControl.hero, enemy)) return;
+  }
   let best = null, bestD = 50;   // herói mais perto do clique na tela, até 50 px
   for (const h of heroes()) {
     tmp.copy(h.pos).setY(h.pos.y + 1).project(camera);
     const d = Math.hypot((tmp.x * 0.5 + 0.5) * innerWidth - e.clientX, (-tmp.y * 0.5 + 0.5) * innerHeight - e.clientY);
     if (d < bestD) { bestD = d; best = h; }
   }
-  if (best) openHeroPanel(best, XP_LEVELS);
+  if (best) {
+    openHeroPanel(best, XP_LEVELS);
+    if (directControl.enabled && best !== directControl.hero) setDirectControlMode(true, best, false);
+  }
   else if (panelHero()) closeHeroPanel();
 });
 addEventListener('keydown', (e) => {

@@ -46,6 +46,7 @@
 #hud .hud-icon:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 #hud #speed small { position: absolute; right: -4px; bottom: -3px; padding: 0 3px; border-radius: 6px; font: 700 9px/12px 'Fredoka', sans-serif; color: #fff; background: #1d6fd6; }
 #hud #pause[aria-pressed="true"] { background: rgba(110, 210, 90, .35); }
+#hud .direct-control-toggle[aria-pressed="true"] { color: #ffe27a; background: rgba(255, 212, 74, .2); border-color: var(--gold); box-shadow: 0 0 12px rgba(255, 212, 74, .24); }
 #hud #mute { line-height: 0; }
 #hud #mute.off { background: rgba(255, 255, 255, .04); opacity: .75; }
 #hud #hudMenu { display: inline-grid; font-size: 18px; }
@@ -73,6 +74,18 @@
 .skill .auto { top: -5px; right: -5px; width: 20px; height: 20px; min-width: 0; padding: 0; display: grid; place-items: center;
   font: 400 12px/1 'Lilita One', sans-serif; border-radius: 50%; border-width: 2px; box-shadow: 0 2px 0 var(--outline); }
 .skill .key { top: -5px; left: -5px; min-width: 20px; height: 20px; font-size: 11px; border-radius: 6px; }
+
+/* Controles diretos aparecem somente quando o jogador assume um herói. */
+#directControlHint { position: fixed; z-index: 24; left: 50%; bottom: clamp(170px, 20vh, 240px); translate: -50% 0;
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; box-sizing: border-box;
+  color: #e8f2ff; background: linear-gradient(110deg, rgba(16, 30, 53, .94), rgba(30, 52, 83, .94));
+  border: 1px solid rgba(174, 205, 249, .42); border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 5px 16px rgba(0,0,0,.38);
+  font: 600 12px/1 'Fredoka', sans-serif; text-shadow: 0 1px 2px #0b1424; white-space: nowrap; pointer-events: none; }
+#directControlHint.is-hidden { display: none; }
+#directControlHint .direct-control-title { color: #ffe27a; font: 400 14px/1 'Lilita One', sans-serif; }
+#directControlHint kbd { display: inline-grid; min-width: 22px; height: 22px; margin-right: 2px; padding: 0 5px; box-sizing: border-box; place-items: center;
+  color: #fff; background: rgba(7, 16, 32, .72); border: 1px solid rgba(184, 212, 255, .48); border-bottom-width: 2px; border-radius: 6px;
+  font: 700 12px/1 'Fredoka', sans-serif; }
 
 /* ---------- faixa da luta: curta ---------- */
 #banner { font-size: 40px; padding: 8px 60px 12px; }
@@ -180,6 +193,7 @@
 
 /* No celular, o objetivo ocupa uma segunda linha para não disputar espaço com os controles. */
 @media (max-width: 600px) {
+  #directControlHint { display: none; }
   #hud {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "left right" "goal goal";
