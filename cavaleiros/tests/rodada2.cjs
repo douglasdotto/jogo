@@ -2578,7 +2578,7 @@ test('escolta usa snapshot pré-cura para estrelas e relatório',()=>{
     for(const enemy of t.skeletonsAlive())enemy.remove();
     Object.assign(t.game,{phase:t.game.last,state:'fight',toSpawn:0,falls:0});
     t.updateGame(.1);
-    if(ratio<1)assert.ok(Math.abs(villager.hp/villager.maxHp-.95)<.001,'a cura de fase leva o aldeão de 55% para 95%');
+    if(ratio<1)assert.ok(Math.abs(villager.hp/villager.maxHp-(ratio+t.getDifficulty().heal))<.001,'a cura de fase soma a cura da dificuldade aos 55%');
     else assert.equal(villager.hp/villager.maxHp,1,'o aldeão intacto permanece com vida cheia');
     assert.ok(Math.abs(t.game.missionVillagerRatio-ratio)<.001,'a vida do aldeão foi registrada antes da cura');
     t.game.timer=0;t.updateGame(.1);
