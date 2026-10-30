@@ -221,6 +221,10 @@ function freshContext() {
   vm.runInContext('MONSTER_TYPES.Executioner.think(boss, 0, hero); updateMonsterFx(0.05)', context);
   assert.equal(vm.runInContext('mBossWarnings.size', context), 3, 'avisos anunciados ficam no conjunto dedicado à barra');
   assert.equal(nodes.get('.boss-telegraph').hidden, false, 'o aviso continua visível na barra');
+  assert.match(nodes.get('.warning-progress').style.transform, /^scaleX\(0?\.\d+\)$/, 'a contagem visual atualiza escala, não largura');
+  const hudCss = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(hudCss, /#bossBar \.warning-progress[^}]*width: 100%[^}]*transform-origin: left center[^}]*transition: transform/,
+    'a barra usa largura fixa e anima a escala pela composição');
   vm.runInContext('updateMonsterFx(0.05)', context);
   assert.equal(unitScans, 1, 'a unidade chefe válida não é redescoberta todo quadro');
   assert.equal(domReads, 1, 'a referência estática do HUD é consultada uma vez');

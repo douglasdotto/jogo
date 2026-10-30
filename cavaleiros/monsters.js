@@ -983,6 +983,7 @@ function updateBossBar() {
     if (mBar.warningText.textContent !== warning.announce) mBar.warningText.textContent = warning.announce;
     const second = Math.ceil(warning.t);
     if (mBar.second !== second) { mBar.countdown.textContent = `${second} s`; mBar.second = second; }
-    mBar.progress.style.width = `${Math.max(0, Math.min(100, (1 - warning.t / warning.life) * 100))}%`;
+    const progress = Math.max(0, Math.min(1, 1 - warning.t / warning.life));
+    mBar.progress.style.transform = `scaleX(${progress})`;
   } else if (mBar.second !== -1) mBar.second = -1;
 }
