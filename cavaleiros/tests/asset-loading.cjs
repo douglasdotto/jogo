@@ -47,9 +47,15 @@ const context = vm.createContext({
 vm.runInContext(main.slice(start, end), context);
 
 async function run() {
-  const required = ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Crossbow.gltf',
+  const chars = 'kaykit/skeletons/Characters/gltf/', rig = 'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_';
+  const required = [...['Minion', 'Warrior', 'Rogue', 'Mage'].map((n) => `${chars}Skeleton_${n}.glb`),
+    ...['General', 'MovementBasic', 'CombatMelee', 'CombatRanged', 'Special'].map((n) => `${rig}${n}.glb`),
+    'kaykit/skeletons/Assets/gltf/Skeleton_Arrow_Broken.gltf', 'Skeleton_Crossbow.gltf',
     'Skeleton_Arrow.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
   assert.deepEqual(Array.from(vm.runInContext('BATTLE_ASSET_FILES', context)), required);
+  for (const file of required) assert.ok(fs.existsSync(path.resolve(__dirname, '..', 'assets', file)), `${file} existe`);
+  for (const old of ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb'])
+    assert.ok(!required.includes(old), `${old} (versão antiga, ~4,8 MB com animações) não é mais baixado`);
   for (const file of required) assert.ok(!heroLoadSource.includes(file), `${file} não deve atrasar o menu`);
   assert.ok(heroLoadSource.includes('Skeleton_Staff.gltf') && heroLoadSource.includes('Skeleton_Quiver.gltf'),
     'peças necessárias às prévias dos heróis são carregadas antes do menu');

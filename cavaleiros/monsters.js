@@ -361,6 +361,7 @@ const HARD_COUNT = 1.12;   // Difícil e Pesadelo: bando de 3 crânios, golem av
 export const MONSTER_TYPES = {
   // escudo de torre: bloqueia boa parte do dano que vem pela frente
   Shieldbearer: { name: 'Escudeiro', model: 'Warrior', hp: 48, dmg: 9, range: 1.4, speed: 1.0, cooldown: 1.8, weapon: 'Skeleton_Blade', idle: 'Blocking', size: 1.1,
+    attacks: ['1H_Melee_Attack_Chop', 'Block_Attack'],
     dress(s) {
       paint(s, 0xc4cfdf, 0x7fc8ff);
       const g = new THREE.Group();
@@ -689,7 +690,7 @@ export const MONSTER_TYPES = {
 
   // mini-chefe: enorme, espinhos nas costas, pancada em área que derruba
   Golem: { name: 'Golem de Ossos', title: 'Mini-chefe', model: 'Warrior', hp: 250, dmg: 15, range: 2.0, speed: 0.85, cooldown: 2.4, weapon: 'Skeleton_Axe', attack: '2H_Melee_Attack_Chop',
-    size: 2.2, heavy: true,
+    attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Stab'], size: 2.2, heavy: true,
     dress(s) {
       paint(s, 0xb9ad96, 0xff3b1f, 0x140a04);
       s.root.getObjectByName('Skeleton_Warrior_Helmet')?.removeFromParent?.();
@@ -714,7 +715,7 @@ export const MONSTER_TYPES = {
 
   // chefe da fase 6
   King: { name: 'Rei Esqueleto', title: 'Chefe', model: 'Warrior', hp: 54, dmg: 11, range: 1.5, speed: 1.45, cooldown: 1.7, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A',
-    size: 2.0,
+    attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Jump_Chop', 'Block_Attack'], size: 2.0,
     dress(s) {
       paint(s, 0xfff0cf, 0xffb020, 0x1a1000);
       meshNamed(s, '_Cloak', (m) => m.color.set(0xd02a3c));
@@ -795,7 +796,7 @@ export const MONSTER_TYPES = {
 
   // chefe da fase 9: machadada em linha, corrente que puxa quem está longe e, em fúria (<50%), giro sangrento
   Executioner: { name: 'Carrasco', title: 'Chefe', model: 'Warrior', hp: 46, dmg: 8, range: 1.7, speed: 1.3, cooldown: 2.0, weapon: 'Skeleton_Axe', attack: '2H_Melee_Attack_Chop',
-    size: 2.1,
+    attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice'], size: 2.1,
     dress(s) {
       paint(s, 0xd8c8b8, 0xff2020, 0x200000);
       meshNamed(s, '_Cloak', (m) => m.color.set(0x3a0c12));
