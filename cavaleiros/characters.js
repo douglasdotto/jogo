@@ -1267,6 +1267,26 @@ const ACCESSORIES = {
     [[-0.3, 0x9cff3a], [0.3, 0xff8ad8], [0.05, 0x5fd0ff]].forEach(([x, liquid], i) => g.add(ACCESSORIES.flask({ liquid, size: 0.85, pos: [x + (i === 2 ? 0.2 : 0), -0.02, 0.42 - Math.abs(x) * 0.2] })));
     return g;
   },
+  // ponta do cajado do Invocador: gema que gira num aro dourado e três sininhos pendurados
+  bellStaff({ gem = 0xff8ad8, metal = 0xf0c040, y = 1.3 } = {}) {
+    const g = new THREE.Group(), gold = lambert(metal, { emissive: 0x5a4210, emissiveIntensity: 0.3 });
+    const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 5, 16), gold);
+    hoop.position.y = y;
+    g.add(hoop);
+    const stone = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), lambert(gem, { emissive: gem, emissiveIntensity: 0.7 }));
+    stone.position.y = y;
+    stone.scale.set(0.9, 1.4, 0.9);
+    stone.userData.spin = true;
+    g.add(stone);
+    const bells = [];
+    for (const a of [-0.9, 0, 0.9]) {
+      const x = Math.sin(a) * 0.15, z = Math.cos(a) * 0.15 * 0.3;
+      bells.push(piece(new THREE.ConeGeometry(0.045, 0.075, 7), [x, y - 0.21, z]), piece(new THREE.SphereGeometry(0.018, 5, 4), [x, y - 0.25, z]));
+      bells.push(piece(new THREE.CylinderGeometry(0.006, 0.006, 0.08, 4), [x, y - 0.14, z]));
+    }
+    g.add(new THREE.Mesh(merged(bells), gold));
+    return g;
+  },
   // cristal de gelo flutuando na mão
   iceShard() {
     const g = new THREE.Group();
