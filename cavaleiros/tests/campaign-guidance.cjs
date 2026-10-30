@@ -59,7 +59,9 @@ function render(stars, visuals = null) {
     addEventListener() {}, removeEventListener() {},
   });
   vm.runInContext(`${source}\nthis.renderCampaign = renderCampaign; this.campaignCosmetics = campaignCosmetics; this.equippedCampaignCosmetic = equippedCampaignCosmetic;`, context);
-  context.renderCampaign(root, () => {});
+  context.renderCampaign(root, () => {}, null, null, '', (mission) => mission.id === 'coracao-do-castelo'
+    ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).'
+    : '');
   return {
     map, info, focusState, data,
     campaignCosmetics: () => context.campaignCosmetics(),
@@ -75,6 +77,7 @@ let view = render(imperfect);
 assert.match(view.info.innerHTML, /Espiral do Eclipse/);
 assert.match(view.info.innerHTML, /aria-valuemax="1" aria-valuenow="1"/);
 assert.match(view.info.innerHTML, /Desbloqueado · 3\/3 estrelas do capítulo/);
+assert.match(view.info.innerHTML, /class="camp-team-tip"[^>]*>.*Equipe recomendada para 4 heróis: Paladino \(cura\), Guardião \(proteção\), Viking \(dano a chefe\) e Clériga \(suporte\/cura\)\./, 'a composição sugerida aparece no resumo antes de iniciar a missão final');
 assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo VI · O coração sombrio<\/div>/);
 assert.ok(view.info.innerHTML.indexOf('camp-chapter-label') < view.info.innerHTML.indexOf('camp-name'), 'o capítulo aparece antes do nome da missão');
 assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a missão final do Coração do Castelo destacada quando a campanha foi concluída');
@@ -84,6 +87,7 @@ view.replayButton.onclick();
 assert.ok(view.map.children[0].classList.contains('sel'), 'a recomendação leva à primeira missão com estrelas faltando');
 assert.match(view.info.innerHTML, /A Vila/);
 assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo I · Sinais na estrada<\/div>/, 'o capítulo acompanha a missão selecionada');
+assert.ok(!view.info.innerHTML.includes('camp-team-tip'), 'a sugestão específica da fase final não aparece em outras missões');
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'), 'o atalho some quando a missão recomendada já está selecionada');
 assert.equal(view.focusState.current, view.playButton, 'o foco vai para Batalhar após a seleção');
 

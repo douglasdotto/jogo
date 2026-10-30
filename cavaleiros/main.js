@@ -806,7 +806,9 @@ function showCampaign(autoPlay = null) {
     root.classList.add('hidden');
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning());
+  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning(), (m) => m.id === 'coracao-do-castelo'
+    ? difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m)
+    : '');
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';

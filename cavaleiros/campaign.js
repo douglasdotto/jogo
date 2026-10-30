@@ -646,7 +646,7 @@ const medalSeal = (medal, tip = '') => medal.best
 const BOSSES = ['King', 'Executioner', 'Lich', 'Golem'];
 
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
-export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null, storageWarning = '') {
+export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null, storageWarning = '', getTeamRecommendation = null) {
   const total = totalStars();
   const cosmetics = campaignCosmetics();
   const cleared = MISSIONS.every((m) => starsOf(m.id) > 0);
@@ -704,6 +704,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     const stars = starsOf(m.id);
     const biome = typeof mapBiome === 'function' ? mapBiome(m) : '';
     const threats = typeof getThreats === 'function' ? getThreats(m) : [];
+    const teamRecommendation = typeof getTeamRecommendation === 'function' ? getTeamRecommendation(m) : '';
     const records = missionRecords(m.id);
     const medal = missionMedal(m.id);
     const chapterReward = cosmetics.find((cosmetic) => cosmetic.chapter === m.chapter);
@@ -747,6 +748,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
         <span class="camp-chapter-reward-foot">${chapterReward.legacyEntitlement ? 'Desbloqueado anteriormente · recompensa preservada' : chapterReward.unlocked ? `Desbloqueado · ${chapterReward.stars}/${chapterReward.maxStars} estrelas do capítulo` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas · faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'}`}</span>
       </div>` : ''}
       <div class="camp-goal" data-tip="${attr(m.tip)}" tabindex="0" aria-label="Objetivo: ${attr(goalText(m.goal))}. Plano de batalha: ${attr(m.tip)}"><i aria-hidden="true">⚑</i>${goalText(m.goal)}</div>
+      ${teamRecommendation ? `<div class="camp-team-tip" role="note" aria-label="${attr(teamRecommendation)}"><i aria-hidden="true">✦</i><span>${attr(teamRecommendation)}</span></div>` : ''}
       ${threats.length ? `<div class="camp-threats" role="list" aria-label="Inimigos especiais">${threats.map((threat) => {
         const tip = `${threat.name} · ${threatPhase(threat)} · ${threat.detail}`;
         return `<span role="listitem" class="camp-threat${threat.optional ? ' optional' : ''}${BOSSES.includes(threat.id) ? ' boss' : ''}" data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}">${threat.icon}</span>`;
