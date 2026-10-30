@@ -28,6 +28,9 @@ const source=readFileSync(new URL('../world.js',import.meta.url),'utf8');
 const biomeStart=source.indexOf('const MAP_STYLES = ['),worldStart=source.indexOf('export function createWorld',biomeStart);
 if(biomeStart<0||worldStart<0)throw Error('Seleção de biomas ausente');
 const biomeApi=runInNewContext(source.slice(biomeStart,worldStart).replace('export function biomeForSeed','function biomeForSeed')+';({biomeForSeed})');
+const routeStart=source.indexOf('const ROUTE = ['),routeEnd=source.indexOf('];',routeStart)+2;
+if(routeStart<0||routeEnd<2)throw Error('Controles da estrada ausentes');
+const routeControls=runInNewContext(source.slice(routeStart,routeEnd)+';ROUTE');
 const biomeCycle=['Pradaria','Outono','Pântano','Crepúsculo'];
 for(let seed=1;seed<=8;seed++)if(biomeApi.biomeForSeed(seed)!==biomeCycle[seed%biomeCycle.length])throw Error('Prévia de bioma diverge da semente '+seed);
 if(biomeApi.biomeForSeed(11)!=='Pradaria')throw Error('Mapa-base deixou de usar a pradaria');
@@ -76,12 +79,50 @@ function groundHeightBeforeBounds(zones,x,z) {
   }
   return 0;
 }
-function makeSeededTerrain(seed) {
-  const pointAt=s=>new Vector3(Math.sin(s*0.03+seed)*5+Math.sin(s*0.08+seed*0.4)*1.5,0,-s+Math.sin(s*0.025+seed)*1.5);
-  const tangentAt=s=>new Vector3(0.15*Math.cos(s*0.03+seed)+0.12*Math.cos(s*0.08+seed*0.4),0,-1+0.0375*Math.cos(s*0.025+seed)).normalize();
-  const sideOf=t=>new Vector3(-t.z,0,t.x),along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
+function makeSeededTerrain(seed,phases=12,castleInterior=false) {
+  let mapSeed=(seed>>>0)||1;
+  const rand=()=>((mapSeed=(mapSeed*16807)%2147483647)/2147483647);
+  rand();rand();   // createWorld escolhe dois offsets de terreno antes de perturbar os pontos da estrada
+  const controls=routeControls.map(([x,z],i)=>new Vector3(x+(i===0||i===routeControls.length-1?0:(rand()*5.2-2.6)),0,z+(i===0||i===routeControls.length-1?0:(rand()*2.8-1.4))));
+  const curveFor=(points)=>{
+    const samplePoints=[];
+    const interpolate=(p0,p1,p2,p3,t)=>{
+      const dt0=Math.sqrt(Math.hypot(p0.x-p1.x,p0.z-p1.z)),dt1=Math.sqrt(Math.hypot(p1.x-p2.x,p1.z-p2.z)),dt2=Math.sqrt(Math.hypot(p2.x-p3.x,p2.z-p3.z));
+      const d0=dt0||1,d1=dt1||1,d2=dt2||1;
+      const component=(a,b,c,d)=>{
+        const m1=((b-a)/d0-(c-a)/(d0+d1)+(c-b)/d1)*d1;
+        const m2=((c-b)/d1-(d-b)/(d1+d2)+(d-c)/d2)*d1;
+        const t2=t*t,t3=t2*t;
+        return (2*t3-3*t2+1)*b+(t3-2*t2+t)*m1+(-2*t3+3*t2)*c+(t3-t2)*m2;
+      };
+      return new Vector3(component(p0.x,p1.x,p2.x,p3.x),0,component(p0.z,p1.z,p2.z,p3.z));
+    };
+    for(let segment=0;segment<points.length-1;segment++) {
+      const p1=points[segment],p2=points[segment+1];
+      const p0=points[segment-1]||new Vector3(2*p1.x-p2.x,0,2*p1.z-p2.z);
+      const p3=points[segment+2]||new Vector3(2*p2.x-p1.x,0,2*p2.z-p1.z);
+      for(let step=segment===0?0:1;step<=32;step++)samplePoints.push(interpolate(p0,p1,p2,p3,step/32));
+    }
+    const samples=[{p:samplePoints[0],s:0}];let length=0;
+    for(let i=1;i<samplePoints.length;i++){length+=samplePoints[i].distanceTo(samplePoints[i-1]);samples.push({p:samplePoints[i],s:length});}
+    const pointAt=(s)=>{
+      const wanted=Math.max(0,Math.min(length,s));let lo=1,hi=samples.length-1;
+      while(lo<hi){const mid=(lo+hi)>>1;if(samples[mid].s<wanted)lo=mid+1;else hi=mid;}
+      const a=samples[lo-1],b=samples[lo];return a.p.clone().lerp(b.p,(wanted-a.s)/Math.max(1e-8,b.s-a.s));
+    };
+    return {length,pointAt};
+  };
+  const baseCurve=curveFor(controls),baseRouteLength=baseCurve.length,interiorArenaS=baseRouteLength+12;
+  if(castleInterior)controls.push(...[[-1.5,-278],[-1,-292],[0,-306],[0,-320]].map(([x,z])=>new Vector3(x,0,z)));
+  const curve=castleInterior?curveFor(controls):baseCurve,L=curve.length,pointAt=curve.pointAt;
+  const tangentAt=(s)=>pointAt(Math.min(L,s+0.5)).sub(pointAt(Math.max(0,s-0.5))).normalize();
+  const sideOf=(t)=>new Vector3(-t.z,0,t.x);
+  const along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
+  const firstS=12,lastS=castleInterior?baseRouteLength-30:L-30;
+  const anchorS=(phase)=>castleInterior&&phase===13?interiorArenaS:firstS+((phase-1)*(lastS-firstS))/(castleInterior?11:phases-1);
   const obstacles=[];
-  return runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles,pointAt,anchorS,along})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:false,obstacles});
+  const terrain=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS,castleInterior,obstacles});
+  return {...terrain,pointAt,tangentAt,sideOf,along,anchorS,L,obstacles};
 }
 for(let seed=0;seed<8;seed++) {
   const sampleWorld=makeSeededTerrain(seed),zones=[3,5,7,9,10].map(p=>sampleWorld.zoneOf(p));
@@ -109,6 +150,11 @@ for(let seed=0;seed<8;seed++) {
   }
 }
 console.log('Terreno: broadphase de groundHeight equivalente à fórmula anterior em 8 seeds, grade e bordas OK');
+const seededCastleWorld=makeSeededTerrain(19,13,true),seededCastleArena=seededCastleWorld.zoneOf(13);
+const seededCastleCenter=seededCastleWorld.pointAt(seededCastleWorld.anchorS(13));
+if(seededCastleArena?.type!=='castle'||seededCastleWorld.groundHeight(seededCastleCenter.x,seededCastleCenter.z)!==0)throw Error('A arena final não acompanha a estrada semeada real');
+if(seededCastleWorld.nextWaypoint(seededCastleWorld.pointAt(seededCastleWorld.anchorS(12)),seededCastleCenter)!==seededCastleCenter)throw Error('A fase final não alcança a câmara pela estrada semeada');
+console.log('Terreno: 13ª fase conecta a estrada curva à arena interna do castelo OK');
 const main=readFileSync(new URL('../main.js',import.meta.url),'utf8');
 const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // anima a locomoção'));
 const gridStart=main.indexOf('const SEPARATION_CELL_SIZE = 3;'),gridEnd=main.indexOf('function separate() {',gridStart);
