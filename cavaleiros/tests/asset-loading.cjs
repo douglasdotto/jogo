@@ -52,7 +52,7 @@ async function run() {
   await firstAttempt;
   assert.equal(started, false, 'falha de rede não inicia a partida');
   assert.equal(elements.overlayBtn.hidden, false, 'falha oferece ação de retry');
-  assert.match(elements.overlayText.textContent, /Verifique sua conexão/);
+  assert.match(elements.overlayText.textContent, /Recarregue a página/);
 
   await elements.overlayBtn.onclick();
   assert.equal(started, true, 'retry inicia a partida depois de carregar os modelos');

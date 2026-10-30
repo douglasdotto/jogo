@@ -1877,7 +1877,7 @@ function withBattleAssets(ready) {
     if (request !== battleGateId) return;
     battleLoadingVisible = false;
     console.error('Falha ao preparar a batalha:', error);
-    $('overlayText').textContent = 'Não foi possível preparar a batalha. Verifique sua conexão e tente novamente.';
+    $('overlayText').textContent = 'Não foi possível carregar os modelos da batalha. Recarregue a página (F5) e tente de novo.';
     $('overlayBtn').textContent = 'Tentar novamente';
     $('overlayBtn').hidden = false;
     $('overlayBtn').onclick = () => withBattleAssets(ready);
