@@ -61,7 +61,9 @@ function render(stars, visuals = null) {
   vm.runInContext(`${source}\nthis.renderCampaign = renderCampaign; this.campaignCosmetics = campaignCosmetics; this.equippedCampaignCosmetic = equippedCampaignCosmetic;`, context);
   context.renderCampaign(root, () => {}, null, null, '', (mission) => mission.id === 'coracao-do-castelo'
     ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).'
-    : '');
+    : mission.id === 'ruinas'
+      ? 'Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'
+      : '');
   return {
     map, info, focusState, data,
     campaignCosmetics: () => context.campaignCosmetics(),
@@ -104,6 +106,10 @@ assert.match(view.info.innerHTML, /Espiral do Eclipse/);
 assert.match(view.info.innerHTML, /aria-valuemax="1" aria-valuenow="1"/, 'a barra continua cheia após o desbloqueio');
 assert.match(view.info.innerHTML, /Desbloqueado · 3\/3 estrelas do capítulo/, 'as estrelas de domínio continuam visíveis separadamente');
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'));
+view.map.children[9].onclick();
+assert.ok(view.map.children[9].classList.contains('sel'), 'Ruínas Antigas continua selecionável após concluir a campanha');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'),
+  'o resumo de Ruínas explica a composição de área e o reforço recomendado');
 
 view = render({ vila: 2, fazendas: 3 });
 assert.ok(view.map.children[1].classList.contains('sel'), 'a missão liberada seguinte é selecionada');

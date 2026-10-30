@@ -455,6 +455,14 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
   assert.equal(t.difficultyTeamRecommendation({id:'normal'},t.MISSIONS.find(m=>m.id==='coracao-do-castelo')),
     'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).',
     'o trio final também recomenda a composição fora do Pesadelo');
+  const ruins=t.MISSIONS.find(m=>m.id==='ruinas');
+  const ruinsRecommendation='Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).';
+  assert.equal(t.difficultyTeamRecommendation({id:'normal'},ruins),ruinsRecommendation,
+    'a missão dos totens recomenda dano em área também no Normal');
+  clear();t.setDifficulty(1);t.setMission(ruins);t.game.picksLeft=3;t.showPick('','');
+  const at=id=>t.pick.options.findIndex(hero=>hero.id===id);
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada: Paladino + Piromante + Clériga + Guardião'));
+  assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
 });
 test('Anjo tem asas animadas e paira acima do chão',()=>{
   clear();const angel=new t.Hero(cfg('angel'));

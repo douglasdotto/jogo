@@ -183,7 +183,7 @@ const nextNightmareTeamId = (mission) => {
   const selected = new Set(heroes().map((hero) => hero.cfg.id));
   return nightmareTeamPlanIds(mission).find((id) => !selected.has(id)) || null;
 };
-const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses']);
+const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses', 'totems']);
 const shouldRecommendMissionTeam = (mission, difficultyId = difficulty.id) => difficultyId === 'pesadelo'
   || Boolean(mission && TEAM_RECOMMENDATION_GOALS.has(mission.goal?.type));
 const difficultyTeamRecommendation = (option, mission) => {
@@ -806,9 +806,8 @@ function showCampaign(autoPlay = null) {
     root.classList.add('hidden');
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning(), (m) => m.id === 'coracao-do-castelo'
-    ? difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m)
-    : '');
+  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning(), (m) =>
+    difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m));
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
