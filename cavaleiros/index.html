@@ -654,6 +654,7 @@
   <link rel="stylesheet" href="battle-hud.css">
   <link rel="stylesheet" href="tutorial.css">
   <link rel="stylesheet" href="kingdom.css">
+  <link rel="stylesheet" href="loading.css">
   <script type="importmap">
     { "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -710,8 +711,22 @@
     <div class="modal-box"><b id="restartTitle">Reiniciar?</b><span id="restartText">A partida será perdida.</span>
       <div class="modal-actions"><button id="restartNo" type="button">Voltar</button><button id="restartYes" type="button" class="danger">↺ Reiniciar</button></div></div>
   </div>
-  <div id="overlay"><div class="overlay-card"><b id="overlayTitle"></b><span id="overlayText">Carregando modelos...</span><div id="overlayStars"></div><div id="overlayStats"></div>
+  <div id="overlay" class="hidden"><div class="overlay-card"><b id="overlayTitle"></b><span id="overlayText"></span><div id="overlayStars"></div><div id="overlayStats"></div>
     <div id="overlayActions"><span id="overlayNext"></span><button id="overlayBtn" hidden>Jogar de novo</button></div></div></div>
+  <div id="loading" role="status" aria-label="Carregando">
+    <div class="ld-logo"></div>
+    <div class="ld-track"><div class="ld-fill"></div>
+      <div class="ld-runner" aria-hidden="true"><i class="ld-dust"></i><svg viewBox="0 0 44 48">
+        <rect class="ld-leg" x="14" y="30" width="5" height="14" rx="2.5" fill="#efe7d0" stroke="#0d1426" stroke-width="2"/>
+        <rect class="ld-leg b" x="25" y="30" width="5" height="14" rx="2.5" fill="#efe7d0" stroke="#0d1426" stroke-width="2"/>
+        <path d="M22 3C11 3 5 10 5 18c0 6 3 9 6 11v5h22v-5c3-2 6-5 6-11 0-8-6-15-17-15Z" fill="#fffaf0" stroke="#0d1426" stroke-width="3" stroke-linejoin="round"/>
+        <ellipse cx="15.5" cy="18" rx="4.5" ry="5" fill="#0d1426"/><ellipse cx="28.5" cy="18" rx="4.5" ry="5" fill="#0d1426"/>
+        <circle cx="16.5" cy="16.5" r="1.4" fill="#fff"/><circle cx="29.5" cy="16.5" r="1.4" fill="#fff"/>
+        <path d="M20 25l2-3 2 3Z" fill="#0d1426"/><path d="M15 30v4M20 30v4M25 30v4M30 30v4" stroke="#0d1426" stroke-width="2"/>
+        <path d="M12 6l-3-6 7 3 6-4 6 4 7-3-3 6" fill="#ffd23f" stroke="#0d1426" stroke-width="2" stroke-linejoin="round"/>
+      </svg></div></div>
+    <p class="ld-tip"></p>
+  </div>
   <script type="module" src="main.js?v=20261030-picker-groups-layout-3"></script>
 </body>
 </html>

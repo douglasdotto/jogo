@@ -189,6 +189,7 @@ const FRAG = {
     }`,
 };
 
+export const VFX_KINDS = Object.keys(FRAG);   // um shader por tipo: as paletas só trocam uniforms (tela de carregamento aquece um de cada)
 const SPRITES = new Set(['flame', 'orb', 'puff', 'leaf']);
 const ADDITIVE = new Set(['rays']);   // raio de luz soma; fogo, runas, fumaça e gelo cobrem o fundo com a própria cor
 let octaves = 3;
