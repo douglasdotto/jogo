@@ -62,18 +62,30 @@
 #hud #hudOptions button[aria-pressed="true"]::after { content: '\2713'; float: right; color: #8ef07a; }
 #hud #hudOptions .danger { color: #ffb3a8; border-top: 1px solid rgba(184, 212, 255, .15); border-radius: 0 0 8px 8px; }
 
-/* ---------- barra de habilidades: ícone + tecla + recarga ---------- */
+/* ---------- barra de habilidades: retrato com anel de vida à esquerda + botões em linha ---------- */
 #skills { gap: 8px; padding: 8px 10px; border-radius: 18px; }
-.skillGroup { gap: 6px; padding: 6px 8px 8px; border-radius: 13px; }
-.skillHero { min-height: 0; padding: 0 4px; gap: 5px; background: none; font: 600 12px 'Fredoka', sans-serif; color: #dfe9fb; }
-.skillHeroMark { width: 16px; height: 16px; flex-basis: 16px; font-size: 11px; border-radius: 5px; }
-.skillSlots { grid-template-columns: repeat(3, 62px); gap: 8px; }
-.skill { width: 62px; gap: 0; }
-.skill .face { width: 62px; height: 62px; border-radius: 16px; }
-.skill .glyph { font-size: 32px; }
-.skill .auto { top: -5px; right: -5px; width: 20px; height: 20px; min-width: 0; padding: 0; display: grid; place-items: center;
-  font: 400 12px/1 'Lilita One', sans-serif; border-radius: 50%; border-width: 2px; box-shadow: 0 2px 0 var(--outline); }
-.skill .key { top: -5px; left: -5px; min-width: 20px; height: 20px; font-size: 11px; border-radius: 6px; }
+.skillGroup { flex-direction: row; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 13px; }
+.skillHero { position: relative; flex: 0 0 54px; width: 54px; height: 54px; min-height: 0; padding: 0; background: none; cursor: help; }
+/* anel de vida: --hp (0..1) só é escrito quando a vida muda; a cor vai de vermelho a verde */
+.skillHeroRing { --hp: 1; display: block; width: 100%; height: 100%; padding: 4px; box-sizing: border-box; border-radius: 50%;
+  background: conic-gradient(color-mix(in srgb, #6ee35a calc(var(--hp) * 100%), #ff4d4d) calc(var(--hp) * 1turn), rgba(6, 12, 27, .78) 0);
+  box-shadow: 0 0 0 2px var(--outline), 0 3px 0 var(--outline); }
+.skillHeroRing > span { display: block; width: 100%; height: 100%; overflow: hidden; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--c) 65%, white), var(--cd)); box-shadow: inset 0 0 0 2px rgba(6, 12, 27, .55); }
+.skillHeroRing img { width: 100%; height: 100%; display: block; transform: scale(1.7); transform-origin: 50% 22%; }
+.skillHeroClass, .skillHeroLevel { position: absolute; z-index: 1; width: 18px; height: 18px; box-sizing: border-box; display: grid; place-items: center;
+  border: 2px solid var(--outline); border-radius: 50%; font: 400 10px/1 'Lilita One', sans-serif; color: #fff8dc; }
+.skillHeroClass { top: -3px; left: -3px; background: linear-gradient(145deg, color-mix(in srgb, var(--c) 72%, white), var(--cd)); }
+.skillHeroLevel { right: -3px; bottom: -3px; color: #3a2508; background: linear-gradient(#ffe995, #e2a92d 62%, #bd791c); }
+.skillSlots { display: flex; gap: 5px; }
+.skill { width: 46px; gap: 0; }
+.skill .face { width: 46px; height: 46px; border-radius: 12px; }
+.skill .glyph { font-size: 24px; }
+.skill .secs { bottom: 3px; min-width: 22px; height: 16px; font-size: 11px; }
+.skill .auto { top: -5px; right: -5px; width: 18px; height: 18px; min-width: 0; padding: 0; display: grid; place-items: center;
+  font: 400 11px/1 'Lilita One', sans-serif; border-radius: 50%; border-width: 2px; box-shadow: 0 2px 0 var(--outline); }
+.skill .key { top: -5px; left: -5px; min-width: 18px; height: 18px; font-size: 10px; border-radius: 6px; }
+.skill .key:empty { display: none; }   /* slot sem tecla (ex.: 4ª habilidade) */
 
 /* Controle direto: chip curto só enquanto o jogador assume um herói; os comandos ficam no tooltip. */
 #directControlHint { position: fixed; z-index: 24; left: 50%; bottom: clamp(170px, 20vh, 240px); translate: -50% 0;

@@ -190,6 +190,7 @@ test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   assert.equal(hero.bar.style.transform,transform);assert.equal(hero.bar.firstChild.style.width,width);
   t.game.paused=false;t.updateBars();
   assert.notEqual(hero.bar.style.transform,transform);assert.equal(hero.bar.firstChild.style.width,'50%');
+  assert.equal(hero.barTrail.style.width,'50%','o rastro de dano recebe a mesma largura; o atraso fica na transição CSS');
   const settled=hero.bar.style.transform;hero.pos.x+=0.0001;t.updateBars();assert.equal(hero.bar.style.transform,settled);
   hero.pos.x=2;t.updateBars();assert.equal(hero.bar.style.display,'none','barra fora da tela não permanece visível');
   hero.pos.x=0;t.updateBars();assert.equal(hero.bar.style.display,'','barra reaparece ao voltar para a tela');
