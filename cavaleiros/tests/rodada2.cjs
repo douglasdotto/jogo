@@ -2751,7 +2751,12 @@ test('separação repete a passada quando um empurrão cria uma colisão em cade
 test('monstros novos usam animações que existem nos GLB',()=>{
   const glb=n=>{const b=fs.readFileSync(path.join(dir,'assets',n+'.glb'));return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString()).animations.map(a=>a.name)};
   const used=['Blocking','Block_Hit','Block','Use_Item','Spellcast_Raise','Spellcast_Summon','Spellcast_Shoot','Spellcasting','Spellcast_Long','Throw','2H_Melee_Attack_Spin','1H_Melee_Attack_Stab','Death_C_Skeletons_Resurrect','Jump_Idle','Spawn_Air','1H_Melee_Attack_Stab','1H_Melee_Attack_Jump_Chop','2H_Melee_Attack_Chop','Taunt','Running_C'];
-  for(const [type,m] of Object.entries(t.MONSTER_TYPES)){const clips=glb('Skeleton_'+m.model);for(const c of used)assert.ok(clips.includes(c),type+': '+c)}
+  // esqueletos 1.1: clipes do Rig_Medium + nomes antigos (SKELETON_CLIP_ALIASES em main.js)
+  const rig=['General','MovementBasic','CombatMelee','CombatRanged','Special'].flatMap(n=>glb('kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_'+n));
+  const aliases=vm.runInNewContext('('+source.match(/const SKELETON_CLIP_ALIASES = (\{[\s\S]*?\n\});/)[1]+')');
+  const skel=[...rig,...Object.keys(aliases).filter(k=>rig.includes(aliases[k]))];
+  const attacks=Object.values(t.MONSTER_TYPES).flatMap(m=>m.attacks||[]);
+  for(const [type,m] of Object.entries(t.MONSTER_TYPES)){assert.ok(fs.existsSync(path.join(dir,'assets/kaykit/skeletons/Characters/gltf/Skeleton_'+m.model+'.glb')),type);for(const c of [...used,...attacks,'Lie_Down','Lie_StandUp','Hit_A','Hit_B','Death_A','Death_B','Idle_Combat','Walking_D_Skeletons','Spawn_Ground_Skeletons','Death_C_Skeletons','Skeletons_Awaken_Floor','Skeletons_Awaken_Floor_Long'])assert.ok(skel.includes(c),type+': '+c)}
   for(const c of ['Lie_Down','Lie_StandUp'])assert.ok(glb('Knight').includes(c));
 });
 test('escudeiro bloqueia pela frente; pelas costas entra tudo',()=>{

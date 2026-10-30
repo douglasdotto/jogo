@@ -145,9 +145,12 @@ const XP_LEVELS = [0, 90, 350];   // XP acumulado para Nv2 e Nv3
 const SKELETONS = {
   Crossbow: { model: 'Rogue', hp: 34, dmg: 7, range: 10, speed: 0, cooldown: 2.3, weapon: 'Skeleton_Crossbow', ranged: true, attack: '2H_Ranged_Shoot' },
   Mage: { model: 'Mage', hp: 40, dmg: 9, range: 10, speed: 0, cooldown: 2.8, weapon: 'Skeleton_Staff', ranged: true, attack: 'Spellcast_Shoot' },
-  Minion:  { hp: 36, dmg: 6,  range: 1.3, speed: 1.6, cooldown: 1.4, weapon: 'Skeleton_Blade' },
-  Warrior: { hp: 80, dmg: 11, range: 1.4, speed: 1.3, cooldown: 1.6, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A' },
-  Rogue:   { hp: 30, dmg: 8,  range: 1.3, speed: 2.3, cooldown: 1.1, weapon: 'Skeleton_Blade', move: 'Running_C' },
+  Minion:  { hp: 36, dmg: 6,  range: 1.3, speed: 1.6, cooldown: 1.4, weapon: 'Skeleton_Blade',
+    attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal'] },
+  Warrior: { hp: 80, dmg: 11, range: 1.4, speed: 1.3, cooldown: 1.6, weapon: 'Skeleton_Axe', shield: 'Skeleton_Shield_Small_A',
+    attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', 'Block_Attack'] },   // às vezes bate com o escudo
+  Rogue:   { hp: 30, dmg: 8,  range: 1.3, speed: 2.3, cooldown: 1.1, weapon: 'Skeleton_Blade', move: 'Running_C',
+    attacks: ['1H_Melee_Attack_Stab', '1H_Melee_Attack_Slice_Horizontal', '1H_Melee_Attack_Chop'] },
 };
 Object.assign(SKELETONS, MONSTER_TYPES);   // escudeiro, bombardeiro, sacerdote, fantasma, golem e chefes (monsters.js)
 
@@ -1821,8 +1824,13 @@ const loader = new GLTFLoader();
 const load = (file) => loader.loadAsync(`assets/${file}`);
 const assets = {};
 const assetKey = (file) => file.replace(/\.(glb|gltf)$/, '');
-const BATTLE_ASSET_FILES = ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb', 'Skeleton_Crossbow.gltf',
-  'Skeleton_Arrow.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
+// esqueletos KayKit 1.1: modelos sem animação + clipes do Rig_Medium (ver skeletonModel)
+const BATTLE_ASSET_FILES = ['kaykit/skeletons/Characters/gltf/Skeleton_Minion.glb', 'kaykit/skeletons/Characters/gltf/Skeleton_Warrior.glb',
+  'kaykit/skeletons/Characters/gltf/Skeleton_Rogue.glb', 'kaykit/skeletons/Characters/gltf/Skeleton_Mage.glb',
+  'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_General.glb', 'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb',
+  'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_CombatMelee.glb', 'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_CombatRanged.glb',
+  'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_Special.glb', 'kaykit/skeletons/Assets/gltf/Skeleton_Arrow_Broken.gltf',
+  'Skeleton_Crossbow.gltf', 'Skeleton_Arrow.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
 let battleAssetsPromise = null, battleAssetsReady = false, battleLoadingVisible = false, battleGateId = 0;
 let battleLoadProgress = { done: 0, total: BATTLE_ASSET_FILES.length };
 
@@ -1929,6 +1937,47 @@ function setUnitEmissive(material, hex) {
   if (!material?.emissive || lastUnitEmissive.get(material) === hex) return;
   material.emissive.setHex(hex);
   lastUnitEmissive.set(material, hex);
+}
+
+// Esqueletos KayKit 1.1: mesmos nós, ossos e malhas da versão antiga, mas sem animações embutidas (~0,3 MB
+// cada, contra ~4,8 MB). Os clipes vêm dos arquivos Rig_Medium e ganham também os nomes antigos, que o resto
+// do código (monsters.js, Reino) continua usando. Lie_Down/Lie_StandUp viram desmontar e se remontar.
+const SKELETON_CLIP_ALIASES = {
+  '1H_Melee_Attack_Chop': 'Melee_1H_Attack_Chop', '1H_Melee_Attack_Jump_Chop': 'Melee_1H_Attack_Jump_Chop',
+  '1H_Melee_Attack_Slice_Diagonal': 'Melee_1H_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal': 'Melee_1H_Attack_Slice_Horizontal',
+  '1H_Melee_Attack_Stab': 'Melee_1H_Attack_Stab', '2H_Melee_Attack_Chop': 'Melee_2H_Attack_Chop', '2H_Melee_Attack_Slice': 'Melee_2H_Attack_Slice',
+  '2H_Melee_Attack_Spin': 'Melee_2H_Attack_Spin', '2H_Melee_Attack_Stab': 'Melee_2H_Attack_Stab', '2H_Melee_Idle': 'Melee_2H_Idle',
+  Block: 'Melee_Block', Block_Attack: 'Melee_Block_Attack', Block_Hit: 'Melee_Block_Hit', Blocking: 'Melee_Blocking', Unarmed_Idle: 'Melee_Unarmed_Idle',
+  '1H_Ranged_Shoot': 'Ranged_1H_Shoot', '2H_Ranged_Shoot': 'Ranged_2H_Shoot',
+  Spellcast_Shoot: 'Ranged_Magic_Shoot', Spellcast_Raise: 'Ranged_Magic_Raise', Spellcast_Summon: 'Ranged_Magic_Summon',
+  Spellcasting: 'Ranged_Magic_Spellcasting', Spellcast_Long: 'Ranged_Magic_Spellcasting_Long',
+  Idle: 'Idle_A', Idle_Combat: 'Skeletons_Idle', Walking_D_Skeletons: 'Skeletons_Walking', Running_C: 'Running_B',
+  Spawn_Ground_Skeletons: 'Skeletons_Spawn_Ground', Death_C_Skeletons: 'Skeletons_Death', Death_C_Skeletons_Resurrect: 'Skeletons_Death_Resurrect',
+  Taunt: 'Skeletons_Taunt', Taunt_Longer: 'Skeletons_Taunt_Longer', Cheer: 'Skeletons_Taunt',
+  Lie_Down: 'Skeletons_Death', Lie_StandUp: 'Skeletons_Death_Resurrect',
+};
+const SKELETON_RIG_PARTS = ['General', 'MovementBasic', 'CombatMelee', 'CombatRanged', 'Special'];
+let skeletonClips = null;
+const skeletonModels = new Map();
+function skeletonModel(model) {
+  const cached = skeletonModels.get(model);
+  if (cached) return cached;
+  const src = assets[`kaykit/skeletons/Characters/gltf/Skeleton_${model}`];
+  if (!src) return assets[`Skeleton_${model}`];   // modelo antigo (testes)
+  if (!skeletonClips) {
+    const byName = new Map();
+    for (const part of SKELETON_RIG_PARTS) {
+      for (const clip of assets[`kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_${part}`]?.animations || []) byName.set(clip.name, clip);
+    }
+    for (const [old, now] of Object.entries(SKELETON_CLIP_ALIASES)) {
+      const clip = byName.get(now);
+      if (clip && !byName.has(old)) byName.set(old, new THREE.AnimationClip(old, clip.duration, clip.tracks));   // trilhas compartilhadas
+    }
+    skeletonClips = [...byName.values()];
+  }
+  const gltf = { scene: src.scene, animations: skeletonClips };
+  skeletonModels.set(model, gltf);
+  return gltf;
 }
 
 // esqueletos inimigos: corpo, braços e pernas usam o mesmo material e o mesmo esqueleto, então viram uma
@@ -3281,11 +3330,17 @@ function updateEnemyBolts(dt) {
     b.life -= dt;
     const d = b.mesh.position.distanceTo(goal);
     const wall = walls.length && !b.target.dead ? wallBlocking(b, walls) : null;
-    if (wall) { popText(wall.pos, 'Bloqueado!', 'block'); burst(b.mesh.position, [0xc9bba2, 0xffffff], 6, 2); b.life = 0; }
-    else if (!b.target.dead) {
+    if (wall) {
+      popText(wall.pos, 'Bloqueado!', 'block'); burst(b.mesh.position, [0xc9bba2, 0xffffff], 6, 2); b.life = 0;
+      if (b.from.enemyKind === 'Crossbow') FX.brokenArrow(b.mesh.position, wall.pos);
+    } else if (!b.target.dead) {
       b.mesh.quaternion.setFromUnitVectors(enemyBoltUp, enemyBoltDir.subVectors(goal, b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
-      if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos, b.from); b.life = 0; }
+      if (d < 12 * dt + 0.2) {
+        const hp = b.target.hp;
+        b.target.takeDamage(b.dmg, b.from.pos, b.from); b.life = 0;
+        if (b.from.enemyKind === 'Crossbow' && b.target.hp >= hp) FX.brokenArrow(b.mesh.position, b.target.pos);   // esquiva, escudo ou imune: a seta quebra e cai
+      }
     }
     if (b.life <= 0 || b.target.dead) { scene.remove(b.mesh); enemyBolts.splice(i, 1); }
   }
@@ -4793,6 +4848,28 @@ function stasis(enemy) {
   burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0x8feaff, 0xb6a4ff], 6, 2.5, { gravity: 0 });
 }
 
+// seta de besta que não entrou: quebra, quica para trás e fica cravada no chão um instante
+function brokenArrow(at, from) {
+  const src = assets['kaykit/skeletons/Assets/gltf/Skeleton_Arrow_Broken'];
+  if (!src) return;
+  const g = src.scene.clone();
+  g.traverse((o) => { if (o.material) o.material.userData.keep = true; });   // material do GLTF, compartilhado
+  g.position.copy(at);
+  const away = new THREE.Vector3(at.x - from.x, 0, at.z - from.z).normalize().multiplyScalar(-1.2 - Math.random());
+  const vel = new THREE.Vector3(away.x + rnd(0.8), 3 + Math.random(), away.z + rnd(0.8));
+  const ground = world.groundHeight(at.x + vel.x * 0.6, at.z + vel.z * 0.6);
+  g.rotation.set(rnd(1), Math.random() * TAU, rnd(1));
+  const tilt = new THREE.Euler(Math.PI - 0.5 + rnd(0.35), Math.random() * TAU, 0);   // ponta para baixo, inclinada
+  addFx(g, 2.6, (e, dt, k) => {
+    if (g.position.y > ground + 0.12 || vel.y > 0) {
+      vel.y -= 14 * dt;
+      g.position.addScaledVector(vel, dt);
+      g.rotation.x += dt * 9; g.rotation.z += dt * 5;
+      if (g.position.y <= ground + 0.12 && vel.y < 0) { g.position.y = ground + 0.12; vel.set(0, 0, 0); g.rotation.copy(tilt); }
+    } else if (k > 0.75) g.position.y = ground + 0.12 - (k - 0.75) * 1.4;   // afunda e some
+  });
+}
+
 const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
@@ -4800,6 +4877,7 @@ const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt,
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 Object.assign(FX, { pactCall, fairyPulse, golemSlam, dragonBreath });   // Invocador
+FX.brokenArrow = brokenArrow;   // besteiro esqueleto
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -6935,7 +7013,7 @@ const SKILL_ANIMS = {
 
 class Minion extends Unit {
   constructor(summoner, side) {
-    super(assets.Skeleton_Minion, { hp: 55 * summoner.skillPower, dmg: 9, range: 1.3, speed: 3.4, cooldown: 1.3 }, 'ally');
+    super(skeletonModel('Minion'), { hp: 55 * summoner.skillPower, dmg: 9, range: 1.3, speed: 3.4, cooldown: 1.3 }, 'ally');
     this.summoner = summoner;
     this.cfg = { id: 'minion' };
     this.level = summoner.level;
@@ -7325,7 +7403,7 @@ class Skeleton extends Unit {
     const D = difficulty;
     const hpScale = (1 + (phase - 1) * 0.12) * D.hp * (boss ? 9 * D.boss : 1);
     const dmgScale = (1 + (phase - 1) * 0.06) * D.dmg * (boss ? 2.5 * D.boss : 1);
-    super(assets[`Skeleton_${base.model || type}`], { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
+    super(skeletonModel(base.model || type), { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss || !!base.heavy;   // o golem é pesado como um chefe, mas sem a vida de chefe
     this.phaseBoss = !!boss;             // só o chefe da fase encerra objetivos de chefe na campanha
     this.ranged = !!base.ranged;
@@ -7337,6 +7415,7 @@ class Skeleton extends Unit {
     this.emissiveDirty = true;
     this.enemyKind = type;
     this.attackAnim = base.attack || '1H_Melee_Attack_Chop';
+    this.attackAnims = base.attacks || null;   // golpe comum sorteado entre estes
     this.stunT = 0;
     this.rootT = 0;
     this.slowT = 0;
@@ -7367,8 +7446,25 @@ class Skeleton extends Unit {
     if (base.weapon) this.attach(base.weapon, 'handslotr');   // o GLTFLoader tira o ponto de "handslot.r"
     if (base.shield) this.attach(base.shield, 'handslotl');
     this.spawning = true;
-    this.busy = this.once(base.spawn || 'Spawn_Ground_Skeletons');
+    // sai da cova; às vezes levanta do chão. Chefes acordam devagar. Mesma duração do surgimento comum.
+    const rise = base.spawn ? null : this.boss ? 'Skeletons_Awaken_Floor_Long' : Math.random() < 0.3 ? 'Skeletons_Awaken_Floor' : null;
+    const riseClip = rise && THREE.AnimationClip.findByName(this.clips, rise), spawnClip = THREE.AnimationClip.findByName(this.clips, 'Spawn_Ground_Skeletons');
+    this.busy = riseClip && spawnClip ? this.once(rise, riseClip.duration / spawnClip.duration) : this.once(base.spawn || 'Spawn_Ground_Skeletons');
     base.dress?.(this);   // peças, cores e brilho dos tipos novos
+  }
+
+  // morte variada: quase sempre desmonta numa pilha de ossos (a cabeça rola longe); às vezes tomba inteiro
+  die() {
+    super.die();
+    const r = this.boss ? 0 : Math.random();
+    if (r > 0.65) this.once(r > 0.85 ? 'Death_A' : 'Death_B', 1.3);
+  }
+
+  // golpe recebido alterna entre os dois trancos
+  takeDamage(...args) {
+    const before = this.current;
+    super.takeDamage(...args);
+    if (!this.dead && this.current !== before && this.current === this.actions.Hit_B && Math.random() < 0.5) this.busy = this.once('Hit_A', 1.6) * 0.8;
   }
 
   attach(asset, bone) {
@@ -7400,6 +7496,7 @@ class Skeleton extends Unit {
     popText(this.pos, `+${Math.round(heal)}`, 'heal');
     showBanner('Chefe furioso!', 1.6);
     ring(this.pos, 2 * this.size, 0xff5a3a);
+    if (this.busy <= 0 && !this.pendingHit) this.busy = this.once('Taunt', 1.1);   // urra antes de voltar à luta
   }
 
   update(dt) {
@@ -7455,7 +7552,10 @@ class Skeleton extends Unit {
       const d = target.pos.distanceTo(this.pos) - (target.reach || 0);   // prédios do Reino: golpeia a parede, não o centro
       if (this.ranged) this.vel.set(0, 0, 0);
       if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
-      else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) this.attack(target, this.attackAnim);
+      else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) {
+        const pool = this.attackAnims;
+        this.attack(target, pool ? pool[Math.floor(Math.random() * pool.length)] : this.attackAnim);
+      }
     }
     if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
   }
