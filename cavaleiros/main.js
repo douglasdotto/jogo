@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { createWorld, biomeForSeed } from './world.js';
+import { createWorld, biomeForSeed, preloadSceneryAssets } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook, buildBeast, animateBeast } from './characters.js';
 import { LOOKS } from './looks.js';
 import { HERO_ANIM_FILES, HERO_PROP_FILES, heroModelFile, attachHeroAnimations, HERO_HITS, HERO_DEATHS, HERO_DODGES } from './hero-anims.js';
@@ -1936,6 +1936,7 @@ async function loadAssets() {
   const files = [...new Set([...VARIANTS.map((h) => heroModelFile(h.model)), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), ...HERO_ANIM_FILES, ...HERO_PROP_FILES, 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
   await loadAssetFiles(files, (done, total) => loading.progress(0.8 * done / total));
   attachHeroAnimations(assets);   // clipes do pacote de animações nos modelos de herói (mesmo esqueleto)
+  await preloadSceneryAssets({ castle: true });   // árvores/pedras e salão do trono já prontos: o cenário não troca na frente do jogador
   // Monta cada receita uma vez; retratos e unidades reaproveitam suas peças.
   // variantes comuns ganham as cores e acessórios de looks.js
   for (const cfg of VARIANTS) {
