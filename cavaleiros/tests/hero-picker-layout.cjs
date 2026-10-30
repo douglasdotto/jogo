@@ -42,4 +42,13 @@ assert.ok(copy, 'o texto tem um contêiner próprio abaixo do retrato');
 assert.match(copy[1], /flex:\s*1\s+1\s+auto/);
 assert.match(copy[1], /align-content:\s*center/);
 
-console.log('hero-picker-layout ok — card e retrato quadrados, texto reservado, seletor desktop isolado');
+// abas temáticas: uma linha só e grade de 3–4 colunas definida pelo main.js
+const campaignCss = fs.readFileSync(path.join(__dirname, '..', 'campaign.css'), 'utf8');
+const tabs = campaignCss.match(/#pick:has\(#pickList\.grid\) \.pick-filters\s*\{([^}]*)\}/);
+assert.ok(tabs, 'barra de abas tem regra própria');
+assert.match(tabs[1], /flex-wrap:\s*nowrap/, 'as abas ficam numa linha só');
+assert.match(campaignCss, /grid-template-columns:\s*repeat\(var\(--pick-cols, 4\), minmax\(0, 1fr\)\)/, 'a grade da aba usa as colunas do main.js');
+const mainJs = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+assert.match(mainJs, /setProperty\('--pick-cols'/, 'main.js informa as colunas que a navegação por setas usa');
+
+console.log('hero-picker-layout ok — card e retrato quadrados, texto reservado, seletor desktop isolado, abas numa linha');
