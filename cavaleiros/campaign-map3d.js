@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MAP_STYLES } from './world.js';
-import { preloadSceneryAssets, sceneryModel, sceneryReady, forestMaterial } from './scenery-assets.js';
+import { preloadSceneryAssets, sceneryModel, sceneryReady } from './scenery-assets.js';
 import { makeBuilding, makeBridge, makeTree } from './kingdom-models.js';
 import { CAMPAIGN_ROAD, CHAPTER_COSMETICS, campaignRoadX } from './campaign.js';
 
@@ -432,10 +432,11 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     return it.theme.dead ? color.lerp(GLOOM, 0.65) : color.lerp(GLOOM, it.theme.gloom * 0.6);
   };
   const isTrunk = (o) => o.material.color.getHex() === STATE_COLORS.pole;
-  function proceduralPlants() {
+  // árvores procedurais de copa redonda (o usuário preferiu às copas quadradas do Forest pack)
+  instancedFrom(makeTree(0), plants.pine, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).pine, k)), []);
+  instancedFrom(makeTree(2), plants.round, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).canopy, k)), []);
+  function proceduralRocks() {
     const out = [];
-    instancedFrom(makeTree(0), plants.pine, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).pine, k)), out);
-    instancedFrom(makeTree(2), plants.round, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).canopy, k)), out);
     const rock = new THREE.Group();
     const geo = new THREE.DodecahedronGeometry(0.7, 0);
     own.geos.push(geo);
@@ -446,47 +447,34 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     mesh.material.dispose();
     return out;
   }
-  // Forest pack (scenery-assets.js): uma InstancedMesh por modelo e paleta de copa; capítulos sombrios ganham árvores secas
-  const PLANT_MODELS = { pine: ['Tree_4_A_Color1', 'Tree_4_B_Color1'], round: ['Tree_1_A_Color1', 'Tree_2_A_Color1'],
-    dead: ['Tree_Bare_1_A_Color1'], rock: ['Rock_3_E_Color1'] };
-  const PLANT_FIT = { pine: 0.6, round: 0.85, dead: 0.95, rock: 1.1 };
-  function modelPlants() {
-    const groups = new Map(), white = new THREE.Color(0xffffff);
-    const add = (kind, it, k, material, tint) => {
-      const list = PLANT_MODELS[kind], name = list[((k * 2654435761) >>> 0) % list.length];
-      const key = `${name}|${material.id}`;
-      if (!groups.has(key)) groups.set(key, { name, material, items: [] });
-      groups.get(key).items.push({ it, s: it.s * PLANT_FIT[kind], c: tint.clone() });
-    };
-    const leaves = (it) => { const l = styleOf(it.theme).leaves; return (l && forestMaterial(...l)) || sceneryModel(PLANT_MODELS.round[0]).material; };
-    const tree = (kind) => (it, k) => {
-      if (it.theme.dead && (kind === 'round' || k % 2 === 0)) add('dead', it, k, forestMaterial(null, null, [0x9a8c8a, 0x3e3436]), color.copy(white).lerp(GLOOM, it.theme.gloom * 0.4));
-      else add(kind, it, k, leaves(it), color.copy(white).lerp(GLOOM, (it.theme.dead ? 0.65 : it.theme.gloom * 0.6)));
-    };
-    plants.pine.forEach(tree('pine'));
-    plants.round.forEach(tree('round'));
-    plants.rock.forEach((it, k) => add('rock', it, k, sceneryModel(PLANT_MODELS.rock[0]).material,
-      color.setHex(styleOf(it.theme).cliffs[1]).lerp(white, 0.35).lerp(GLOOM, it.theme.gloom * 0.7)));
-    for (const { name, material, items } of groups.values()) {
-      const im = new THREE.InstancedMesh(sceneryModel(name).geometry, material, items.length);   // geometria e material em cache: não liberados aqui
-      items.forEach(({ it, s, c }, k) => {
+  // pedras do Forest pack (scenery-assets.js): uma InstancedMesh por modelo, várias formas
+  const ROCK_MODELS = ['Rock_3_E_Color1', 'Rock_1_E_Color1', 'Rock_2_C_Color1'];
+  const ROCK_FIT = [1.1, 0.8, 0.75];
+  function modelRocks() {
+    const white = new THREE.Color(0xffffff);
+    const groups = ROCK_MODELS.map(() => []);
+    plants.rock.forEach((it, k) => groups[((k * 2654435761) >>> 0) % ROCK_MODELS.length].push(it));
+    groups.forEach((items, v) => {
+      if (!items.length) return;
+      const model = sceneryModel(ROCK_MODELS[v]);
+      const im = new THREE.InstancedMesh(model.geometry, model.material, items.length);   // geometria e material em cache: não liberados aqui
+      items.forEach((it, k) => {
         q.setFromAxisAngle(up, it.ry);
-        im.setMatrixAt(k, m4.compose(v3.set(it.x, heightAt(it.x, it.z) - 0.05, it.z), q, s3.setScalar(s)));
-        im.setColorAt(k, c);
+        im.setMatrixAt(k, m4.compose(v3.set(it.x, heightAt(it.x, it.z) - 0.05, it.z), q, s3.setScalar(it.s * ROCK_FIT[v])));
+        im.setColorAt(k, color.setHex(styleOf(it.theme).cliffs[1]).lerp(white, 0.35).lerp(GLOOM, it.theme.gloom * 0.7));
       });
       im.computeBoundingSphere();
       own.instanced.push(im);
       scene.add(im);
-    }
+    });
   }
-  const plantNames = Object.values(PLANT_MODELS).flat();
-  if (sceneryReady(plantNames)) modelPlants();
+  if (sceneryReady(ROCK_MODELS)) modelRocks();
   else {
-    const fallback = proceduralPlants();   // até o Forest pack chegar (ou para sempre, se ele faltar)
+    const fallback = proceduralRocks();   // até o Forest pack chegar (ou para sempre, se ele faltar)
     preloadSceneryAssets().then((ok) => {
-      if (!ok || disposed || !sceneryReady(plantNames)) return;
+      if (!ok || disposed || !sceneryReady(ROCK_MODELS)) return;
       for (const im of fallback) { scene.remove(im); im.dispose(); own.instanced.splice(own.instanced.indexOf(im), 1); }
-      modelPlants();
+      modelRocks();
     });
   }
 
