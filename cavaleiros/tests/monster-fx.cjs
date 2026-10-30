@@ -91,7 +91,7 @@ function freshContext() {
   const units = [], skeletons = [];
   const unit = (extra) => {
     const root = new Piece();
-    const u = { dead: false, stunT: 0, busy: 0, spawning: false, size: 1, maxHp: 100, hp: 100, dmg: 10, pos: new Vector3(), root, mats: [],
+    const u = { team: 'skeleton', dead: false, stunT: 0, busy: 0, spawning: false, size: 1, maxHp: 100, hp: 100, dmg: 10, pos: new Vector3(), root, mats: [],
       vel: { set() {} }, once() { return 1; }, action() { return { getClip: () => ({ duration: 1 }) }; }, ...extra };
     units.push(u); skeletons.push(u);
     return u;
@@ -103,6 +103,17 @@ function freshContext() {
   };
   vm.runInContext('linkMonsters(api)', context);
   return { context, hero, unit, inScene, counts: () => ({ made: made - base, disposed }) };
+}
+
+{
+  const { context, unit } = freshContext();
+  unit({ enemyKind: 'Priest' });
+  unit({ enemyKind: 'Priest' });
+  unit({ enemyKind: 'Priest', dead: true });
+  unit({ enemyKind: 'Warrior' });
+  vm.runInContext('G.skeletonsAlive = () => { throw new Error("a contagem voltou a montar uma lista") }', context);
+  assert.equal(vm.runInContext('countOf("Priest")', context), 2, 'a contagem por tipo ignora mortos');
+  assert.equal(vm.runInContext('countAliveSkeletons()', context), 3, 'o limite inclui apenas inimigos vivos');
 }
 
 {

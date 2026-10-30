@@ -50,7 +50,17 @@ function nearestOf(from, list) {
   return best;
 }
 const liveAllies = () => G.livingAllies?.() ?? G.allies().filter((u) => !u.dead);
-const countOf = (kind) => G.skeletonsAlive().filter((s) => s.enemyKind === kind).length;
+function countAliveSkeletons(kind = null) {
+  let count = 0;
+  const units = G.units;
+  if (Array.isArray(units)) {
+    for (const unit of units) if (unit.team === 'skeleton' && !unit.dead && (!kind || unit.enemyKind === kind)) count++;
+    return count;
+  }
+  for (const unit of G.skeletonsAlive()) if (!unit.dead && (!kind || unit.enemyKind === kind)) count++;
+  return count;
+}
+const countOf = (kind) => countAliveSkeletons(kind);
 
 // ---------- efeitos com tempo: avisos no chão, crânios caindo, derrubadas ----------
 const mFx = [];
@@ -320,7 +330,7 @@ export const MONSTER_TYPES = {
     tick(s, dt) { s.cd.heal -= dt; s.cd.revive -= dt; s.halo.rotation.z += dt * 2; },
     think(s, dt, target) {
       if (!target) return true;
-      if (s.cd.revive <= 0 && G.skeletonsAlive().length < 12) {
+      if (s.cd.revive <= 0 && countAliveSkeletons() < 12) {
         const grave = nearestOf(s.pos, mGraves.filter((g) => flat(g.pos, s.pos) < 9));
         if (grave) {
           mGraves.splice(mGraves.indexOf(grave), 1);
@@ -334,7 +344,10 @@ export const MONSTER_TYPES = {
         }
       }
       if (s.cd.heal <= 0) {
-        const hurt = G.skeletonsAlive().filter((o) => o !== s && !o.spawning && o.hp < o.maxHp * 0.95 && flat(o.pos, s.pos) < 6);
+        const hurt = [];
+        const units = Array.isArray(G.units) ? G.units : G.skeletonsAlive();
+        for (const o of units) if (o.team === 'skeleton' && o !== s && !o.dead && !o.spawning
+          && o.hp < o.maxHp * 0.95 && flat(o.pos, s.pos) < 6) hurt.push(o);
         if (hurt.length) {
           s.busy = s.once('Spellcast_Raise', 1.3);
           s.cd.heal = 4.5;
@@ -562,7 +575,7 @@ export const MONSTER_TYPES = {
     think(s, dt, target) {
       if (!target) return false;
       const d = flat(s.pos, target.pos);
-      if (s.cd.summon <= 0 && G.skeletonsAlive().length < 9) {   // invoca uma onda de lacaios
+      if (s.cd.summon <= 0 && countAliveSkeletons() < 9) {   // invoca uma onda de lacaios
         s.busy = s.once('Taunt', 1.2);
         s.cd.summon = 18;
         G.popText(s.pos, 'Às armas!', 'evolve');
@@ -753,7 +766,7 @@ export const MONSTER_TYPES = {
         G.ring(s.pos, 2.5, 0xb36bff, 0.9);
         return true;
       }
-      if (s.cd.summon <= 0 && G.skeletonsAlive().length < 10) {
+      if (s.cd.summon <= 0 && countAliveSkeletons() < 10) {
         s.busy = s.once('Spellcast_Summon', 1.2);
         s.cd.summon = fury ? 10 : 15;
         around(s.pos, Math.round((fury ? 2.6 : 1.8) * G.difficulty.count), 2.8, Math.random() * 6).forEach((p) =>
