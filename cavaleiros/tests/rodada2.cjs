@@ -422,8 +422,8 @@ test('poof reutiliza materiais só depois que as partículas expiram',()=>{
     clear();
   }
 });
-test('27 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,27);
+test('28 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,28);
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');if(!fs.existsSync(f))return JSON.parse(fs.readFileSync(path.join(dir,'assets',n+'.gltf'),'utf8'));const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
@@ -431,7 +431,7 @@ test('27 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('81 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('84 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   const glb=n=>{const f=path.join(dir,'assets',n+'.glb');const b=fs.readFileSync(f);return JSON.parse(b.subarray(20,20+b.readUInt32LE(12)).toString())};
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
@@ -449,15 +449,15 @@ test('81 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes no
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,3,v.id+': as três habilidades devem ter corpos diferentes');
     assert.equal(new Set(anims.map(a=>a.clip)).size,3,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,81);
-  assert.equal(new Set(allNames).size,81,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,84);
+  assert.equal(new Set(allNames).size,84,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
   assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,81,
-    `cada uma das 81 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,84,
+    `cada uma das 84 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -609,7 +609,7 @@ test('seletor separa as classes especiais sem alterar os arquétipos de combate'
   assert.deepEqual(Array.from(t.pick.classFilters,filter=>filter.innerHTML.match(/<span>(.*?)<\/span>/)?.[1]),
     ['Cavaleiro','Bárbaro','Mago','Ladino','Monge','Druida','Clérigo','Bardo','Anjo','Alquimista','Engenheira','Domador','Oráculo']);
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
-  assert.deepEqual(Array.from(rowFor('Bárbaro').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking']);
+  assert.deepEqual(Array.from(rowFor('Bárbaro').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','brute']);
   assert.deepEqual(Array.from(rowFor('Monge').children,card=>card.attributes['data-hero-id']),['monk']);
   assert.deepEqual(Array.from(rowFor('Clérigo').children,card=>card.attributes['data-hero-id']),['cleric']);
   assert.equal(cfg('monk').classId,1,'o arquétipo de combate do Monge continua separado da categoria visual');
@@ -624,7 +624,7 @@ test('seletor separa as classes especiais sem alterar os arquétipos de combate'
 });
 test('navegação respeita as linhas de classe, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,27);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,28);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -1133,7 +1133,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas e ultimates das 27 variantes executam seus efeitos sem erro',()=>{
+test('técnicas e ultimates das 28 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -1180,6 +1180,57 @@ test('Engenheira, Domador e Oráculo têm habilidades principais próprias e efe
   enemy.stunT=0;assert.equal(oracle.useSkill(enemy,false,true,1),true);oracle.pendingHit.effect();assert.equal(enemy.telegraph.dodge.get(oracle),true,'W garante a esquiva da aliada no aviso ativo');
   assert.equal(oracle.useSkill(enemy,false,true,2),true);oracle.pendingHit.effect();assert.ok(enemy.stunT>0,'a ultimate reescreve e interrompe o aviso');
   clear();t.frameTargetContext.skeletons.length=0;
+});
+test('Brutamontes: couraça contra golpes pequenos, Pancada, Arremesso, Pele de Pedra e posto da frente',()=>{
+  clear();
+  const brute=cfg('brute'),others=t.VARIANTS.filter(v=>v.id!=='brute');
+  assert.ok(brute.hp>Math.max(...others.map(v=>v.hp)),'maior vida do jogo');
+  assert.ok(brute.dmg<cfg('guardian').dmg&&brute.speed<cfg('guardian').speed&&brute.cooldown>cfg('guardian').cooldown,'menos dano e mais lento que o Guardião');
+  assert.ok(brute.cleave>0&&!brute.ranged,'golpe em leque curto');
+  const minion=()=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.hp=e.maxHp=10000;return e;};
+  const b=new t.Hero(brute),plain=new t.Hero(cfg('crusher'));b.pos.set(0,0,0);plain.pos.set(30,0,0);
+  assert.ok(b.size>plain.size,'silhueta maior que os outros heróis');
+  // passiva: −3 por golpe, mínimo 1; quem não tem couraça leva o golpe inteiro
+  const hitter=minion();hitter.pos.set(0,0,1);
+  let hp=b.hp;b.takeDamage(6,null,hitter);assert.equal(hp-b.hp,3,'golpe de 6 vira 3');
+  hp=b.hp;b.takeDamage(2,null,hitter);assert.equal(hp-b.hp,1,'golpe pequeno ainda tira 1');
+  hp=b.hp;b.takeDamage(40,null,hitter);assert.equal(hp-b.hp,37,'golpe grande quase inteiro');
+  hp=plain.hp;plain.takeDamage(6,null,hitter);assert.equal(hp-plain.hp,6,'Esmagador não tem couraça');
+  hitter.remove();
+  // Pancada: atordoa e provoca quem está perto; chefe fica zonzo pela metade; longe não pega
+  const a1=minion(),a2=minion(),boss=minion(),far=minion();a1.pos.set(1.2,0,0);a2.pos.set(-1.2,0,0);boss.pos.set(0,0,1.5);boss.boss=true;far.pos.set(0,0,6);
+  assert.equal(b.useSkill(a1,false,false),true,'a IA usa com dois ou mais em volta');b.pendingHit.effect();
+  for(const e of [a1,a2,boss])assert.strictEqual(e.taunt,b,'provoca quem foi atingido');
+  assert.ok(a1.stunT>0&&a1.tauntT>a1.stunT,'atordoa por instantes e a provocação dura mais');
+  assert.ok(Math.abs(boss.stunT-a1.stunT/2)<1e-9,'chefe fica zonzo pela metade do tempo');
+  assert.ok(a1.hp<10000);assert.equal(far.stunT||0,0);assert.notStrictEqual(far.taunt,b);
+  for(const e of [a1,a2,boss,far])e.remove();
+  // Arremesso: pega o comum mais perto (nunca o chefe) e lança no grupo mais denso; a queda fere em área
+  const big=minion();big.boss=true;big.pos.set(0,0,1);
+  b.skillTimers[1]=0;assert.equal(b.useSkill(null,false,false,1),false,'chefe não é agarrado');
+  const grab=minion();grab.pos.set(0,0,1.6);const pack=[[0,7],[0.6,7],[-0.6,7.3]].map(([x,z])=>{const e=minion();e.pos.set(x,0,z);return e;});
+  assert.equal(b.useSkill(null,false,false,1),true);b.pendingHit.effect();
+  assert.strictEqual(b.hurl.victim,grab,'agarra o comum mais próximo');assert.ok(grab.stunT>0);
+  b.updateHurl(b.hurl.flight/2);assert.ok(grab.lift>0.5,'voa em arco');
+  b.updateHurl(5);assert.equal(b.hurl,null);assert.equal(grab.lift,0);
+  assert.ok(grab.pos.z>6,'cai no grupo');for(const e of [...pack,grab])assert.ok(e.hp<10000,'o impacto fere todos em volta');
+  assert.equal(big.hp,10000,'o chefe longe da queda não é ferido');
+  for(const e of [big,grab,...pack])e.remove();
+  // Pele de Pedra: cresce, recebe 60% menos, devolve 30% do corpo a corpo e provoca em volta
+  const melee=minion(),archer=new t.Skeleton('Crossbow',1);melee.pos.set(0,0,1);archer.spawning=false;archer.busy=99;archer.pos.set(3,0,0);
+  const baseSize=b.heroSize();
+  assert.equal(b.useSkill(melee,false,true,2),true);b.pendingHit.effect();
+  assert.ok(b.stoneT>=7,'dura cerca de 8 s');assert.ok(Math.abs(b.heroSize()-baseSize*1.22)<1e-9,'fica maior');
+  assert.strictEqual(melee.taunt,b);assert.strictEqual(archer.taunt,b,'provoca todos no raio');
+  hp=b.hp;const before=melee.hp;b.takeDamage(20,null,melee);
+  assert.equal(hp-b.hp,20*0.4-3,'60% menos e depois a couraça');assert.equal(before-melee.hp,6,'devolve 30% ao atacante corpo a corpo');
+  const archerHp=archer.hp;b.takeDamage(20,null,archer);assert.equal(archer.hp,archerHp,'tiro à distância não é refletido');
+  b.revive();assert.equal(b.stoneT,0,'reviver limpa a Pele de Pedra');
+  for(const e of [melee,archer])e.remove();
+  // posto: o Brutamontes ocupa a frente mesmo entrando depois de outro corpo a corpo
+  clear();const first=new t.Hero(cfg('paladin')),tank=new t.Hero(brute),mage=new t.Hero(cfg('pyro'));t.arrangeParty();
+  assert.deepEqual(Array.from(tank.formation),[0,-1.2],'Brutamontes na frente');assert.notDeepEqual(Array.from(first.formation),[0,-1.2]);
+  clear();
 });
 test('virotes perfurantes reutilizam vetores e acertam vários inimigos no quadro',()=>{
   clear();assert.equal(t.sentries.length,0,'o cenário do tiro começa sem torres');t.bolts.length=0;
@@ -2057,7 +2108,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
 test('18 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,18);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,27);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,28);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

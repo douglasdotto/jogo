@@ -290,6 +290,22 @@ export const LOOKS = {
       { type: 'brows', bone: 'head', color: 0xc8501e, angle: -0.2, size: 1.2 },
     ],
   },
+  // ---------- Bárbaro (tanque) ----------
+  brute: {   // gigante de punhos: tronco e braços enormes, ombreiras de pedra, manoplas de pedra, careca de barba ruiva
+    shape: silhouette('Barbarian', { torso: 1.3, arms: 1.28, legs: 1.14, height: 1.02, depth: 1.26 }),
+    hide: ['Barbarian_Hat'],
+    paint: {
+      ...outfit('Barbarian', '#566a78', '#3a3a40', 0.65), ...face('Barbarian', { skin: '#d8a07a', hair: '#7a3a1a', eyes: '#7affd8' }),
+      Barbarian_Cape: { tint: '#4a4038', amount: 0.8 },
+    },
+    extras: [
+      { type: 'pauldrons', bone: 'chest', color: 0x9a948a, trim: 0x5a554e, size: 1.7 },
+      { type: 'armWraps', bone: 'lowerarm.l', color: 0x8a847a, radius: 0.2, n: 5 },
+      { type: 'armWraps', bone: 'lowerarm.r', color: 0x8a847a, radius: 0.2, n: 5 },
+      { type: 'beard', bone: 'head', color: 0x7a3a1a },
+      { type: 'brows', bone: 'head', color: 0x5a2a12, angle: 0.35, size: 1.4 },
+    ],
+  },
 };
 
 // para a vitrine: modelo e armas visíveis de cada variante, na ordem de VARIANTS em main.js (o jogo usa aquela lista);
@@ -322,6 +338,7 @@ export const LOOK_PREVIEW = [
   { id: 'engineer', name: 'Engenheira', model: 'Rogue', recipe: 'engineer' },
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
+  { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [] },   // luta de punhos (manoplas de pedra)
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],

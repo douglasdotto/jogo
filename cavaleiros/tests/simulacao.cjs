@@ -263,6 +263,7 @@ const details = campaignMode ? process.argv[8] === 'detalhe' : process.argv[6] =
 const profiles = {
   inicial: ['paladin', 'berserker', 'pyro', 'assassin'],
   equilibrado: ['paladin', 'guardian', 'pyro', 'cleric'],
+  brutamontes: ['paladin', 'brute', 'pyro', 'cleric'],
   sustentacao: ['guardian', 'cleric', 'druid', 'pyro'],
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
