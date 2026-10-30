@@ -11,7 +11,7 @@ THREE.BufferGeometry.prototype.toNonIndexed = function () { return this.index ? 
 
 // pontos (x, z) por onde a estrada passa, de baixo (z positivo) para cima
 const ROUTE = [[0, 14], [2, 0], [8, -18], [4, -38], [-7, -56], [-10, -76], [-3, -96], [8, -114], [10, -134], [2, -152], [-8, -170], [-7, -190], [1, -208], [6, -228], [2, -246], [0, -264]];
-const MAP_STYLES = [
+export const MAP_STYLES = [
   { name: 'Pradaria', grass: [0x76cc32, 0x5db426], sand: [0xf0b860, 0xe0a24c], cliffs: [0xdba468, 0xc98d55], bed: 0xc9a46a, dry: 0xa39a5c, gloom: 0x5e536e,
     river: 0x5fb3e0, deep: 0x2a7fa6, shallow: 0x8fdde6, murky: 0x3e5a5a, pondLeaf: 0x6fae46, reeds: 0x6f8f3e,
     canopy: [0x4fb82a, 0x3fa424, 0x62c834, 0x37941e, 0x58bf2c], pine: [0x6aa83f, 0x5e9e3c, 0x77b347], tuft: [0x82d63e, 0x6cc432, 0x94e04a, 0x5cb22a], modelHue: 38 },

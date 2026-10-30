@@ -21,6 +21,7 @@ import { MISSIONS, createCampaignMapSeedSession, goalText, starConditions, stars
 import { materialPool } from './fx-pool.js';
 import { createPopTextPool } from './pop-text-pool.js';
 import { createCampaignAura } from './campaign-aura.js';
+import { mountCampaignMap3D } from './campaign-map3d.js';
 import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
@@ -825,7 +826,7 @@ function showCampaign(autoPlay = null) {
     showDifficulty();
   };
   renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning(), (m) =>
-    difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m));
+    difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m), mountCampaignMap3D);
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';

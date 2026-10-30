@@ -366,6 +366,16 @@
 .camp-node.done { background: linear-gradient(145deg, #a8da7c, #558e53); }
 .camp-node.locked { filter: saturate(.35) brightness(.78); }
 .camp-node.sel { scale: 1.12; box-shadow: 0 0 0 3px rgba(255, 236, 174, .9), 0 0 17px 3px rgba(255, 207, 98, .42), 0 4px 10px rgba(7, 20, 31, .42); }
+/* mapa 3D (campaign-map3d.js): o diorama desenha estrada e marcos; os botões viram alvos invisíveis sobre cada estandarte */
+.camp-map.is-3d { height: 100%; box-sizing: border-box; aspect-ratio: auto; background: #a9d6f0; cursor: grab; touch-action: none; user-select: none; }   /* ocupa a altura do painel em vez de vazar sobre o título */
+.camp-map.is-3d.dragging { cursor: grabbing; }
+.camp-map.is-3d::after { z-index: 0; }
+.camp-map3d { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; }
+.camp-map.is-3d .camp-trail { display: none; }
+.camp-map.is-3d .camp-node { width: 46px; height: 46px; border: 0; background: transparent; box-shadow: none; filter: none; scale: 1; animation: none; transition: none; }
+.camp-map.is-3d .camp-node > * { display: none; }
+.camp-map.is-3d .camp-node.locked { cursor: not-allowed; }
+.camp-map.is-3d.dragging .camp-node { cursor: grabbing; }
 /* painel da missão: poucas linhas, muito respiro e o Batalhar sempre no rodapé */
 .camp-info { width: min(380px, 38vw); height: 100%; max-height: 100%; padding: 26px 24px 22px; gap: 20px; align-items: stretch; text-align: left; border: 1px solid rgba(229, 240, 251, .14); border-radius: 18px;
   background: linear-gradient(155deg, rgba(34, 71, 103, .94), rgba(16, 40, 64, .96)); box-shadow: 0 18px 42px rgba(0, 0, 0, .28); backdrop-filter: blur(14px); }
