@@ -314,12 +314,13 @@ export const LOOKS = {
   // ---------- Invocador ----------
   summoner: {   // mestre dos pactos: manto ameixa com capa rosada, cabelo verde-água, cajado de gema e sininhos
     shape: silhouette('Mage', { torso: 0.97, arms: 0.97, legs: 0.98, height: 1.03, depth: 0.97 }),
-    hide: ['Spellbook', 'Spellbook_open', '1H_Wand'],
+    hide: ['Spellbook', 'Spellbook_open', '1H_Wand', 'Mage_Hat'],   // sem chapéu de mago: coroa de flores (não confunde com o Piromante)
     paint: {
       ...outfit('Mage', '#8a3a6e', '#4a2a48', 0.8), ...face('Mage', { skin: '#f2c9a8', hair: '#3ab0a0', eyes: '#ffd23a' }),
-      Mage_Cape: { tint: '#f0a8d0', amount: 0.8 }, Mage_Hat: { tint: '#6a2a5a', amount: 0.75 }, '2H_Staff': { tint: '#c89a5a', amount: 0.55 },
+      Mage_Cape: { tint: '#f0a8d0', amount: 0.8 }, '2H_Staff': { tint: '#c89a5a', amount: 0.55 },
     },
     extras: [
+      { type: 'flowerCrown', bone: 'head' },
       { type: 'bellStaff', bone: 'handslotr', gem: 0xff8ad8, metal: 0xf0c040 },
       { type: 'robeSkirt', bone: 'hips', color: 0x8a3a6e, trim: 0xf0c040, height: 0.5, flare: 0.44 },
       { type: 'brows', bone: 'head', color: 0x3ab0a0, angle: -0.1 },

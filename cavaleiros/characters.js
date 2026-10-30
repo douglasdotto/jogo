@@ -944,6 +944,28 @@ const ACCESSORIES = {
     g.add(stone);
     return g;
   },
+  // coroa de flores com gema na testa: o Invocador (pactos com fadas) sem o chapéu de mago
+  flowerCrown({ vine = 0x4f9a5a, petal = 0xff9ad0, center = 0xffd23a, gem = 0xff6ab8, y = 0.62, radius = 0.53 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged([piece(new THREE.TorusGeometry(radius, 0.035, 5, 20), [0, y, 0.02], [Math.PI / 2 + 0.12, 0, 0])]), lambert(vine)));
+    const petals = [], hearts = [];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + Math.PI / 2, x = Math.cos(a) * radius, z = Math.sin(a) * radius;
+      if (Math.abs(a - Math.PI / 2) < 0.1) continue;   // a frente fica para a gema
+      for (let k = 0; k < 5; k++) {
+        const b = (k / 5) * Math.PI * 2;
+        petals.push(piece(new THREE.SphereGeometry(0.055, 5, 4), [x + Math.cos(b) * 0.06, y + 0.05 + Math.sin(b) * 0.06, z], [0, -a, 0], [1, 1, 0.5]));
+      }
+      hearts.push(piece(new THREE.SphereGeometry(0.035, 5, 4), [x, y + 0.05, z * 1.02]));
+    }
+    g.add(new THREE.Mesh(merged(petals), lambert(petal)));
+    g.add(new THREE.Mesh(merged(hearts), lambert(center)));
+    const stone = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), lambert(gem, { emissive: gem, emissiveIntensity: 0.6 }));
+    stone.position.set(0, y + 0.04, radius + 0.03);
+    stone.scale.set(0.8, 1.25, 0.6);
+    g.add(stone);
+    return g;
+  },
   // monóculo dourado com corrente: o cronomante "lê o tempo"
   monocle({ color = 0xe8c060, lens = 0x9fe6ff, side = 1 } = {}) {
     const g = new THREE.Group();
