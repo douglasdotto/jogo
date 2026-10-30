@@ -83,6 +83,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
   FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
+context.loading={visible:false,show:()=>Promise.resolve(),progress:noop,hide:()=>Promise.resolve()};   // tela de carregamento (loading.js) fora dos trechos carregados
 context.queryObstacleCandidates=()=>context.world.obstacles;
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
 vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('export ',''),context);

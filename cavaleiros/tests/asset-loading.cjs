@@ -18,10 +18,19 @@ const elements = {
   overlayBtn: { hidden: false, textContent: '', onclick: null },
   overlay: { classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name) } },
 };
+// tela de carregamento (loading.js): só registra o que o gate pede
+const screen = { shown: 0, hidden: 0, last: 0, visible: false };
+const loading = {
+  get visible() { return screen.visible; },
+  show() { screen.shown++; screen.visible = true; return Promise.resolve(); },
+  progress(f) { screen.last = f; },
+  hide() { screen.hidden++; screen.visible = false; return Promise.resolve(); },
+};
 let failFirstAttempt = true;
 const loaded = [];
 const context = vm.createContext({
   assets: {},
+  createLoadingScreen: () => loading,
   game: { paused: false, mission: null },
   load(file) {
     loaded.push(file);
@@ -49,15 +58,28 @@ async function run() {
   const firstAttempt = context.withBattleAssets(() => { started = true; context.game.paused = false; });
   assert.equal(context.game.paused, true, 'combate fica pausado enquanto os assets carregam');
   assert.equal(started, false, 'a partida não começa antes dos modelos');
+  assert.equal(screen.visible, true, 'a tela de carregamento cobre a entrada da fase');
   await firstAttempt;
   assert.equal(started, false, 'falha de rede não inicia a partida');
   assert.equal(elements.overlayBtn.hidden, false, 'falha oferece ação de retry');
+  assert.equal(screen.visible, false, 'na falha a tela sai e o aviso com retry aparece');
+  assert.ok(!classes.has('hidden'), 'aviso de falha visível');
   assert.match(elements.overlayText.textContent, /Recarregue a página/);
 
   await elements.overlayBtn.onclick();
   assert.equal(started, true, 'retry inicia a partida depois de carregar os modelos');
   assert.equal(context.game.paused, false);
   assert.ok(classes.has('hidden'), 'overlay some após o carregamento');
+  assert.equal(screen.visible, false, 'tela de carregamento some antes da partida');
+  assert.equal(screen.last, 0.6, 'progresso chega ao fim dos modelos');
+  let again = false;
+  context.withBattleAssets(() => { again = true; });
+  assert.equal(again, true, 'pronto e sem cenário novo: começa na hora');
+  const shows = screen.shown;
+  let built = false;
+  await context.withBattleAssets(() => {}, () => { built = true; });
+  assert.equal(built, true, 'cenário novo é montado com a tela na frente');
+  assert.equal(screen.shown, shows + 1);
   assert.equal(elements.overlayBtn.hidden, true);
 
   const count = loaded.length;

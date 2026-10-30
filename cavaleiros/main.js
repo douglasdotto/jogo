@@ -24,9 +24,10 @@ import { createCampaignAura } from './campaign-aura.js';
 import { mountCampaignMap3D } from './campaign-map3d.js';
 import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
-import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
+import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality, VFX_KINDS } from './vfx-shaders.js';
+import { createLoadingScreen } from './loading.js';
 import { startKingdom, linkKingdom, loadKingdomRecords, kingdomRecordText } from './kingdom.js';
-import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard, cleanseAround } from './monsters.js';
+import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard, cleanseAround } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -825,8 +826,10 @@ function showCampaign(autoPlay = null) {
   const mapSeeds = campaignMapSession.get();
   const play = (m) => {
     game.mission = m;
-    useMissionWorld(m, mapSeeds.get(m.id));
     root.classList.add('hidden');
+    const build = () => useMissionWorld(m, mapSeeds.get(m.id));
+    if (typeof withBattleAssets === 'function') return withBattleAssets(showDifficulty, build);   // cenário, modelos e shaders com a tela de carregamento
+    build();
     showDifficulty();
   };
   renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning(), (m) =>
@@ -845,12 +848,24 @@ function useMissionWorld(m, seed) {
   world.dispose?.();
   const castleInterior = m.id === 'coracao-do-castelo';
   world = createWorld(scene, ROAD, castleInterior ? 13 : PHASES, seed, { castleInterior });
+  aimCamera(world.anchorS(m.from));
+}
+
+// jornada depois de uma missão: volta ao mapa-base
+const journeyWorldStale = () => world.seed != null && world.seed !== 11;
+function useJourneyWorld() {
+  world.dispose?.();
+  world = createWorld(scene, ROAD, PHASES, 11);
 }
 
 // "Repetir" da campanha: mesma missão, cenário, dificuldade e equipe, sem passar pelas escolhas
 function replayMission({ replay: m, team, seed }) {
   game.mission = m;
+  if (typeof withBattleAssets === 'function') return withBattleAssets(() => replayTeam(m, team), () => useMissionWorld(m, seed));
   useMissionWorld(m, seed);
+  replayTeam(m, team);
+}
+function replayTeam(m, team) {
   prepareRun();
   game.picksLeft = 0;
   for (const cfg of team.slice(0, m.heroes)) {
@@ -918,19 +933,20 @@ function confirmDifficulty(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   if (pick.reino) { pick.timer = setTimeout(() => startGame('reino'), 450); return; }   // o Reino usa a dificuldade escolhida aqui
-  const m = prepareRun();
-  pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
-    : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
+  const next = () => {
+    const m = prepareRun();
+    pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
+      : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
+  };
+  if (!game.mission && journeyWorldStale() && typeof withBattleAssets === 'function') return withBattleAssets(next, useJourneyWorld);   // mapa-base refeito com a tela de carregamento
+  next();
 }
 
 // dificuldade já escolhida: prepara o cenário e o grupo vazio da missão (ou da jornada)
 function prepareRun() {
   const m = game.mission;
   if (m) campaignMapSession.reset();   // a próxima visita à campanha começa uma nova combinação de mapas
-  if (!m && world.seed != null && world.seed !== 11) {
-    world.dispose?.();
-    world = createWorld(scene, ROAD, PHASES, 11);
-  }
+  if (!m && journeyWorldStale()) useJourneyWorld();
   // ?fase=N também vale na campanha, dentro do trecho da missão
   const asked = +new URLSearchParams(location.search).get('fase');
   placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
@@ -1825,6 +1841,7 @@ const BATTLE_ASSET_FILES = ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skel
   'Skeleton_Arrow.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
 let battleAssetsPromise = null, battleAssetsReady = false, battleLoadingVisible = false, battleGateId = 0;
 let battleLoadProgress = { done: 0, total: BATTLE_ASSET_FILES.length };
+const loading = createLoadingScreen($('loading'));
 
 async function loadAssetFiles(files, onProgress = null) {
   const missing = [...new Set(files)].filter((file) => !assets[assetKey(file)]);
@@ -1845,7 +1862,7 @@ function ensureBattleAssets() {
   battleLoadProgress = { done: 0, total: missing.length };
   battleAssetsPromise = loadAssetFiles(missing, (done, total) => {
     battleLoadProgress = { done, total };
-    if (battleLoadingVisible) $('overlayText').textContent = `Preparando batalha... ${done}/${total}`;
+    if (battleLoadingVisible) loading.progress(STAGE_BUILT + (STAGE_LOADED - STAGE_BUILT) * done / total);
   }).then(() => { battleAssetsReady = true; });
   battleAssetsPromise = battleAssetsPromise.catch((error) => { battleAssetsPromise = null; throw error; });
   return battleAssetsPromise;
@@ -1855,18 +1872,36 @@ function preloadBattleAssets() {
   ensureBattleAssets().catch((error) => console.warn('Não foi possível antecipar os modelos da batalha:', error));
 }
 
-function withBattleAssets(ready) {
-  if (battleAssetsReady) return ready();
+// Entrada de fase: com a tela de carregamento na frente, monta o cenário (build), baixa os modelos de batalha
+// e aquece a GPU (warmStage). Já pronto e sem cenário novo, começa na hora.
+const STAGE_BUILT = 0.25, STAGE_LOADED = 0.6;
+function withBattleAssets(ready, build = null) {
+  const warm = typeof isStageWarm !== 'function' || isStageWarm();
+  if (battleAssetsReady && warm && !build) return ready();
   const request = ++battleGateId;
   battleLoadingVisible = true;
   game.paused = true;
-  const pending = ensureBattleAssets();
-  if (battleAssetsReady) { battleLoadingVisible = false; return ready(); }
-  $('overlayBtn').hidden = true;
-  $('overlayText').textContent = `Preparando batalha... ${battleLoadProgress.done}/${battleLoadProgress.total}`;
-  $('overlay').classList.remove('hidden');
-  return pending.then(() => {
-    if (request !== battleGateId) return;
+  $('overlay').classList.add('hidden');
+  // startGame (menu, Esc) cancela o pedido: a tela sai se ninguém mais a estiver usando
+  const stale = () => {
+    if (request === battleGateId) return false;
+    if (!battleLoadingVisible) loading.hide({ immediate: true });
+    return true;
+  };
+  const pending = loading.show().then(() => {
+    if (stale()) return;
+    if (build) { build(); build = null; }   // só uma vez, mesmo se os modelos falharem e o jogador tentar de novo
+    loading.progress(STAGE_BUILT);
+    return ensureBattleAssets();
+  }).then(() => {
+    if (stale()) return;
+    loading.progress(STAGE_LOADED);
+    if (typeof warmStage === 'function') return warmStage((f) => loading.progress(STAGE_LOADED + (1 - STAGE_LOADED) * f));
+  });
+  return pending.then(async () => {
+    if (stale()) return;
+    await loading.hide();
+    if (stale()) return;
     battleLoadingVisible = false;
     $('overlay').classList.add('hidden');
     $('overlayBtn').hidden = true;
@@ -1874,19 +1909,21 @@ function withBattleAssets(ready) {
     $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');
     ready();
   }, (error) => {
-    if (request !== battleGateId) return;
+    if (stale()) return;
     battleLoadingVisible = false;
     console.error('Falha ao preparar a batalha:', error);
+    loading.hide({ immediate: true });
     $('overlayText').textContent = 'Não foi possível carregar os modelos da batalha. Recarregue a página (F5) e tente de novo.';
     $('overlayBtn').textContent = 'Tentar novamente';
     $('overlayBtn').hidden = false;
-    $('overlayBtn').onclick = () => withBattleAssets(ready);
+    $('overlay').classList.remove('hidden');
+    $('overlayBtn').onclick = () => withBattleAssets(ready, build);
   });
 }
 
 async function loadAssets() {
   const files = [...new Set([...VARIANTS.map((h) => `${h.model}.glb`), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
-  await loadAssetFiles(files, (done, total) => { $('overlayText').textContent = `Carregando modelos... ${done}/${total}`; });
+  await loadAssetFiles(files, (done, total) => loading.progress(0.8 * done / total));
   // Monta cada receita uma vez; retratos e unidades reaproveitam suas peças.
   // variantes comuns ganham as cores e acessórios de looks.js
   for (const cfg of VARIANTS) {
@@ -1895,6 +1932,61 @@ async function loadAssets() {
     if (LOOKS[cfg.id]) applyLook(scene, assets, LOOKS[cfg.id]);
     cfg.built = { scene, animations: assets[cfg.model].animations };
   }
+}
+
+// Aquecimento da GPU: na primeira vez que um material aparece, o navegador compila o shader e sobe malhas e
+// texturas — um engasgo no primeiro esqueleto, golpe ou habilidade. Com a tela de carregamento na frente,
+// uma amostra de cada modelo de batalha e de cada efeito comum entra na cena junto do cenário novo;
+// compileAsync compila tudo em paralelo e um quadro desenhado (com sombra) termina o envio para a GPU.
+let warmedWorld = null;
+const isStageWarm = () => warmedWorld === world;
+const warmGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3), warmGhostMats = new Map();
+async function warmStage(onProgress = () => {}, battle = true) {
+  const group = new THREE.Group(), pooled = [];
+  const add = (o, shadow) => {
+    const i = group.children.length;
+    o.position.set((i % 10) * 0.5 - 2.25, 0.5, Math.floor(i / 10) * 0.5 - 1);
+    if (shadow) o.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    group.add(o);
+  };
+  if (battle) {
+    for (const file of BATTLE_ASSET_FILES) {
+      const gltf = assets[assetKey(file)];
+      if (!gltf.animations?.length) { add(gltf.scene.clone(), true); continue; }
+      mergeSkeletonLimbs(gltf.scene);   // o mesmo corte que Unit faz: já sobe a malha final
+      add(SkeletonUtils.clone(gltf.scene), true);
+    }
+    // fantasma: o mesmo esqueleto com material transparente é outro shader (as cópias ficam vivas para ele não sair do cache)
+    const ghost = SkeletonUtils.clone(assets.Skeleton_Minion.scene);
+    ghost.traverse((m) => {
+      if (!m.isMesh) return;
+      if (!warmGhostMats.has(m.material)) warmGhostMats.set(m.material, Object.assign(m.material.clone(), { transparent: true, opacity: 0.5, depthWrite: false }));
+      m.material = warmGhostMats.get(m.material);
+    });
+    add(ghost, true);
+    for (const material of MONSTER_MATERIALS) add(new THREE.Mesh(warmGeo, material), true);
+    for (const pool of [ringMaterials, beamMaterials, groundMarkMaterials, poofPuffMaterials, poofStarMaterials, particleMats.add, particleMats.soft, particleMats.solid]) {
+      const material = pool.take(0xffffff, 0.5);
+      pooled.push([pool, material]);
+      add(new THREE.Mesh(warmGeo, material));
+    }
+    for (const material of [...Object.values(boltMats), goldMat]) add(new THREE.Mesh(warmGeo, material));
+    for (const kind of VFX_KINDS) add(vfxMesh(kind, 'fire', SPRITE, { opacity: 0.01 }));   // uma paleta basta: o programa é o mesmo
+  }
+  group.position.copy(controls.target);
+  scene.add(group);
+  onProgress(0.1);
+  try {
+    await renderer.compileAsync(scene, camera);
+    onProgress(0.8);
+    renderer.render(scene, camera);   // a tela de carregamento cobre este quadro
+    onProgress(1);
+  } finally {
+    scene.remove(group);
+    disposeSkeletons(group);
+    for (const [pool, material] of pooled) pool.give(material);
+  }
+  if (battle) warmedWorld = world;
 }
 
 // ---------- unidades ----------
@@ -8107,10 +8199,7 @@ function placeParty(first) {
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
-  const start = world.pointAt(game.guideS);
-  follow.set(start.x, 0, start.z - 3);
-  controls.target.copy(follow);
-  camera.position.set(follow.x, 27.6, follow.z + 25.2);   // mesmo ângulo, 20% mais longe: mais campo de visão
+  aimCamera(game.guideS);
   menuOrbit.t = menuOrbit.angle = 0;   // o balanço do menu recomeça do ângulo de jogo
   $('goal').classList.toggle('hidden', !m);
   if (m) {
@@ -8118,6 +8207,14 @@ function placeParty(first) {
     setGoalUI(goalText(m.goal), 0);
   }
   $('goal').classList.remove('warn', 'done');
+}
+
+// câmera no ponto s da estrada (também usada antes da fase, para o aquecimento desenhar o lugar certo)
+function aimCamera(s) {
+  const start = world.pointAt(s);
+  follow.set(start.x, 0, start.z - 3);
+  controls.target.copy(follow);
+  camera.position.set(follow.x, 27.6, follow.z + 25.2);   // mesmo ângulo, 20% mais longe: mais campo de visão
 }
 
 // grupo inicial escolhido: começa a missão (o aldeão entra junto na escolta)
@@ -9346,7 +9443,7 @@ function frame() {
   if (cam.wheel) { cam.userDist = camera.position.distanceTo(controls.target) / cam.zoom; cam.wheel = false; cam.manual = true; }   // o jogador mudou o zoom
   const kick = FX.jolt(real);   // tremida dos golpes fortes, só no quadro desenhado
   camera.position.add(kick);
-  renderer.render(scene, camera);
+  if (!loading.visible) renderer.render(scene, camera);   // atrás da tela de carregamento não desenha: compileAsync compila sem travar
   camera.position.sub(kick);
   updateBars();
   updateSkillBar();
@@ -9700,9 +9797,12 @@ try {
   preparePortraits();
   startGame();
   frame();
+  await warmStage((f) => loading.progress(0.8 + 0.2 * f), false);   // shaders do cenário do menu
+  loading.hide();
   if (new URLSearchParams(location.search).has('bench')) (await import('./bench.js')).runBench(benchApi()).catch((e) => console.error('bench:', e));
 } catch (error) {
   console.error('Falha ao iniciar o jogo:', error);
+  loading.hide({ immediate: true });
   $('overlayText').textContent = 'Não foi possível carregar o jogo. Verifique sua conexão e tente novamente.';
   $('overlay').classList.remove('hidden');
   $('overlayBtn').textContent = 'Tentar novamente';

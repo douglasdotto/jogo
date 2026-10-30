@@ -22,6 +22,8 @@ const GEO = {
   disc: new THREE.CircleGeometry(1, 36), edge: new THREE.RingGeometry(0.92, 1, 48), strip: new THREE.PlaneGeometry(1, 1), torus: new THREE.TorusGeometry(1, 0.12, 6, 24),
 };
 const greenBolt = glowMat(0x6dff8c), purpleBolt = glowMat(0xb35cff), tealBolt = glowMat(0x5ff2ff);
+// materiais compartilhados dos inimigos: a tela de carregamento compila os shaders antes da fase
+export const MONSTER_MATERIALS = [...Object.values(MAT), greenBolt, purpleBolt, tealBolt];
 const mV = new THREE.Vector3();
 const hookPullTo = new THREE.Vector3(), hookPullNext = new THREE.Vector3();
 const dangerRel = new THREE.Vector3(), dangerPerp = new THREE.Vector3(), dangerDestination = new THREE.Vector3();
