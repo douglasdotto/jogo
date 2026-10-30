@@ -183,8 +183,12 @@ const nextNightmareTeamId = (mission) => {
   const selected = new Set(heroes().map((hero) => hero.cfg.id));
   return nightmareTeamPlanIds(mission).find((id) => !selected.has(id)) || null;
 };
+const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses']);
+const shouldRecommendMissionTeam = (mission, difficultyId = difficulty.id) => difficultyId === 'pesadelo'
+  || Boolean(mission && TEAM_RECOMMENDATION_GOALS.has(mission.goal?.type));
 const difficultyTeamRecommendation = (option, mission) => {
-  if (option.id !== 'pesadelo') return '';
+  if (!shouldRecommendMissionTeam(mission, option.id)) return '';
+  const nightmare = option.id === 'pesadelo';
   const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', viking: 'Viking (dano a chefe)', cleric: 'Clériga (suporte/cura)', angel: 'Anjo (dano e cura)' };
   const initial = nightmareTeamIds(mission).map((id) => labels[id]);
   const plan = nightmareTeamPlanIds(mission).map((id) => labels[id]);
@@ -195,10 +199,12 @@ const difficultyTeamRecommendation = (option, mission) => {
   if (initial.length === 1) return mission?.goal?.type === 'duel'
     ? 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.'
     : 'Equipe para 1 herói: Paladino (cura) para sustentar a missão sozinho.';
-  const opening = mission ? `Equipe inicial para ${initial.length} heróis: ${list(initial)}.`
+  const opening = mission ? `${nightmare ? 'Equipe inicial' : 'Equipe recomendada'} para ${initial.length} heróis: ${list(initial)}.`
     : `Equipe para ${initial.length} heróis: ${list(initial)}.`;
   const reserves = plan.slice(initial.length);
-  const reserveLabel = reserves.length === 1 ? 'Reforço sugerido' : 'Reforços sugeridos';
+  const reserveLabel = nightmare
+    ? reserves.length === 1 ? 'Reforço sugerido' : 'Reforços sugeridos'
+    : reserves.length === 1 ? 'Reforço recomendado' : 'Reforços recomendados';
   return reserves.length ? `${opening} ${reserveLabel}: ${list(reserves)}.` : opening;
 };
 let difficulty = DIFFICULTIES[1];
@@ -421,7 +427,7 @@ function showPick(title, sub) {
   const previousSuggestion = game.mission && game.picksLeft > 0 && !game.test
     ? game.campaignSquadSuggestion?.[heroes().length]
     : null;
-  const recommendedId = game.mission && difficulty.id === 'pesadelo'
+  const recommendedId = game.mission && shouldRecommendMissionTeam(game.mission)
     ? nextNightmareTeamId(game.mission)
     : null;
   pick.suggestedId = previousSuggestion;
@@ -475,7 +481,8 @@ function showPick(title, sub) {
     b.setAttribute('role', 'button');
     b.tabIndex = 0;
     b.setAttribute('aria-pressed', 'false');
-    b.setAttribute('aria-label', `${cfg.name}, categoria ${categoryName}${suggested ? ' (sugestão da equipe anterior)' : owned ? ' (já está no grupo)' : open ? '' : ` (★ ${starsToUnlock(cfg.id)} para liberar)`}${recommended ? ' (recomendado para Pesadelo nesta missão)' : ''}`);
+    const recommendationLabel = difficulty.id === 'pesadelo' ? 'recomendado para Pesadelo nesta missão' : 'recomendado para esta missão';
+    b.setAttribute('aria-label', `${cfg.name}, categoria ${categoryName}${suggested ? ' (sugestão da equipe anterior)' : owned ? ' (já está no grupo)' : open ? '' : ` (★ ${starsToUnlock(cfg.id)} para liberar)`}${recommended ? ` (${recommendationLabel})` : ''}`);
     b.setAttribute('aria-disabled', String(owned || !open));
     b.setAttribute('data-hero-id', cfg.id);
     b.style.setProperty('--c', cfg.color[0]);
@@ -981,8 +988,8 @@ function selectCard(i) {
   });
   if (pick.mode === 'hero') {
     setPickClass(pickGroupIndex(pick.options[pick.sel]));
-    const recommendation = game.mission && difficulty.id === 'pesadelo'
-      ? `Sugestão Pesadelo: ${nightmareTeamPlanIds(game.mission).map((id) => VARIANTS.find((cfg) => cfg.id === id)?.name || id).join(' + ')}`
+    const recommendation = game.mission && shouldRecommendMissionTeam(game.mission)
+      ? `${difficulty.id === 'pesadelo' ? 'Sugestão Pesadelo' : 'Equipe recomendada'}: ${nightmareTeamPlanIds(game.mission).map((id) => VARIANTS.find((cfg) => cfg.id === id)?.name || id).join(' + ')}`
       : '';
     $('pickHint').textContent = recommendation ? `${PICK_HERO_HINT} · ${recommendation}` : PICK_HERO_HINT;
     renderInfo(pick.options[pick.sel]);
@@ -2351,8 +2358,7 @@ function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
   for (const candidate of party) {
     if (candidate.dead || (fixedDefenseGoal(goal) && candidate === defenseAnchor(context))) continue;
     const distance = tacticalDistance(candidate.post, target.pos);
-    const normalReach = distance <= LEASH + candidate.range + plateauBonus
-      || tacticalDistance(candidate.pos, target.pos) <= candidate.range + 1.5;
+    const normalReach = distance <= LEASH + candidate.range + plateauBonus;
     if (normalReach || distance > limit) continue;
     if (interceptorRanksBefore(candidate, distance, first, firstDistance)) {
       second = first; secondDistance = firstDistance;
@@ -2450,18 +2456,20 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (lastDefenderThreat) hero.lastDefenderThreatTarget = target;
     return !!objectiveAttack || lastDefenderThreat;
   }
-  const normalReach = fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
+  const postReach = fromPost <= LEASH + hero.range + plateauBonus;
+  const nearTarget = tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
   const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
-  if (huntTarget && !normalReach) {
+  if (huntTarget && !postReach) {
     if (fromPost > HUNT_PURSUIT_LIMIT) return false;
     return hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS);
   }
   // No Trono, o Lich móvel pode parar fora do alcance normal enquanto ataca
   // o grupo. Dois heróis o interceptam por uma distância curta e o resto guarda posição.
-  if (groupedBossGoal(goal) && target.phaseBoss && !normalReach) {
+  if (groupedBossGoal(goal) && target.phaseBoss && !postReach) {
+    if (fromPost > TWIN_BOSS_INTERCEPT) return false;
     return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
   }
-  if (normalReach) return true;
+  if (postReach || nearTarget) return true;
 
   // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
   // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.

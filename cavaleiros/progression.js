@@ -42,7 +42,7 @@ export const ACHIEVEMENTS = [
   { id: 'ossario', icon: '☠', name: 'Ossário', desc: 'Derrote 2000 esqueletos no total.', goal: 2000, count: (s) => s.counters.kills },
   { id: 'ultimates', icon: '☼', name: 'Poder supremo', desc: 'Use 50 ultimates.', goal: 50, count: (s) => s.counters.ultimates },
   { id: 'regicida', icon: '♚', name: 'Regicida', desc: 'Derrote o Rei Esqueleto da fase 6.', test: (s, r) => !!r && clearedPhase(r, 6) },
-  { id: 'lich', icon: '♛', name: 'Fim do Lich', desc: 'Derrote o Lich da fase 12.', test: (s, r) => !!r && r.won && r.last === 12 },
+  { id: 'lich', icon: '♛', name: 'Embate com o Lich', desc: 'Vença um confronto com o Lich na fase 12.', test: (s, r) => !!r && r.won && r.last === 12 },
   { id: 'lich-pesadelo', icon: '☠', name: 'Pesadelo do Lich', desc: 'Derrote o Lich no Pesadelo.', test: (s, r) => !!r && r.won && r.last === 12 && r.difficultyId === 'pesadelo' },
   { id: 'muralha', icon: '⛨', name: 'Muralha intacta', desc: 'Vença uma missão com 4 heróis sem nenhuma queda.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.partySize >= 4 && r.falls === 0 },
   { id: 'perfeito', icon: '★', name: 'Perfeccionista', desc: 'Ganhe 3 estrelas numa missão.', test: (s, r) => !!r && r.stars >= 3 },

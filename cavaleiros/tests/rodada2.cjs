@@ -384,6 +384,9 @@ test('composições Pesadelo cobrem os papéis prioritários de todas as missõe
     'Equipe inicial para 2 heróis: Paladino (cura) e Viking (dano a chefe). Reforços sugeridos: Guardião (proteção) e Clériga (suporte/cura).');
   assert.equal(t.difficultyTeamRecommendation({id:'pesadelo'},t.MISSIONS.find(m=>m.id==='ruinas')),
     'Equipe inicial para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço sugerido: Guardião (proteção).');
+  assert.equal(t.difficultyTeamRecommendation({id:'normal'},t.MISSIONS.find(m=>m.id==='coracao-do-castelo')),
+    'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).',
+    'o trio final também recomenda a composição fora do Pesadelo');
 });
 test('Anjo tem asas animadas e paira acima do chão',()=>{
   clear();const angel=new t.Hero(cfg('angel'));
@@ -442,6 +445,14 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   assert.deepEqual(wantedRoles(true),['Defesa','Cura','Controle']);
   t.setMission(t.MISSIONS.find(m=>m.id==='fazendas'));t.selectCard(at('assassin'));
   assert.ok(pickText().includes('Derrote o chefe')&&/class="covered priority" data-role="Dano a chefe"/.test(pickText()));
+
+  clear();t.setDifficulty(1);t.setMission(t.MISSIONS.find(m=>m.id==='coracao-do-castelo'));t.game.picksLeft=4;t.showPick('','');
+  const finalRecommendation='Paladino + Guardião + Viking + Clériga';
+  assert.equal(t.pick.options[t.pick.sel].id,'paladin','o seletor inicia pela composição recomendada');
+  assert.ok(t.pick.cards[at('paladin')].className.includes('recommended'));
+  assert.ok(elements.get('pickHint').textContent.includes(`Equipe recomendada: ${finalRecommendation}`));
+  t.showDifficulty();t.pick.cards[t.pick.options.findIndex(d=>d.id==='normal')].onfocus();
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).'));
 
   t.setMission(t.MISSIONS.find(m=>m.id==='resgate'));t.game.picksLeft=3;t.game.campaignSquadSuggestion=['berserker','paladin','pyro'];t.setDifficulty(3);t.showPick('','');
   assert.equal(t.pick.sel,at('paladin'),'o primeiro herói sugerido fica em foco');
@@ -1009,7 +1020,8 @@ test('Trono de Ossos intercepta o Lich móvel preso fora da formação, sem pers
   assert.equal(t.chooseHeroTarget(interceptors[0],[lich],.016,team),lich);
   assert.equal(t.chooseHeroTarget(interceptors[1],[lich],.016,team),lich);
   assert.equal(t.chooseHeroTarget(party.find(hero=>!interceptors.includes(hero)),[lich],.016,team),null,'os demais heróis mantêm a formação');
-  lich.pos.z=-301;
+  lich.pos.z=-301;interceptors[0].pos.copy(lich.pos);
+  assert.equal(t.canHeroReachTarget(interceptors[0],lich,team),false,'o chefe além da corda não continua perseguido por estar perto do herói');
   const distant=t.makeTargetContext();
   assert.ok(party.every(hero=>!t.canHeroReachTarget(hero,lich,distant)),'o chefe além do limite tático não arrasta a equipe pelo mapa');
   clear();
@@ -1218,6 +1230,9 @@ test('Caçada: dois heróis interceptam o alvo marcado dentro do limite e priori
   assert.equal(t.chooseHeroTarget(first,[minion,mark],.016,team),mark);
   assert.equal(t.chooseHeroTarget(second,[minion,mark],.016,team),mark);
   assert.equal(t.chooseHeroTarget(third,[minion,mark],.016,team),minion,'um terceiro herói mantém a formação');
+  first.pos.set(0,0,25);mark.pos.set(0,0,26);
+  assert.equal(t.canHeroReachTarget(first,mark,team),false,'a proximidade depois de iniciar a perseguição não permite ultrapassar o limite');
+  assert.equal(t.canHeroReachTarget(second,mark,team),false,'o limite também vale para o segundo interceptador');
   const priest=new t.Skeleton('Priest',7);priest.spawning=false;priest.pos.set(0,0,.5);
   mark.pos.set(0,0,25);
   first.targetFocus=priest;first.targetFocusT=1;second.targetFocus=priest;second.targetFocusT=1;
@@ -2593,6 +2608,9 @@ test('missões novas: ordem, câmara depois do castelo e nós do mapa sem sobrep
     const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
     assert.ok(i('santuario')<i('chamas')&&i('chamas')<i('fazendas'));assert.ok(i('lago')<i('duelo')&&i('duelo')<i('caca'));
     assert.deepEqual([...t.MISSIONS.slice(-4).map(m=>m.id)],['castelo','cripta','trono','coracao-do-castelo']);
+    assert.match(mission('castelo').ending,/recua para o salão do trono/,'a batalha do castelo prepara o confronto seguinte');
+    assert.match(mission('trono').ending,/sombra escapa/,'a fuga da sombra explica sua volta na câmara final');
+    assert.match(mission('coracao-do-castelo').story,/sombra do Lich se refaz/,'a missão final conclui a continuidade do vilão');
     for(const id of ['cripta','trono'])assert.match(mission(id).chapter,/Além do Castelo/);
     assert.match(mission('coracao-do-castelo').chapter,/coração sombrio/);
     for(const id of ['chamas','duelo','cripta','trono']){
