@@ -34,7 +34,7 @@ const recipes = fs.readFileSync(path.join(__dirname, '..', 'characters.js'), 'ut
 const slice = recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '');
 vm.runInNewContext(`${slice}\nglobalThis.result = CHARACTERS;`, context);
 const heroes = [
-  ...LOOK_PREVIEW.map((v) => ({ id: v.id, model: v.model === 'Rogue_Hooded' ? 'Rogue' : v.model, paint: LOOKS[v.id].paint })),
+  ...LOOK_PREVIEW.filter((v) => !v.recipe).map((v) => ({ id: v.id, model: v.model === 'Rogue_Hooded' ? 'Rogue' : v.model, paint: LOOKS[v.id].paint })),
   ...context.result.map((c) => ({ id: c.id, model: c.base, paint: c.paint })),
 ];
 assert.equal(heroes.length, 27, '27 variantes com aparência própria');
@@ -87,5 +87,28 @@ assert.deepEqual(Array.from(LOOK_PREVIEW.find((hero) => hero.id === 'monk').use)
 assert.ok(has('alchemist', 'goggles', 'head') && has('alchemist', 'flaskBelt', 'hips') && has('alchemist', 'flask', 'handslotr'), 'Alquimista com óculos, cinto de frascos e frasco na mão');
 assert.ok(['Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'].every((w) => LOOKS.alchemist.hide.includes(w)), 'Alquimista não mostra livro, varinha nem cajado');
 for (const id of ['archer', 'monk', 'alchemist']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
+
+// cada variante do jogo tem aparência própria (LOOKS ou receita de characters.js) e aparece na vitrine,
+// na mesma ordem de VARIANTS; antes Engenheira, Domador e Oráculo entravam como Mago/Bárbaro sem pintura
+const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+const variantBlock = main.slice(main.indexOf('const VARIANTS = ['), main.indexOf('].map((v) => ({ ...HEROES'));
+const variants = variantBlock.split(/\n  \{ id: '/).slice(1).map((body) => ({ id: body.slice(0, body.indexOf("'")), recipe: /recipe: CHARACTERS\[(\d+)\]/.exec(body)?.[1] }));
+assert.equal(variants.length, 27, 'VARIANTS lido de main.js');
+assert.deepEqual(Array.from(LOOK_PREVIEW, (v) => v.id), variants.map((v) => v.id), 'LOOK_PREVIEW lista todas as variantes na ordem de VARIANTS');
+for (const v of variants) {
+  const preview = LOOK_PREVIEW.find((p) => p.id === v.id);
+  const recipe = v.recipe === undefined ? null : context.result[+v.recipe];
+  if (v.recipe !== undefined) {
+    assert.ok(recipe, `${v.id}: receita existe`);
+    assert.equal(preview.recipe, recipe.id, `${v.id}: vitrine aponta a mesma receita do jogo`);
+  } else {
+    assert.ok(LOOKS[v.id], `${v.id}: sem receita, precisa de LOOKS próprio`);
+    assert.ok(!preview.recipe, `${v.id}: vitrine sem receita`);
+  }
+  for (const extra of (recipe || LOOKS[v.id]).extras || []) {
+    assert.ok(recipes.includes(`  ${extra.type}(`), `${v.id}: acessório ${extra.type} existe`);
+    assert.ok(extra.bone, `${v.id}: acessório ${extra.type} preso a um osso`);
+  }
+}
 
 console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador e Oráculo com identidades próprias; 27 paletas distintas');

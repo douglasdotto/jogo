@@ -292,7 +292,8 @@ export const LOOKS = {
   },
 };
 
-// para a vitrine: modelo e armas visíveis de cada variante (o jogo usa a lista de VARIANTS em main.js)
+// para a vitrine: modelo e armas visíveis de cada variante, na ordem de VARIANTS em main.js (o jogo usa aquela lista);
+// as variantes montadas por receita (characters.js) apontam a receita em "recipe" e usam as armas dela
 export const LOOK_PREVIEW = [
   { id: 'paladin', name: 'Paladino', model: 'Knight', use: ['1H_Sword', 'Round_Shield'] },
   { id: 'guardian', name: 'Guardião', model: 'Knight', use: ['1H_Sword', 'Rectangle_Shield'] },
@@ -307,9 +308,20 @@ export const LOOK_PREVIEW = [
   { id: 'crossbow', name: 'Besteiro', model: 'Rogue', use: ['2H_Crossbow'] },
   { id: 'ninja', name: 'Ninja', model: 'Rogue_Hooded', use: ['Knife', 'Throwable'] },
   { id: 'duelist', name: 'Duelista', model: 'Rogue', use: [] },
+  { id: 'king', name: 'Rei Dourado', model: 'Knight', recipe: 'rei' },
+  { id: 'iceviking', name: 'Viking do Gelo', model: 'Barbarian', recipe: 'viking' },
+  { id: 'necro', name: 'Necromante', model: 'Skeleton_Mage', recipe: 'necromante' },
+  { id: 'druid', name: 'Druida', model: 'Rogue', recipe: 'druida' },
+  { id: 'cleric', name: 'Clériga', model: 'Mage', recipe: 'cleric' },
+  { id: 'bard', name: 'Bardo', model: 'Rogue', recipe: 'bard' },
+  { id: 'angel', name: 'Anjo', model: 'Mage', recipe: 'angel' },
+  { id: 'chronist', name: 'Cronomante', model: 'Rogue', recipe: 'chronist' },
   { id: 'archer', name: 'Arqueira', model: 'Rogue_Hooded', use: [] },
   { id: 'monk', name: 'Monge', model: 'Barbarian', use: [] },
   { id: 'alchemist', name: 'Alquimista', model: 'Mage', use: [] },
+  { id: 'engineer', name: 'Engenheira', model: 'Rogue', recipe: 'engineer' },
+  { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
+  { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],

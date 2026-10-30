@@ -144,16 +144,17 @@ export const CHARACTERS = [
     id: 'engineer', name: 'Engenheira', desc: 'Inventora de campo equipada para montar dispositivos.', color: ['#f2b36b', '#a95331'],
     base: 'Rogue',
     shape: silhouette('Rogue', { torso: 1.04, arms: 1.02, legs: 1, height: 1, depth: 1.04 }),
-    hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
+    hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '2H_Crossbow', 'Throwable'],   // besta de mão fica: o ataque é 1H_Ranged_Shoot
     paint: {
       ...rogueOutfit({ cloth: '#e37b32', trim: '#f0c779', sleeves: '#d6a16f', leather: '#48332f', pants: '#4b5057', boots: '#332b30', gloves: '#bc783f', metal: '#e6b454' }),
       Rogue_Head: { face: { skin: '#dca77a', hair: '#493126', eyes: '#f3c46a' } },
+      '1H_Crossbow': { tint: '#d8a24a', amount: 0.55 },   // besta de latão
     },
     extras: [
-      { type: 'goggles', color: 0xc88937, lens: 0x8df1de, strap: 0x593b2c, y: 0.63 },
+      { type: 'goggles', bone: 'head', color: 0xc88937, lens: 0x8df1de, strap: 0x593b2c, y: 0.63 },
       { type: 'toolPack', bone: 'chest', body: 0x754a3b, metal: 0xd5a349 },
       { type: 'toolBelt', bone: 'hips', leather: 0x46312d, metal: 0xe4bd5a },
-      { type: 'wrench', bone: 'handslotr', metal: 0xdba84e, grip: 0x593b2c },
+      { type: 'wrench', bone: 'handslotl', metal: 0xdba84e, grip: 0x593b2c },
       { type: 'motes', bone: 'root', color: 0xf2b36b, n: 3, size: 0.04, y: 0.9 },
     ],
   },
@@ -161,14 +162,15 @@ export const CHARACTERS = [
     id: 'beast_tamer', name: 'Domador', desc: 'Batedor que luta em sintonia com sua fera companheira.', color: ['#a6d77a', '#477c45'],
     base: 'Barbarian',
     shape: silhouette('Barbarian', { torso: 0.96, arms: 0.96, legs: 1, height: 1.02, depth: 0.96 }),
-    hide: ['Barbarian_Hat', 'Barbarian_Cape', '1H_Axe', '1H_Axe_Offhand', '2H_Axe', 'Barbarian_Round_Shield', 'Mug'],
+    hide: ['Barbarian_Hat', 'Barbarian_Cape', '1H_Axe_Offhand', '2H_Axe', 'Barbarian_Round_Shield', 'Mug'],   // machado de mão fica: o ataque é 1H_Melee_Attack_Chop
     paint: {
       Barbarian_Body: { tint: '#638c45', amount: 0.78 }, Barbarian_ArmLeft: { tint: '#638c45', amount: 0.65 }, Barbarian_ArmRight: { tint: '#638c45', amount: 0.65 },
       Barbarian_LegLeft: { tint: '#59402c', amount: 0.72 }, Barbarian_LegRight: { tint: '#59402c', amount: 0.72 },
       Barbarian_Head: { face: { skin: '#c98f62', hair: '#50351f', eyes: '#a6df65' } },
+      '1H_Axe': { tint: '#c8b48a', amount: 0.45 },   // machadinha de osso e couro
     },
     extras: [
-      { type: 'animalEars', bone: 'head', fur: 0x705039, inner: 0xd59a75 },
+      { type: 'wolfHood', bone: 'head' },
       { type: 'furMantle', bone: 'chest', color: 0x766147 },
       { type: 'trailPouch', bone: 'chest', leather: 0x59402c, trim: 0xb28a50 },
       { type: 'whistle', bone: 'chest', metal: 0xd6b85d, cord: 0x365b38 },
@@ -1169,14 +1171,21 @@ const ACCESSORIES = {
     g.add(new THREE.Mesh(merged(jaw), lambert(metal)));
     return g;
   },
-  // orelhas de lobo sobre a testa, para diferenciar o batedor sem barba ou elmo
-  animalEars({ fur = 0x705039, inner = 0xd59a75 } = {}) {
-    const g = new THREE.Group(), outers = [], inners = [];
-    for (const s of [-1, 1]) {
-      outers.push(piece(new THREE.ConeGeometry(0.18, 0.42, 6), [s * 0.34, 0.62, -0.01], [0, 0, -s * 0.18], [1, 1, 0.62]));
-      inners.push(piece(new THREE.ConeGeometry(0.09, 0.25, 5), [s * 0.34, 0.65, 0.085], [0, 0, -s * 0.18], [1, 1, 0.35]));
-    }
-    g.add(new THREE.Mesh(merged(outers), lambert(fur)), new THREE.Mesh(merged(inners), lambert(inner)));
+  // capuz de pele de lobo: calota com focinho sobre a testa, orelhas em pé e pele caindo na nuca;
+  // mesma pelagem da fera companheira, para o par se reconhecer de longe
+  wolfHood({ fur = 0x8f7b66, light = 0xeadcc4, dark = 0x3e322b, y = 0.5 } = {}) {
+    const g = new THREE.Group();
+    const pelt = [
+      piece(new THREE.SphereGeometry(0.6, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), [0, y, -0.03], [-0.12, 0, 0], [1.04, 0.92, 1.06]),
+      piece(new THREE.CylinderGeometry(0.2, 0.26, 0.4, 7), [0, y + 0.3, 0.5], [Math.PI / 2 + 0.35, 0, 0], [1, 1, 0.62]),   // focinho
+      piece(new THREE.ConeGeometry(0.42, 0.62, 7), [0, y - 0.26, -0.5], [-0.5, 0, Math.PI], [1.1, 1, 0.5]),   // pele na nuca
+    ];
+    for (const s of [-1, 1]) pelt.push(piece(new THREE.ConeGeometry(0.15, 0.34, 4), [s * 0.33, y + 0.58, -0.04], [0, 0, -s * 0.28], [1, 1, 0.6]));
+    const inner = [piece(new THREE.CylinderGeometry(0.16, 0.2, 0.08, 7), [0, y + 0.18, 0.62], [0.35, 0, 0], [1, 1, 0.7])];   // queixo claro do focinho
+    for (const s of [-1, 1]) inner.push(piece(new THREE.ConeGeometry(0.08, 0.22, 4), [s * 0.33, y + 0.55, 0.02], [0, 0, -s * 0.28], [1, 1, 0.4]));
+    const nose = [piece(new THREE.SphereGeometry(0.07, 6, 4), [0, y + 0.4, 0.69])];
+    for (const s of [-1, 1]) nose.push(piece(new THREE.SphereGeometry(0.045, 6, 4), [s * 0.14, y + 0.42, 0.53]));
+    g.add(new THREE.Mesh(merged(pelt), lambert(fur)), new THREE.Mesh(merged(inner), lambert(light)), new THREE.Mesh(merged(nose), lambert(dark)));
     return g;
   },
   // bolsa de trilha atravessada no peito, com mapas e tiras de couro
@@ -1278,3 +1287,131 @@ const ACCESSORIES = {
     return g;
   },
 };
+
+// ---------- fera do Domador: lobo low-poly montado em peças, com pernas, cauda e mandíbula articuladas ----------
+// Geometrias juntas por material e compartilhadas entre todas as feras (montadas uma vez); cada fera só cria os
+// próprios materiais, para piscar ao levar golpe e brilhar no Alfa sem afetar outra.
+const BEAST_COLORS = { fur: 0x8f7b66, light: 0xeadcc4, dark: 0x3e322b, eye: 0x1e1612, shine: 0xffffff, collar: 0x4f7a3c, tag: 0xd6b85d, spirit: 0xffe6a1 };
+let beastGeo = null;
+function beastGeometries() {
+  if (beastGeo) return beastGeo;
+  const sphere = (r, w = 8, h = 6) => new THREE.SphereGeometry(r, w, h);
+  const leg = (front) => ({   // coxa de pelo + pata escura; o pivô fica no ombro/quadril (origem)
+    fur: merged([piece(new THREE.CylinderGeometry(front ? 0.1 : 0.12, 0.075, 0.36, 7), [0, -0.17, 0]), piece(sphere(front ? 0.11 : 0.14), [0, -0.01, front ? 0.01 : -0.02], [0, 0, 0], [1, 1.1, 1.2])]),
+    dark: merged([piece(sphere(0.095, 7, 5), [0, -0.36, 0.035], [0, 0, 0], [1, 0.62, 1.3])]),
+  });
+  beastGeo = {
+    body: {   // tronco oval, peito claro e juba fofa em volta do pescoço
+      fur: merged([
+        piece(sphere(0.42, 10, 7), [0, 0, -0.06], [0, 0, 0], [0.82, 0.74, 1.18]),
+        piece(sphere(0.3, 9, 6), [0, 0.1, 0.28], [0, 0, 0], [1.25, 1.12, 0.95]),
+        ...[-1, 1].map((s) => piece(new THREE.ConeGeometry(0.12, 0.3, 4), [s * 0.27, 0.2, 0.25], [0.6, 0, -s * 0.9])),
+        piece(new THREE.ConeGeometry(0.12, 0.3, 4), [0, 0.36, 0.2], [-0.9, 0, 0]),
+      ]),
+      light: merged([piece(sphere(0.24, 8, 6), [0, -0.08, 0.38], [0, 0, 0], [1.05, 1.05, 0.7]), piece(sphere(0.2, 8, 5), [0, -0.2, -0.02], [0, 0, 0], [1.1, 0.5, 1.6])]),
+    },
+    collar: merged([piece(new THREE.TorusGeometry(0.27, 0.045, 5, 14), [0, 0.12, 0.33], [1.2, 0, 0], [1.1, 1, 1])]),
+    tag: merged([piece(new THREE.OctahedronGeometry(0.06), [0, -0.12, 0.47], [0, 0, 0], [1, 1.2, 0.5])]),
+    head: {   // crânio redondo de filhote, bochechas claras, focinho curto e olhos grandes
+      fur: merged([
+        piece(sphere(0.3, 9, 7), [0, 0, 0], [0, 0, 0], [1.05, 0.95, 1]),
+        piece(new THREE.CylinderGeometry(0.1, 0.15, 0.32, 7), [0, -0.04, 0.3], [Math.PI / 2 + 0.12, 0, 0], [1.05, 1, 0.8]),
+        ...[-1, 1].map((s) => piece(new THREE.ConeGeometry(0.11, 0.28, 4), [s * 0.17, 0.3, -0.04], [-0.12, Math.PI / 4, -s * 0.32], [1, 1, 0.7])),
+      ]),
+      light: merged([
+        ...[-1, 1].map((s) => piece(sphere(0.13, 7, 5), [s * 0.17, -0.11, 0.13], [0, 0, 0], [1, 0.8, 1])),
+        piece(new THREE.CylinderGeometry(0.09, 0.13, 0.1, 7), [0, -0.11, 0.34], [Math.PI / 2 + 0.12, 0, 0]),
+        ...[-1, 1].map((s) => piece(new THREE.ConeGeometry(0.06, 0.17, 4), [s * 0.16, 0.28, 0.0], [-0.12, Math.PI / 4, -s * 0.32], [1, 1, 0.4])),
+      ]),
+      dark: merged([piece(sphere(0.06, 7, 5), [0, 0.0, 0.46], [0, 0, 0], [1.3, 0.9, 1])]),
+      eye: merged([-1, 1].map((s) => piece(sphere(0.06, 7, 5), [s * 0.13, 0.06, 0.24], [0, 0, 0], [0.9, 1.05, 0.6]))),
+      shine: merged([-1, 1].map((s) => piece(sphere(0.02, 5, 4), [s * 0.12 + 0.02, 0.09, 0.28]))),
+    },
+    jaw: merged([piece(new THREE.BoxGeometry(0.15, 0.05, 0.24), [0, -0.02, 0.13])]),
+    tongue: merged([piece(new THREE.BoxGeometry(0.08, 0.02, 0.12), [0, 0.01, 0.12])]),
+    tail: {   // cauda espessa em duas bolas, ponta clara
+      fur: merged([piece(sphere(0.13, 7, 5), [0, 0.06, -0.1], [0, 0, 0], [0.9, 0.9, 1.3]), piece(sphere(0.12, 7, 5), [0, 0.16, -0.3], [0, 0, 0], [1, 1, 1.4])]),
+      light: merged([piece(sphere(0.085, 7, 5), [0, 0.24, -0.46], [0, 0, 0], [1, 1, 1.2])]),
+    },
+    front: leg(true), back: leg(false),
+    aura: merged([piece(new THREE.TorusGeometry(0.62, 0.03, 4, 24), [0, 0, 0], [Math.PI / 2, 0, 0])]),
+  };
+  return beastGeo;
+}
+
+export function buildBeast(colors = BEAST_COLORS) {
+  const geo = beastGeometries();
+  const mat = {
+    fur: lambert(colors.fur), light: lambert(colors.light), dark: lambert(colors.dark),
+    eye: lambert(colors.eye, { emissive: 0x000000 }), shine: new THREE.MeshBasicMaterial({ color: colors.shine }),
+    collar: lambert(colors.collar), tag: lambert(colors.tag, { emissive: 0x4a390a, emissiveIntensity: 0.3 }),
+    tongue: lambert(0xe86a7a), spirit: new THREE.MeshBasicMaterial({ color: colors.spirit, transparent: true, opacity: 0.7, depthWrite: false }),
+  };
+  const mesh = (g, m, parent) => { const o = new THREE.Mesh(g, m); o.castShadow = m !== mat.spirit && m !== mat.shine; parent.add(o); return o; };
+  const group = (parent, pos) => { const g = new THREE.Group(); g.position.fromArray(pos); parent.add(g); return g; };
+  const root = new THREE.Group();
+  const body = group(root, [0, 0.62, 0]);
+  mesh(geo.body.fur, mat.fur, body); mesh(geo.body.light, mat.light, body);
+  mesh(geo.collar, mat.collar, body); mesh(geo.tag, mat.tag, body);
+  const head = group(body, [0, 0.36, 0.42]);
+  for (const k of ['fur', 'light', 'dark', 'eye', 'shine']) mesh(geo.head[k], mat[k], head);
+  const jaw = group(head, [0, -0.14, 0.14]);
+  mesh(geo.jaw, mat.light, jaw); mesh(geo.tongue, mat.tongue, jaw);
+  const tail = group(body, [0, 0.12, -0.5]);
+  mesh(geo.tail.fur, mat.fur, tail); mesh(geo.tail.light, mat.light, tail);
+  const legs = [[-1, 0.27, true], [1, 0.27, true], [-1, -0.36, false], [1, -0.36, false]].map(([s, z, front]) => {
+    const leg = group(body, [s * 0.2, -0.16, z]);
+    const g = front ? geo.front : geo.back;
+    mesh(g.fur, mat.fur, leg); mesh(g.dark, mat.dark, leg);
+    return leg;
+  });
+  const aura = mesh(geo.aura, mat.spirit, root);   // anel do Alfa: só aparece fortalecida
+  aura.position.y = 0.06;
+  aura.visible = false;
+  // flash: materiais que piscam com o golpe (os de brilho próprio ficam de fora)
+  return { root, body, head, jaw, tail, legs, aura, mat, flash: [mat.fur, mat.light, mat.dark], materials: Object.values(mat), phase: 0, empower: 0 };
+}
+
+// pose da fera a cada quadro: trote (pares diagonais), cauda abanando, bote com mordida, uivo e brilho do Alfa.
+// s: { speed (0..1), bite (progresso 0..1 do ataque ou -1), howl (0..1 ou -1), empower (bool) }
+export function animateBeast(b, t, dt, s) {
+  const run = Math.min(1, s.speed || 0);
+  if (run > 0.05) b.phase += dt * (5 + 8 * run);
+  const p = b.phase, step = Math.sin(p);
+  b.legs.forEach((leg, i) => { leg.rotation.x = Math.sin(p + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.75 * run; });
+  let y = 0.62 + Math.abs(Math.cos(p)) * 0.07 * run + Math.sin(t * 2.4) * 0.012 * (1 - run);
+  let z = 0, pitch = -step * 0.04 * run, headX = Math.sin(p * 2) * 0.05 * run + Math.sin(t * 1.3) * 0.04 * (1 - run), jaw = 0.05;
+  let tailY = Math.sin(t * (6 + 6 * run)) * 0.45, tailX = 0.55 - run * 0.3;
+  if (s.bite >= 0) {   // agacha, dá o bote com a boca aberta e fecha a mordida em ~40% (quando o golpe acerta)
+    const k = s.bite;
+    const crouch = k < 0.25 ? k / 0.25 : Math.max(0, 1 - (k - 0.25) / 0.12);
+    const lunge = k < 0.25 ? 0 : k < 0.42 ? (k - 0.25) / 0.17 : Math.max(0, 1 - (k - 0.42) / 0.5);
+    y -= crouch * 0.12;
+    z += lunge * 0.42 - crouch * 0.1;
+    pitch += crouch * 0.12 - lunge * 0.18;
+    headX += crouch * 0.18 - lunge * 0.1;
+    jaw = k < 0.25 ? 0.05 + k * 2 : k < 0.38 ? 0.55 : Math.max(0.05, 0.55 - (k - 0.38) * 6);
+    tailX -= crouch * 0.3;
+  }
+  if (s.howl >= 0) {   // senta um pouco e uiva para o alto
+    const k = Math.sin(Math.min(1, s.howl) * Math.PI);
+    pitch -= k * 0.3; headX -= k * 0.65; jaw = Math.max(jaw, k * 0.45); y -= k * 0.05; tailY *= 1 - k;
+  }
+  b.body.position.y = y;
+  b.body.position.z = z;
+  b.body.rotation.x = pitch;
+  b.head.rotation.x = headX;
+  b.jaw.rotation.x = jaw;
+  b.tail.rotation.set(tailX, tailY, 0);
+  // Alfa: brilho dourado nos olhos e anel girando nos pés, aceso e apagado aos poucos
+  b.empower += ((s.empower ? 1 : 0) - b.empower) * Math.min(1, dt * 4);
+  b.aura.visible = b.empower > 0.02;
+  if (b.aura.visible) {
+    b.aura.rotation.y = t * 1.5;
+    b.aura.scale.setScalar(1 + Math.sin(t * 5) * 0.06);
+    b.mat.spirit.opacity = 0.65 * b.empower;
+  }
+  const glow = b.empower > 0.5 ? 0xffc23a : 0x000000;
+  if (b.glow !== glow) { b.mat.eye.emissive.setHex(glow); b.glow = glow; }
+  b.body.scale.setScalar(1 + b.empower * 0.12);
+}

@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createWorld, biomeForSeed } from './world.js';
-import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook } from './characters.js';
+import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook, buildBeast, animateBeast } from './characters.js';
 import { LOOKS } from './looks.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
@@ -104,11 +104,11 @@ const VARIANTS = [
   { id: 'alchemist', names: ['Alquimista', 'Mestre dos Frascos', 'Grão-Transmutador'], desc: 'Frascos de veneno e de tônico.', ability: 'Frasco', color: ['#d8f59a', '#8cb83f'],
     use: [], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 200, dmg: 14, range: 6, speed: 3, cooldown: 1.15, ranged: true, splash: 0.6, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'alchemist' },
   { id: 'engineer', names: ['Engenheira', 'Inventora de Batalha', 'Mestra das Engrenagens'], desc: 'Constrói uma torre automática e desmonta a formação inimiga.', ability: 'Torreta sentinela', color: ['#9be8db', '#3b9c94'],
-    use: ['1H_Wand', 'Spellbook'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 190, dmg: 19, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['1H_Ranged_Shoot'], classId: 2, pickGroup: 'engineer' },
+    stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 190, dmg: 19, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['1H_Ranged_Shoot'], classId: 2, pickGroup: 'engineer', recipe: CHARACTERS[8] },
   { id: 'beast_tamer', names: ['Domador', 'Guardião da Matilha', 'Lenda Selvagem'], desc: 'Chama uma fera aliada que protege o grupo e caça ameaças.', ability: 'Companheiro feral', color: ['#d2c28e', '#8c6d36'],
-    use: ['1H_Axe'], stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop'], classId: 1, pickGroup: 'beast-tamer' },
+    stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop'], classId: 1, pickGroup: 'beast-tamer', recipe: CHARACTERS[9] },
   { id: 'oracle', names: ['Oráculo', 'Vidente do Véu', 'Profeta das Estrelas'], desc: 'Prevê ataques anunciados e interrompe os golpes dos chefes.', ability: 'Estilhaço do augúrio', color: ['#c6b4ff', '#7862c5'],
-    use: ['Spellbook', '1H_Wand'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle' },
+    stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle', recipe: CHARACTERS[10] },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   hide: v.recipe ? [] : HEROES[v.classId].weapons.filter((w) => !v.use.includes(w)),
 }));
@@ -4011,6 +4011,13 @@ function beastCall(h, beast) {
       V(at.x + Math.cos(angle) * radius, at.y + 0.2, at.z + Math.sin(angle) * radius),
       V(rnd(0.6), 1.5 + Math.random() * 1.3, rnd(0.6)), 0.65, { size: 1.15, gravity: -0.5 });
   }
+  // tufos de pelo (mesmas cores da fera) saltando do chão em volta de onde ela surge
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * TAU;
+    particle(puffGeo, i % 2 ? 0x8f7b66 : 0xeadcc4, V(at.x + Math.cos(angle) * 0.4, at.y + 0.3, at.z + Math.sin(angle) * 0.4),
+      V(Math.cos(angle) * 2.2, 2.4, Math.sin(angle) * 2.2), 0.55, { solid: true, size: 0.7, gravity: 7 });
+  }
+  beast.howl?.();   // a fera chega uivando
   popText(at, h.cfg.id === 'beast_tamer' ? 'Matilha!' : 'Alfa!', 'evolve');
 }
 
@@ -5115,6 +5122,7 @@ class Hero extends Unit {
         const caught = attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius);
         effect = () => {
           const protector = companion || this;
+          companion?.howl();   // o rugido sai da fera
           for (const enemy of caught) { enemy.taunt = protector; enemy.tauntT = (skill.duration || 4) * power; enemy.pendingHit = null; }
           for (const ally of party) if (ally.pos.distanceTo(center) <= radius) ally.guardT = Math.max(ally.guardT, 2.5 * power);
           wave(center, color, 0.25, radius, 0.75);
@@ -5932,54 +5940,35 @@ class BeastCompanion extends Unit {
     this.bar.classList.add('ally');
     this.root.traverse((object) => { if (object.isMesh) object.visible = false; });
 
-    this.beastVisual = new THREE.Group();
-    this.root.add(this.beastVisual);
-    this.beastMaterials = {
-      fur: new THREE.MeshStandardMaterial({ color: 0x80613f, roughness: 0.86, flatShading: true }),
-      dark: new THREE.MeshStandardMaterial({ color: 0x443629, roughness: 0.9, flatShading: true }),
-      eyes: new THREE.MeshBasicMaterial({ color: 0xffd578 }),
-      spirit: new THREE.MeshBasicMaterial({ color: 0xcbb36f, transparent: true, opacity: 0.75 }),
-    };
-    this.beastGeometries = [];
-    const piece = (geometry, material, position, scale = null) => {
-      this.beastGeometries.push(geometry);
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(...position);
-      if (scale) mesh.scale.set(...scale);
-      mesh.castShadow = true;
-      this.beastVisual.add(mesh);
-      return mesh;
-    };
-    piece(new THREE.IcosahedronGeometry(0.52, 1), this.beastMaterials.fur, [0, 0.68, -0.02], [1.05, 0.78, 1.45]);
-    const head = new THREE.Group();
-    head.position.set(0, 1.05, 0.55);
-    this.beastVisual.add(head);
-    const headMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), this.beastMaterials.fur);
-    headMesh.scale.set(1, 0.88, 1.06); headMesh.castShadow = true; head.add(headMesh); this.beastGeometries.push(headMesh.geometry);
-    const muzzle = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), this.beastMaterials.dark);
-    muzzle.position.set(0, -0.12, 0.35); muzzle.scale.set(1.2, 0.7, 0.9); head.add(muzzle); this.beastGeometries.push(muzzle.geometry);
-    for (const side of [-1, 1]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.32, 5), this.beastMaterials.dark);
-      ear.position.set(side * 0.3, 0.32, 0.08); ear.rotation.z = side * -0.3; head.add(ear); this.beastGeometries.push(ear.geometry);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), this.beastMaterials.eyes);
-      eye.position.set(side * 0.17, -0.03, 0.32); head.add(eye); this.beastGeometries.push(eye.geometry);
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.5, 6), this.beastMaterials.dark);
-      leg.position.set(side * 0.32, 0.28, 0.28); leg.rotation.x = 0.14; this.beastVisual.add(leg); this.beastGeometries.push(leg.geometry);
-      const backLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.52, 6), this.beastMaterials.dark);
-      backLeg.position.set(side * 0.32, 0.27, -0.48); backLeg.rotation.x = -0.14; this.beastVisual.add(backLeg); this.beastGeometries.push(backLeg.geometry);
-    }
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.07, 5, 12), this.beastMaterials.spirit);
-    collar.rotation.x = Math.PI / 2; collar.position.set(0, 0.7, 0.02); this.beastVisual.add(collar); this.beastGeometries.push(collar.geometry);
-    this.beastHead = head;
-    this.beastLegs = this.beastVisual.children.filter((object) => object.geometry?.type === 'CylinderGeometry');
+    // lobo montado em peças (characters.js): geometrias compartilhadas, materiais próprios para piscar e brilhar
+    this.beast = buildBeast();
+    this.root.add(this.beast.root);
+    this.mats.push(...this.beast.flash);
+    this.age = 0;
+    this.biteT = 0;
+    this.biteDur = 1;
+    this.howlT = 0.9;   // entra uivando, com o pop elástico de quem acabou de surgir
+    this.popT = 0;
     poof(this.pos, 0.9);
     wave(this.pos, 0xcbb36f, 0.2, 1.7, 0.55);
   }
 
   remove() {
     super.remove();
-    for (const geometry of this.beastGeometries || []) geometry?.dispose?.();
-    for (const material of Object.values(this.beastMaterials || {})) material.dispose?.();
+    for (const material of this.beast.materials) material.dispose();   // geometrias são compartilhadas entre as feras
+  }
+
+  howl() { this.howlT = 0.9; }
+
+  pose(dt) {
+    this.biteT = Math.max(0, this.biteT - dt);
+    this.howlT = Math.max(0, this.howlT - dt);
+    animateBeast(this.beast, this.age, dt, {
+      speed: this.vel.length() / this.speed,
+      bite: this.biteT > 0 ? 1 - this.biteT / this.biteDur : -1,
+      howl: this.howlT > 0 ? 1 - this.howlT / 0.9 : -1,
+      empower: this.empowerT > 0,
+    });
   }
 
   update(dt) {
@@ -5987,10 +5976,11 @@ class BeastCompanion extends Unit {
     this.updateCommon(dt);
     this.life -= dt;
     this.empowerT = Math.max(0, this.empowerT - dt);
-    this.age = (this.age || 0) + dt;
+    this.age += dt;
     if (this.dead || this.life <= 0 || this.summoner.dead || !units.includes(this.summoner)) {
       poof(this.pos, 0.9); this.remove(); return;
     }
+    this.pose(dt);
     if (game.over || game.state !== 'fight' || this.busy > 0) return;
     const targets = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((enemy) => !enemy.spawning);
     const threats = this.threatScratch;
@@ -6006,6 +5996,7 @@ class BeastCompanion extends Unit {
         const duration = this.once('1H_Melee_Attack_Chop', 1.25);
         this.busy = duration * 0.9;
         this.attackTimer = this.cooldown;
+        this.biteT = this.biteDur = duration * 0.9;   // bote: agacha, salta e fecha a mordida no golpe (36%)
         const enemy = target;
         this.pendingHit = { target: enemy, t: duration * 0.36, effect: () => {
           if (enemy.dead || !units.includes(enemy)) return;
@@ -6018,10 +6009,6 @@ class BeastCompanion extends Unit {
         enemy.taunt = this; enemy.tauntT = 0.65; enemy.pendingHit = null;
       }
     } else if (this.pos.distanceTo(this.summoner.pos) > 2) this.moveTo(this.summoner.pos, dt);
-    const gait = this.moving ? Math.sin(this.age * 13) * 0.09 : Math.sin(this.age * 2.6) * 0.025;
-    this.beastVisual.position.y = Math.abs(gait) * (this.moving ? 0.9 : 0.3);
-    this.beastVisual.rotation.z = this.moving ? gait * 0.4 : 0;
-    this.beastHead.rotation.x = this.moving ? Math.sin(this.age * 13 + 0.4) * 0.07 : 0;
   }
 }
 

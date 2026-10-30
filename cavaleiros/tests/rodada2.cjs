@@ -73,7 +73,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
-  newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop,
+  newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop, buildBeast:()=>({root:root(),flash:[],materials:[]}), animateBeast:noop,
   renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
@@ -426,7 +426,7 @@ test('27 variantes, receitas e animações existentes nos GLB',()=>{
   for(const v of t.VARIANTS){
     const g=glb(v.recipe?.base||v.model),clips=g.animations.map(a=>a.name);
     for(const clip of [v.idle,...v.attacks,'Death_A','Block_Hit',t.SKILL_MOVES[v.id][0],'Dualwield_Melee_Attack_Stab']) assert.ok(clips.includes(clip),v.id+': '+clip);
-    if(v.recipe) for(const add of v.recipe.add) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
+    if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
 test('81 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
@@ -1160,6 +1160,8 @@ test('Engenheira, Domador e Oráculo têm habilidades principais próprias e efe
   const beast=t.units.find(unit=>unit.beastCompanion&&unit.summoner===tamer);assert.ok(beast,'Q chama uma fera aliada');
   assert.equal(tamer.useSkill(enemy,false,true,1),true);tamer.pendingHit.effect();assert.strictEqual(enemy.taunt,beast,'o rugido faz a fera interceptar a ameaça');
   assert.equal(tamer.useSkill(enemy,false,true,2),true);tamer.pendingHit.effect();assert.ok(beast.empowerT>0,'a ultimate fortalece a fera');
+  beast.howlT=0;assert.equal(tamer.useSkill(enemy,false,true,1),true);tamer.pendingHit.effect();assert.ok(beast.howlT>0,'o rugido sai da fera uivando');
+  beast.update(0.05);assert.ok(beast.biteT>=0&&beast.howlT<0.9,'a fera anima o corpo próprio a cada quadro');
 
   enemy.telegraph={interruptible:true,t:2,dodge:new Map(),at:enemy.pos.clone(),owner:enemy};
   assert.equal(t.aimSpec(oracle).mode,'enemy');

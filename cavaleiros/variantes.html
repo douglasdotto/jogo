@@ -32,7 +32,7 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-    import { applyLook } from './characters.js';
+    import { applyLook, buildCharacter, CHARACTERS } from './characters.js';
     import { LOOKS, LOOK_PREVIEW, WEAPONS } from './looks.js';
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -43,9 +43,9 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xbfe3ff);
     const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 100);
-    camera.position.set(0, 9, 17);
+    camera.position.set(0, 15, 30);
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0.8, -1);
+    controls.target.set(0, 0.8, 4);
     scene.add(new THREE.HemisphereLight(0xfff4dc, 0xa89868, 1.9));
     const sun = new THREE.DirectionalLight(0xffe2b8, 2.4);
     sun.position.set(4, 10, 6);
@@ -59,24 +59,29 @@
 
     const loader = new GLTFLoader();
     const assets = {};
-    await Promise.all(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded'].map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
+    await Promise.all(['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Skeleton_Mage'].map(async (n) => (assets[n] = await loader.loadAsync(`assets/${n}.glb`))));
     assets.Skeleton_Quiver = await loader.loadAsync('assets/Skeleton_Quiver.gltf');
+    assets.Skeleton_Staff = await loader.loadAsync('assets/Skeleton_Staff.gltf');
 
     // uma coluna por modelo (Cavaleiro, Bárbaro, Mago, Ladino); cada herói a mais abre uma linha na coluna do seu modelo
-    const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', ''));
+    const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', '').replace('Skeleton_', ''));
     const units = LOOK_PREVIEW.map((v, i) => {
       const col = colOf(v), row = LOOK_PREVIEW.slice(0, i).filter((o) => colOf(o) === col).length;
-      const model = SkeletonUtils.clone(assets[v.model].scene);
-      model.traverse((o) => { if (WEAPONS[v.model].includes(o.name) && !v.use.includes(o.name)) o.visible = false; });
-      applyLook(model, assets, LOOKS[v.id]);
-      model.position.set((col - 1.5) * 4.2, 0, (row - 1) * 4 - 1);
+      // variante por receita (characters.js): a receita já esconde e troca as peças
+      const recipe = v.recipe && CHARACTERS.find((r) => r.id === v.recipe);
+      const model = recipe ? buildCharacter(assets, recipe).scene : SkeletonUtils.clone(assets[v.model].scene);
+      if (!recipe) {
+        model.traverse((o) => { if (WEAPONS[v.model].includes(o.name) && !v.use.includes(o.name)) o.visible = false; });
+        applyLook(model, assets, LOOKS[v.id]);
+      }
+      model.position.set((col - 1.5) * 4.2, 0, row * 2.6 - 6);
       scene.add(model);
       const mixer = new THREE.AnimationMixer(model);
       const tag = document.createElement('div');
       tag.className = 'tag';
       tag.textContent = v.name;
       document.getElementById('labels').appendChild(tag);
-      return { v, model, mixer, tag, current: null, anims: assets[v.model].animations };
+      return { v, model, mixer, tag, current: null, anims: assets[recipe?.base || v.model].animations };
     });
 
     function play(u, name) {
