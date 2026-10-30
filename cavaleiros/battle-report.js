@@ -39,7 +39,7 @@ function mostDangerous(sources) {
       || a.index - b.index)[0].source;
 }
 
-function objectiveTip(mission) {
+function objectiveTip(mission, heroes = []) {
   const goal = mission?.goal;
   if (!goal) return null;
   if (goal.type === 'escort') {
@@ -92,8 +92,12 @@ function objectiveTip(mission) {
   }
   if (goal.type === 'bosses' && !mission.bossDown) {
     const left = number(mission.bossesLeft);
-    return left === 1 ? 'Falta um guardião: desvie das marcas e guarde a cura para o último.'
+    const ids = new Set(heroes.map((hero) => hero.id).filter((id) => typeof id === 'string'));
+    const teamUsed = ['paladin', 'guardian', 'viking', 'cleric'].every((id) => ids.has(id));
+    const teamTip = ids.size && !teamUsed ? ' Equipe sugerida: Paladino, Guardião, Viking e Clériga.' : '';
+    const combatTip = left === 1 ? 'Falta um guardião: desvie das marcas e guarde a cura para o último.'
       : `${left || goal.bosses?.length || 3} guardiões seguem no salão: foque um por vez e interrompa as investidas.`;
+    return combatTip + teamTip;
   }
   if (goal.type === 'endless') {
     const seconds = Math.floor(number(mission.endlessTime));
@@ -138,7 +142,7 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
     return 'Experimente outra composição de grupo.';
   }
 
-  const objective = objectiveTip(mission);
+  const objective = objectiveTip(mission, heroes);
   if (objective) return objective;
 
   const partyDamage = heroes.reduce((sum, hero) => sum + number(hero.damage), 0);

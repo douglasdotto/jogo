@@ -7042,7 +7042,7 @@ function endGame(text, won = false) {
   const party = game.roster;
   const report = buildBattleReport({
     won,
-    heroes: party.map((h) => ({ name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
+    heroes: party.map((h) => ({ id: h.cfg.id, name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
     falls: game.fallLog,
     damageSources: Object.values(game.damageSources),
     militia: game.militia?.size ? { size: game.militia.size, damage: game.militia.damage, kills: game.militia.kills, fallen: game.militia.fallen } : null,

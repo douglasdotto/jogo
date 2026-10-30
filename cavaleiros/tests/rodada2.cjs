@@ -1395,7 +1395,7 @@ test('Druida não gasta habilidade manual sem aliado ferido ou inimigo ao alcanc
   assert.equal(druid.useSkill(null,false,true),true);
 });
 test('dica pós-derrota usa o objetivo e o estado real da missão',()=>{
-  const tip=mission=>context.buildBattleReport({won:false,mission}).find(item=>item.id==='next-try').text;
+  const tip=(mission,heroes=[])=>context.buildBattleReport({won:false,mission,heroes}).find(item=>item.id==='next-try').text;
   assert.match(tip({goal:{type:'escort'},villagerDown:true}),/aldeão caiu/);
   assert.match(tip({goal:{type:'escort'},villagerDown:false}),/grupo caiu antes de concluir a escolta/);
   assert.match(tip({goal:{type:'nofall'}}),/Todo o grupo caiu.*quedas individuais tiram as estrelas extras/i);
@@ -1403,6 +1403,14 @@ test('dica pós-derrota usa o objetivo e o estado real da missão',()=>{
   assert.match(tip({goal:{type:'totems',count:3},totemsDown:1}),/Faltaram 2 totens/);
   assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:false,phase:5}),/antes da estreia do chefe.*fase 6/);
   assert.match(tip({goal:{type:'boss'},bossDown:false,bossSeen:true}),/chefe ainda está ativo/);
+  const finalGoal={type:'bosses',bosses:['Lich','Executioner','DarkKnight']};
+  const teamSuggestion='Equipe sugerida: Paladino, Guardião, Viking e Clériga.';
+  assert.ok(tip({goal:finalGoal,bossDown:false,bossesLeft:2},[{id:'pyro'},{id:'archer'}]).includes(teamSuggestion),
+    'a derrota final mostra a equipe recomendada quando ela não foi usada');
+  assert.doesNotMatch(tip({goal:finalGoal,bossDown:false,bossesLeft:1},['paladin','guardian','viking','cleric'].map(id=>({id}))),/Equipe sugerida:/,
+    'quem já usou a composição recebe somente a orientação tática');
+  assert.match(tip({goal:finalGoal,bossDown:false,bossesLeft:1}),/guarde a cura para o último/,
+    'o lembrete da composição não remove a dica tática sobre o último guardião');
   assert.match(tip({goal:{type:'survive',time:90},surviveRemaining:12.1}),/Faltavam 13 s/);
 });
 test('dica de vitória orienta a próxima arena e a busca por estrelas',()=>{
