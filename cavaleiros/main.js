@@ -5321,7 +5321,10 @@ class Hero extends Unit {
       ? chooseHeroTarget(this, targetCandidates, dt, targeting) : null;
     // no manual a habilidade fica carregada esperando o jogador pedir
     if (game.state === 'fight') {
-      const requested = this.skillRequests.findIndex((time, slot) => time > 0 && this.skillTimers[slot] <= 0);
+      let requested = -1;
+      for (let slot = 0; slot < this.skillRequests.length; slot++) {
+        if (this.skillRequests[slot] > 0 && this.skillTimers[slot] <= 0) { requested = slot; break; }
+      }
       if (requested >= 0) {
         const chosen = this.skillTargets[requested];
         this.skillRequests[requested] = 0;

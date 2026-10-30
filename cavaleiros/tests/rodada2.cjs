@@ -656,6 +656,7 @@ test('fase revive aliados, oferece reforço, gera chefe e termina em vitória',(
 test('manual espera o jogador; pedido sem alvo avisa e não gasta a recarga',()=>{
   clear();context.localStorage.data={};
   const h=new t.Hero(cfg('pyro'));assert.equal(h.auto,true);h.auto=false;h.pos.set(0,0,0);h.skillTimer=0;
+  h.skillRequests.findIndex=()=>{throw new Error('a busca de habilidade não deve criar callback por quadro')};
   const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,4);e.hp=1000;
   h.busy=0;h.update(.016);assert.ok(h.skillTimer<=0);assert.ok(!h.pendingHit?.effect);
   h.busy=0;h.pendingHit=null;assert.equal(h.requestSkill(),'ok');h.update(.016);
