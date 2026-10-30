@@ -179,15 +179,20 @@ test('unidade clona cada material-fonte uma vez e mantém os bonecos isolados',(
     assert.equal(disposed.length,4,'cada material próprio é descartado uma vez');
   }finally{context.SkeletonUtils.clone=originalClone;clear();}
 });
+let fxMaterialCreates=0,beamVectorCreates=0;
+class BeamVector3 extends Vector3 { constructor(...args){super(...args);beamVectorCreates++;} }
 const ringContext=vm.createContext({
-  THREE:{DoubleSide:2,MeshBasicMaterial:class{constructor(options={}){Object.assign(this,options);this.userData={};this.color={setHex:noop};this.dispose=noop;}} ,
-    Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.rotation={x:0};this.position=new Vector3();this.scale={setScalar:noop};}},
-  Vector3,RingGeometry:class{}},ringGeo:{},blasts:[],scene:{add:noop},
+  THREE:{DoubleSide:2,Vector3:BeamVector3,MeshBasicMaterial:class{constructor(options={}){fxMaterialCreates++;Object.assign(this,options);this.userData={};this.color={hex:0,setHex(hex){this.hex=hex}};this.opacity??=1;this.dispose=noop;}} ,
+    Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.rotation={x:0};this.position={x:0,y:0,z:0,
+      copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this;},add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this;},multiplyScalar(k){this.x*=k;this.y*=k;this.z*=k;return this;},
+      setY(y){this.y=y;return this;}};this.scale={y:1,setScalar:noop};this.quaternion={setFromUnitVectors:noop};}},
+  Vector3,RingGeometry:class{}},ringGeo:{},beamGeo:{},blasts:[],scene:{add:noop},
 });
 vm.runInContext(fxPool.replaceAll('export ',''),ringContext);
 vm.runInContext(part(source,'const ringMaterials = materialPool(','const colors ='),ringContext);
-vm.runInContext(part(source,'function ring(at, radius, color, life = 0.6) {','function beam(start'),ringContext);
-vm.runInContext('globalThis.ringApi={ring,ringMaterials,blasts};',ringContext);
+vm.runInContext(part(source,'function ring(at, radius, color, life = 0.6) {','function fireBolt'),ringContext);
+vm.runInContext(part(source,'function releaseFxMaterial(material) {','function clearFx()'),ringContext);
+vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,releaseFxMaterial,blasts};',ringContext);
 test('anéis de impacto reutilizam o material e restauram sua opacidade ao reaparecer',()=>{
   const {ring,ringMaterials,blasts}=ringContext.ringApi,used=[];
   for(let i=0;i<100;i++){
@@ -202,6 +207,22 @@ test('anéis de impacto reutilizam o material e restauram sua opacidade ao reapa
   assert.strictEqual(blasts.at(-1).mesh.material,used[0],'o material reaparece do estoque');
   assert.equal(blasts.at(-1).mesh.material.opacity,.65,'a opacidade visual volta ao valor correto');
   assert.equal(ringMaterials.free,0,'o anel ativo não fica contado como material livre');
+});
+test('raios curtos reutilizam material e vetores temporários',()=>{
+  const {beam,beamMaterials,releaseFxMaterial,blasts}=ringContext.ringApi;
+  const materialCount=fxMaterialCreates,vectorCount=beamVectorCreates,used=new Set();
+  for(let i=0;i<100;i++){
+    beam(new Vector3(i,0,0),new Vector3(i+2,1,3),0x5ff2ff+i);
+    const material=blasts.at(-1).mesh.material;used.add(material);
+    assert.equal(material.opacity,1,'a opacidade do raio começa cheia após reutilização');
+    releaseFxMaterial(material);blasts.pop();
+  }
+  assert.equal(used.size,1,'cem raios sequenciais reutilizam um único material');
+  assert.equal(fxMaterialCreates-materialCount,1,'os raios deixam de criar e destruir um material por uso');
+  assert.equal(beamVectorCreates,vectorCount,'as direções usam vetores de trabalho reaproveitados');
+  beam(new Vector3(),new Vector3(0,0,4),0x6dff8c);
+  assert.equal(blasts.at(-1).mesh.material.color.hex,0x6dff8c,'a cor muda corretamente quando o estoque reaproveita o material');
+  releaseFxMaterial(blasts.at(-1).mesh.material);blasts.pop();
 });
 test('cache de emissive preserva glow base e só atualiza quando a cor muda',()=>{
   const wasOver=t.game.over;t.game.over=true;

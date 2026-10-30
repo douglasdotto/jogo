@@ -2790,6 +2790,8 @@ const ringGeo = new THREE.RingGeometry(0.75, 1, 32);
 const haloGeo = new THREE.TorusGeometry(0.35, 0.06, 6, 24);
 const beamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
 const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }), 128);
+const beamMaterials = materialPool(() => new THREE.MeshBasicMaterial({ transparent: true }), 32);
+const beamDirection = new THREE.Vector3(), beamUp = new THREE.Vector3(0, 1, 0), beamLift = new THREE.Vector3(0, 1.3, 0);
 const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
@@ -2804,11 +2806,11 @@ function ring(at, radius, color, life = 0.6) {
 }
 
 function beam(start, end, color) {
-  const mesh = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color, transparent: true }));
-  const dir = new THREE.Vector3().subVectors(end, start);
-  mesh.position.copy(start).add(end).multiplyScalar(0.5).add(new THREE.Vector3(0, 1.3, 0));
-  mesh.scale.y = dir.length();
-  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  const mesh = new THREE.Mesh(beamGeo, beamMaterials.take(color));
+  beamDirection.subVectors(end, start);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5).add(beamLift);
+  mesh.scale.y = beamDirection.length();
+  mesh.quaternion.setFromUnitVectors(beamUp, beamDirection.normalize());
   scene.add(mesh);
   blasts.push({ mesh, t: 0.25, life: 0.25 });
 }
