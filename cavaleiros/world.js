@@ -1853,11 +1853,445 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   batchStaticMeshes(scene, { merge: mergeGeometries, makeMesh: (geo, material) => new THREE.Mesh(geo, material), band: INSTANCE_BAND,
     skip: [millBlades, ...floaters.map((f) => f.m), ...bubbles, ...clouds] });
 
+  // ---------- detalhes: beira da estrada, vegetação miúda e marcos de cada trecho ----------
+  // Sorteio próprio (a sequência do mapa não muda) e só visual: nada aqui entra em obstacles.
+  // As peças de cada faixa de z já saem fundidas em até 4 malhas (sem sombra, com sombra, brilho quente
+  // e brilho roxo), com cor por vértice; ficam depois do batchStaticMeshes, que as juntaria numa faixa só.
+  let decoSeed = (Math.abs(Math.trunc(seedValue * 7919 + 104729)) % 2147483646) + 1;
+  const dr = () => (decoSeed = (decoSeed * 48271) % 2147483647) / 2147483647;
+  const drange = (a, b) => a + (b - a) * dr();
+  const dpick = (list) => list[Math.floor(dr() * list.length)];
+  const decoGeo = (g) => { const out = g.toNonIndexed(); out.deleteAttribute('uv'); g.dispose(); return out; };
+  const D = {
+    box: decoGeo(new THREE.BoxGeometry(1, 1, 1)),
+    cyl: decoGeo(new THREE.CylinderGeometry(0.5, 0.5, 1, 7)),
+    disc: decoGeo(new THREE.CylinderGeometry(0.5, 0.5, 1, 5)),
+    cone: decoGeo(new THREE.ConeGeometry(0.5, 1, 5)),
+    rock: decoGeo(new THREE.IcosahedronGeometry(0.5, 0)),
+    gem: decoGeo(new THREE.OctahedronGeometry(0.5, 0)),
+    dome: decoGeo(new THREE.SphereGeometry(0.5, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2)),
+  };
+  const decoMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  const decoKinds = { f: [decoMat, false], s: [decoMat, true], g: [lantern, false], p: [crystalMat, false] };
+  const decoBuckets = new Map();
+  const dLocal = new THREE.Matrix4(), dFull = new THREE.Matrix4(), dNormal = new THREE.Matrix3(), dQuat = new THREE.Quaternion(),
+    dEuler = new THREE.Euler(), dPos = new THREE.Vector3(), dScale = new THREE.Vector3(), dVec = new THREE.Vector3(), dCol = new THREE.Color();
+  const frameAt = (x, z, ry = 0, y = heightAt(x, z)) => ({ z, g: gloomAt(z),
+    m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(1, 1, 1)) });
+  // peça (geometria unitária escalada) na posição local do quadro f; kind: f, s (sombra), g (lanterna), p (roxo)
+  function piece(f, geo, hex, x, y, z, sx, sy = sx, sz = sx, rx = 0, ry = 0, rz = 0, kind = 'f') {
+    const key = kind + Math.floor(f.z / INSTANCE_BAND);
+    let b = decoBuckets.get(key);
+    if (!b) decoBuckets.set(key, (b = { kind, pos: [], nrm: [], col: [] }));
+    dLocal.compose(dPos.set(x, y, z), dQuat.setFromEuler(dEuler.set(rx, ry, rz)), dScale.set(sx, sy, sz));
+    dFull.multiplyMatrices(f.m, dLocal);
+    dNormal.getNormalMatrix(dFull);
+    dCol.set(hex);
+    if (kind === 'f' || kind === 's') dCol.lerp(deadTone, Math.min(1, f.g * 0.55));   // apaga como o resto do mundo
+    const p = geo.attributes.position, n = geo.attributes.normal;
+    for (let i = 0; i < p.count; i++) {
+      dVec.fromBufferAttribute(p, i).applyMatrix4(dFull);
+      b.pos.push(dVec.x, dVec.y, dVec.z);
+      dVec.fromBufferAttribute(n, i).applyMatrix3(dNormal).normalize();
+      b.nrm.push(dVec.x, dVec.y, dVec.z);
+      b.col.push(dCol.r, dCol.g, dCol.b);
+    }
+  }
+  const sMax = castleS - 28;
+  const phaseAt = (s) => 1 + ((s - firstS) * 11) / (lastS - firstS);
+  const nearBridge = (s) => Math.abs(s - crossS) < 9;
+  const decoOk = (p, r, minLat) => roadDist(p.x, p.z) >= ROAD + minLat && riverDist(p.x, p.z) > 3.8 + r && isFree(p.x, p.z, r);
+  const faceRoad = (p, s) => { const t = pointAt(s); return Math.atan2(t.x - p.x, t.z - p.z); };
+  function decoSpot(min, max, r) {
+    const s = drange(4, sMax), p = along(s, (dr() < 0.5 ? -1 : 1) * (ROAD + drange(min, max)));
+    return decoOk(p, r, min - 0.3) ? { s, p } : null;
+  }
+  const flowerCols = { Pradaria: [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7], Outono: [0xff8c3a, 0xf5b942, 0xe8414a, 0xfff1d0, 0xc0562f],
+    'Pântano': [0xb46ad9, 0xffffff, 0x9fd8ff, 0xf5d142, 0x7fc4a0], 'Crepúsculo': [0x9fd8ff, 0xffffff, 0xd8a8ff, 0xff9ec7, 0x7fb0ff] }[biome.name];
+  const straw = [0xe0c060, 0xd8b450, 0xe8cc70], woods = [0x8a5a2e, 0x7a4e26, 0x9a6a36], mossCol = 0x5d8a34, cutWood = 0xd2a46a;
+
+  // pedrinhas e tufos marcando a beira da estrada
+  for (let s = 4; s < sMax; s += drange(0.9, 1.9)) {
+    if (nearBridge(s)) continue;
+    for (const side of [-1, 1]) {
+      if (dr() < 0.35) continue;
+      const p = along(s, side * (ROAD + drange(0.1, 1.3)));
+      if (!decoOk(p, 0.2, 0)) continue;
+      const f = frameAt(p.x, p.z, dr() * 6.3), k = drange(0.16, 0.38);
+      piece(f, D.rock, dpick(stoneGrays), 0, k * 0.18, 0, k, k * drange(0.45, 0.7), k * drange(0.8, 1.2), dr(), 0, dr() * 0.4);
+      if (dr() < 0.35) piece(f, D.rock, dpick(stoneGrays), drange(0.2, 0.35), 0.03, drange(-0.2, 0.2), k * 0.55, k * 0.35, k * 0.55);
+      if (dr() < 0.4 && f.g < 0.6) for (let t = 0; t < 3; t++) piece(f, D.cone, dpick(biome.tuft), -0.25 + t * 0.08, 0.2, drange(-0.1, 0.1), 0.1, drange(0.35, 0.5), 0.1, 0, 0, (t - 1) * 0.35);
+    }
+  }
+  // canteiros de flores (manchas de uma cor só, como na natureza)
+  for (let n = 0; n < 150; n++) {
+    const at = decoSpot(1.2, 16, 0.8);
+    if (!at || gloomAt(at.p.z) > dr() * 0.5) continue;
+    const col = dpick(flowerCols), core = col === 0xf5d142 ? 0xffffff : 0xf5d142, f = frameAt(at.p.x, at.p.z, dr() * 6.3);
+    for (let k = 4 + Math.floor(dr() * 6); k > 0; k--) {
+      const x = drange(-0.8, 0.8), z = drange(-0.8, 0.8), h = drange(0.18, 0.34), sc = drange(0.8, 1.2);
+      piece(f, D.disc, col, x, h, z, 0.24 * sc, 0.03, 0.24 * sc, drange(-0.2, 0.2), dr() * 6.3);
+      piece(f, D.gem, core, x, h + 0.02, z, 0.08 * sc, 0.05, 0.08 * sc);
+      piece(f, D.box, 0x4f8a2c, x, h / 2, z, 0.03, h, 0.03);
+    }
+  }
+  // cogumelos de chapéu (vermelho com pinta ou marrom), troncos caídos com musgo, tocos e arbustos com frutinhas
+  const capCols = biome.name === 'Pradaria' || biome.name === 'Crepúsculo' ? [0xd8352a, 0xd8352a, 0xb0703a] : [0xb0703a, 0x9a5a30, 0xd8352a];
+  for (let n = 0; n < 70; n++) {
+    const at = decoSpot(2.5, 18, 0.6);
+    if (!at || gloomAt(at.p.z) > 0.5) continue;
+    const f = frameAt(at.p.x, at.p.z, dr() * 6.3), cap = dpick(capCols);
+    for (let k = 2 + Math.floor(dr() * 4); k > 0; k--) {
+      const x = drange(-0.45, 0.45), z = drange(-0.45, 0.45), sc = drange(0.7, 1.5);
+      piece(f, D.cyl, 0xf1e8d6, x, 0.1 * sc, z, 0.09 * sc, 0.2 * sc, 0.09 * sc);
+      piece(f, D.dome, cap, x, 0.18 * sc, z, 0.3 * sc, 0.26 * sc, 0.3 * sc, drange(-0.2, 0.2));
+      if (cap === 0xd8352a) piece(f, D.gem, 0xffffff, x + 0.05 * sc, 0.29 * sc, z, 0.06 * sc);
+    }
+  }
+  for (let n = 0; n < 34; n++) {
+    const at = decoSpot(4, 16, 1.6);
+    if (!at) continue;
+    const f = frameAt(at.p.x, at.p.z, dr() * 6.3), r = drange(0.26, 0.38), len = drange(2, 3.2), bark = at.p && f.g > 0.5 ? 0x4a3e3a : dpick([0x6b4423, 0x7a4a26, 0x5e3b1d]);
+    piece(f, D.cyl, bark, 0, r * 0.85, 0, r * 2, len, r * 2, 0, 0, Math.PI / 2, 's');
+    for (const sx of [-1, 1]) piece(f, D.cyl, cutWood, sx * len / 2, r * 0.85, 0, r * 1.7, 0.04, r * 1.7, 0, 0, Math.PI / 2);
+    piece(f, D.cyl, bark, drange(-0.5, 0.5), r * 1.4, 0, 0.12, 0.6, 0.12, 0.6, 0, 0.3);   // galho quebrado
+    if (f.g < 0.6) piece(f, D.rock, mossCol, drange(-0.6, 0.6), r * 1.6, 0, drange(0.6, 1), 0.25, r * 1.6);
+    if (dr() < 0.5 && f.g < 0.5) for (let k = 0; k < 3; k++) piece(f, D.dome, 0xe8c08a, drange(-0.8, 0.8), r * 0.9, r * 0.95, 0.2, 0.12, 0.12, Math.PI / 2);
+  }
+  for (let n = 0; n < 40; n++) {
+    const at = decoSpot(3, 18, 0.8);
+    if (!at) continue;
+    const f = frameAt(at.p.x, at.p.z, dr() * 6.3), r = drange(0.28, 0.42), h = drange(0.35, 0.7);
+    piece(f, D.cyl, dpick([0x6b4423, 0x7a4a26]), 0, h / 2, 0, r * 2, h, r * 2, 0, 0, 0, 's');
+    piece(f, D.cyl, cutWood, 0, h + 0.01, 0, r * 1.8, 0.03, r * 1.8);
+    for (let k = 0; k < 3; k++) { const a = k * 2.1 + dr(); piece(f, D.box, 0x6b4423, Math.cos(a) * r, 0.08, Math.sin(a) * r, 0.14, 0.14, 0.6, -0.5, Math.PI / 2 - a, 0); }
+    if (f.g < 0.5 && dr() < 0.5) piece(f, D.rock, mossCol, r * 0.4, h + 0.05, 0, 0.35, 0.12, 0.3);
+  }
+  const berries = [0xe8414a, 0x4f6fd6, 0xffffff, 0xff9ec7];
+  for (let n = 0; n < 80; n++) {
+    const at = decoSpot(1.8, 14, 1);
+    if (!at) continue;
+    const f = frameAt(at.p.x, at.p.z, dr() * 6.3), sc = drange(0.8, 1.3);
+    if (f.g > 0.45) {   // espinheiro seco nas terras escuras
+      for (let k = 0; k < 6; k++) piece(f, D.cone, dpick([0x4a3e3a, 0x5a4a42, 0x3e3446]), drange(-0.3, 0.3), 0.35 * sc, drange(-0.3, 0.3), 0.12, 0.9 * sc, 0.12, drange(-0.7, 0.7), 0, drange(-0.7, 0.7));
+      continue;
+    }
+    const leaf = dpick(biome.canopy), dot = dpick(berries);
+    piece(f, D.rock, leaf, 0, 0.35 * sc, 0, 1.1 * sc, 0.75 * sc, 1 * sc, 0, dr() * 3);
+    piece(f, D.rock, leaf, 0.4 * sc, 0.25 * sc, 0.2, 0.7 * sc, 0.5 * sc, 0.7 * sc, 0, dr() * 3);
+    for (let k = 0; k < 6; k++) { const a = dr() * 6.3; piece(f, D.gem, dot, Math.cos(a) * 0.5 * sc, drange(0.3, 0.6) * sc, Math.sin(a) * 0.48 * sc, 0.1); }
+  }
+  // juncos com taboa nas margens do rio
+  for (let i = 4; i < riverPts.length - 4; i += 3) {
+    const p = riverPts[i], q = riverPts[i + 1], tx = q.x - p.x, tz = q.z - p.z, tl = Math.hypot(tx, tz) || 1;
+    for (const side of [-1, 1]) {
+      if (dr() < 0.45) continue;
+      const lat = drange(3.1, 3.9), x = p.x - (tz / tl) * side * lat, z = p.z + (tx / tl) * side * lat;
+      if (Math.hypot(x - cp.x, z - cp.z) < 7 || roadDist(x, z) < ROAD + 2) continue;
+      const f = frameAt(x, z, dr() * 6.3);
+      for (let k = 3 + Math.floor(dr() * 3); k > 0; k--) {
+        const ox = drange(-0.35, 0.35), oz = drange(-0.35, 0.35), h = drange(0.8, 1.4), lean = drange(-0.15, 0.15);
+        piece(f, D.box, biome.reeds, ox, h / 2, oz, 0.05, h, 0.05, lean, 0, lean);
+        if (dr() < 0.6) piece(f, D.cyl, 0x7a5232, ox + lean * h, h, oz - lean * h, 0.1, 0.28, 0.1);
+      }
+    }
+  }
+
+  // cercas de beira de estrada: retas nas terras vivas, tortas e quebradas nas sombrias
+  for (let s = 20 + drange(0, 20); s < sMax - 6; s += drange(24, 40)) {
+    const side = dr() < 0.5 ? -1 : 1, lat = ROAD + drange(2.6, 3.4), len = drange(6, 13);
+    let prev = null;
+    for (let u = 0; u <= len; u += 1.6) {
+      const crooked = gloomAt(pointAt(s + u).z) > 0.4;
+      const p = along(s + u, side * (lat + (crooked ? drange(-0.25, 0.25) : 0)));
+      if (nearBridge(s + u) || !decoOk(p, 0.4, 2) || (crooked && dr() < 0.15)) { prev = null; continue; }
+      p.y = heightAt(p.x, p.z);
+      const f = frameAt(p.x, p.z, dr() * 6.3, p.y), tilt = crooked ? drange(-0.28, 0.28) : drange(-0.04, 0.04);
+      const h = crooked ? drange(0.75, 1.15) : 1;
+      piece(f, D.box, crooked ? 0x4a3e3a : darkWood, 0, h / 2 - 0.05, 0, 0.15, h, 0.15, tilt, 0, tilt * 0.6);
+      if (!crooked) piece(f, D.cone, darkWood, 0, h, 0, 0.2, 0.14, 0.2, 0, Math.PI / 4);
+      if (prev) {
+        const mx = (p.x + prev.x) / 2, mz = (p.z + prev.z) / 2, rl = Math.hypot(p.x - prev.x, p.z - prev.z);
+        const mf = frameAt(mx, mz, Math.atan2(p.x - prev.x, p.z - prev.z), (p.y + prev.y) / 2);
+        for (const y of [0.35, 0.72]) {
+          if (crooked && dr() < 0.35) continue;
+          piece(mf, D.box, crooked ? 0x5a4a42 : wood, 0, y + (crooked ? drange(-0.12, 0.08) : 0), 0, 0.07, 0.1, rl, crooked ? drange(-0.15, 0.15) : 0, 0, crooked ? drange(-0.1, 0.1) : 0);
+        }
+      }
+      prev = p;
+    }
+  }
+  // paradas na beira da estrada: carroças, barris, caixotes, feno e lampião; nas trevas, carroça largada e velas
+  function decoLamp(f, x, z) {
+    piece(f, D.box, darkWood, x, 1.2, z, 0.14, 2.4, 0.14, 0, 0, 0, 's');
+    piece(f, D.box, darkWood, x + 0.28, 2.3, z, 0.6, 0.08, 0.08);
+    piece(f, D.box, 0xffe08a, x + 0.52, 2.0, z, 0.26, 0.34, 0.26, 0, 0, 0, 'g');
+    piece(f, D.cone, 0x3a3a3a, x + 0.52, 2.25, z, 0.42, 0.18, 0.42, 0, Math.PI / 4);
+  }
+  function decoBarrel(f, x, z, y = 0, lying = false) {
+    if (lying) {
+      piece(f, D.cyl, 0x7a4e26, x, 0.32, z, 0.64, 0.8, 0.64, 0, 0, Math.PI / 2, 's');
+      for (const o of [-0.25, 0.25]) piece(f, D.cyl, 0x3a3a3a, x + o, 0.32, z, 0.67, 0.07, 0.67, 0, 0, Math.PI / 2);
+      return;
+    }
+    piece(f, D.cyl, 0x7a4e26, x, y + 0.4, z, 0.64, 0.8, 0.64, 0, 0, 0, 's');
+    for (const o of [0.15, 0.62]) piece(f, D.cyl, 0x3a3a3a, x, y + o, z, 0.67, 0.07, 0.67);
+    piece(f, D.cyl, 0x9a6a36, x, y + 0.81, z, 0.56, 0.02, 0.56);
+  }
+  function decoCrate(f, x, z, sc = 0.7, y = 0) {
+    piece(f, D.box, 0x9a6a36, x, y + sc / 2, z, sc, sc, sc, 0, drange(-0.3, 0.3), 0, 's');
+    piece(f, D.box, 0x6e4a26, x, y + sc / 2, z, sc * 1.02, sc * 0.15, sc * 1.02, 0, drange(-0.3, 0.3));
+  }
+  function decoCart(f, broken) {
+    const tilt = broken ? 0.28 : 0, y = broken ? 0.42 : 0.62;
+    piece(f, D.box, 0x8a5a2e, 0, y, 0, 1.5, 0.22, 2.4, 0, 0, tilt, 's');
+    for (const sx of [-1, 1]) piece(f, D.box, 0x7a4e26, sx * 0.72, y + 0.25 - sx * tilt * 0.7, 0, 0.08, 0.4, 2.4, 0, 0, tilt);
+    for (const sz of [-1, 1]) piece(f, D.box, 0x7a4e26, 0, y + 0.25, sz * 1.18, 1.5, 0.4, 0.08, 0, 0, tilt);
+    for (const sx of broken ? [1] : [-1, 1]) {
+      piece(f, D.cyl, 0x5e3b1d, sx * 0.85, 0.5, 0, 1, 0.12, 1, 0, 0, Math.PI / 2, 's');
+      piece(f, D.cyl, 0x3a3a3a, sx * 0.87, 0.5, 0, 0.3, 0.16, 0.3, 0, 0, Math.PI / 2);
+    }
+    if (broken) { piece(f, D.cyl, 0x4a3e3a, -1.6, 0.06, 0.4, 1, 0.12, 1, 0.1); return; }
+    for (const sx of [-0.35, 0.35]) piece(f, D.box, 0x6b4423, sx, 0.45, 1.9, 0.08, 0.08, 1.6, 0.35);
+    if (dr() < 0.5) piece(f, D.box, dpick(straw), 0, y + 0.45, 0, 1.3, 0.55, 2, 0, 0, 0, 's');
+    else { decoBarrel(f, -0.35, -0.5, y + 0.1); decoBarrel(f, 0.35, 0.4, y + 0.1); piece(f, D.rock, 0xd8c49a, 0.3, y + 0.35, -0.6, 0.45, 0.5, 0.4); }
+  }
+  function decoHay(f) {
+    for (const [x, z] of [[-0.6, 0], [0.6, 0.1]]) {
+      piece(f, D.cyl, dpick(straw), x, 0.55, z, 1.1, 0.9, 1.1, 0, dr() * 0.5, Math.PI / 2, 's');
+      piece(f, D.cyl, 0xc8a048, x, 0.55, z, 0.7, 0.92, 0.7, 0, 0, Math.PI / 2);
+    }
+    piece(f, D.box, dpick(straw), 1.6, 0.25, -0.8, 1, 0.5, 0.6, 0, 0.3, 0, 's');
+    piece(f, D.box, dpick(straw), 1.5, 0.75, -0.8, 1, 0.5, 0.6, 0, 0.1, 0, 's');
+  }
+  function decoCandles(f) {
+    for (let k = 3 + Math.floor(dr() * 5); k > 0; k--) {
+      const x = drange(-0.6, 0.6), z = drange(-0.6, 0.6), h = drange(0.15, 0.45);
+      piece(f, D.cyl, 0xd8d0c0, x, h / 2, z, 0.11, h, 0.11);
+      piece(f, D.cone, 0xffffff, x, h + 0.07, z, 0.08, 0.15, 0.08, 0, 0, 0, 'p');
+    }
+    for (let k = 0; k < 2; k++) {   // caveirinhas
+      const x = drange(-0.8, 0.8), z = drange(-0.8, 0.8), ry = dr() * 6.3;
+      piece(f, D.rock, 0xe8e0cc, x, 0.14, z, 0.3, 0.26, 0.3, 0, ry);
+      for (const e of [-0.06, 0.06]) piece(f, D.box, 0x241e2a, x + Math.cos(ry) * e + Math.sin(ry) * 0.13, 0.17, z - Math.sin(ry) * e + Math.cos(ry) * 0.13, 0.05);
+    }
+  }
+  for (let s = 26 + drange(0, 12); s < sMax; s += drange(26, 40)) {
+    const p = along(s, (dr() < 0.5 ? -1 : 1) * (ROAD + drange(4.4, 7)));
+    if (nearBridge(s) || !decoOk(p, 1.6, 4)) continue;
+    const f = frameAt(p.x, p.z, faceRoad(p, s) + drange(-0.7, 0.7)), roll = dr();
+    if (f.g > 0.5) {
+      if (roll < 0.35) decoCart(f, true); else decoCandles(f);
+      if (dr() < 0.4) decoBarrel(f, 1.4, 1, 0, true);
+      continue;
+    }
+    if (roll < 0.4) { decoCart(f, false); if (dr() < 0.6) decoCrate(f, 1.4, -0.6, 0.6); }
+    else if (roll < 0.7) { decoBarrel(f, 0, 0); decoBarrel(f, 0.7, 0.3); decoBarrel(f, -0.2, -1.2, 0, true); decoCrate(f, -0.8, 0.5); decoCrate(f, -0.8, 0.5, 0.5, 0.7); }
+    else decoHay(f);
+    if (f.g < 0.3 && dr() < 0.65) decoLamp(f, -1.9, 1.2);
+  }
+  // placas de direção (setas sem texto)
+  for (let s = 40 + drange(0, 20); s < sMax; s += drange(50, 70)) {
+    const side = dr() < 0.5 ? -1 : 1, p = along(s, side * (ROAD + 2));
+    if (nearBridge(s) || !decoOk(p, 0.6, 1.5)) continue;
+    const f = frameAt(p.x, p.z, faceRoad(p, s) + Math.PI / 2), old = f.g > 0.45, tilt = old ? drange(-0.2, 0.2) : 0;
+    piece(f, D.box, old ? 0x4a3e3a : darkWood, 0, 0.9, 0, 0.14, 1.8, 0.14, tilt, 0, tilt, 's');
+    piece(f, D.box, old ? 0x6a5a50 : wood, 0.3, 1.5, 0, 0.9, 0.22, 0.06, 0, 0.35);
+    piece(f, D.box, old ? 0x6a5a50 : wood, -0.3, 1.15, 0, 0.9, 0.22, 0.06, 0, -0.35, old ? 0.6 : 0);
+  }
+
+  // ponte: lampiões nas pontas e pedras na cabeceira
+  bridge.updateMatrix();
+  { const f = { z: cp.z, g: gloomAt(cp.z), m: bridge.matrix.clone() };
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      piece(f, D.box, darkWood, sx * (BW - 0.15), 1.35, sz * 5, 0.12, 0.6, 0.12);
+      piece(f, D.box, darkWood, sx * (BW - 0.15), 1.62, sz * 5, 0.5, 0.07, 0.07);
+      piece(f, D.box, 0xffe08a, sx * (BW + 0.05), 1.42, sz * 5, 0.22, 0.28, 0.22, 0, 0, 0, 'g');
+      for (let k = 0; k < 3; k++) piece(f, D.rock, dpick(stoneGrays), sx * (BW + drange(0.4, 1.4)), 0.05, sz * (5.6 + drange(-0.8, 0.8)), drange(0.4, 0.8), drange(0.3, 0.5), drange(0.4, 0.8), 0, dr() * 3);
+    }
+    for (let z = -4.6; z <= 4.6; z += 0.9) if (dr() < 0.5) piece(f, D.box, 0x9a6a36, drange(-1.5, 1.5), 0.035, z + 0.45, drange(1.5, 3), 0.04, 0.3);
+  }
+
+  // hortas com fileiras (repolho perto da vila, abóbora nas fazendas)
+  for (let n = 0, made = 0; n < 40 && made < 4; n++) {
+    const s = anchorS(made < 2 ? 2 : 6) + drange(-12, 12), p = along(s, (dr() < 0.5 ? -1 : 1) * (ROAD + drange(5.5, 9)));
+    if (nearBridge(s) || !decoOk(p, 2.6, 5) || gloomAt(p.z) > 0.35) continue;
+    made++;
+    const f = frameAt(p.x, p.z, faceRoad(p, s)), pumpkin = phaseAt(s) > 4;
+    piece(f, D.box, 0x8a6038, 0, 0.02, 0, 3.4, 0.08, 4.2);
+    for (const x of [-1.1, 0, 1.1]) {
+      piece(f, D.box, 0x6e4a2a, x, 0.08, 0, 0.6, 0.14, 3.8);
+      for (let z = -1.5; z <= 1.5; z += 0.75) {
+        if (dr() < 0.15) continue;
+        if (pumpkin) {
+          piece(f, D.rock, dpick([0xe8822a, 0xf09a3a, 0xd9741e]), x, 0.32, z, 0.55, 0.4, 0.55, 0, dr() * 3);
+          piece(f, D.box, 0x4f8a2c, x, 0.55, z, 0.06, 0.14, 0.06);
+          piece(f, D.disc, 0x5d9a34, x + 0.25, 0.18, z + 0.2, 0.45, 0.04, 0.4, 0.2);
+        } else {
+          piece(f, D.rock, dpick([0x7fbf4a, 0x93cf5a, 0x6aa83f]), x, 0.3, z, 0.5, 0.42, 0.5, 0, dr() * 3);
+          piece(f, D.rock, 0xb8e07a, x, 0.36, z, 0.3, 0.28, 0.3);
+        }
+      }
+    }
+    // cerquinha baixa em volta
+    for (const sx of [-1, 1]) piece(f, D.box, wood, sx * 1.85, 0.3, 0, 0.06, 0.08, 4.4);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) piece(f, D.box, darkWood, sx * 1.85, 0.3, sz * 2.2, 0.1, 0.6, 0.1);
+  }
+
+  // ruínas: colunas quebradas com musgo e tambores caídos entre o bosque e as terras sombrias
+  for (let n = 0, made = 0; n < 60 && made < 16; n++) {
+    const s = drange(anchorS(6) + 6, anchorS(9)), p = along(s, (dr() < 0.5 ? -1 : 1) * (ROAD + drange(3.6, 12)));
+    if (nearBridge(s) || !decoOk(p, 1.2, 3.4)) continue;
+    made++;
+    const f = frameAt(p.x, p.z, dr() * 6.3), h = drange(0.8, 3.4), lean = drange(-0.12, 0.12), col = dpick([0xb9b2a3, 0xc9c2b2, 0xa9a399]);
+    piece(f, D.box, 0x9d988f, 0, 0.15, 0, 1.15, 0.3, 1.15, 0, dr(), 0, 's');
+    piece(f, D.cyl, col, 0, 0.3 + h / 2, 0, 0.8, h, 0.8, lean, 0, lean, 's');
+    for (let y = 0.6; y < h; y += 0.7) piece(f, D.cyl, 0x8f8b86, lean * y, 0.3 + y, -lean * y, 0.84, 0.04, 0.84, lean, 0, lean);
+    piece(f, D.rock, mossCol, lean * h, 0.3 + h, -lean * h, 0.75, 0.25, 0.7, 0, dr() * 3);
+    piece(f, D.disc, 0x6f9a3c, 0.2, 0.31, 0.1, 0.9, 0.02, 0.7);
+    for (let k = Math.floor(dr() * 3); k > 0; k--) {
+      const a = dr() * 6.3, d = drange(1, 2);
+      piece(f, D.cyl, col, Math.cos(a) * d, 0.38, Math.sin(a) * d, 0.76, drange(0.5, 0.9), 0.76, 0, a, Math.PI / 2, 's');
+    }
+  }
+
+  // velas e caveiras espalhadas nas terras sombrias
+  for (let n = 0, made = 0; n < 80 && made < 22; n++) {
+    const at = decoSpot(1.8, 12, 1);
+    if (!at || gloomAt(at.p.z) < 0.55) continue;
+    made++;
+    decoCandles(frameAt(at.p.x, at.p.z, dr() * 6.3));
+  }
+
+  // estandartes e braseiros roxos na subida até o castelo
+  for (let s = castleS - 34; s <= castleS - 6; s += 5.6) for (const side of [-1, 1]) {
+    const p = along(s, side * (ROAD + 1.7));
+    const f = frameAt(p.x, p.z, faceRoad(p, s));
+    piece(f, D.cyl, 0x2e2a36, 0, 2.2, 0, 0.16, 4.4, 0.16, 0, 0, 0, 's');
+    piece(f, D.box, 0x2e2a36, 0, 4.1, 0.1, 1.1, 0.08, 0.08);
+    piece(f, D.box, 0x4b2470, 0, 3.05, 0.14, 0.95, 2, 0.05, 0, 0, 0, 's');
+    piece(f, D.box, 0x2e1846, 0, 2.02, 0.14, 0.95, 0.12, 0.06);
+    piece(f, D.gem, 0xffffff, 0, 3.3, 0.18, 0.32, 0.4, 0.08, 0, 0, 0, 'p');
+    piece(f, D.gem, 0xd9a83a, 0, 4.55, 0, 0.22, 0.3, 0.22);
+    const q = along(s + 2.7, side * (ROAD + 1.9)), b = frameAt(q.x, q.z);
+    piece(b, D.cyl, 0x5a5468, 0, 0.35, 0, 0.3, 0.7, 0.3);
+    piece(b, D.cone, 0x6a6478, 0, 0.85, 0, 0.8, 0.4, 0.8, Math.PI);
+    piece(b, D.cone, 0xffffff, 0, 1.15, 0, 0.45, 0.6, 0.45, 0, 0, 0, 'p');
+  }
+
+  for (const b of decoBuckets.values()) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nrm, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+    g.computeBoundingSphere();
+    const [material, shadow] = decoKinds[b.kind], m = new THREE.Mesh(g, material);
+    m.castShadow = shadow;
+    m.receiveShadow = shadow;
+    scene.add(m);
+  }
+  for (const g of Object.values(D)) g.dispose();
+
+  // ---------- ambiente animado: pólen/vaga-lumes perto da câmera, folhas caindo e espuma no rio ----------
+  // xs da estrada por z (inteiro), para centrar o que segue a câmera
+  const roadXAt = new Float32Array(Math.ceil(zBot - zTop) + 1);
+  for (let i = 0, j = 0; i < roadXAt.length; i++) {
+    const z = zBot - i;
+    while (j < roadPts.length - 1 && roadPts[j + 1].z >= z) j++;
+    roadXAt[i] = roadPts[j].x;
+  }
+  const roadXFor = (z) => roadXAt[THREE.MathUtils.clamp(Math.round(zBot - z), 0, roadXAt.length - 1)];
+  const moteTex = (() => {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 32;
+    const x = cv.getContext('2d'), gr = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(cv);
+  })();
+  const MOTES = 220, motes = [];
+  const motePos = new Float32Array(MOTES * 3), moteCol = new Float32Array(MOTES * 3);
+  for (let i = 0; i < MOTES; i++) motes.push({ x: drange(-24, 24), y: drange(0.4, 4), z: drange(-36, 18), ph: dr() * 10, sp: drange(0.3, 0.9), kind: dr() < 0.5 ? 0 : 1 });
+  const moteGeo = new THREE.BufferGeometry();
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3).setUsage(THREE.DynamicDrawUsage));
+  moteGeo.setAttribute('color', new THREE.BufferAttribute(moteCol, 3).setUsage(THREE.DynamicDrawUsage));
+  const motePoints = new THREE.Points(moteGeo, new THREE.PointsMaterial({ size: 0.32, map: moteTex, vertexColors: true, transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending }));
+  motePoints.frustumCulled = false;
+  scene.add(motePoints);
+  const dayMote = new THREE.Color({ Pradaria: 0xfff0a0, Outono: 0xffc070, 'Pântano': 0xc8ffb0, 'Crepúsculo': 0xb8d8ff }[biome.name]).multiplyScalar(0.55);
+  const flyA = new THREE.Color(0xb8ff5a), flyB = new THREE.Color(0xc89cff), moteC = new THREE.Color(), flyC = new THREE.Color();
+  // folhas caindo e girando (só nas terras vivas)
+  const LEAVES = 40, leaves = [];
+  const leafGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -0.13), new THREE.Vector3(0.08, 0, 0), new THREE.Vector3(0, 0, 0.13),
+    new THREE.Vector3(0, 0, -0.13), new THREE.Vector3(0, 0, 0.13), new THREE.Vector3(-0.08, 0, 0)]);
+  leafGeo.computeVertexNormals();
+  const leafMesh = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }), LEAVES);
+  leafMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  leafMesh.frustumCulled = false;
+  for (let i = 0; i < LEAVES; i++) {
+    leaves.push({ x: drange(-20, 20), z: drange(-32, 14), t: dr() * 8, sp: drange(0.5, 0.9), ph: dr() * 10 });
+    leafMesh.setColorAt(i, moteC.set(dpick(biome.canopy)));
+  }
+  scene.add(leafMesh);
+  // espuma descendo o rio
+  const FOAM = 60, foam = [];
+  const foamMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.02, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }), FOAM);
+  foamMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  foamMesh.castShadow = foamMesh.receiveShadow = false;
+  for (let i = 0; i < FOAM; i++) foam.push({ u: dr(), lat: drange(-2.4, 2.4), len: drange(0.4, 1.1), sp: drange(0.004, 0.008) });
+  foamMesh.frustumCulled = false;
+  scene.add(foamMesh);
+  const fxObj = new THREE.Object3D();
+  function updateAmbient(dt, viewZ) {
+    const cx = roadXFor(viewZ);
+    for (let i = 0; i < MOTES; i++) {
+      const m = motes[i], t = time * m.sp + m.ph;
+      const z = viewZ + ((((m.z + time * 0.4 * m.sp + 36) % 54) + 54) % 54) - 36;
+      const x = cx + m.x + Math.sin(t) * 1.2, g = gloomAt(z);
+      motePos[i * 3] = x;
+      motePos[i * 3 + 1] = m.y + Math.sin(t * 1.3) * 0.4;
+      motePos[i * 3 + 2] = z;
+      // de dia: pólen suave; nas trevas: vaga-lumes que piscam
+      const blink = Math.max(0, Math.sin(time * 2.2 * m.sp + m.ph * 3));
+      moteC.copy(dayMote).multiplyScalar(1 - Math.min(1, g * 1.6)).add(flyC.copy(m.kind ? flyB : flyA).multiplyScalar(smooth(g, 0.3, 0.6) * (0.15 + blink * 0.85)));
+      moteC.toArray(moteCol, i * 3);
+    }
+    moteGeo.attributes.position.needsUpdate = true;
+    moteGeo.attributes.color.needsUpdate = true;
+    for (let i = 0; i < LEAVES; i++) {
+      const l = leaves[i];
+      l.t += dt * l.sp;
+      const fall = l.t % 8, z = viewZ + l.z, alive = gloomAt(z) < 0.45;
+      fxObj.position.set(cx + l.x + Math.sin(l.t * 1.7 + l.ph) * 0.9 + fall * 0.4, 7 - fall * 0.9, z + Math.cos(l.t * 1.3 + l.ph) * 0.5);
+      fxObj.rotation.set(Math.sin(l.t * 3 + l.ph) * 1.2, l.t * 2 + l.ph, Math.cos(l.t * 2.4) * 0.8);
+      fxObj.scale.setScalar(alive && fall < 7.6 ? 1.4 : 0.0001);
+      fxObj.updateMatrix();
+      leafMesh.setMatrixAt(i, fxObj.matrix);
+    }
+    leafMesh.instanceMatrix.needsUpdate = true;
+    foamMesh.visible = Math.abs(viewZ - cp.z) < 70;
+    if (!foamMesh.visible) return;
+    for (let i = 0; i < FOAM; i++) {
+      const f = foam[i];
+      f.u = (f.u + dt * f.sp) % 1;
+      const k = f.u * (riverPts.length - 2), j = Math.floor(k), a = riverPts[j], b = riverPts[j + 1];
+      const tx = b.x - a.x, tz = b.z - a.z, tl = Math.hypot(tx, tz) || 1;
+      fxObj.position.set(a.x + tx * (k - j) - (tz / tl) * f.lat, -0.2, a.z + tz * (k - j) + (tx / tl) * f.lat);
+      fxObj.rotation.set(0, Math.atan2(tx, tz) + Math.PI / 2, 0);
+      fxObj.scale.set(f.len * (0.6 + 0.4 * Math.sin(f.u * 40)), 1, 1);
+      fxObj.updateMatrix();
+      foamMesh.setMatrixAt(i, fxObj.matrix);
+    }
+    foamMesh.instanceMatrix.needsUpdate = true;
+  }
+
   let time = 0;
   const animationFrustum = new THREE.Frustum();
   const animationProjectionView = new THREE.Matrix4();
   function update(dt, viewZ = 0, camera = null) {
     time += dt;
+    updateAmbient(dt, viewZ);
     if (camera) {
       camera.updateMatrixWorld();
       animationProjectionView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
