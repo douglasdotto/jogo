@@ -2078,6 +2078,7 @@ class Unit {
     if (this.team === 'hero') {
       this.diedIn = game.phase;   // no Pesadelo, decide quando volta
       game.fallLog.push({ name: this.cfg.names?.[this.level - 1] || this.cfg.name, phase: game.phase, time: game.runTime });
+      FX.heroFall(this);
       if (directControl?.hero === this) {
         clearDirectControlOrders();
         syncDirectControlUI();
@@ -2167,8 +2168,15 @@ class Unit {
           if (this.team === 'skeleton') fireEnemyBolt(this, target);
           else { fireBolt(this, target, this.cfg.id === 'crossbow' ? 'crossbow' : 'magic'); relicExtraShot(this, target); }
         }
-        else if (this.cleave) damageCleave(this, target);
-        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size + (target.reach || 0)) this.team !== 'skeleton' ? heroHit(this, target, this.dmg) : target.takeDamage(this.dmg, this.pos, this);
+        else if (this.cleave) {
+          const hit = !target.dead && inMeleeArc(this, target);
+          damageCleave(this, target);
+          if (hit) FX.meleeHit(target, false);
+        }
+        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size + (target.reach || 0)) {
+          if (this.team !== 'skeleton') FX.meleeHit(target, heroHit(this, target, this.dmg));
+          else target.takeDamage(this.dmg, this.pos, this);
+        }
       }
     }
   }
@@ -2357,6 +2365,7 @@ function heroHit(owner, target, dmg, center = owner.pos) {
   if (attack) dmg = applySynergy(attack, owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
   target.takeDamage(dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1), center, owner.summoner || owner, critical);
+  return critical;
 }
 
 
@@ -3305,8 +3314,9 @@ const SKILL_ART = {
   oracle: { color: 0xc6b4ff, accent: 0xffffff, glyph: crystalGeo, scale: 1.3 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
-let shakeK = 0, stopT = 0;
+let shakeK = 0, stopT = 0, slowT = 0;
 const jolt = new THREE.Vector3();
+const calmMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');   // sistema pede menos movimento: sem tremida nem hit-stop
 
 function glow(color, opacity = 0.85, additive = true) {
   return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
@@ -3367,7 +3377,7 @@ function updateSkillFx(dt) {
 function clearSkillFx() {
   while (skillFx.length) dropFx(skillFx.pop());
   shakeK = 0;
-  stopT = 0;
+  stopT = slowT = 0;
 }
 
 // partícula que voa, cai (gravity) e some; smoke = fumaça opaca em vez de brilho
@@ -4436,17 +4446,55 @@ function trail(b, dt) {
 }
 
 // tremida de câmera curta nos golpes fortes
-function shake(n) { shakeK = Math.max(shakeK, n); }
+function shake(n) { if (!calmMotion?.matches) shakeK = Math.max(shakeK, n); }
 // hit-stop: o jogo quase congela por um instante no disparo da ultimate (só o tempo do quadro, sem mudar números)
-function hitStop(n) { stopT = Math.max(stopT, n); }
+function hitStop(n) { if (!calmMotion?.matches) stopT = Math.max(stopT, n); }
+// câmera lenta curta (queda de chefe)
+function slowMo(n) { slowT = Math.max(slowT, n); }
 function timeScale(real) {
-  if (stopT <= 0) return 1;
-  stopT -= real;
-  return 0.12;
+  if (stopT > 0) { stopT -= real; return 0.12; }
+  if (slowT > 0) { slowT -= real; return 0.3; }
+  return 1;
 }
 function cameraJolt(real) {
   shakeK = Math.max(0, shakeK - real * 1.6);
   return jolt.set(rnd(), rnd() * 0.6, rnd()).multiplyScalar(shakeK);
+}
+
+// golpe corpo a corpo: faíscas curtas no alvo (materiais do estoque, sem material novo); crítico ganha mini hit-stop
+function meleeHit(target, critical) {
+  const p = V(target.pos.x, target.pos.y + 0.9 * (target.size || 1), target.pos.z);
+  burst(p, critical ? [0xffffff, 0xff5a3a, 0xffd04a] : [0xffffff, 0xffe9a8], fewer(critical ? 9 : 5), critical ? 5 : 3.5, { life: 0.3, size: critical ? 1.2 : 0.85, gravity: 4 });
+  if (critical) hitStop(0.03);
+}
+
+// herói caído: anel vermelho no chão, poeira e faíscas que caem
+function heroFall(h) {
+  wave(h.pos, 0xff5a4a, 0.4, 2.2, 0.7, { opacity: 0.7 });
+  puffs(h.pos, 4, 'dust', { size: 0.8, rise: 0.5, life: 0.8 });
+  burst(h.pos.clone().setY(h.pos.y + 1), [0xff6a5a, 0xffffff], 10, 3, { gravity: 5 });
+}
+
+// herói de volta: raios de luz dourada, anel e faíscas subindo
+function heroRise(h) {
+  rays(h.pos, 'holy', 0.7, 5, 1.1, { follow: h });
+  wave(h.pos, 0xfff0a0, 0.4, 2.4, 0.7);
+  burst(h.pos.clone().setY(h.pos.y + 0.6), [0xffe27a, 0xffffff], 14, 3, { gravity: -2 });
+}
+
+// chefe derrotado: câmera lenta, tremida e explosão de luz
+function bossDown(boss) {
+  slowMo(0.6);
+  shake(0.6);
+  if (!boss) return;
+  const p = boss.pos.clone().setY(boss.pos.y + 1.2);
+  rays(boss.pos, 'holy', 1.4, 10, 1.4);
+  wave(boss.pos, 0xfff2b0, 0.5, 7, 0.9, { geo: ringGeo, opacity: 0.8, spin: 3 });
+  wave(boss.pos, 0xffffff, 0.4, 4.5, 0.6, { delay: 0.08 });
+  burst(p, [0xffffff, 0xfff2b0, 0xffd04a], fewer(26), 8, { life: 0.8, size: 1.4 });
+  const blaze = new THREE.Mesh(shellGeo, glow(0xffffff, 0.9));
+  blaze.position.copy(p);
+  addFx(blaze, 0.4, (e, dt, k) => { blaze.scale.setScalar(1 + 12 * (1 - (1 - k) ** 3)); blaze.material.opacity = e.base * (1 - k) ** 2; });
 }
 
 // Partículas do elemento de cada herói ao soltar uma habilidade extra (fogo, gelo, arcano, luz, natureza, sombra, tempo, som).
@@ -4548,7 +4596,7 @@ function stasis(enemy) {
   burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0x8feaff, 0xb6a4ff], 6, 2.5, { gravity: 0 });
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, timeScale, element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 
@@ -5579,6 +5627,7 @@ class Hero extends Unit {
     this.current = null;
     this.mixer.stopAllAction();
     this.loop(this.cfg.idle);
+    FX.heroRise(this);
   }
 
   update(dt) {
@@ -7509,6 +7558,7 @@ function campaignTick(dt, skeletons, party = heroes()) {
       game.last = game.phase;
       game.toSpawn = 0;
       for (const s of skeletonsAlive()) if (!s.dead) { s.exploded = s.dissolved = true; s.die(); }   // desfaz sem explodir nem contar abate
+      FX.bossDown(boss);
       showBanner('Chefe derrotado!', 2.5);
     }
   }
