@@ -3022,7 +3022,11 @@ function updateFx(dt) {
     if (k >= 1) {
       scene.remove(m);
       releaseFxMaterial(m.material);
-      fx.splice(i, 1);
+      // A ordem dos efeitos é irrelevante. Como percorremos de trás para frente,
+      // o último item já foi atualizado neste quadro e pode ocupar este índice.
+      const last = fx.length - 1;
+      if (i !== last) fx[i] = fx[last];
+      fx.pop();
       continue;
     }
     if (u.star) { u.v.y -= 9 * dt; m.rotation.y += dt * 12; }
