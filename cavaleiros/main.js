@@ -25,7 +25,7 @@ import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality } from './vfx-shaders.js';
 import { startKingdom, linkKingdom, loadKingdomRecords, kingdomRecordText } from './kingdom.js';
-import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard } from './monsters.js';
+import { MONSTER_TYPES, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard, cleanseAround } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -2038,7 +2038,7 @@ class Unit {
     if (!this.ranged) this.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(2.2));   // passo à frente
   }
 
-  takeDamage(n, from, owner = null, critical = false) {
+  takeDamage(n, from, owner = null, critical = false, dot = false) {   // dot: veneno e afins, sem esquiva, bloqueio nem tropeço
     if (this.dead || game.over) return;
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
@@ -2047,7 +2047,7 @@ class Unit {
     if (this.team === 'hero') {
       if (this.oathUntil > game.runTime) return;   // Juramento final: invulnerável por instantes
       if (this.immuneT > 0) return;   // Meditação do Monge: imune enquanto medita
-      if (this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
+      if (!dot && this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
         this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
         this.pendingHit = null;
@@ -2055,7 +2055,7 @@ class Unit {
         this.stats.esquivas++;
         return;
       }
-      if (this.bladeDanceT > 0 && Math.random() < 0.35) {   // girando, o Duelista desvia de parte dos golpes
+      if (!dot && this.bladeDanceT > 0 && Math.random() < 0.35) {   // girando, o Duelista desvia de parte dos golpes
         popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
         return;
@@ -2067,7 +2067,7 @@ class Unit {
         n *= protection;
         if (this.synergyNoticeT <= 0) { popText(this.pos, '⛨−20%', 'block'); this.synergyNoticeT = 1.2; }
       }
-      if (canBlock(this) && Math.random() < 0.3) {
+      if (!dot && canBlock(this) && Math.random() < 0.3) {
         n *= 0.5;
         popText(this.pos, 'Bloqueio!', 'block');
         if (this.busy <= 0 && THREE.AnimationClip.findByName(this.clips, 'Block_Hit')) this.busy = this.once('Block_Hit', 1.5);
@@ -2101,7 +2101,7 @@ class Unit {
       this.vel.add(tmp.subVectors(this.pos, from).setY(0).normalize().multiplyScalar(k));
     }
     if (this.hp <= 0) return this.die();
-    if (!this.pendingHit && !this.boss && this.busy <= 0) { this.busy = this.once(this.team === 'hero' ? 'Hit_A' : 'Hit_B', 1.6) * 0.8; }
+    if (!dot && !this.pendingHit && !this.boss && this.busy <= 0) { this.busy = this.once(this.team === 'hero' ? 'Hit_A' : 'Hit_B', 1.6) * 0.8; }
   }
 
   die() {
@@ -4648,7 +4648,10 @@ function stasis(enemy) {
   burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0x8feaff, 0xb6a4ff], 6, 2.5, { gravity: 0 });
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, holyLight, dome, whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, leaves, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
+  holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
+  leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
+  whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 

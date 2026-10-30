@@ -306,3 +306,59 @@ function freshContext() {
 }
 
 console.log('OK: escudo de ossos e avisos do Carrasco saem da cena e descartam materiais');
+
+// ---------- veneno, lamaçal e fúria do Rei ----------
+{
+  const { context, hero, unit } = freshContext();
+  const dots = [];
+  hero.takeDamage = (n, from, owner, crit, dot) => { hero.damage += n; dots.push(!!dot); };
+  context.hero = hero;
+  vm.runInContext('api.units.push(hero)', context);
+  context.archer = unit({ enemyKind: 'Venomer', root: { rotation: { y: 0 } }, cd: { venom: 0 }, pos: new Vector3(0, 0, -5) });
+  vm.runInContext('MONSTER_TYPES.Venomer.think(archer, 0.016, hero); updateMonsterFx(0.95)', context);
+  assert.ok(hero.poisonT > 0 && dots[0] === false, 'o virote venenoso acerta quem ficou na linha e envenena');
+  const before = hero.damage;
+  vm.runInContext('updateMonsterFx(1.01)', context);
+  assert.ok(hero.damage > before && dots.at(-1) === true, 'o veneno tira vida por tempo, como dano contínuo');
+  vm.runInContext('cleanseAround(hero.pos, 3)', context);
+  assert.equal(hero.poisonT, 0, 'cura em área remove o veneno');
+  const after = hero.damage;
+  vm.runInContext('updateMonsterFx(2)', context);
+  assert.equal(hero.damage, after, 'sem veneno não há mais dano');
+}
+{
+  const { context, hero, unit } = freshContext();
+  context.hero = hero;
+  context.game = { state: 'fight' };
+  vm.runInContext('api.units.push(hero); Object.defineProperty(G, "game", { get: () => game, configurable: true })', context);
+  context.witch = unit({ enemyKind: 'Witch', root: { rotation: { y: 0 } }, cd: { bog: 0 }, pos: new Vector3(0, 0, -5) });
+  vm.runInContext('MONSTER_TYPES.Witch.think(witch, 0.016, hero); updateMonsterFx(1.25); updateMonsterFx(0.1)', context);
+  assert.ok(hero.slowT > 0, 'o lamaçal deixa lento o herói dentro dele');
+  assert.ok(vm.runInContext('mFx.some((f) => f.bog && f.warning && !f.harmless)', context), 'o lamaçal conta como área de perigo para a IA');
+  context.game.state = 'cleared';
+  vm.runInContext('updateMonsterFx(0.016)', context);
+  assert.equal(hero.slowT, 0, 'fim da fase limpa a lentidão');
+}
+{
+  const { context, hero, unit } = freshContext();
+  context.hero = hero;
+  context.king = unit({ enemyKind: 'King', boss: true, phaseBoss: true, hp: 40, maxHp: 100, speed: 1, cooldown: 1,
+    root: { rotation: { y: 0 } }, cd: { slam: 99, summon: 99, charge: 99, quake: 99 }, pos: new Vector3() });
+  vm.runInContext('MONSTER_TYPES.King.tick(king, 0.1); MONSTER_TYPES.King.tick(king, 1.1)', context);
+  assert.ok(context.king.enraged && context.king.cd.quake <= 0, 'abaixo de 50% o Rei entra na fase 2');
+  hero.pos.set(1, 0, 0);   // colado no Rei: seguro dentro do anel
+  vm.runInContext('MONSTER_TYPES.King.think(king, 0.016, hero)', context);
+  assert.ok(vm.runInContext('mFx.some((f) => f.hole > 0)', context), 'a onda de choque marca um anel no chão');
+  vm.runInContext('updateMonsterFx(1.65)', context);
+  assert.equal(hero.damage, 0, 'quem cola no Rei escapa do anel');
+  assert.ok(vm.runInContext('mFx.some((f) => f.warning && !f.hole && f.announce)', context), 'em seguida vem o pisão no centro');
+  vm.runInContext('updateMonsterFx(1.2)', context);
+  assert.ok(hero.damage > 0, 'quem fica no centro leva o pisão');
+}
+{
+  const { context } = freshContext();
+  const ids = vm.runInContext('campaignThreats(5, 9).map((t) => t.id)', context);
+  assert.ok(ids.includes('Venomer') && ids.includes('Witch'), 'as ameaças novas aparecem no painel da campanha');
+  assert.ok(!vm.runInContext('campaignThreats(1, 4).map((t) => t.id)', context).includes('Venomer'), 'o besteiro venenoso só estreia na fase 5');
+}
+console.log('OK: veneno, lamaçal e fúria do Rei');
