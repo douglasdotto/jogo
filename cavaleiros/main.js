@@ -1626,8 +1626,8 @@ const SKILL_GLYPHS = {
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '⚡', '◷', '⟲'],
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
-  brute: ['⛰', '⤴', '⬢'],
-  summoner: ['✿', '⬢', '♆'],
+  brute: ['⛰', '⤴', '⬢', '▥'],
+  summoner: ['✿', '⬢', '♆', '⚘'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 
@@ -3262,15 +3262,27 @@ function fireEnemyBolt(from, target) {
   scene.add(mesh);
   enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
 }
+// Muralha do Brutamontes: um projétil que passa rente a ele (rumo a outro alvo) bate na pedra e some
+function wallBlocking(b, walls) {
+  for (const h of walls) {
+    if (!(h.wallT > 0) || h.dead || h === b.target) continue;
+    const dx = b.mesh.position.x - h.pos.x, dz = b.mesh.position.z - h.pos.z;
+    if (dx * dx + dz * dz <= 1.4 * 1.4 * h.size * h.size) return h;
+  }
+  return null;
+}
 const enemyBoltGoal = new THREE.Vector3(), enemyBoltDir = new THREE.Vector3(), enemyBoltUp = new THREE.Vector3(0, 1, 0);
 function updateEnemyBolts(dt) {
   if (dt <= 0) return;
+  const walls = enemyBolts.length ? units.filter((u) => u.wallT > 0 && u.team === 'hero') : [];
   for (let i = enemyBolts.length - 1; i >= 0; i--) {
     const b = enemyBolts[i], goal = enemyBoltGoal.copy(b.target.pos);
     goal.y += 1.1;
     b.life -= dt;
     const d = b.mesh.position.distanceTo(goal);
-    if (!b.target.dead) {
+    const wall = walls.length && !b.target.dead ? wallBlocking(b, walls) : null;
+    if (wall) { popText(wall.pos, 'Bloqueado!', 'block'); burst(b.mesh.position, [0xc9bba2, 0xffffff], 6, 2); b.life = 0; }
+    else if (!b.target.dead) {
       b.mesh.quaternion.setFromUnitVectors(enemyBoltUp, enemyBoltDir.subVectors(goal, b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
       if (d < 12 * dt + 0.2) { b.target.takeDamage(b.dmg, b.from.pos, b.from); b.life = 0; }
@@ -5713,6 +5725,46 @@ class Hero extends Unit {
         break;
       }
       // ---------- segundas técnicas (slot 3): um comportamento próprio por herói ----------
+      case 'stone-wall': {
+        // Muralha: o Brutamontes finca os pés; segura metade do dano e engole os projéteis que passam por ele
+        const threats = enemyBolts.filter((b) => b.target !== this && !b.target.dead).length;
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= 3.5).length;
+        if (!force && !threats && close < 3 && !urgentEnemy) return false;
+        effect = () => {
+          this.wallT = (skill.duration || 3) * (0.9 + 0.1 * power);
+          this.busy = this.wallT;
+          this.pendingHit = null;
+          this.vel.set(0, 0, 0);
+          this.loop('Blocking');
+          popText(this.pos, 'Muralha!', 'evolve');
+          FX.quake(this, 1.2);
+          column(this.pos, color, 1.1, 2.4, this.wallT, { follow: this, opacity: 0.3 });
+        };
+        break;
+      }
+      case 'bestiary-fury': {
+        // Fúria do Bestiário: atiça as criaturas ativas; sem nenhuma, a fada atende por pouco tempo
+        const creatures = units.filter((unit) => unit.summonKind && unit.summoner === this && !unit.dead);
+        if (!force && !creatures.length && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
+        if (!force && creatures.length && !enemies.length) return false;
+        effect = () => {
+          const alive = creatures.filter((unit) => !unit.dead && units.includes(unit));
+          if (!alive.length) {
+            const fairy = callSummon(this, 'fairy');
+            fairy.life = Math.min(fairy.life, 6);
+            return;
+          }
+          const duration = scaleBranchEffect(this, 'support', skill.duration || 5) * (0.9 + 0.1 * power);
+          for (const unit of alive) {
+            unit.frenzyT = duration;
+            unit.frenzyHaste = skill.haste || 0.5;
+            wave(unit.pos, color, 0.2, 1.6, 0.5);
+            burst(unit.pos, [color, 0xffffff], 10, 2.5);
+          }
+          popText(this.pos, 'Fúria!', 'evolve');
+        };
+        break;
+      }
       case 'oath-link': {
         // Juramento: o Paladino assume parte do dano do aliado mais ferido
         const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 9));
@@ -6441,10 +6493,11 @@ class Hero extends Unit {
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
+    this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
   }
 
   updateSkillStates(dt) {
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.leechT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.leechT -= dt; this.wallT -= dt;
     if (this.blessT > 0) {
       this.blessT -= dt;
       const heal = Math.min(this.maxHp - this.hp, this.blessHeal * dt);
@@ -6461,6 +6514,7 @@ class Hero extends Unit {
   // dano já reduzido chegando ao herói: segundas técnicas podem esquivar, aparar, refletir, dividir ou segurar a queda
   skillGuard(n, owner) {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
+    if (this.wallT > 0) n *= 0.5;
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
     if (this.riposteT > 0) {
       popText(this.pos, 'Aparou!', 'block');
@@ -6869,11 +6923,13 @@ const SKILL_ANIMS = {
     { clip: 'Jump_Land', hold: 'Unarmed_Idle', f: 0.3, arc: 'ring', hop: 0.6, lean: 0.2 },
     { clip: 'Throw', hold: 'Unarmed_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
     { clip: 'Cheer', hold: 'Block', f: 0.4, lean: -0.2, hop: 0.25 },
+    { clip: 'Block', hold: 'Blocking', f: 0.42, hop: 0.35, lean: 0.12, kick: -0.25 },   // salta e crava os pés: vira muralha
   ],
   summoner: [
     { clip: '2H_Melee_Attack_Stab', hold: 'Spellcasting', f: 0.5, lean: 0.12, float: 0.18 },   // finca o cajado e a fada sai da gema
     { clip: '1H_Melee_Attack_Stab', f: 0.55, arc: 'thrust', lean: 0.22, kick: 0.35 },          // bate no chão e o golem brota
     { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.6, spin: 1.1, float: 0.5, lean: -0.14 },   // ergue o cajado e chama o dragãozinho
+    { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: -0.5, lean: -0.1, float: 0.12 },   // brada o pacto e atiça as criaturas
   ],
 };
 
@@ -7146,7 +7202,10 @@ class SummonedCreature extends Unit {
     this.updateCommon(dt);
     this.age += dt;
     this.life -= dt;
-    this.abilityT -= dt;
+    this.frenzyT = (this.frenzyT || 0) - dt;
+    const fury = this.frenzyT > 0 ? this.frenzyHaste : 0;   // Fúria do Bestiário: ataques e poderes mais rápidos
+    this.abilityT -= dt * (1 + fury);
+    if (fury) this.attackTimer -= dt * fury;
     const summoner = this.summoner;
     if (this.dead || this.life <= 0 || summoner.dead || !units.includes(summoner) || game.state === 'cleared' || game.phase !== this.phase) { this.vanish(); return; }
     this.animate();
