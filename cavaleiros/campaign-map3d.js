@@ -26,7 +26,7 @@ const LANDMARKS = { vila: 'village', santuario: 'shrine', chamas: 'fire', fazend
   horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne' };
 const STATE_COLORS = { locked: 0x7c7f89, open: 0xf3c24f, done: 0xe9dfc6, lockedBanner: 0x5f636d, starOn: 0xffd84a, starOff: 0x3b3f4b, pole: 0x8a5a2e };
 
-const CAMERA_DIST = 38;
+const CAMERA_DIST = 46;   // trecho com 4–6 missões à vista
 const smooth = (x, a, b) => THREE.MathUtils.smoothstep(x, a, b);
 
 export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, states, selected = 0 }) {
@@ -114,7 +114,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     b.position.set(x, 0, z); b.scale.setScalar(s); b.rotation.y = ry;
     g.add(b);
   }
-  const extraTrees = [];
+  const extraTrees = [], windmills = [];
   const BUILD = {
     village(g) {
       addKingdom(g, 'house', -1.3, 0.5, 0.42, 0.4);
@@ -137,8 +137,25 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       addKingdom(g, 'farm', -0.9, 0, 0.6, 0.2);
       addKingdom(g, 'farm', 1.4, 0.8, 0.5, -0.1);
       P(g, 'ico', 0xe2c04a, [1.2, 0.45, -1.4], [0.6, 0.55, 0.6]);
+      // moinho atrás das fazendas; as pás giram numa malha à parte (ver `windmills`)
+      P(g, 'tower', 0xeadfca, [-0.4, 1.2, -2.9], [0.75, 2.4, 0.75]);
+      P(g, 'cone', 0xb5523b, [-0.4, 2.75, -2.9], [0.95, 0.9, 0.95]);
+      P(g, 'box', wood, [-0.4, 0.35, -2.25], [0.35, 0.6, 0.1]);
+      g.updateMatrixWorld(true);
+      windmills.push({ at: g.localToWorld(new THREE.Vector3(-0.4, 2.15, -2.3)), ry: g.rotation.y });
     },
-    lake(g, at) { lakes.push({ x: at.x, z: at.z, r: 2.4, color: 0x5fb3e0 }); reeds(g); },
+    lake(g, at) {
+      lakes.push({ x: at.x, z: at.z, r: 2.4, color: 0x5fb3e0 });
+      reeds(g);
+      // píer saindo da margem do lado da estrada e dois barquinhos
+      P(g, 'box', 0xa9784a, [1.1, 0.06, 2.35], [0.62, 0.08, 2.3]);
+      for (const z of [1.4, 2.4, 3.3]) for (const x of [0.83, 1.37]) P(g, 'cyl', 0x6b4426, [x, -0.15, z], [0.06, 0.55, 0.06]);
+      for (const [x, z, ry, sail] of [[-0.7, 0.5, 0.6, true], [0.5, -1.1, -0.4, false]]) {
+        P(g, 'box', 0x8a5a2e, [x, -0.12, z], [0.5, 0.2, 1.1], [0, ry, 0]);
+        P(g, 'box', 0x5d3a1e, [x, -0.04, z], [0.38, 0.06, 0.9], [0, ry, 0]);
+        if (sail) { P(g, 'cyl', 0x5d3a1e, [x, 0.45, z], [0.03, 1, 0.03]); P(g, 'crystal', 0xf4ecdc, [x + 0.12, 0.55, z], [0.3, 0.75, 0.05], [0, ry, 0]); }
+      }
+    },
     darkLake(g, at) {
       lakes.push({ x: at.x, z: at.z, r: 2.4, color: 0x3e3a5c });
       for (const [x, z] of [[2.4, 0.8], [-2.2, -1.2]]) P(g, 'cyl', 0x4b3d3a, [x, 0.3, z], [0.18, 0.6, 0.18]);
@@ -201,6 +218,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   };
   // 'roof' (prisma) só existe no kingdom-models; aqui uma pirâmide de 4 lados serve
   tmpGeos.set('roof', new THREE.ConeGeometry(0.75, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0));
+  tmpGeos.set('tower', new THREE.CylinderGeometry(0.62, 1, 1, 8));
   function reeds(g) { for (let k = 0; k < 7; k++) { const a = k * 0.9 + 0.3; P(g, 'cone', 0x6f8f3e, [Math.cos(a) * 2.7, 0.35, Math.sin(a) * 2.7], [0.08, 0.7, 0.08]); } }
 
   // ---------- cenário estático ----------
@@ -227,6 +245,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   castle.scale.setScalar(1.45);
   statics.add(castle);
   exclusions.push({ x: castleAt.x, z: castleAt.z, r: 8 });
+  windmills.forEach((w) => exclusions.push({ x: w.at.x, z: w.at.z, r: 1.6 }));
+  const nearCastle = (x, z) => 1 - smooth(Math.hypot(x - castleAt.x, z - castleAt.z), 7, 30);
   for (const x of [-1, 1]) P(statics, 'cone', 0x6b4f8f, [castleAt.x + x * 7.5, 2.5, castleAt.z - 4.5], [0.6, 5, 0.6]);
   if (river) {
     const i = sampleIndex(river.z), a = road[i - 3], b = road[i + 3];
@@ -254,7 +274,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     const patch = Math.sin(cx * 0.31 + cz * 0.17) + Math.sin(cz * 0.23 - cx * 0.11) > 0.4 ? 1 : 0;   // manchas, não xadrez
     color.setHex(wet ? style.bed : style.grass[patch]);
     if (!wet && cy > 1.2) color.setHex(style.cliffs[patch]);   // morros da borda
-    return color.lerp(GLOOM, theme.gloom).multiplyScalar(0.97 + rand() * 0.05);
+    color.lerp(GLOOM, theme.gloom).lerp(CASTLE_TINT, nearCastle(cx, cz) * 0.5);   // escurece rumo ao castelo
+    return color.multiplyScalar(0.97 + rand() * 0.05);
   };
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
     const a = vert(r, c), b = vert(r, c + 1), d = vert(r + 1, c), e = vert(r + 1, c + 1);
@@ -314,7 +335,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   staticGeo.computeVertexNormals();
   for (const g of tmpGeos.values()) g.dispose();
   for (const m of tmpMats.values()) m.dispose();
-  const own = { geos: [staticGeo], mats: [], instanced: [] };
+  const own = { geos: [staticGeo], mats: [], instanced: [], textures: [] };
+  const waterTime = { value: 0 };
   const staticMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   own.mats.push(staticMat);
   const scene = new THREE.Scene();
@@ -341,6 +363,16 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       g.setAttribute('color', new THREE.Float32BufferAttribute(cols3, 3));
       g.computeVertexNormals();
       const mat = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
+      // ondinha leve: a superfície sobe e desce e faixas de brilho correm pela água
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = waterTime;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vWaterPos;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y += sin(position.x * 1.3 + uTime * 1.6) * 0.035 + cos(position.z * 1.1 + uTime * 1.2) * 0.035;\nvWaterPos = position;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vWaterPos;')
+          .replace('#include <opaque_fragment>', 'float glint = sin(vWaterPos.x * 1.7 + vWaterPos.z * 0.9 + uTime * 1.5) * sin(vWaterPos.z * 2.3 - vWaterPos.x * 0.6 - uTime * 1.1);\noutgoingLight += vec3(0.16, 0.18, 0.2) * smoothstep(0.55, 0.95, glint);\n#include <opaque_fragment>');
+      };
       own.geos.push(g); own.mats.push(mat);
       scene.add(new THREE.Mesh(g, mat));
     }
@@ -349,6 +381,14 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   // ---------- natureza instanciada: árvores do Reino (pinheiro e copa redonda) e pedras ----------
   const plants = { pine: [], round: [], rock: [] };
   const free = (x, z, r = 0) => exclusions.every((e) => Math.hypot(x - e.x, z - e.z) > e.r + r);
+  // plantações cercadas nos dois primeiros capítulos (reservam o espaço antes das árvores)
+  const fields = [];
+  for (let k = 0; k < 500 && fields.length < 9; k++) {
+    const x = -A - 7 + rand() * (2 * A + 14), z = zTop + 4 + rand() * (zBottom - zTop - 6);
+    if (chapterAt(x, z) > 1 || roadDist(x, z) < 3.6 || !free(x, z, 2.2) || waterDepth(x, z) > 0.01 || heightAt(x, z) > 0.9) continue;
+    fields.push({ x, z, ry: rand() * Math.PI, wheat: rand() < 0.6 });
+    exclusions.push({ x, z, r: 2 });
+  }
   for (let k = 0; k < 1500; k++) {
     const x = -W + 1 + rand() * (2 * W - 2), z = zTop + 4 + rand() * (zBottom - zTop - 6);
     const theme = themeOf(chapterAt(x, z));
@@ -400,6 +440,163 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     mesh.material.dispose();
   }
 
+  // ---------- detalhes: uma malha instanciada (uma chamada de desenho) por tipo de peça, geometria unitária compartilhada ----------
+  const e = new THREE.Euler();
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);           // base no chão
+  const colGeo = new THREE.CylinderGeometry(1, 1, 1, 8).translate(0, 0.5, 0);
+  const blobGeo = new THREE.IcosahedronGeometry(1, 1);
+  const flowerGeo = new THREE.OctahedronGeometry(1, 0);
+  const plateGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  own.geos.push(boxGeo, colGeo, blobGeo, flowerGeo, plateGeo);
+  const lambert = (opts = {}) => { const m = new THREE.MeshLambertMaterial({ flatShading: true, ...opts }); own.mats.push(m); return m; };
+  const glowMat = (opts = {}) => { const m = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, ...opts }); own.mats.push(m); return m; };
+  const tinted = (hex, x, z, amount = 0.6) => new THREE.Color(hex).lerp(GLOOM, themeOf(chapterAt(x, z)).gloom * amount);
+  function compose(it) {
+    e.set(it.rx || 0, it.ry || 0, it.rz || 0);
+    return m4.compose(v3.set(it.x, it.y, it.z), q.setFromEuler(e), s3.set(it.sx, it.sy ?? it.sx, it.sz ?? it.sx));
+  }
+  function instances(geo, mat, list) {
+    if (!list.length) return null;
+    const im = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((it, k) => { im.setMatrixAt(k, compose(it)); im.setColorAt(k, it.c); });
+    im.computeBoundingSphere();
+    own.instanced.push(im);
+    scene.add(im);
+    return im;
+  }
+  const ground = (x, z) => Math.max(-0.1, heightAt(x, z));
+
+  // plantações: canteiro de terra, fileiras de trigo ou couve e cerca de madeira em volta
+  const fieldParts = [], fence = [];
+  for (const f of fields) {
+    const at = (lx, lz) => ({ x: f.x + Math.cos(f.ry) * lx + Math.sin(f.ry) * lz, z: f.z - Math.sin(f.ry) * lx + Math.cos(f.ry) * lz });
+    const c0 = at(0, 0);
+    fieldParts.push({ ...c0, y: ground(c0.x, c0.z) - 0.02, sx: 2.8, sy: 0.08, sz: 2.2, ry: f.ry, c: tinted(0x8a6a3e, f.x, f.z) });
+    for (let r = -2; r <= 2; r++) {
+      const p = at(r * 0.52, 0);
+      fieldParts.push({ ...p, y: ground(p.x, p.z), sx: 0.3, sy: f.wheat ? 0.32 : 0.2, sz: 1.85, ry: f.ry, c: tinted(f.wheat ? (r % 2 ? 0xe8c552 : 0xd9b23f) : 0x6fbf3a, f.x, f.z) });
+    }
+    const hw = 1.55, hd = 1.25, wood2 = tinted(0x9a6a3a, f.x, f.z, 0.8);
+    for (const [ax, az, bx, bz] of [[-hw, -hd, hw, -hd], [hw, -hd, hw, hd], [hw, hd, -hw, hd], [-hw, hd, -hw, -hd]]) {
+      const len = Math.hypot(bx - ax, bz - az), steps = Math.round(len / 0.75);
+      for (let s = 0; s < steps; s++) { const p = at(ax + (bx - ax) * s / steps, az + (bz - az) * s / steps); fence.push({ ...p, y: ground(p.x, p.z), sx: 0.07, sy: 0.5, ry: f.ry, c: wood2 }); }
+      const m = at((ax + bx) / 2, (az + bz) / 2), ry = f.ry + Math.atan2(-(bz - az), bx - ax);
+      for (const h of [0.18, 0.36]) fence.push({ ...m, y: ground(m.x, m.z) + h, sx: len, sy: 0.05, sz: 0.04, ry, c: wood2 });
+    }
+  }
+  instances(boxGeo, lambert(), [...fieldParts, ...fence]);
+
+  // flores e arbustos: muitos nos capítulos vivos, poucos e roxos nos sombrios
+  const PETALS = [0xff8fb1, 0xffe066, 0xffffff, 0xc59bff, 0xff7a59, 0x8fd3ff], DUSK_PETALS = [0x9c7fc9, 0x7b6f99, 0xb7a6d9];
+  const flowers = [], bushes = [];
+  for (let k = 0; k < 1400; k++) {
+    const x = -W + 2 + rand() * (2 * W - 4), z = zTop + 4 + rand() * (zBottom - zTop - 6);
+    const theme = themeOf(chapterAt(x, z)), lush = 1 - theme.gloom;
+    if (roadDist(x, z) < 1.4 || !free(x, z, 0.3) || waterDepth(x, z) > 0.02 || heightAt(x, z) > 1.3) continue;
+    const roll = rand();
+    if (roll < 0.1 + 0.12 * lush) {
+      const style = styleOf(theme), s = 0.32 + rand() * 0.28;
+      bushes.push({ x, z, y: ground(x, z) + s * 0.35, sx: s, sy: s * 0.75, ry: rand() * 3, c: new THREE.Color(style.canopy[k % style.canopy.length]).multiplyScalar(0.88).lerp(GLOOM, theme.dead ? 0.6 : theme.gloom * 0.6) });
+    } else if (roll < 0.1 + 0.45 * lush) {
+      const list = theme.dead ? DUSK_PETALS : PETALS, hex = list[Math.floor(rand() * list.length)];
+      for (let f = 0, n = 3 + Math.floor(rand() * 4); f < n; f++) {
+        const fx = x + (rand() - 0.5) * 0.9, fz = z + (rand() - 0.5) * 0.9;
+        flowers.push({ x: fx, z: fz, y: ground(fx, fz) + 0.1, sx: 0.09, sy: 0.12, ry: rand() * 3, c: new THREE.Color(hex) });
+      }
+    }
+  }
+  instances(blobGeo, lambert(), bushes);
+  instances(flowerGeo, lambert(), flowers);
+
+  // ruínas: colunas quebradas de pé e tombadas, sobretudo no capítulo das ruínas
+  const columns = [];
+  for (let k = 0; k < 260; k++) {
+    const x = -A - 8 + rand() * (2 * A + 16), z = zTop + 4 + rand() * (zBottom - zTop - 6), ch = chapterAt(x, z);
+    if (rand() > (ch === 2 ? 0.28 : ch >= 3 ? 0.1 : 0)) continue;
+    if (roadDist(x, z) < 2.4 || !free(x, z, 0.6) || waterDepth(x, z) > 0.02) continue;
+    const c = tinted(rand() < 0.5 ? 0xcfc6b4 : 0xb8ae9c, x, z, 0.7);
+    if (rand() < 0.35) columns.push({ x, z, y: ground(x, z) + 0.2, sx: 0.2, sy: 1 + rand() * 0.8, rx: Math.PI / 2, ry: rand() * 3, c });
+    else columns.push({ x, z, y: ground(x, z) - 0.05, sx: 0.22, sy: 0.35 + rand() * 1.3, rz: (rand() - 0.5) * 0.25, c });
+    if (rand() < 0.5) columns.push({ x: x + 0.35, z: z + 0.2, y: ground(x, z) - 0.02, sx: 0.36, sy: 0.14, sz: 0.36, ry: rand(), c });   // base
+  }
+  instances(colGeo, lambert(), columns);
+
+  // tochas e lanternas ao longo da estrada, alternando os lados; o brilho cresce nos capítulos escuros
+  const torchPosts = [], torchHeads = [], torchGlows = [];
+  for (let s = 4, side = 1, i = 0; s < layout.length - 2; s += 3.3, side = -side) {
+    while (i < road.length - 1 && road[i].s < s) i++;
+    const p = road[i], a = road[Math.max(0, i - 2)], b = road[Math.min(road.length - 1, i + 2)];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1, x = p.x - (b.z - a.z) / len * 1.6 * side, z = p.z + (b.x - a.x) / len * 1.6 * side;
+    if (layout.nodes.some((n) => Math.hypot(n.x - x, n.z - z) < 2.1) || (river && Math.abs(z - river.z) < river.half + 1.4)) continue;
+    const y = ground(x, z), gloom = themeOf(chapterAt(x, z)).gloom;
+    torchPosts.push({ x, z, y, sx: 0.06, sy: 1.15, c: new THREE.Color(0x4a3220) });
+    torchHeads.push({ x, z, y: y + 1.12, sx: 0.17, sy: 0.22, ry: 0.6, c: new THREE.Color(0xffd36a) });
+    torchGlows.push({ x, z, y: y + 1.22, sx: 0.55, c: new THREE.Color(0xffa23a).multiplyScalar(0.3 + 0.7 * gloom) });
+  }
+  instances(colGeo, lambert(), torchPosts);
+  const flameMat = new THREE.MeshBasicMaterial();   // chama acesa: sem sombreamento
+  own.mats.push(flameMat);
+  instances(boxGeo, flameMat, torchHeads);
+  const torchGlow = glowMat({ opacity: 0.55 });
+  instances(blobGeo, torchGlow, torchGlows);
+
+  // pás do moinho
+  const blades = windmills.map((w) => {
+    const parts = [0, 1, 2, 3].map((k) => new THREE.BoxGeometry(0.16, 1.25, 0.03).translate(0.05, 0.66, 0).rotateZ(k * Math.PI / 2));
+    const sails = [0, 1, 2, 3].map((k) => new THREE.BoxGeometry(0.32, 0.8, 0.02).translate(0.22, 0.8, 0.02).rotateZ(k * Math.PI / 2));
+    const geo = mergeGeometries([...parts, ...sails, new THREE.CylinderGeometry(0.1, 0.1, 0.16, 6).rotateX(Math.PI / 2)]);
+    [...parts, ...sails].forEach((g) => g.dispose());
+    own.geos.push(geo);
+    const mesh = new THREE.Mesh(geo, lambert({ color: 0xf0e6d2 }));
+    mesh.position.copy(w.at);
+    mesh.rotation.set(0, w.ry, 0, 'YXZ');
+    scene.add(mesh);
+    return mesh;
+  });
+
+  // névoa rasteira rumo ao castelo: placas com degradê redondo que vagueiam devagar
+  const mistTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const ctx = c.getContext('2d'), grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, 64, 64);
+    const t = new THREE.CanvasTexture(c); own.textures.push(t); return t;
+  })();
+  const mist = [];
+  for (let k = 0; k < 400 && mist.length < 42; k++) {
+    const x = -W + 3 + rand() * (2 * W - 6), z = zTop + 2 + rand() * (zBottom - zTop - 4), gloom = themeOf(chapterAt(x, z)).gloom;
+    if (rand() > gloom * 0.9 + nearCastle(x, z) * 0.5) continue;
+    mist.push({ x, z, bx: x, y: Math.max(0, heightAt(x, z)) + 0.35 + rand() * 0.5, sx: 5 + rand() * 5, sy: 1, sz: 3 + rand() * 3, c: new THREE.Color(0xb5a6d4).multiplyScalar(0.6 + 0.4 * gloom) });
+  }
+  const mistMat = new THREE.MeshBasicMaterial({ map: mistTex, transparent: true, opacity: 0.38, depthWrite: false });
+  own.mats.push(mistMat);
+  const mistMesh = instances(plateGeo, mistMat, mist);
+  if (mistMesh) mistMesh.frustumCulled = false;
+
+  // nuvens leves cruzando o céu
+  const clouds = [];
+  for (let k = 0; k < 8; k++) {
+    const cx = -W - 10 + rand() * (2 * W + 20), cz = zTop + 6 + rand() * (zBottom - zTop - 10), cy = 14 + rand() * 2;
+    for (let p = 0; p < 4; p++) clouds.push({ bx: cx + (p - 1.5) * 0.85, x: 0, y: cy + (p % 2) * 0.25, z: cz + (rand() - 0.5) * 0.8, sx: 0.75 + rand() * 0.4, sy: 0.42, sz: 0.7, ry: rand() * 3, c: new THREE.Color(0xffffff) });
+  }
+  const cloudMesh = instances(blobGeo, new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.5, depthWrite: false, emissive: 0x666666 }), clouds.map((c) => ({ ...c, x: c.bx })));
+  if (cloudMesh) own.mats.push(cloudMesh.material);
+  if (cloudMesh) cloudMesh.frustumCulled = false;
+  const span = 2 * W + 24;
+  function animateDetails(t) {
+    waterTime.value = t;
+    blades.forEach((b) => (b.rotation.z = -t * 0.9));
+    torchGlow.opacity = 0.45 + Math.sin(t * 9) * 0.05 + Math.sin(t * 13.7) * 0.04;
+    if (mistMesh) {
+      mist.forEach((m, k) => { m.x = m.bx + Math.sin(t * 0.12 + k) * 1.4; mistMesh.setMatrixAt(k, compose(m)); });
+      mistMesh.instanceMatrix.needsUpdate = true;
+    }
+    if (cloudMesh) {
+      clouds.forEach((c, k) => { c.x = ((c.bx + t * 0.45 + W + 12) % span + span) % span - W - 12; cloudMesh.setMatrixAt(k, compose(c)); });
+      cloudMesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
   // ---------- marcos das missões: pedestal, mastro, estandarte e estrelas ----------
   const N = layout.nodes.length;
   const pedestalGeo = new THREE.CylinderGeometry(0.8, 0.95, 0.4, 6).translate(0, 0.2, 0);
@@ -412,33 +609,42 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   }
   const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.07, bevelEnabled: false }).translate(0, 0, -0.035);
   const ringGeo = new THREE.RingGeometry(1.05, 1.32, 6).rotateX(-Math.PI / 2);
-  own.geos.push(pedestalGeo, poleGeo, bannerGeo, starGeo, ringGeo);
+  const beamGeo = new THREE.CylinderGeometry(0.8, 1.15, 7, 14, 1, true).translate(0, 3.5, 0);
+  own.geos.push(pedestalGeo, poleGeo, bannerGeo, starGeo, ringGeo, beamGeo);
   const markMat = () => { const m = new THREE.MeshLambertMaterial({ flatShading: true }); own.mats.push(m); return m; };
   const pedestals = new THREE.InstancedMesh(pedestalGeo, markMat(), N);
   const poles = new THREE.InstancedMesh(poleGeo, markMat(), N);
   const banners = new THREE.InstancedMesh(bannerGeo, markMat(), N);
   const stars = new THREE.InstancedMesh(starGeo, markMat(), N * 3);
-  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.9, depthWrite: false });
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.95, depthWrite: false });
+  const beamMat = glowMat({ color: 0xffd76a, opacity: 0.2, side: THREE.DoubleSide });
   own.mats.push(ringMat);
-  const ring = new THREE.Mesh(ringGeo, ringMat);
+  const ring = new THREE.Mesh(ringGeo, ringMat), beam = new THREE.Mesh(beamGeo, beamMat);
   for (const im of [pedestals, poles, banners, stars]) { im.frustumCulled = false; own.instanced.push(im); scene.add(im); }
-  scene.add(ring);
+  scene.add(ring, beam);
+  const pickables = [pedestals, poles, banners];   // uma instância por missão: instanceId = índice da missão
   const kindOf = (st) => (!st.open ? 'locked' : st.stars > 0 ? 'done' : 'open');
-  layout.nodes.forEach((n, i) => {
-    const st = states[i], kind = kindOf(st);
-    n.y = Math.max(0, heightAt(n.x, n.z));
-    pedestals.setColorAt(i, color.setHex(STATE_COLORS[kind]));
-    poles.setColorAt(i, color.setHex(kind === 'locked' ? STATE_COLORS.locked : STATE_COLORS.pole));
-    banners.setColorAt(i, color.setHex(kind === 'locked' ? STATE_COLORS.lockedBanner : chapterColor(n.chapter)));
-    for (let k = 0; k < 3; k++) stars.setColorAt(i * 3 + k, color.setHex(k < st.stars ? STATE_COLORS.starOn : STATE_COLORS.starOff));
-  });
+  const MARK = 1.3;   // marcos maiores que os do diorama original: dá para mirar
   let sel = selected, hover = -1;
-  const e = new THREE.Euler();
+  const bright = new THREE.Color(0xffffff);
+  // cores por estado; a missão sob o mouse ou selecionada clareia
+  function paint() {
+    layout.nodes.forEach((n, i) => {
+      const st = states[i], kind = kindOf(st), lit = i === hover ? 0.35 : i === sel ? 0.2 : 0;
+      pedestals.setColorAt(i, color.setHex(STATE_COLORS[kind]).lerp(bright, lit));
+      poles.setColorAt(i, color.setHex(kind === 'locked' ? STATE_COLORS.locked : STATE_COLORS.pole).lerp(bright, lit * 0.5));
+      banners.setColorAt(i, color.setHex(kind === 'locked' ? STATE_COLORS.lockedBanner : chapterColor(n.chapter)).lerp(bright, lit));
+      for (let k = 0; k < 3; k++) stars.setColorAt(i * 3 + k, color.setHex(k < st.stars ? STATE_COLORS.starOn : STATE_COLORS.starOff));
+    });
+    for (const im of [pedestals, poles, banners, stars]) im.instanceColor.needsUpdate = true;
+  }
+  layout.nodes.forEach((n) => (n.y = Math.max(0, heightAt(n.x, n.z))));
+  paint();
   function placeMarkers(t) {
     layout.nodes.forEach((n, i) => {
       const kind = kindOf(states[i]);
-      const pulse = kind === 'open' && !still ? Math.sin(t * 4 + i) * 0.07 : 0;
-      const grow = (i === hover ? 1.18 : i === sel ? 1.1 : 1) + pulse;
+      const pulse = states[i].next && !still ? Math.sin(t * 4) * 0.09 : 0;   // a próxima missão disponível pulsa
+      const grow = MARK * ((i === hover ? 1.2 : i === sel ? 1.12 : kind === 'locked' ? 0.88 : 1) + pulse);
       m4.compose(v3.set(n.x, n.y, n.z), q.identity(), s3.setScalar(grow));
       pedestals.setMatrixAt(i, m4);
       poles.setMatrixAt(i, m4);
@@ -458,7 +664,9 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     if (at) {
       ring.position.set(at.x, at.y + 0.06, at.z);
       ring.rotation.y = still ? 0 : t * 0.6;
-      ring.scale.setScalar(1.15 + (still ? 0 : Math.sin(t * 3) * 0.06));
+      ring.scale.setScalar(MARK * (1.25 + (still ? 0 : Math.sin(t * 3) * 0.06)));
+      beam.position.set(at.x, at.y, at.z);
+      beamMat.opacity = 0.16 + (still ? 0 : Math.sin(t * 2.5) * 0.05);
     }
   }
 
@@ -478,8 +686,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   sun.position.set(-10, 25, 12);
   scene.add(sun);
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 160);
-  const focusOf = (i) => ({ x: THREE.MathUtils.clamp(layout.nodes[i].x * 0.6, -A, A), z: layout.nodes[i].z - 1.5 });
-  const limits = { minZ: castleAt.z - 1, maxZ: n0.z - 1 };
+  const focusOf = (i) => ({ x: THREE.MathUtils.clamp(layout.nodes[i].x * 0.6, -A, A), z: layout.nodes[i].z - 3 });
+  const limits = { minZ: castleAt.z - 1, maxZ: n0.z - 3 };
   const view = { ...focusOf(Math.min(sel, N - 1)), zoom: 1 };
   const goal = { ...view };
   function clampGoal() {
@@ -494,9 +702,12 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     const d = CAMERA_DIST * view.zoom;
     camera.position.set(view.x, d * 0.78, view.z + d * 0.62);
     camera.lookAt(view.x, 0, view.z);
-    const gloom = themeOf(chapterAt(view.x, view.z)).gloom;
+    // céu e névoa escurecem e fecham perto do castelo
+    const gloom = Math.max(themeOf(chapterAt(view.x, view.z)).gloom, nearCastle(view.x, view.z) * 0.8);
     scene.background.lerpColors(SKY[0], SKY[1], gloom);
     scene.fog.color.copy(scene.background);
+    scene.fog.near = (50 - gloom * 16) * d / 38;
+    scene.fog.far = (105 - gloom * 30) * d / 38;
   }
   function resize() {
     const w = Math.max(1, map.clientWidth), h = Math.max(1, map.clientHeight);
@@ -509,24 +720,56 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   ro?.observe(map);
   resize();
 
-  // botões das missões (foco, teclado, dica e clique) acompanham o marco projetado na tela
+  // selos das missões (botões com número e estrelas: foco, teclado, dica e clique) flutuam sobre o estandarte
   const proj = new THREE.Vector3();
+  const LABEL_Y = 4.9;
   function placeButtons() {
     layout.nodes.forEach((n, i) => {
       const b = buttons[i];
       if (!b) return;
-      proj.set(n.x, n.y + 1.5, n.z).project(camera);
+      proj.set(n.x, n.y + LABEL_Y * MARK, n.z).project(camera);
+      const top = (1 - proj.y) * 50;
       b.style.left = `${((proj.x + 1) * 50).toFixed(2)}%`;
-      b.style.top = `${((1 - proj.y) * 50).toFixed(2)}%`;
+      b.style.top = `${top.toFixed(2)}%`;
+      b.style.zIndex = i === sel ? 300 : i === hover ? 250 : String(10 + Math.round(Math.max(0, top)));   // mais perto da câmera fica na frente
     });
+  }
+  function setHover(i) {
+    if (i === hover) return;
+    buttons[hover]?.classList.remove('hover');
+    hover = i;
+    buttons[hover]?.classList.add('hover');
+    map.classList.toggle('pointing', hover >= 0);
+    paint();
+    dirty = true;
   }
   const offHover = [];
   buttons.forEach((b, i) => {
-    const enter = () => (hover = i), leave = () => { if (hover === i) hover = -1; };
+    const enter = () => setHover(i), leave = () => { if (hover === i) setHover(-1); };
     b.addEventListener('pointerenter', enter);
     b.addEventListener('pointerleave', leave);
     offHover.push(() => { b.removeEventListener('pointerenter', enter); b.removeEventListener('pointerleave', leave); });
   });
+
+  // clique direto no marco 3D: raio contra pedestal/mastro/estandarte; se errar por pouco, vale o marco mais próximo na tela
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  function pick(ev) {
+    const r = canvas.getBoundingClientRect();
+    const px = ev.clientX - r.left, py = ev.clientY - r.top;
+    if (px < 0 || py < 0 || px > r.width || py > r.height) return -1;
+    ndc.set(px / r.width * 2 - 1, -(py / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    pickables.forEach((im) => im.computeBoundingSphere());
+    const hit = ray.intersectObjects(pickables, false)[0];
+    if (hit?.instanceId != null) return hit.instanceId;
+    let best = -1, bestD = 34;
+    layout.nodes.forEach((n, i) => {
+      proj.set(n.x, n.y + 1.4 * MARK, n.z).project(camera);
+      const d = Math.hypot((proj.x + 1) / 2 * r.width - px, (1 - proj.y) / 2 * r.height - py);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  }
 
   // arrastar move a câmera; a roda aproxima (com limites); um arrasto não vira clique
   let drag = null, dragged = false;
@@ -536,10 +779,13 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     dragged = false;
   };
   const onMove = (ev) => {
-    if (!drag) return;
+    if (!drag) {
+      if (ev.target === canvas) setHover(pick(ev));
+      return;
+    }
     const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
     if (!drag.moving && Math.hypot(dx, dy) < 6) return;
-    if (!drag.moving) { drag.moving = true; map.setPointerCapture?.(drag.id); map.classList.add('dragging'); }
+    if (!drag.moving) { drag.moving = true; map.setPointerCapture?.(drag.id); map.classList.add('dragging'); setHover(-1); }
     const perPx = (2 * CAMERA_DIST * view.zoom * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / Math.max(1, map.clientHeight);
     goal.x = drag.gx - dx * perPx;
     goal.z = drag.gz - dy * perPx * 1.3;
@@ -551,17 +797,23 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     drag = null;
     map.classList.remove('dragging');
   };
+  const onLeave = () => { if (!drag) setHover(-1); };
   const onClick = (ev) => { if (dragged) { ev.stopPropagation(); ev.preventDefault(); dragged = false; } };
+  const onCanvasClick = (ev) => { const i = pick(ev); if (i >= 0) buttons[i]?.click(); };
+  const onCanvasDouble = (ev) => { const i = pick(ev); if (i >= 0) buttons[i]?.ondblclick?.(ev); };
   const onWheel = (ev) => { ev.preventDefault(); goal.zoom *= Math.exp(ev.deltaY * 0.0012); clampGoal(); };
   map.addEventListener('pointerdown', onDown);
   map.addEventListener('pointermove', onMove);
   map.addEventListener('pointerup', onUp);
   map.addEventListener('pointercancel', onUp);
+  map.addEventListener('pointerleave', onLeave);
   map.addEventListener('click', onClick, true);
   map.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('click', onCanvasClick);
+  canvas.addEventListener('dblclick', onCanvasDouble);
 
   // ---------- laço: desenha só enquanto o mapa está visível; fora da tela, libera tudo ----------
-  let raf = 0, last = performance.now(), disposed = false;
+  let raf = 0, last = performance.now(), disposed = false, frames = 0;
   function frame(now) {
     if (disposed) return;
     if (!map.isConnected || map.closest('.hidden')) { dispose(); return; }
@@ -575,7 +827,9 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     }
     if (dirty) { placeCamera(); placeButtons(); dirty = false; }
     placeMarkers(now / 1000);
+    if (!still || frames === 0) animateDetails(now / 1000);
     renderer.render(scene, camera);
+    if (++frames === 2) canvas.dataset.drawCalls = String(renderer.info.render.calls);   // conferência de desempenho
   }
   placeCamera();
   placeButtons();
@@ -591,21 +845,27 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     map.removeEventListener('pointermove', onMove);
     map.removeEventListener('pointerup', onUp);
     map.removeEventListener('pointercancel', onUp);
+    map.removeEventListener('pointerleave', onLeave);
     map.removeEventListener('click', onClick, true);
     map.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('click', onCanvasClick);
+    canvas.removeEventListener('dblclick', onCanvasDouble);
     own.instanced.forEach((im) => im.dispose());
     own.geos.forEach((g) => g.dispose());
     own.mats.forEach((m) => m.dispose());
+    own.textures.forEach((t) => t.dispose());
     renderer.dispose();
     renderer.forceContextLoss();
     canvas.remove();
-    map.classList.remove('is-3d', 'dragging');
+    map.classList.remove('is-3d', 'dragging', 'pointing');
   }
 
   return {
     select(i) {
       if (i < 0 || i >= N) return;
       sel = i;
+      paint();
+      dirty = true;
       Object.assign(goal, focusOf(i));
       clampGoal();
     },

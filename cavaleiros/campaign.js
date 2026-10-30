@@ -713,6 +713,9 @@ export function campaignMapLayout(missions = MISSIONS, road = CAMPAIGN_ROAD) {
   return { nodes, road: samples, regions, length };
 }
 
+// "Capítulo IV · ..." → "IV"; sem algarismo romano no nome, usa a posição
+const chapterNumeral = (name, index) => /Cap[ií]tulo\s+([IVXLC]+)\b/.exec(name)?.[1] || String(index + 1);
+
 // desenha o mapa dentro de `root`; onPlay(missão) quando o jogador confirma
 // mountMap(mapa, dados), opcional, desenha o mapa 3D e devolve { select(i) }; sem ele fica o mapa plano
 export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null, storageWarning = '', getTeamRecommendation = null, mountMap = null) {
@@ -729,6 +732,10 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
   root.innerHTML = `
     <div class="camp-head">
       <span class="camp-title"><span class="camp-crown" aria-hidden="true">♛</span>Campanha</span>
+      <nav class="camp-chapters" aria-label="Capítulos">${layout.regions.map((r, k) => {
+        const first = MISSIONS.findIndex((m) => m.chapter === r.name);
+        return `<button type="button" class="camp-chap${unlocked(first) ? '' : ' locked'}" data-tip="${attr(r.name)}" aria-label="${attr(r.name)}">${chapterNumeral(r.name, k)}</button>`;
+      }).join('')}</nav>
       <span class="camp-progress" role="progressbar" aria-label="Estrelas da campanha" aria-valuemin="0" aria-valuemax="${MISSIONS.length * 3}" aria-valuenow="${total}">
         <i aria-hidden="true">★</i><b>${total}</b><span>/${MISSIONS.length * 3}</span>
       </span>
@@ -745,10 +752,11 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
   announcement.setAttribute('aria-live', 'polite');
   announcement.setAttribute('aria-atomic', 'true');
   root.appendChild(announcement);
+  const next = MISSIONS.findIndex((m, i) => unlocked(i) && starsOf(m.id) === 0);   // próxima disponível: pulsa no mapa
   const nodes = MISSIONS.map((m, i) => {
     const b = document.createElement('button');
     const open = unlocked(i), stars = starsOf(m.id), medal = missionMedal(m.id);
-    b.className = `camp-node${open ? '' : ' locked'}${stars ? ' done' : ''}`;
+    b.className = `camp-node${open ? '' : ' locked'}${stars ? ' done' : ''}${i === next ? ' next' : ''}`;
     b.style.left = layout.nodes[i].left + '%';
     b.style.top = layout.nodes[i].top + '%';
     b.setAttribute('data-tip', `${i + 1}. ${m.name}`);
@@ -764,9 +772,19 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
   let mapView = null;
   try {
     mapView = typeof mountMap === 'function'
-      ? mountMap(map, { layout, nodes, missions: MISSIONS, states: MISSIONS.map((m, i) => ({ open: unlocked(i), stars: starsOf(m.id) })), selected: sel })
+      ? mountMap(map, { layout, nodes, missions: MISSIONS, states: MISSIONS.map((m, i) => ({ open: unlocked(i), stars: starsOf(m.id), next: i === next })), selected: sel })
       : null;
   } catch (err) { console.warn('Mapa 3D indisponível', err); mapView = null; }   // sem WebGL: fica o mapa plano
+  // faixa de capítulos: um clique pula para a primeira missão ainda sem estrelas do capítulo (ou a primeira dele)
+  const chapterButtons = Array.from(root.querySelectorAll?.('.camp-chap') || []);
+  chapterButtons.forEach((b, k) => {
+    const name = layout.regions[k]?.name;
+    b.onclick = () => {
+      const own = MISSIONS.map((m, i) => i).filter((i) => MISSIONS[i].chapter === name);
+      const target = own.find((i) => unlocked(i) && starsOf(MISSIONS[i].id) === 0) ?? own[0];
+      if (target !== undefined) select(target, true);
+    };
+  });
   // Painel enxuto: nome, objetivo, estrelas e ameaças à vista; história, plano, trecho, medalha e recordes ficam nas dicas.
   function select(i, moveFocus = false, focusPlay = false) {
     sel = i;
@@ -775,6 +793,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
       n.setAttribute('aria-pressed', String(k === i));
     });
     mapView?.select?.(i);
+    chapterButtons.forEach((b, k) => b.classList?.toggle('sel', layout.regions[k]?.name === MISSIONS[i].chapter));
     const m = MISSIONS[i], open = unlocked(i);
     const stars = starsOf(m.id);
     const biome = typeof mapBiome === 'function' ? mapBiome(m) : '';
@@ -834,7 +853,7 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     info.querySelector('.camp-play').onclick = play;
     const replayButton = info.querySelector('.camp-replay-button');
     if (replayButton && showReplayButton) replayButton.onclick = () => select(replayTargetIndex, false, true);
-    if (moveFocus) nodes[i].focus();
+    if (moveFocus) nodes[i].focus({ preventScroll: true });   // o mapa 3D desliza a câmera; o navegador não rola o recorte
     else if (focusPlay) info.querySelector('.camp-play')?.focus();
   }
   function play() { if (unlocked(sel)) onPlay(MISSIONS[sel]); }
@@ -842,9 +861,12 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
     if (!root.isConnected || root.closest('.hidden')) return;
     const active = document.activeElement;
     const onNode = active?.classList?.contains('camp-node');
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowRight') && (onNode || active === document.body)) select(Math.min(MISSIONS.length - 1, sel + 1), true);
-    else if ((e.key === 'ArrowDown' || e.key === 'ArrowLeft') && (onNode || active === document.body)) select(Math.max(0, sel - 1), true);
-    else if (e.key === 'Enter' && onNode) play();
+    const onMap = onNode || active === document.body || active === map || active?.classList?.contains('camp-chap');
+    const k = e.key?.length === 1 ? e.key.toLowerCase() : e.key;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if ((k === 'ArrowUp' || k === 'ArrowRight' || k === 'd') && onMap) select(Math.min(MISSIONS.length - 1, sel + 1), true);
+    else if ((k === 'ArrowDown' || k === 'ArrowLeft' || k === 'a') && onMap) select(Math.max(0, sel - 1), true);
+    else if (e.key === 'Enter' && (onNode || active === document.body || active === map)) play();
     else return;
     e.preventDefault();
   }
