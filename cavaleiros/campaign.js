@@ -456,7 +456,7 @@ export const variantOpen = () => true;
 
 // Critérios cumulativos servem tanto para calcular estrelas quanto para
 // explicar o resultado no fim da missão.
-export function starConditions({ won, falls, hpRatio, goal, shrineRatio, timeLeft, endlessTime, leaks, seconds }) {
+export function starConditions({ won, falls, hpRatio, goal, shrineRatio, villagerRatio, timeLeft, endlessTime, leaks, seconds }) {
   const completed = Boolean(won);
   const hpPercent = Math.round(Math.max(0, Math.min(1, Number(hpRatio) || 0)) * 100);
   const fallCount = Math.max(0, Number(falls) || 0);
@@ -472,6 +472,15 @@ export function starConditions({ won, falls, hpRatio, goal, shrineRatio, timeLef
       { label: 'Defender o santuário até o fim', achieved: completed },
       { label: `Santuário com 50%+ de vida (atual ${shrinePercent}%)`, achieved: shrineSafe },
       { label: `Santuário 50%+ e sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'})`, achieved: shrineSafe && fallCount === 0 },
+    ];
+  }
+  if (goal?.type === 'escort') {
+    const escortHp = Math.max(0, Math.min(1, Number(villagerRatio) || 0));
+    const escortPercent = Math.round(escortHp * 100);
+    return [
+      { label: 'Concluir a escolta', achieved: completed },
+      { label: `Aldeão com 50%+ de vida (atual ${escortPercent}%)`, achieved: completed && escortHp >= 0.5 },
+      { label: `Aldeão com 75%+ de vida e sem quedas (${fallCount} ${fallCount === 1 ? 'queda' : 'quedas'}; atual ${escortPercent}%)`, achieved: completed && escortHp >= 0.75 && fallCount === 0 },
     ];
   }
   if (goal?.type === 'hunt') {
@@ -533,6 +542,7 @@ export function saveStars(id, stars) {
 // metas de estrela mostradas no mapa, conforme o objetivo
 export function starTargetsFor(goal) {
   if (goal.type === 'nofall') return ['1★ Concluir a missão', '2★ Sem quedas e 75%+ de vida', '3★ Sem quedas e 90%+ de vida'];
+  if (goal.type === 'escort') return ['1★ Concluir a escolta', '2★ Aldeão com 50%+ de vida', '3★ Aldeão com 75%+ de vida e sem quedas'];
   if (goal.type === 'endless') return goal.marks.map((mark, i) => `${i + 1}★ Aguentar ${mark} s`);
   if (goal.type === 'defend') return ['1★ Defender o santuário', '2★ Santuário com 50%+ de vida', '3★ Santuário 50%+ e sem quedas'];
   if (goal.type === 'hunt') return ['1★ Abater o alvo', '2★ Sem quedas', '3★ Sem quedas e metade do tempo sobrando'];

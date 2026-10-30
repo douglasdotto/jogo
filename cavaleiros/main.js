@@ -133,7 +133,9 @@ const DIFFICULTY_PICK_HINT = '← → · Enter · Esc';
 const difficultyTeamRecommendation = (option, mission) => {
   if (option.id !== 'pesadelo') return '';
   if (mission?.heroes === 1) return 'Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.';
-  if (mission?.heroes === 2) return 'Equipe para 2 heróis: Paladino (cura) e Piromante (dano em área).';
+  if (mission?.heroes === 2) return ['defend', 'breach', 'escort', 'rescue'].includes(mission.goal?.type)
+    ? 'Equipe para 2 heróis: Paladino (cura) e Guardião (proteção).'
+    : 'Equipe para 2 heróis: Paladino (cura) e Piromante (dano em área).';
   if (mission?.heroes === 3) return 'Equipe para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área).';
   return 'Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).';
 };
@@ -2027,7 +2029,7 @@ const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dea
 const heroes = () => units.filter((u) => u.team === 'hero');
 const allies = () => units.filter((u) => u.team !== 'skeleton' && !(u.captive && !u.rescued));   // o prisioneiro preso não é alvo
 let activeTargetContext = null;
-const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [] };
+const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], defenseAnchor: null };
 
 function makeTargetContext(reuse = null) {
   const goal = game.mission?.goal;
@@ -2076,6 +2078,8 @@ function makeTargetContext(reuse = null) {
   context.friends = friends;
   context.villager = villager;
   context.plateauBonus = world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0;
+  context.defenseAnchor = goal?.type === 'defend' || goal?.type === 'breach'
+    ? party.find((hero) => !hero.dead) || null : null;
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
   context.alliedUnits = alliedUnits;
@@ -2182,8 +2186,41 @@ function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
+const fixedDefenseGoal = (goal) => goal?.type === 'defend' || goal?.type === 'breach';
+function defenseAnchor(context) {
+  if (!fixedDefenseGoal(context.goal)) return null;
+  if (context.defenseAnchor && !context.defenseAnchor.dead) return context.defenseAnchor;
+  context.defenseAnchor = context.party.find((hero) => !hero.dead) || null;
+  return context.defenseAnchor;
+}
+
+function anotherDefenseHeroCanIntercept(hero, target, context) {
+  const { party, villager, plateauBonus = 0 } = context;
+  for (const ally of party) {
+    if (ally === hero || ally.dead) continue;
+    const fromPost = tacticalDistance(ally.post, target.pos);
+    if (fromPost <= LEASH + ally.range + plateauBonus
+      || tacticalDistance(ally.pos, target.pos) <= ally.range + 1.5) return true;
+    if (villager && fromPost <= LEASH + ally.range + plateauBonus + 5
+      && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
+  }
+  return false;
+}
+
 // quem já está brigando só larga o alvo quando ele se afasta bem do posto (evita ir e voltar na borda)
-const stillEngaged = (hero, target) => hero.engagedWith === target && tacticalDistance(hero.post, target.pos) <= LEASH + hero.range + ENGAGE_SLACK;
+function stillEngaged(hero, target, context = targetContext()) {
+  if (hero.engagedWith !== target) return false;
+  const { villager, plateauBonus = 0 } = context;
+  const fromPost = tacticalDistance(hero.post, target.pos);
+  if (hero === defenseAnchor(context)) {
+    const canCoverFromPost = fromPost <= hero.range + plateauBonus + 0.5;
+    const objectiveAttack = villager && target.pendingHit?.target === villager
+      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && !anotherDefenseHeroCanIntercept(hero, target, context);
+    return canCoverFromPost || !!objectiveAttack;
+  }
+  return fromPost <= LEASH + hero.range + ENGAGE_SLACK;
+}
 
 // Heróis à distância recuam alguns passos quando um inimigo corpo a corpo encosta, puxando para o
 // posto (atrás da linha de frente), e voltam a atirar; a recarga evita que passem a luta fugindo.
@@ -2218,6 +2255,15 @@ const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goa
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, plateauBonus, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
+  if (fixedDefenseGoal(goal) && hero === defenseAnchor(context)) {
+    // A âncora luta do próprio posto. Só abandona a linha se o alvo já prepara
+    // um golpe no objetivo e nenhum outro herói vivo consegue interceptá-lo.
+    if (fromPost <= hero.range + plateauBonus + 0.5) return true;
+    const objectiveAttack = villager && target.pendingHit?.target === villager
+      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && !anotherDefenseHeroCanIntercept(hero, target, context);
+    return !!objectiveAttack;
+  }
   const normalReach = fromPost <= LEASH + hero.range + plateauBonus || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
   const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
   if (huntTarget && !normalReach) {
@@ -2230,10 +2276,10 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
 
   // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
   // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.
-  // Em defesas fixas, só saímos do posto por uma ameaça ligada ao objetivo abaixo.
-  // O raio segue limitado, e totens têm uma regra própria abaixo.
-  const fixedDefense = goal?.type === 'defend' || goal?.type === 'breach';
-  if (!fixedDefense && target.team === 'skeleton' && target.ranged && !target.mobile && !target.totem
+  // Em defesas fixas, a âncora fica no posto; até dois outros heróis podem
+  // interceptar atiradores imóveis dentro deste raio limitado.
+  // Inimigos móveis e totens seguem as regras próprias abaixo.
+  if (target.team === 'skeleton' && target.ranged && !target.mobile && !target.totem
     && fromPost <= RANGED_INTERCEPT) {
     let otherInterceptors = 0;
     for (const ally of party) if (ally !== hero && !ally.dead && ally.targetFocus === target) otherInterceptors++;
@@ -2385,7 +2431,7 @@ function twinBossFocus(context) {
   if (context.goal?.type !== 'twin') { game.twinFocus = null; return null; }
   const attackable = context.skeletons.filter((boss) => boss.phaseBoss && !boss.dead && !boss.spawning
     && context.party.some((member) => !member.dead
-      && (canHeroReachTarget(member, boss, context) || stillEngaged(member, boss))));
+      && (canHeroReachTarget(member, boss, context) || stillEngaged(member, boss, context))));
   if (game.twinFocus && attackable.includes(game.twinFocus)) return game.twinFocus;
   // Lich e Carrasco usam animações de surgimento com durações diferentes; não fixe
   // o foco no primeiro que fica atacável antes de o outro chefe terminar de surgir.
@@ -2413,7 +2459,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
   let urgentTwinTarget = null, urgentTwinScore = Infinity;
   for (const target of candidates) {
-    if (target.dead || target.spawning || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target))) continue;
+    if (target.dead || target.spawning || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target, context))) continue;
     const score = heroTargetScore(hero, target, hero.pos, context);
     if (target === hero.targetFocus) { focused = target; focusedScore = score; }
     if (score < bestScore) { best = target; bestScore = score; }
@@ -2426,7 +2472,7 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   if (goal?.type === 'twin') {
     const focus = twinBossFocus(context);
     if (urgentTwinTarget) { best = urgentTwinTarget; bestScore = urgentTwinScore; }
-    else if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus))) {
+    else if (focus && (canHeroReachTarget(hero, focus, context) || stillEngaged(hero, focus, context))) {
       best = focus;
       bestScore = heroTargetScore(hero, focus, hero.pos, context);
     } else if (focus) { best = null; bestScore = Infinity; }
@@ -5023,8 +5069,9 @@ class Hero extends Unit {
     if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const kite = game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
     if (kite) { this.moveTo(kite, dt); this.locomote(move, walk, this.cfg.idle); return; }
-    const target = game.state === 'fight'
-      ? chooseHeroTarget(this, activeTargetContext?.skeletons ?? skeletonsAlive(), dt) : null;
+    const targeting = game.state === 'fight' ? targetContext() : null;
+    const target = targeting
+      ? chooseHeroTarget(this, targeting.skeletons, dt, targeting) : null;
     // no manual a habilidade fica carregada esperando o jogador pedir
     if (game.state === 'fight') {
       const requested = this.skillRequests.findIndex((time, slot) => time > 0 && this.skillTimers[slot] <= 0);
@@ -5044,7 +5091,7 @@ class Hero extends Unit {
     }
     // O alvo precisa continuar dentro do raio tático; ser atirador não puxa o grupo pelo mapa.
     // margem para não pipocar: quem já está brigando só larga o alvo quando ele se afasta bem do posto
-    const engage = target && (canHeroReachTarget(this, target) || stillEngaged(this, target));
+    const engage = target && (canHeroReachTarget(this, target, targeting) || stillEngaged(this, target, targeting));
     this.engagedWith = engage ? target : null;
     const captive = !engage && game.state === 'fight' ? captivePrisoner() : null;   // sem luta, vai libertar o prisioneiro
     if (captive) {
@@ -5613,7 +5660,7 @@ function placeParty(first) {
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
     shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
-    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, ultimates: 0, twinFocus: null });
+    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null });
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
@@ -6359,7 +6406,12 @@ function missionEnd(won) {
   const party = heroes();
   const hpRatio = game.missionHpRatio ?? party.reduce((s, h) => s + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((s, h) => s + h.maxHp, 0));
   const shrine = game.shrine;
-  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, timeLeft: game.surviveT, endlessTime: game.endlessT, leaks: game.leaks, seconds: game.missionT };
+  const villager = game.villager;
+  const currentVillagerRatio = villager && villager.maxHp > 0 ? Math.max(0, Math.min(1, villager.hp / villager.maxHp)) : 0;
+  const villagerRatio = game.mission.goal.type === 'escort'
+    ? (game.missionVillagerRatio ?? currentVillagerRatio)
+    : currentVillagerRatio;
+  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, villagerRatio, timeLeft: game.surviveT, endlessTime: game.endlessT, leaks: game.leaks, seconds: game.missionT };
   const stars = starsFor(result);
   const conditions = starConditions(result);
   const before = totalStars();
@@ -6499,6 +6551,10 @@ function updateGame(dt) {
         let hp = 0, maxHp = 0;
         for (const h of party) { hp += Math.max(0, h.hp); maxHp += h.maxHp; }
         game.missionHpRatio = hp / Math.max(1, maxHp);
+        const villager = game.villager;
+        game.missionVillagerRatio = villager && villager.maxHp > 0
+          ? Math.max(0, Math.min(1, villager.hp / villager.maxHp))
+          : null;
       }
       showBanner(`✓ Fase ${game.phase}`, 2);
       tutorial.on('phaseCleared', { phase: game.phase });

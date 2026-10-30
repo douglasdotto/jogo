@@ -47,6 +47,61 @@ Vector3.allocations=0;
 if(world.nextWaypoint(clearFrom,clearTo)!==clearTo)throw Error('Rota livre substituiu o destino');
 if(Vector3.allocations!==0)throw Error(`Rota livre alocou ${Vector3.allocations} vetores`);
 console.log(checkTerrain(world,THREE));
+// Equivalência da broadphase com a fórmula anterior, em estradas curvas e posições de borda.
+const smoothstep=(x,a,b)=>x<=a?0:x>=b?1:(x=(x-a)/(b-a))*x*(3-2*x);
+function groundHeightBeforeBounds(zones,x,z) {
+  for(const zone of zones) {
+    if(zone.type==='plateau') {
+      const dx=x-zone.center.x,dz=z-zone.center.z;
+      const px=dx*zone.side.x+dz*zone.side.z,pz=dx*zone.fwd.x+dz*zone.fwd.z;
+      if(Math.abs(px)<=1.5&&pz>=-9&&pz<=-3)return(pz+9)/2;
+      if(Math.hypot(px,pz)<zone.radius)return 3;
+    } else {
+      const radius=Math.hypot(x-zone.center.x,z-zone.center.z);
+      if(radius<zone.radius) {
+        const angle=Math.atan2(z-zone.center.z,x-zone.center.x);
+        const shore=Math.sin(angle*3+zone.center.x)*0.55+Math.sin(angle*5-zone.center.z)*0.3;
+        const d=radius+shore;
+        const bowl=-1.1*(1-smoothstep(d,2.4,zone.radius+0.7));
+        const shoreline=1-smoothstep(radius,zone.radius-0.85,zone.radius);
+        return Math.max(-0.38,bowl*shoreline);
+      }
+    }
+  }
+  return 0;
+}
+function makeSeededTerrain(seed) {
+  const pointAt=s=>new Vector3(Math.sin(s*0.03+seed)*5+Math.sin(s*0.08+seed*0.4)*1.5,0,-s+Math.sin(s*0.025+seed)*1.5);
+  const tangentAt=s=>new Vector3(0.15*Math.cos(s*0.03+seed)+0.12*Math.cos(s*0.08+seed*0.4),0,-1+0.0375*Math.cos(s*0.025+seed)).normalize();
+  const sideOf=t=>new Vector3(-t.z,0,t.x),along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
+  return runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,obstacles:[]});
+}
+for(let seed=0;seed<8;seed++) {
+  const sampleWorld=makeSeededTerrain(seed),zones=[3,5,7,9,10].map(p=>sampleWorld.zoneOf(p));
+  const compare=(x,z,label)=>{
+    const expected=groundHeightBeforeBounds(zones,x,z),actual=sampleWorld.groundHeight(x,z);
+    if(!Object.is(actual,expected))throw Error(`Broadphase alterou o terreno (seed ${seed}, ${label}, ${x.toFixed(3)},${z.toFixed(3)}): ${actual} !== ${expected}`);
+  };
+  // Grade cobrindo o mapa inteiro, inclusive áreas sem zona.
+  for(let xi=-36;xi<=36;xi++)for(let zi=-390;zi<=30;zi++)compare(xi*0.75,zi*0.75,'grade');
+  // Fronteiras exatas do retângulo/círculo do platô e do raio do lago.
+  for(const zone of zones) {
+    if(zone.type==='plateau') {
+      for(const px of [-1.51,-1.5,-1.49,0,1.49,1.5,1.51])for(const pz of [-9.01,-9,-8.99,-6,-3.01,-3,-2.99]) {
+        const x=zone.center.x+zone.side.x*px+zone.fwd.x*pz,z=zone.center.z+zone.side.z*px+zone.fwd.z*pz;
+        compare(x,z,'borda da rampa');
+      }
+      for(const radius of [3.99,4,4.01])for(let i=0;i<24;i++) {
+        const a=i*Math.PI/12,x=zone.center.x+Math.cos(a)*radius,z=zone.center.z+Math.sin(a)*radius;
+        compare(x,z,'borda do platô');
+      }
+    } else for(const radius of [3.19,3.2,3.21,5.79,5.8,5.81])for(let i=0;i<24;i++) {
+      const a=i*Math.PI/12,x=zone.center.x+Math.cos(a)*radius,z=zone.center.z+Math.sin(a)*radius;
+      compare(x,z,'borda do lago');
+    }
+  }
+}
+console.log('Terreno: broadphase de groundHeight equivalente à fórmula anterior em 8 seeds, grade e bordas OK');
 const main=readFileSync(new URL('../main.js',import.meta.url),'utf8');
 const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // anima a locomoção'));
 world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));

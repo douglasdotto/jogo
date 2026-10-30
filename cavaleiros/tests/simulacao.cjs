@@ -1,5 +1,8 @@
-// node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
-// Partidas inteiras sem navegador (estrada reta, sem platôs/lagos), heróis e melhorias aleatórios.
+// Jornada: node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
+// Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|aleatorio] [semente] [detalhe]
+// Exemplo rápido (2 por dificuldade): node cavaleiros/tests/simulacao.cjs campanha ponte todas 2 equilibrado 20261030 detalhe
+// Sem navegador. O modo campanha roda combate/objetivos, mas ainda usa estrada reta,
+// sem obstáculos, platôs ou lagos: não valida dificuldade de navegação/mapas sorteados.
 // Um grupo opcional troca a seleção aleatória; a semente deixa o resultado reproduzível.
 // Serve para calibrar dificuldades e heróis: mostra vitórias, fase média, quedas e dano por herói.
 const fs = require('node:fs');
@@ -89,30 +92,64 @@ vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), cont
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts,
-  DIFFICULTIES, Unit, progress, setDifficulty: (d) => { difficulty = d; } })`, context);
+  DIFFICULTIES, MISSIONS, Unit, progress, showDifficulty, setMission: (m) => { game.mission = m; },
+  setDifficulty: (d) => { difficulty = d; } })`, context);
+// Captura o resultado calculado pelo runtime no encerramento, sem duplicar as regras de estrelas.
+vm.runInContext(`
+  globalThis.__campaignOutcome = null;
+  const __missionEndOriginal = missionEnd;
+  missionEnd = (won) => {
+    // Espelha o valor usado pelas estrelas antes do encerramento poder alterar o estado.
+    const villager = game.villager;
+    const currentVillagerRatio = villager && villager.maxHp > 0
+      ? Math.max(0, Math.min(1, villager.hp / villager.maxHp)) : null;
+    const villagerRatio = game.mission?.goal?.type === 'escort'
+      ? (game.missionVillagerRatio ?? currentVillagerRatio)
+      : currentVillagerRatio;
+    const stars = __missionEndOriginal(won);
+    const party = heroes();
+    globalThis.__campaignOutcome = {
+      won: Boolean(won), stars, falls: game.falls,
+      hpRatio: game.missionHpRatio ?? party.reduce((sum, h) => sum + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((sum, h) => sum + h.maxHp, 0)),
+      villagerRatio,
+    };
+    return stars;
+  };
+`, context);
 // calibração sem meta-progressão: nada salvo antes, nada ganho durante (bônus de maestria/oficina mudariam os números)
 const progressAtStart = JSON.stringify(t.progress.snapshot());
 if (progressAtStart !== JSON.stringify(vm.runInContext('freshProgress()', context))) throw new Error('A simulação precisa começar com a progressão zerada');
 for (const v of vm.runInContext('VARIANTS', context)) v.built = asset(), v.portraits = ['', '', ''];
 
-function play(diff, profile) {
+function play(diff, profile, mission = null) {
   t.setDifficulty(diff);
   let nextProfileHero = 0;
+  let initialHeroes = null;
   t.startGame();
-  t.confirmPick(1);   // menu: Jornada completa
-  t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
+  if (mission) {
+    // Ignora somente a interface do mapa; dificuldade, seleção, startMission e combate são reais.
+    t.setMission(mission);
+    t.showDifficulty();
+    t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
+    vm.runInContext('globalThis.__campaignOutcome = null', context);
+  } else {
+    t.confirmPick(1);   // menu: Jornada completa
+    t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
+  }
   t.setDifficulty(diff);
   let time = 0, deaths = 0;
+  const timeCap = mission ? 900 : 3600; // a campanha acaba em poucas fases; o timeout detecta stalls sem fingir vitória
   const dt = 1 / 30;
   const die = t.Unit.prototype.die;
   t.Unit.prototype.die = function () { if (this.team === 'hero') deaths++; return die.call(this); };
-  while (!t.game.over && time < 3600) {
+  while (!t.game.over && time < timeCap) {
     if (t.pick.open) {
       if (t.pick.mode === 'hero') {
         const free = t.pick.options.map((_, i) => i).filter((i) => !t.heroes().some((h) => h.cfg.id === t.pick.options[i].id));
         const wantedId = profile?.[nextProfileHero++];
         const wanted = wantedId ? t.pick.options.findIndex((option) => option.id === wantedId) : -1;
         t.confirmPick(free.includes(wanted) ? wanted : free[Math.floor(Math.random() * free.length)]);
+        if (mission && initialHeroes == null && t.game.picksLeft === 0 && !t.pick.open) initialHeroes = t.heroes().length;
       } else t.confirmPick(Math.floor(Math.random() * t.pick.cards.length));
       continue;
     }
@@ -125,11 +162,43 @@ function play(diff, profile) {
     time += dt;
   }
   t.Unit.prototype.die = die;
-  const won = t.game.over && t.heroes().some((h) => !h.dead) && t.game.phase === 12;
-  return { won, phase: t.game.phase, deaths, kills: t.game.kills, time, party: t.heroes().map((h) => h.cfg.id), damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo)]) };
+  const won = mission
+    ? Boolean(vm.runInContext('globalThis.__campaignOutcome?.won', context))
+    : t.game.over && t.heroes().some((h) => !h.dead) && t.game.phase === 12;
+  const outcome = mission ? vm.runInContext('globalThis.__campaignOutcome', context) : null;
+  const villager = t.game.villager;
+  const villagerRatio = Number.isFinite(outcome?.villagerRatio) ? outcome.villagerRatio
+    : villager && villager.maxHp > 0 ? Math.max(0, Math.min(1, villager.hp / villager.maxHp)) : null;
+  const describeUnit = (unit) => {
+    if (!unit) return null;
+    const pos = unit.pos || { x: 0, z: 0 };
+    const kind = unit.enemyKind || unit.kind?.name || unit.nameTag?.textContent || (unit.totem ? 'Totem' : unit.team);
+    return `${kind}@${pos.x.toFixed(1)},${pos.z.toFixed(1)}`;
+  };
+  const diagnostic = mission && !t.game.over ? {
+    simulatedSeconds: Number(time.toFixed(1)), timeCap, phase: t.game.phase, state: t.game.state, timer: t.game.timer, missionT: t.game.missionT,
+    surviveT: t.game.surviveT, toSpawn: t.game.toSpawn, spawnTimer: t.game.spawnTimer,
+    shrine: t.game.shrine ? { hp: Math.round(t.game.shrine.hp), maxHp: t.game.shrine.maxHp, dead: t.game.shrine.dead,
+      pos: `${t.game.shrine.pos.x.toFixed(1)},${t.game.shrine.pos.z.toFixed(1)}` } : null,
+    skeletonCount: t.units.filter((u) => u.team === 'skeleton' && !u.dead).length,
+    skeletons: t.units.filter((u) => u.team === 'skeleton' && !u.dead).slice(0, 40).map((u) => ({ kind: u.enemyKind || u.kind?.name || (u.totem ? 'Totem' : '?'),
+      pos: `${u.pos.x.toFixed(1)},${u.pos.z.toFixed(1)}`, raider: Boolean(u.raider), spawning: Boolean(u.spawning) })),
+    heroes: t.heroes().map((h) => ({ id: h.cfg.id, dead: h.dead, hp: Math.round(h.hp),
+      pos: `${h.pos.x.toFixed(1)},${h.pos.z.toFixed(1)}`, targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
+  } : null;
+  return { won, timedOut: mission ? !t.game.over : false, initialHeroes, falls: outcome?.falls ?? t.game.falls,
+    villagerRatio, phase: t.game.phase, deaths, kills: t.game.kills, time,
+    party: t.heroes().map((h) => h.cfg.id), diagnostic,
+    damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo)]), ...(outcome || {}) };
 }
 
-const which = process.argv[2] || 'todas', runs = +process.argv[3] || 10;
+const campaignMode = process.argv[2] === 'campanha';
+const missionId = campaignMode ? process.argv[3] : null;
+const which = campaignMode ? (process.argv[4] || 'todas') : (process.argv[2] || 'todas');
+const runs = +(campaignMode ? process.argv[5] : process.argv[3]) || 10;
+const profileName = campaignMode ? (process.argv[6] || 'aleatorio') : (process.argv[4] || 'aleatorio');
+const seedArg = campaignMode ? process.argv[7] : process.argv[5];
+const details = campaignMode ? process.argv[8] === 'detalhe' : process.argv[6] === 'detalhe';
 const profiles = {
   inicial: ['paladin', 'berserker', 'pyro', 'assassin'],
   equilibrado: ['paladin', 'guardian', 'pyro', 'cleric'],
@@ -137,10 +206,12 @@ const profiles = {
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
 };
-const profileName = process.argv[4] || 'aleatorio';
 const profile = profiles[profileName];
 if (profileName !== 'aleatorio' && !profile) throw new Error(`Grupo desconhecido: ${profileName}. Use: ${Object.keys(profiles).join(', ')}`);
-const baseSeed = Number.isInteger(Number(process.argv[5])) ? Number(process.argv[5]) >>> 0 : 20261028;
+const baseSeed = Number.isInteger(Number(seedArg)) ? Number(seedArg) >>> 0 : 20261028;
+const campaignMission = campaignMode ? t.MISSIONS.find((m) => m.id === missionId) : null;
+if (campaignMode && !campaignMission) throw new Error(`Missão desconhecida: ${missionId}. Use: ${t.MISSIONS.map((m) => m.id).join(', ')}`);
+if (campaignMode && !['todas', ...t.DIFFICULTIES.map((d) => d.id)].includes(which)) throw new Error(`Dificuldade desconhecida: ${which}. Use: todas, ${t.DIFFICULTIES.map((d) => d.id).join(', ')}`);
 const vmMath = vm.runInContext('Math', context);
 function useSeed(seed) {
   let state = seed >>> 0 || 1;
@@ -154,21 +225,32 @@ function useSeed(seed) {
 const damage = {};
 // "original" = o jogo antes das dificuldades, para comparar
 const original = { id: 'original', name: 'Original', hp: 1, dmg: 1, count: 1, interval: 1, boss: 1, heal: 0.35, revive: 0.4, reviveDelay: 0, behind: 0.25, behindFrom: 4, shooters: 0 };
-for (const diff of [original, ...t.DIFFICULTIES].filter((d) => which === 'todas' || d.id === which)) {
+const difficulties = campaignMode ? t.DIFFICULTIES : [original, ...t.DIFFICULTIES];
+for (const diff of difficulties.filter((d) => which === 'todas' || d.id === which)) {
   const res = [];
   for (let i = 0; i < runs; i++) {
     useSeed(baseSeed + i * 2654435761);
-    res.push(play(diff, profile));
+    res.push(play(diff, profile, campaignMission));
   }
   for (const r of res) for (const [id, dmg, dps] of r.damage) (damage[id] ||= []).push([dmg, dps]);
   const avg = (f) => (res.reduce((s, r) => s + f(r), 0) / res.length).toFixed(1);
-  console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · fase média ${avg((r) => r.phase)} · quedas ${avg((r) => r.deaths)} · abates ${avg((r) => r.kills)} · derrotas nas fases ${res.filter((r) => !r.won).map((r) => r.phase).sort((x, y) => x - y).join(',') || '-'}`);
-  if (process.argv[6] === 'detalhe') for (const [i, r] of res.entries())
-    console.log(`  ${i + 1}: ${r.won ? 'vitória' : `fase ${r.phase}`} · ${r.deaths} quedas · ${r.party.join(' + ')}`);
+  if (campaignMode) {
+    const stars = [0, 1, 2, 3].map((n) => res.filter((r) => r.stars === n).length);
+    const withVillager = res.filter((r) => Number.isFinite(r.villagerRatio));
+    const villager = withVillager.length ? `${Math.round(withVillager.reduce((sum, r) => sum + r.villagerRatio, 0) / withVillager.length * 100)}%` : '—';
+    const incomplete = res.filter((r) => r.timedOut).length;
+    console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
+    if (details) for (const [i, r] of res.entries())
+      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · ${r.party.join(' + ')}${r.timedOut ? `\n    diagnóstico: ${JSON.stringify(r.diagnostic)}` : ''}`);
+  } else {
+    console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · fase média ${avg((r) => r.phase)} · quedas ${avg((r) => r.deaths)} · abates ${avg((r) => r.kills)} · derrotas nas fases ${res.filter((r) => !r.won).map((r) => r.phase).sort((x, y) => x - y).join(',') || '-'}`);
+    if (details) for (const [i, r] of res.entries())
+      console.log(`  ${i + 1}: ${r.won ? 'vitória' : `fase ${r.phase}`} · ${r.deaths} quedas · ${r.party.join(' + ')}`);
+  }
 }
-console.log(`Grupo: ${profileName} · semente: ${baseSeed}`);
-console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate');
+console.log(`${campaignMode ? `Missão: ${campaignMission.name} · vagas iniciais: ${campaignMission.heroes} · grupo: ${profileName}` : `Grupo: ${profileName}`} · semente: ${baseSeed}`);
+if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate');
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
-for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
+if (!campaignMode) for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
   console.log(`  ${id.padEnd(10)} ${String(Math.round(mean(list, 0))).padStart(6)} · ${mean(list, 1).toFixed(1).padStart(5)}/s (${list.length})`);
 if (JSON.stringify(t.progress.snapshot()) !== progressAtStart) throw new Error('A simulação não pode acumular progressão entre partidas');

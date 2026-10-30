@@ -104,7 +104,8 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
   if (won) {
     if (mission?.stars != null) {
       const stars = number(mission.stars);
-      const objective = mission.goal?.type === 'rescue' && mission.rescueComplete
+      const objective = mission.goal?.type === 'escort' ? 'Aldeão salvo! '
+        : mission.goal?.type === 'rescue' && mission.rescueComplete
         ? 'Prisioneiro resgatado! '
         : mission.goal?.type === 'tower' && number(mission.towersDown) >= number(mission.goal.count)
           ? `${number(mission.goal.count) === 1 ? 'Torre derrubada!' : 'Torres derrubadas!'} `
@@ -117,9 +118,11 @@ function tipFor({ won, heroes, dangerous, falls, mission }) {
                       : mission.goal?.type === 'twin' ? 'O trono caiu! '
                         : '';
       if (mission.nextMission) {
+        const nextMission = label(mission.nextMission, 'a próxima missão');
+        const unlock = `Próxima missão liberada: ${nextMission}.`;
         return stars < 3
-          ? `${objective}Vitória com ${stars}/3 estrelas. ${label(mission.nextMission, 'A próxima arena')} está liberada.`
-          : `${objective}Três estrelas! ${label(mission.nextMission, 'A próxima arena')} está liberada.`;
+          ? `${objective}Vitória com ${stars}/3 estrelas. ${unlock}`
+          : `${objective}Três estrelas! ${unlock}`;
       }
       const remaining = number(mission.remainingStars);
       return remaining > 0

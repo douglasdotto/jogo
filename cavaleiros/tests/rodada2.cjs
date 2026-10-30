@@ -833,10 +833,10 @@ test('sem quedas permite interceptar ameaça curta fora do limite normal',()=>{
   t.game.mission={goal:{type:'nofall'}};
   assert.equal(t.chooseHeroTarget(h,[attacker],.016),attacker);
 });
-test('defesa fixa não desloca o grupo por atirador remoto, mas intercepta quem ameaça o objetivo',()=>{
+test('defesa fixa mantém a âncora e limita a interceptação de atiradores remotos',()=>{
   for(const goalType of ['defend','breach']){
     clear();t.game.shrine=null;t.game.gate=null;t.game.phase=1;
-    const guards=['paladin','berserker','pyro'].map(id=>new t.Hero(cfg(id)));
+    const guards=['paladin','berserker','pyro','assassin'].map(id=>new t.Hero(cfg(id)));
     for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);h.range=1;}
     const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
     t.game.mission={goal:{type:goalType}};
@@ -844,15 +844,64 @@ test('defesa fixa não desloca o grupo por atirador remoto, mas intercepta quem 
     const shooter=new t.Skeleton('Mage',1);shooter.spawning=false;shooter.ranged=true;shooter.mobile=false;shooter.pos.set(0,0,17);
     let team=t.makeTargetContext();
     assert.equal(team.villager,objective,goalType+': o objetivo protegido entra no contexto tático');
-    for(const h of guards)assert.equal(t.chooseHeroTarget(h,[shooter],.016,team),null,goalType+': atirador remoto não arranca um defensor do posto');
+    const remoteTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+    assert.equal(remoteTargets[0],null,goalType+': a âncora não sai para perseguir o atirador');
+    assert.equal(remoteTargets[1],shooter,goalType+': primeiro interceptador alcança o atirador remoto');
+    assert.equal(remoteTargets[2],shooter,goalType+': segundo interceptador pode ajudar');
+    assert.equal(remoteTargets[3],null,goalType+': o teto de dois perseguidores mantém outro defensor');
+
+    shooter.mobile=true;
+    const mobileTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+    assert.ok(mobileTargets.every(target=>target===null),goalType+': inimigo móvel remoto não ganha a exceção de atirador imóvel');
+    shooter.mobile=false;
 
     shooter.pos.set(0,0,10);shooter.pendingHit=null;
     team=t.makeTargetContext();
-    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': ameaça próxima ao objetivo continua interceptável');
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': a âncora mantém o posto diante de uma ameaça próxima');
+    assert.equal(t.chooseHeroTarget(guards[1],[shooter],.016,team),shooter,goalType+': outro herói intercepta a ameaça próxima');
     guards[0].targetFocus=null;guards[0].targetFocusT=0;
     shooter.pos.set(0,0,11);shooter.pendingHit={target:objective};
     team=t.makeTargetContext();
-    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': golpe preparado contra o objetivo continua interceptável');
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': um interceptador vivo responde ao golpe e mantém a âncora no posto');
+    assert.equal(t.chooseHeroTarget(guards[1],[shooter],.016,team),shooter,goalType+': golpe preparado contra o objetivo continua interceptável');
+
+    for(const h of guards.slice(1))h.dead=true;guards[0].targetFocus=null;guards[0].targetFocusT=0;
+    shooter.pos.set(0,0,10.9);team=t.makeTargetContext();
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),shooter,goalType+': a âncora responde quando não resta outro defensor vivo');
+  }
+  clear();t.game.shrine=null;t.game.gate=null;
+});
+test('defesa fixa reserva uma âncora sem depender da ordem de atualização e transfere após queda',()=>{
+  const permutations=list=>list.length<2?[list]:list.flatMap((item,index)=>permutations([...list.slice(0,index),...list.slice(index+1)]).map(rest=>[item,...rest]));
+  for(const goalType of ['defend','breach'])for(const count of [2,3])for(const orderIndices of permutations(Array.from({length:count},(_,i)=>i))){
+    clear();t.game.shrine=null;t.game.gate=null;t.game.phase=1;
+    const guards=Array.from({length:count},(_,i)=>new t.Hero(cfg(['paladin','berserker','pyro'][i])));
+    for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);h.range=1;}
+    const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
+    t.game.mission={goal:{type:goalType}};
+    if(goalType==='defend')t.game.shrine=objective;else t.game.gate=objective;
+    const threats=[-10,10].map((x,i)=>{const s=new t.Skeleton('Warrior',1);s.spawning=false;s.pos.set(x,0,0);s.enemyKind='Warrior'+i;return s;});
+    const team=t.makeTargetContext(),results=new Map();
+    for(const i of orderIndices)results.set(guards[i],t.chooseHeroTarget(guards[i],threats,.016,team));
+    assert.strictEqual(team.defenseAnchor,guards[0],goalType+': âncora é derivada da ordem estável da equipe, não da chamada');
+    assert.equal(results.get(guards[0]),null,goalType+': a âncora não persegue nenhum dos dois lados');
+    assert.ok([...results.values()].filter(Boolean).length<=count-1,goalType+': pelo menos um herói continua no posto');
+    assert.ok([...results.values()].some(Boolean),goalType+': os demais ainda podem interceptar');
+  }
+
+  for(const goalType of ['defend','breach']){
+    clear();t.game.shrine=null;t.game.gate=null;t.game.phase=1;
+    const guards=['paladin','berserker'].map(id=>new t.Hero(cfg(id)));
+    for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);h.range=1;}
+    const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
+    t.game.mission={goal:{type:goalType}};
+    if(goalType==='defend')t.game.shrine=objective;else t.game.gate=objective;
+    const threat=new t.Skeleton('Warrior',1);threat.spawning=false;threat.pos.set(0,0,10);
+    guards[1].targetFocus=threat;guards[1].targetFocusT=1;guards[1].engagedWith=threat;
+    guards[0].dead=true;
+    const team=t.makeTargetContext();
+    assert.strictEqual(team.defenseAnchor,guards[1],goalType+': o próximo vivo assume a âncora');
+    assert.equal(t.chooseHeroTarget(guards[1],[threat],.016,team),null,goalType+': targetFocus antigo não faz a nova âncora abandonar o posto');
   }
   clear();t.game.shrine=null;t.game.gate=null;
 });
@@ -928,8 +977,14 @@ test('dica pós-derrota usa o objetivo e o estado real da missão',()=>{
 test('dica de vitória orienta a próxima arena e a busca por estrelas',()=>{
   const report=mission=>context.buildBattleReport({won:true,mission}).find(item=>item.id==='next-try');
   let result=report({stars:2,nextMission:'A Ponte do Rio'});
-  assert.equal(result.title,'Progresso da campanha');assert.match(result.text,/Vitória com 2\/3 estrelas/);assert.match(result.text,/A Ponte do Rio está liberada/);
-  result=report({stars:3,nextMission:'Fazendas'});assert.match(result.text,/Três estrelas! Fazendas está liberada/);
+  assert.equal(result.title,'Progresso da campanha');assert.match(result.text,/Vitória com 2\/3 estrelas/);assert.match(result.text,/Próxima missão liberada: A Ponte do Rio\./);
+  result=report({goal:{type:'escort'},stars:2,nextMission:'O Santuário'});
+  assert.match(result.text,/Aldeão salvo! Vitória com 2\/3 estrelas\./,'a vitória celebra a escolta');
+  assert.match(result.text,/Próxima missão liberada: O Santuário\./,'a frase de desbloqueio não depende do gênero do nome');
+  const escortDefeat=context.buildBattleReport({won:false,mission:{goal:{type:'escort'},villagerDown:false}}).find(item=>item.id==='next-try');
+  assert.match(escortDefeat.text,/grupo caiu antes de concluir a escolta/,'a mensagem de derrota da escolta continua específica');
+  assert.doesNotMatch(escortDefeat.text,/Aldeão salvo!/,'a celebração só aparece quando a escolta vence');
+  result=report({stars:3,nextMission:'Fazendas'});assert.match(result.text,/Três estrelas! Próxima missão liberada: Fazendas\./);
   result=report({stars:3,nextMission:null,remainingStars:4});assert.match(result.text,/4 estrelas restantes/);
   result=report({stars:3,nextMission:null,remainingStars:0});assert.match(result.text,/Campanha perfeita/);
 });
@@ -958,7 +1013,7 @@ test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
     t.game.test=false;t.game.roster=[];t.game.mission=t.MISSIONS.find(m=>m.id==='vila');
     t.endGame('Missão cumprida',true);
     const progress=report.find(item=>item.id==='next-try');
-    assert.equal(progress.title,'Progresso da campanha');assert.match(progress.text,/A Ponte do Rio está liberada/);
+    assert.equal(progress.title,'Progresso da campanha');assert.match(progress.text,/Próxima missão liberada: A Ponte do Rio\./);
     assert.equal(t.starsOf('vila'),2);
   } finally { context.summaryHTML=previousSummary;context.location=previousLocation;context.localStorage.data=previousStorage;clear(); }
 });
@@ -995,6 +1050,19 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
   clear();context.localStorage.data={};t.showDifficulty();
   const journeyNightmare=t.pick.cards[idx('pesadelo')];journeyNightmare.onfocus();
   assert.ok(elements.get('pickHint').textContent.includes('Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),'a recomendação completa continua disponível na Jornada');
+  clear();t.setDifficulty(1);
+});
+test('Pesadelo recomenda Guardião para defender e mantém Piromante em metas ofensivas',()=>{
+  clear();context.localStorage.data={};t.setMission(mission('santuario'));t.showDifficulty();
+  let card=t.pick.cards[idx('pesadelo')];card.onfocus();
+  const defense='Equipe para 2 heróis: Paladino (cura) e Guardião (proteção).';
+  assert.ok(elements.get('pickHint').textContent.includes(defense),'Santuário recomenda proteção para a composição de duas vagas');
+  assert.ok(card.attributes['data-tip'].includes(defense),'a sugestão defensiva também aparece na dica');
+  assert.ok(card.attributes['aria-label'].includes(defense),'a sugestão defensiva também fica acessível');
+
+  clear();context.localStorage.data={};t.setMission(mission('fazendas'));t.showDifficulty();
+  card=t.pick.cards[idx('pesadelo')];card.onfocus();
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 2 heróis: Paladino (cura) e Piromante (dano em área).'),'metas ofensivas mantêm a recomendação de dano em área');
   clear();t.setDifficulty(1);
 });
 test('mapas da campanha ficam estáveis ao voltar da dificuldade e rerrolam na próxima visita',()=>{
@@ -1043,6 +1111,28 @@ test('estrelas da campanha são cumulativas e missão sem quedas usa vida como d
   const special=Array.from(context.starConditions({won:true,falls:0,hpRatio:.8,goal:nofall}),c=>c.achieved);
   assert.deepEqual(special,[true,true,false]);
 });
+test('escolta pontua pela vida do aldeão e usa os mesmos critérios no mapa e no relatório',()=>{
+  const goal={type:'escort'};
+  assert.deepEqual(Array.from(context.starTargetsFor(goal)),[
+    '1★ Concluir a escolta','2★ Aldeão com 50%+ de vida','3★ Aldeão com 75%+ de vida e sem quedas',
+  ]);
+  const expected=[ [.49,1], [.5,2], [.74,2], [.75,3] ];
+  for(const [ratio,stars] of expected){
+    context.location={search:''};
+    begin('ponte',['paladin','pyro']);
+    const villager=t.game.villager;
+    villager.hp=villager.maxHp*ratio;
+    t.game.falls=0;
+    t.game.test=true;
+    t.endGame('Missão cumprida',true);
+    const html=elements.get('overlayStars').innerHTML;
+    assert.ok(html.includes(`${stars} de 3 estrelas`),`${Math.round(ratio*100)}% de vida do aldeão resulta em ${stars} estrelas`);
+    assert.ok(html.includes(`Aldeão com 50%+ de vida (atual ${Math.round(ratio*100)}%)`),'o relatório mostra a mesma meta de preservação do mapa');
+  }
+  const fallen=Array.from(context.starConditions({won:true,falls:1,hpRatio:1,goal,villagerRatio:.9}),c=>c.achieved);
+  assert.deepEqual(fallen,[true,true,false],'a terceira estrela também exige zero quedas');
+  clear();
+});
 test('progresso da missão acompanha o objetivo exibido no HUD',()=>{
   clear();t.game.mission={from:5,to:7};t.game.phase=5;t.game.state='fight';
   t.game.surviveT=90;
@@ -1084,7 +1174,7 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   // painel enxuto: história, plano e descrições dos inimigos só em dicas; Batalhar continua no painel
   const visible=info.innerHTML.replace(/\s(?:data-tip|aria-label)="[^"]*"/g,'');
   for(const gone of ['Plano de batalha','Estrelas acumulativas','Inimigos especiais','Desafios opcionais','Bombardeiro'])assert.ok(!visible.includes(gone),`${gone} não fica à vista`);
-  assert.ok(info.innerHTML.includes('data-tip="1★ Concluir a missão"'),'critério de cada estrela na dica');
+  assert.ok(info.innerHTML.includes('data-tip="1★ Concluir a escolta"'),'critério próprio de cada estrela de escolta na dica');
   assert.ok(visible.includes('class="camp-play"'));
   context.document.activeElement=focusedNode;
   let prevented=false;keyHandler({key:'Enter',preventDefault(){prevented=true}});
@@ -1248,10 +1338,10 @@ test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   assert.ok(t.variantOpen('viking'));assert.equal(elements.get('overlayBtn').textContent,'Mapa');
   t.game.paused=false;t.startGame('map');assert.equal(t.game.paused,true);t.updateGame(.1);assert.equal(t.game.over,false);   // o mapa segura a partida
   begin('ponte',['paladin','pyro']);t.heroes()[0].die();t.heroes()[1].hp=1;Object.assign(t.game,{phase:5,state:'cleared',timer:0});t.updateGame(.1);t.updateGame(.1);
-  assert.equal(t.starsOf('ponte'),1);   // venceu, mas um caiu e terminou com pouca vida
-  assert.ok(elements.get('overlayStars').innerHTML.includes('Terminar sem quedas (1 queda)'));
+  assert.equal(t.starsOf('ponte'),2);   // o aldeão chega intacto; uma queda só impede a terceira estrela
+  assert.ok(elements.get('overlayStars').innerHTML.includes('75%+ de vida e sem quedas (1 queda; atual 100%)'));
   context.location={search:'?fase=4'};begin('ponte',['paladin','pyro']);Object.assign(t.game,{phase:5,state:'cleared',timer:0});t.updateGame(.1);
-  assert.equal(t.starsOf('ponte'),1);assert.ok(elements.get('overlayStars').innerHTML.includes('não contam'));
+  assert.equal(t.starsOf('ponte'),2);assert.ok(elements.get('overlayStars').innerHTML.includes('não contam'));
   context.location={search:'?tudo=1'};
 });
 test('terceira estrela mede a vida antes da cura da última fase',()=>{
@@ -1261,6 +1351,30 @@ test('terceira estrela mede a vida antes da cura da última fase',()=>{
   assert.ok(h.hp/h.maxHp>.5);assert.equal(t.game.missionHpRatio,.4);
   t.game.timer=0;t.updateGame(.1);
   assert.equal(t.starsOf('vila'),2);
+});
+test('escolta usa snapshot pré-cura para estrelas e relatório',()=>{
+  const previousDifficulty=t.getDifficulty();
+  const finishAt=(ratio)=>{
+    context.location={search:''};context.localStorage.data={};
+    begin('ponte',['paladin','pyro']);t.setDifficulty(1);t.game.test=true;
+    const villager=t.game.villager;villager.hp=villager.maxHp*ratio;
+    for(const enemy of t.skeletonsAlive())enemy.remove();
+    Object.assign(t.game,{phase:t.game.last,state:'fight',toSpawn:0,falls:0});
+    t.updateGame(.1);
+    if(ratio<1)assert.ok(Math.abs(villager.hp/villager.maxHp-.95)<.001,'a cura de fase leva o aldeão de 55% para 95%');
+    else assert.equal(villager.hp/villager.maxHp,1,'o aldeão intacto permanece com vida cheia');
+    assert.ok(Math.abs(t.game.missionVillagerRatio-ratio)<.001,'a vida do aldeão foi registrada antes da cura');
+    t.game.timer=0;t.updateGame(.1);
+    return elements.get('overlayStars').innerHTML;
+  };
+  try{
+    const damaged=finishAt(.55);
+    assert.ok(damaged.includes('2 de 3 estrelas'),'55% pré-cura e zero quedas dão 2 estrelas');
+    assert.ok(damaged.includes('Aldeão com 50%+ de vida (atual 55%)'),'o relatório mostra a vida pré-cura');
+    const intact=finishAt(1);
+    assert.ok(intact.includes('3 de 3 estrelas'),'aldeão intacto e zero quedas dão 3 estrelas');
+    assert.ok(intact.includes('Aldeão com 75%+ de vida e sem quedas (0 quedas; atual 100%)'));
+  }finally{t.setDifficulty(t.DIFFICULTIES.indexOf(previousDifficulty));}
 });
 test('trechos da campanha variam, crescem e só missões de chefe passam pelas fases 6 e 12',()=>{
   const ranges=new Set(),icons=new Set();let from=1;

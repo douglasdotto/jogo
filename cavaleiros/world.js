@@ -98,6 +98,19 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
       zone.ramp = { bottom: center.clone().addScaledVector(fwd, -9), top: center.clone().addScaledVector(fwd, -3).setY(3) };
       zone.top = [-1.2, 1.2].map((off) => center.clone().addScaledVector(side, off).setY(3));
     } else zone.water = [-1, 0, 1].map((a) => center.clone().addScaledVector(side, 4.8 * Math.cos(a)).addScaledVector(fwd, 4.8 * Math.sin(a)));
+    // Broadphase conservador da consulta de terreno: platô circular + retângulo
+    // da rampa orientada pelo caminho. O pequeno padding cobre arredondamentos.
+    const pad = 0.01;
+    let minX = center.x - zone.radius, maxX = center.x + zone.radius;
+    let minZ = center.z - zone.radius, maxZ = center.z + zone.radius;
+    if (type === 'plateau') {
+      const rampCenterX = center.x - fwd.x * 6, rampCenterZ = center.z - fwd.z * 6;
+      const halfX = Math.abs(side.x) * 1.5 + Math.abs(fwd.x) * 3;
+      const halfZ = Math.abs(side.z) * 1.5 + Math.abs(fwd.z) * 3;
+      minX = Math.min(minX, rampCenterX - halfX); maxX = Math.max(maxX, rampCenterX + halfX);
+      minZ = Math.min(minZ, rampCenterZ - halfZ); maxZ = Math.max(maxZ, rampCenterZ + halfZ);
+    }
+    zone.bounds = { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad };
     zones.set(phase, zone);
   }
   const zoneOf = (phase) => zones.get(phase) || null;
@@ -118,6 +131,8 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11) {
   };
   function groundHeight(x, z) {
     for (const zone of zones.values()) {
+      const bounds = zone.bounds;
+      if (x < bounds.minX || x > bounds.maxX || z < bounds.minZ || z > bounds.maxZ) continue;
       if (zone.type === 'plateau') {
         // Keep this hot query allocation-free; manual ground aiming samples it repeatedly.
         const dx = x - zone.center.x, dz = z - zone.center.z;
