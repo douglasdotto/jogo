@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { recolor } from './characters.js';
-import { bandsByZ, disposeInstancedMeshes, isInstancedBandVisible } from './scene-perf.js';
+import { batchStaticMeshes, bandsByZ, disposeInstancedMeshes, isInstancedBandVisible } from './scene-perf.js';
 
 // muitas peças já vêm sem índice; o three avisa a cada "desindexação" repetida. Mesma saída (uma cópia), sem o aviso
 const toNonIndexed = THREE.BufferGeometry.prototype.toNonIndexed;
@@ -1848,6 +1848,10 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       n++;
     }
   }).catch((e) => { if (!disposed) console.warn('modelos de montanha não carregaram', e); });
+
+  // peças paradas do mesmo material viram uma malha por faixa: bem menos chamadas de desenho (câmera e sombra)
+  batchStaticMeshes(scene, { merge: mergeGeometries, makeMesh: (geo, material) => new THREE.Mesh(geo, material), band: INSTANCE_BAND,
+    skip: [millBlades, ...floaters.map((f) => f.m), ...bubbles, ...clouds] });
 
   let time = 0;
   const animationFrustum = new THREE.Frustum();
