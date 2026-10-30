@@ -115,8 +115,8 @@ const VARIANTS = [
     stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle', recipe: CHARACTERS[10] },
   // tanque de punhos: mais vida e menos dano que o Guardião, lento; armor tira um pouco de cada golpe (takeDamage)
   { id: 'brute', names: ['Brutamontes', 'Rocha Viva', 'Colosso'], desc: 'Aguenta a horda na frente do grupo.', ability: 'Pancada', color: ['#c9bba2', '#7d7464'],
-    use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.4, cooldown: 1.6, idle: 'Unarmed_Idle',
-    attacks: ['Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'], armor: 3, scale: 1.6, frontline: true, classId: 1 },
+    use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.4, cooldown: 1.6, idle: 'Brute_Idle', walk: 'Brute_Walk', run: 'Brute_Run',   // guarda, passo e corrida de gigante (Rig_Large)
+    attacks: ['Brute_Punch', 'Brute_Kick'], armor: 3, scale: 1.6, frontline: true, classId: 1 },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
@@ -6888,7 +6888,7 @@ class Hero extends Unit {
   }
     const escape = !directControlled && game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
     const move = this.cfg.id === 'angel' ? 'Jump_Idle' : this.cfg.run || 'Running_A';   // arqueira e besteiro correm com a arma em punho
-    const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : 'Walking_A';
+    const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : this.cfg.walk || 'Walking_A';
     if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const kite = !directControlled && game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
     if (kite) { this.moveTo(kite, dt); this.locomote(move, walk, this.cfg.idle); return; }
@@ -7167,8 +7167,8 @@ const SKILL_ANIMS = {
     { clip: 'Cheer', hold: 'Spellcasting', f: 0.45, float: 0.3, lean: -0.12 },
   ],
   brute: [
-    { clip: 'Jump_Land', hold: 'Unarmed_Idle', f: 0.3, arc: 'ring', hop: 0.6, lean: 0.2 },
-    { clip: 'Throw', hold: 'Unarmed_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
+    { clip: 'Brute_Smash', f: 0.3, arc: 'ring', hop: 0.2, lean: 0.1 },   // ergue os dois punhos e esmaga o chão
+    { clip: 'Throw', hold: 'Brute_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
     { clip: 'Cheer', hold: 'Block', f: 0.4, lean: -0.2, hop: 0.25 },
     { clip: 'Block', hold: 'Blocking', f: 0.42, hop: 0.35, lean: 0.12, kick: -0.25 },   // salta e crava os pés: vira muralha
   ],

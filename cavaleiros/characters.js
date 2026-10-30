@@ -263,6 +263,12 @@ export function applyLook(root, assets, r) {
     const [x = 1, y = 1, z = 1] = factors;
     mesh.scale.set(mesh.scale.x * x, mesh.scale.y * y, mesh.scale.z * z);
   }
+  // proporção e postura por osso (gigante: mãos enormes, cabeça pequena, costas curvadas): { scale, rot, pos } fica no
+  // userData (passa pelos clones) e entra por cima da pose do clipe a cada quadro (Bone.updateMatrix abaixo)
+  for (const [bone, pose] of Object.entries(r.bones || {})) {
+    const b = root.getObjectByName(clean(bone));
+    if (b) b.userData.pose = pose;
+  }
   // peças rígidas (escudo, arma) maiores ou menores sem mexer nas proporções do corpo
   for (const [part, factor] of Object.entries(r.resize || {})) root.getObjectByName(part)?.scale.multiplyScalar(factor);
   // nova orientação de uma peça rígida no seu osso (ex.: livro aberto virado para a frente)
@@ -285,6 +291,22 @@ export function applyLook(root, assets, r) {
   root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.material.userData?.vfx; o.frustumCulled = false; } });   // chama em shader não faz sombra
   return root;
 }
+
+// os clipes reescrevem posição, rotação e escala dos ossos todo quadro: o ajuste de bones (applyLook) é somado na hora
+// de montar a matriz local — escala multiplica a do clipe, rot gira depois dela, pos desloca (ex.: quadril mais baixo)
+const _poseQ = new THREE.Quaternion(), _poseS = new THREE.Vector3(), _poseP = new THREE.Vector3(), _poseV = new THREE.Vector3();
+const boneMatrix = THREE.Object3D.prototype.updateMatrix;
+THREE.Bone.prototype.updateMatrix = function () {
+  const pose = this.userData.pose;
+  if (!pose) return boneMatrix.call(this);
+  this.poseRot ??= new THREE.Quaternion().setFromEuler(new THREE.Euler(...(pose.rot || [0, 0, 0])));
+  _poseP.copy(this.position);
+  if (pose.pos) _poseP.add(_poseV.fromArray(pose.pos));
+  const k = pose.scale ?? 1;
+  _poseS.copy(this.scale).multiply(Array.isArray(k) ? _poseV.fromArray(k) : _poseV.setScalar(k));
+  this.matrix.compose(_poseP, _poseQ.copy(this.quaternion).multiply(this.poseRot), _poseS);
+  this.matrixWorldNeedsUpdate = true;
+};
 
 // ---------- cores: recolore o atlas de cores do modelo ----------
 const recolored = new Map();
@@ -563,9 +585,10 @@ const ACCESSORIES = {
   },
   // ombreiras redondas (no osso do peito): o tamanho cresce a peça, não a altura,
   // para não subirem até a cabeça e virarem "orelhas" no retrato
-  pauldrons({ color = 0xb0b8c4, spikes = false, size = 1, trim } = {}) {
+  // sides: [1] só no ombro esquerdo, [-1] só no direito
+  pauldrons({ color = 0xb0b8c4, spikes = false, size = 1, trim, sides = [-1, 1] } = {}) {
     const plates = [], studs = [], rims = [];
-    for (const s of [-1, 1]) {
+    for (const s of sides) {
       const x = s * (0.4 + (size - 1) * 0.12), tilt = [0, 0, -s * 0.42];
       plates.push(piece(new THREE.SphereGeometry(0.21, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2), [x, 0.2, 0], tilt, [size * 1.05, size * 0.8, size]));
       rims.push(piece(new THREE.TorusGeometry(0.2, 0.03, 4, 12), [x, 0.2, 0], [Math.PI / 2, 0, tilt[2]], [size * 1.05, size, size]));
@@ -1063,6 +1086,35 @@ const ACCESSORIES = {
     const parts = [];
     for (let i = 0; i < n; i++) parts.push(piece(new THREE.CylinderGeometry(radius, radius, 0.035, 8, 1, true), [0, 0.05 + i * 0.06, 0], [0.18 * (i % 2 ? 1 : -1), 0, 0]));
     return new THREE.Mesh(merged(parts), lambert(color, { side: THREE.DoubleSide }));
+  },
+  // punho de pedra (osso da mão: o eixo Y corre para os dedos): bloco lascado em volta do punho, cravos e argola de ferro
+  // manopla: bloco de pedra chanfrado (prisma de 8 faces) que engole a mão, quatro nós de ferro em blocos na ponta e punho de ferro
+  stoneFist({ color = 0x8a8478, metal = 0x4a4440, x = 0, y = 0.075, z = -0.01 } = {}) {
+    const g = new THREE.Group();
+    const oct = (r, h) => new THREE.CylinderGeometry(r, r, h, 8).rotateY(Math.PI / 8);
+    const rock = [piece(oct(0.142, 0.17), [x, y, z], [0, 0, 0], [1, 1, 1.06])];
+    const iron = [piece(oct(0.152, 0.05), [x, y - 0.1, z], [0, 0, 0], [1, 1, 1.06])];
+    for (let i = 0; i < 4; i++) iron.push(piece(new THREE.BoxGeometry(0.058, 0.05, 0.1), [x + (i - 1.5) * 0.064, y + 0.1, z + 0.035], [0, 0, 0], [1, 1, 1]));
+    g.add(new THREE.Mesh(merged(rock), lambert(color)), new THREE.Mesh(merged(iron), lambert(metal)));
+    return g;
+  },
+  // tanga de pele presa por cinto largo com fivela redonda de bronze (osso do quadril: barriga larga, mais que funda)
+  furLoincloth({ fur = 0x7a5a3a, belt = 0x3a2418, buckle = 0xc08a3a, y = 0.12, width = 1 } = {}) {
+    const g = new THREE.Group();
+    const flap = (z, tilt, w, h) => piece(new THREE.CylinderGeometry(w * 0.5, w * 0.62, h, 5, 1), [0, y - h / 2 - 0.02, z], [tilt, Math.PI / 4, 0], [1, 1, 0.22]);
+    g.add(new THREE.Mesh(merged([flap(0.3 * width, -0.12, 0.36 * width, 0.36), flap(-0.28 * width, 0.12, 0.42 * width, 0.32)]), lambert(fur)));
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.4, 0.15, 14, 1, true).scale(1.3 * width, 1, 1.05 * width).translate(0, y, 0), lambert(belt, { side: THREE.DoubleSide })));
+    g.add(new THREE.Mesh(merged([piece(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 10), [0, y, 0.42 * width], [Math.PI / 2, 0, 0])]), lambert(buckle, { emissive: 0x4a2a00, emissiveIntensity: 0.3 })));
+    return g;
+  },
+  // corrente de elos grossos atravessando o peito na diagonal (osso do peito)
+  chain({ color = 0x7a7470, n = 7, side = 1 } = {}) {
+    const links = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1) - 0.5;
+      links.push(piece(new THREE.TorusGeometry(0.035, 0.012, 4, 8), [side * t * 0.36, 0.02 - t * 0.4, 0.36 - Math.abs(t) * 0.12], [i % 2 ? Math.PI / 2 : 0, 0, -side * 0.85]));
+    }
+    return new THREE.Mesh(merged(links), lambert(color));
   },
   // manto curto só nas costas e ombros: deixa a frente livre para os braços (besteiro)
   capelet({ color = 0x4f9a44, trim = 0x6a4a2a, height = 0.42, y = 0.15 } = {}) {
