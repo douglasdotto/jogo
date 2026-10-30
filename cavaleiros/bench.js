@@ -21,7 +21,8 @@ function seeded(seed) {
 const percentile = (list, p) => {
   if (!list.length) return 0;
   const sorted = [...list].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+  const rank = Math.max(1, Math.ceil(sorted.length * p));
+  return sorted[Math.min(sorted.length - 1, rank - 1)];
 };
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -39,6 +40,8 @@ export async function runBench(api) {
   const original = {
     requestAnimationFrame: window.requestAnimationFrame,
     render: api.renderer.render,
+    worldUpdate: api.world?.update,
+    updateBars: api.updateBars,
     random: Math.random,
   };
   let originalLowQuality;
@@ -60,6 +63,8 @@ export async function runBench(api) {
       } finally {
         window.requestAnimationFrame = original.requestAnimationFrame;
         api.renderer.render = original.render;
+        if (typeof original.worldUpdate === 'function') api.world.update = original.worldUpdate;
+        if (typeof original.updateBars === 'function') api.updateBars = original.updateBars;
         Math.random = original.random;
         api.game.paused = true;
       }
@@ -94,7 +99,7 @@ async function runBenchBody(api) {
   await new Promise((ready) => api.withBattleAssets(ready));
   api.beginBattle();
 
-  const state = { phase: 'warmup', frames: [], keepTimes: [], callbackTimes: [], submits: [], calls: [], tris: [], units: [],
+  const state = { phase: 'warmup', frames: [], keepTimes: [], callbackTimes: [], submits: [], worldUpdates: [], barsUpdates: [], calls: [], tris: [], units: [],
     rafIntervals: [], rafFrames: 0, lastRafTimestamp: null, visibilityStart: 'unknown', visibilityFrameCounts: {} };
   window.__benchState = 'warmup';
   window.__benchInspect = { scene: api.scene, renderer, units };
@@ -111,6 +116,14 @@ async function runBenchBody(api) {
     while (alive < target) { api.spawnSkeleton(); alive++; }
   };
   const frameFn = api.frame;
+  const timeSection = (fn, samplesKey) => function (...args) {
+    if (state.phase !== 'measure') return fn.apply(this, args);
+    const start = performance.now();
+    try { return fn.apply(this, args); }
+    finally { state[samplesKey].push(performance.now() - start); }
+  };
+  if (typeof world?.update === 'function') world.update = timeSection(world.update, 'worldUpdates');
+  if (typeof api.updateBars === 'function') api.updateBars = timeSection(api.updateBars, 'barsUpdates');
   const rAF = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = (cb) => rAF((t) => {
     if (cb !== frameFn) return cb(t);
@@ -146,7 +159,7 @@ async function runBenchBody(api) {
     state.phase = 'warmup';
     window.__benchState = 'warmup';
     await wait(warm * 1000);
-    Object.assign(state, { frames: [], keepTimes: [], callbackTimes: [], submits: [], calls: [], tris: [], units: [], rafIntervals: [], rafFrames: 0,
+    Object.assign(state, { frames: [], keepTimes: [], callbackTimes: [], submits: [], worldUpdates: [], barsUpdates: [], calls: [], tris: [], units: [], rafIntervals: [], rafFrames: 0,
       lastRafTimestamp: null, visibilityFrameCounts: {}, visibilityStart: document.visibilityState || 'unknown' });
     state.phase = 'measure';
     window.__benchState = 'measure';
@@ -170,6 +183,8 @@ async function runBenchBody(api) {
       keepMs: round(avg(state.keepTimes)), keepP95Ms: round(percentile(state.keepTimes, 0.95)),
       callbackMs: round(avg(state.callbackTimes)), callbackP95Ms: round(percentile(state.callbackTimes, 0.95)),
       renderSubmitMs: round(avg(state.submits)), renderSubmitP95: round(percentile(state.submits, 0.95)),
+      worldUpdateP50Ms: round(percentile(state.worldUpdates, 0.5)), worldUpdateP95Ms: round(percentile(state.worldUpdates, 0.95)),
+      barsUpdateP50Ms: round(percentile(state.barsUpdates, 0.5)), barsUpdateP95Ms: round(percentile(state.barsUpdates, 0.95)),
       calls: Math.round(avg(state.calls)), callsMax: Math.max(0, ...state.calls),
       tris: Math.round(avg(state.tris)),
       units: round(avg(state.units), 1),
@@ -188,7 +203,7 @@ async function runBenchBody(api) {
   console.log('BENCH ' + JSON.stringify(result));
   const box = document.createElement('pre');
   box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99999;background:#000c;color:#9f9;font:12px monospace;padding:8px;max-width:95vw;white-space:pre-wrap';
-  box.textContent = segments.map((s) => `fase ${s.fase}: ${s.fps} fps · ${s.framesMeasured} quadros · rAF p50/p95 ${s.rafIntervalP50Ms}/${s.rafIntervalP95Ms} ms · vis ${s.visibilityStart}→${s.visibilityEnd} · callback ${s.callbackMs} ms (manutenção ${s.keepMs}; jogo ${s.cpuMs}) · envio CPU ${s.renderSubmitMs} ms · ${s.calls} draws · ${s.tris} tris · ${s.units} unid · geo ${s.geometries} tex ${s.textures} · heap ${s.heapMB} MB`).join('\n');
+  box.textContent = segments.map((s) => `fase ${s.fase}: ${s.fps} fps · ${s.framesMeasured} quadros · rAF p50/p95 ${s.rafIntervalP50Ms}/${s.rafIntervalP95Ms} ms · vis ${s.visibilityStart}→${s.visibilityEnd} · callback ${s.callbackMs} ms (manutenção ${s.keepMs}; jogo ${s.cpuMs}) · mundo p50/p95 ${s.worldUpdateP50Ms}/${s.worldUpdateP95Ms} ms · barras p50/p95 ${s.barsUpdateP50Ms}/${s.barsUpdateP95Ms} ms · envio CPU ${s.renderSubmitMs} ms · ${s.calls} draws · ${s.tris} tris · ${s.units} unid · geo ${s.geometries} tex ${s.textures} · heap ${s.heapMB} MB`).join('\n');
   document.body.appendChild(box);
   return result;
 }

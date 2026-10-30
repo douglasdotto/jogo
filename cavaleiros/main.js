@@ -7522,6 +7522,10 @@ linkKingdom({ Unit, Hero, Skeleton, units, scene, camera, controls, renderer, su
 // ?bench=1: medição de desempenho (bench.js) — monta uma jornada com 4 heróis sem passar pelos menus
 const benchApi = () => ({
   renderer, scene, game, units, heroes, world, VARIANTS, frame, spawnSkeleton, withBattleAssets,
+  // O adaptador só é criado quando ?bench está ativo. O setter troca a função
+  // lexical chamada pelo frame para permitir medi-la sem ramificação no jogo.
+  get updateBars() { return updateBars; },
+  set updateBars(fn) { updateBars = fn; },
   isLowQuality: () => lowQuality,
   getShadowMapSize: () => sun.shadow.mapSize.x,
   setShadowMapSize(size) {

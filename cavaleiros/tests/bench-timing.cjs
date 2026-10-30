@@ -5,6 +5,13 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'bench.js'), 'utf8').replace(/^export /gm, '');
+const percentileSource = source.match(/const percentile = \(list, p\) => \{[\s\S]*?\n\};/);
+assert.ok(percentileSource, 'benchmark deve definir a função de percentil');
+const percentileContext = vm.createContext({});
+vm.runInContext(`${percentileSource[0]}\nglobalThis.measurePercentile = percentile`, percentileContext);
+assert.equal(percentileContext.measurePercentile([4, 1, 3, 2], 0.5), 2, 'p50 usa o posto nearest-rank');
+assert.equal(percentileContext.measurePercentile(Array.from({ length: 100 }, (_, i) => i + 1), 0.95), 95,
+  'p95 usa o 95º valor em uma amostra de 100');
 
 function makeHarness(search, { failOnJump = false } = {}) {
   const rafQueue = [];
@@ -32,7 +39,7 @@ function makeHarness(search, { failOnJump = false } = {}) {
     getPixelRatio() { return 1; },
   };
   const api = {
-    renderer, game, units, world: {}, scene: { traverse(callback) { callback({}); } },
+    renderer, game, units, world: { update() {} }, updateBars() {}, scene: { traverse(callback) { callback({}); } },
     VARIANTS: [{ id: 'paladin' }],
     heroes() { return []; },
     setupJourney() {},
@@ -45,7 +52,9 @@ function makeHarness(search, { failOnJump = false } = {}) {
     getShadowMapSize() { return shadowSize; },
     setShadowMapSize(size) { shadowSize = size; },
     frame() {
+      api.world.update();
       renderer.render({}, {});
+      api.updateBars();
       window.requestAnimationFrame(api.frame);
     },
   };
@@ -72,6 +81,7 @@ function makeHarness(search, { failOnJump = false } = {}) {
   vm.runInContext(source, context);
   return {
     context, api, renderer, window, document, game, originalRaf, originalRender,
+    originalWorldUpdate: api.world.update, originalUpdateBars: api.updateBars,
     get lowQuality() { return lowQuality; },
     get shadowSize() { return shadowSize; },
     get renderCalls() { return renderCalls; },
@@ -91,6 +101,10 @@ async function main() {
   assert.equal(segment.visibilityStart, 'visible');
   assert.equal(segment.visibilityEnd, 'hidden');
   assert.ok(segment.renderSubmitMs > 0, 'mede o tempo de renderer.render');
+  assert.ok(segment.worldUpdateP50Ms > 0, 'mede separadamente p50 de world.update');
+  assert.ok(segment.worldUpdateP95Ms >= segment.worldUpdateP50Ms, 'mede separadamente p95 de world.update');
+  assert.ok(segment.barsUpdateP50Ms > 0, 'mede separadamente p50 de updateBars');
+  assert.ok(segment.barsUpdateP95Ms >= segment.barsUpdateP50Ms, 'mede separadamente p95 de updateBars');
   assert.ok(segment.keepMs > 0, 'mede separadamente a manutenção da carga do benchmark');
   assert.ok(segment.cpuMs > 0, 'mede o callback do jogo sem a manutenção');
   assert.ok(segment.callbackMs >= segment.keepMs + segment.cpuMs, 'tempo total inclui manutenção e callback do jogo');
@@ -101,6 +115,8 @@ async function main() {
   assert.equal(success.shadowSize, 1024, 'restaura o tamanho original das sombras após sucesso');
   assert.equal(success.window.requestAnimationFrame, success.originalRaf, 'restaura requestAnimationFrame após sucesso');
   assert.equal(success.renderer.render, success.originalRender, 'restaura renderer.render após sucesso');
+  assert.equal(success.api.world.update, success.originalWorldUpdate, 'restaura world.update após sucesso');
+  assert.equal(success.api.updateBars, success.originalUpdateBars, 'restaura updateBars após sucesso');
   assert.equal(vm.runInContext('Math.random === originalRandom', success.context), true, 'restaura Math.random após sucesso');
   assert.equal(success.game.paused, true, 'encerra o benchmark com a partida pausada');
 
@@ -111,6 +127,8 @@ async function main() {
   assert.equal(failure.shadowSize, 1024, 'restaura sombras originais após erro depois da medição');
   assert.equal(failure.window.requestAnimationFrame, failure.originalRaf, 'restaura RAF após erro depois da instrumentação');
   assert.equal(failure.renderer.render, failure.originalRender, 'restaura render após erro depois da instrumentação');
+  assert.equal(failure.api.world.update, failure.originalWorldUpdate, 'restaura world.update após erro depois da instrumentação');
+  assert.equal(failure.api.updateBars, failure.originalUpdateBars, 'restaura updateBars após erro depois da instrumentação');
   assert.equal(vm.runInContext('Math.random === originalRandom', failure.context), true, 'restaura Math.random após erro');
   assert.equal(failure.game.paused, true, 'pausa a partida após erro');
 
