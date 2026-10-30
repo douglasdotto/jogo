@@ -1,13 +1,14 @@
 // Jornada: node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
-// Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|recomendado|aleatorio] [semente] [detalhe]
+// Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|recomendado|aleatorio] [semente] [detalhe] [reta]
 // Exemplo rápido (2 por dificuldade): node cavaleiros/tests/simulacao.cjs campanha ponte todas 2 equilibrado 20261030 detalhe
-// Sem navegador. O modo campanha roda combate/objetivos, mas ainda usa estrada reta,
-// sem obstáculos, platôs ou lagos: não valida dificuldade de navegação/mapas sorteados.
+// Sem navegador. A campanha usa a estrada curva, terreno e navegação reais, com bloqueadores semeados.
+// Acrescente "reta" no fim para comparar com o cenário sem navegação.
 // Um grupo opcional troca a seleção aleatória; a semente deixa o resultado reproduzível.
 // Serve para calibrar dificuldades e heróis: mostra vitórias, fase média, quedas e dano por herói.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createNavigationWorld, seedRoadObstacles } = require('./navigation-world.cjs');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
@@ -57,21 +58,26 @@ const THREE = new Proxy({ Vector3, Mesh: class { constructor() { Object.assign(t
   MeshBasicMaterial: class { constructor() { Object.assign(this, material()); } }, MeshLambertMaterial: class { constructor() { Object.assign(this, material()); } },
   AnimationMixer: class { update() {} clipAction() { return action(); } stopAllAction() {} },
   AnimationClip: { findByName: (_, name) => ({ name, duration: 1 }) }, Clock: class { getDelta() { return 0.016; } },
-  MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(v, b)) }, LoopOnce: 1, LoopRepeat: 2, RingGeometry: class {}, DoubleSide: 2 }, { get: (o, k) => k in o ? o[k] : class { constructor() { Object.assign(this, root()); } } });   // geometrias novas viram objetos simples
+  MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(v, b)), smoothstep: (x, a, b) => { if (x <= a) return 0; if (x >= b) return 1; x = (x - a) / (b - a); return x * x * (3 - 2 * x); } }, LoopOnce: 1, LoopRepeat: 2, RingGeometry: class {}, DoubleSide: 2 }, { get: (o, k) => k in o ? o[k] : class { constructor() { Object.assign(this, root()); } } });   // geometrias novas viram objetos simples
 const asset = () => ({ scene: root(), animations: [] });
 const assets = {};
 for (const n of ['Minion', 'Warrior', 'Rogue', 'Mage', 'Blade', 'Axe', 'Shield_Small_A', 'Crossbow', 'Staff', 'Arrow']) assets['Skeleton_' + n] = asset();
 assets.Barbarian = asset();   // aldeões da milícia
 const stats = () => ({ dano: 0, recebido: 0, cura: 0, abates: 0, ataques: 0, habilidades: 0, criticos: 0, esquivas: 0, distancia: 0, tempo: 0 });
+const simBlasts = [];
+const simRing = (_at, _radius, _color, life = 0.6) => simBlasts.push({
+  mesh: { material: { opacity: 1, dispose: noop }, scale: { addScalar: noop } }, t: life, life,
+});
 const context = vm.createContext({ THREE, document: { createElement: el, body: el(), getElementById: el }, URLSearchParams, location: { search: '?tudo=1' },   // todas as variantes liberadas
   addEventListener: noop, requestAnimationFrame: noop, hideTooltip: noop, logoSVG: () => "", tutorial: { on: noop, wants: () => false }, setTimeout: (fn) => fn(), clearTimeout: noop, innerWidth: 1440, innerHeight: 1000, aiming: null, battleGateId: 0, battleLoadingVisible: false,
   SkeletonUtils: { clone: root }, scene: { add: noop, remove: noop }, assets, ringGeo: {}, haloGeo: {}, goldMat: {}, starGeo: {}, puffGeo: {},
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
   newStats: stats, openHeroPanel: noop, closeHeroPanel: noop, panelHero: () => null, tickHeroPanel: noop, summaryHTML: () => '', LOOKS: {}, applyLook: noop,
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
+  blasts: simBlasts,
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
     along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
-  poof: noop, ring: noop, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], blasts: [], flames: [], wave: noop, burst: noop, column: noop,
+  poof: noop, ring: simRing, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], flames: [], wave: noop, burst: noop, column: noop,
   FX: new Proxy({}, { get: () => noop }), clearFx: noop, popTextPool: { clear: noop }, audio: new Proxy({}, { get: () => noop }) });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
@@ -95,6 +101,7 @@ vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts,
   DIFFICULTIES, MISSIONS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
+  setWorld: (next) => { world = next; },
   setDifficulty: (d) => { difficulty = d; },
   setFrameTargetContext: () => { activeTargetContext = game.state === 'fight' && !game.paused && !game.over ? makeTargetContext(frameTargetContext) : null; },
   clearFrameTargetContext: () => { activeTargetContext = null; } })`, context);
@@ -114,6 +121,7 @@ vm.runInContext(`
     const party = heroes();
     globalThis.__campaignOutcome = {
       won: Boolean(won), stars, falls: game.falls,
+      shrineRatio: game.shrine ? Math.max(0, Math.min(1, game.shrine.hp / game.shrine.maxHp)) : null,
       hpRatio: game.missionHpRatio ?? party.reduce((sum, h) => sum + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((sum, h) => sum + h.maxHp, 0)),
       villagerRatio,
     };
@@ -125,11 +133,21 @@ const progressAtStart = JSON.stringify(t.progress.snapshot());
 if (progressAtStart !== JSON.stringify(vm.runInContext('freshProgress()', context))) throw new Error('A simulação precisa começar com a progressão zerada');
 for (const v of vm.runInContext('VARIANTS', context)) v.built = asset(), v.portraits = ['', '', ''];
 
+let currentMapSeed = 11;
+const straightMode = process.argv.includes('reta');
 function play(diff, profile, mission = null) {
   t.setDifficulty(diff);
   let nextProfileHero = 0;
   let initialHeroes = null;
   let initialParty = null;
+  if (mission && !straightMode) {
+    const castleInterior = mission.id === 'coracao-do-castelo';
+    const phases = castleInterior ? 13 : 12;
+    const mapWorld = createNavigationWorld({ THREE, Vector3, seed: currentMapSeed, phases, castleInterior });
+    seedRoadObstacles(mapWorld, currentMapSeed, phases);
+    t.setWorld(mapWorld);
+    if (vm.runInContext('world', context) !== mapWorld) throw new Error('A simulação não está usando o mapa de campanha configurado');
+  }
   t.startGame();
   if (mission) {
     // Ignora somente a interface do mapa; dificuldade, seleção, startMission e combate são reais.
@@ -203,7 +221,7 @@ function play(diff, profile, mission = null) {
       range: h.range, ranged: Boolean(h.ranged), targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
   } : null;
   return { won, timedOut: mission ? !t.game.over : false, initialHeroes, initialParty, falls: outcome?.falls ?? t.game.falls,
-    villagerRatio, phase: t.game.phase, deaths, kills: t.game.kills, time,
+    villagerRatio, shrineRatio: outcome?.shrineRatio ?? null, phase: t.game.phase, deaths, kills: t.game.kills, time,
     party: t.heroes().map((h) => h.cfg.id), diagnostic,
     damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo)]), ...(outcome || {}) };
 }
@@ -225,6 +243,7 @@ const profiles = {
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],
   elite: ['paladin', 'guardian', 'pyro', 'viking'],
+  santuario: ['paladin', 'pyro', 'cleric', 'guardian'],
   resgate: ['paladin', 'pyro', 'cleric', 'guardian'],
   resgate_anjo: ['paladin', 'guardian', 'angel', 'pyro'],
   resgate_suporte: ['paladin', 'guardian', 'angel', 'cleric'],
@@ -257,7 +276,9 @@ const difficulties = campaignMode ? t.DIFFICULTIES : [original, ...t.DIFFICULTIE
 for (const diff of difficulties.filter((d) => which === 'todas' || d.id === which)) {
   const res = [];
   for (let i = 0; i < runs; i++) {
-    useSeed(baseSeed + i * 2654435761);
+    const runSeed = (baseSeed + i * 2654435761) >>> 0;
+    currentMapSeed = runSeed || 1;
+    useSeed(runSeed);
     res.push(play(diff, profile, campaignMission));
   }
   for (const r of res) for (const [id, dmg, dps] of r.damage) (damage[id] ||= []).push([dmg, dps]);
@@ -269,7 +290,7 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
     const incomplete = res.filter((r) => r.timedOut).length;
     console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
     if (details) for (const [i, r] of res.entries()) {
-      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}`);
+      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · santuário ${Number.isFinite(r.shrineRatio) ? `${Math.round(r.shrineRatio * 100)}%` : '—'} · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}`);
       if (!r.won && r.diagnostic) console.log(`    diagnóstico: ${JSON.stringify(r.diagnostic)}`);
     }
   } else {
@@ -278,7 +299,7 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
       console.log(`  ${i + 1}: ${r.won ? 'vitória' : `fase ${r.phase}`} · ${r.deaths} quedas · ${r.party.join(' + ')}`);
   }
 }
-console.log(`${campaignMode ? `Missão: ${campaignMission.name} · vagas iniciais: ${campaignMission.heroes} · grupo: ${profileName}` : `Grupo: ${profileName}`} · semente: ${baseSeed}`);
+console.log(`${campaignMode ? `Missão: ${campaignMission.name} · vagas iniciais: ${campaignMission.heroes} · grupo: ${profileName} · mapa: ${straightMode ? 'reta' : 'curvo + terreno + obstáculos'}` : `Grupo: ${profileName}`} · semente: ${baseSeed}`);
 if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate');
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
 if (!campaignMode) for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
