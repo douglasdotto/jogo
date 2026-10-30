@@ -2304,17 +2304,26 @@ const BLADE_DANCE_TICK = 0.3;   // intervalo entre as voltas da Dança de lâmin
 const MEDITATE_TICK = 0.5;      // intervalo entre as curas da Meditação
 
 function damageCleave(owner, primary) {
-  for (const s of skeletonsAlive()) {
-    if (s.spawning || !inMeleeArc(owner, s)) continue;
+  const count = units.length;
+  for (let i = 0; i < count; i++) {
+    const s = units[i];
+    if (s.team !== 'skeleton' || s.dead || s.spawning || !inMeleeArc(owner, s)) continue;
     const secondary = s !== primary;
-    const before = s.vel.clone();
+    const beforeX = s.vel.x, beforeZ = s.vel.z;
     heroHit(owner, s, owner.dmg * (secondary ? 0.6 : 1));
-    if (secondary) s.vel.sub(before).multiplyScalar(0.5).add(before);
+    if (secondary) {
+      s.vel.x = beforeX + (s.vel.x - beforeX) * 0.5;
+      s.vel.z = beforeZ + (s.vel.z - beforeZ) * 0.5;
+    }
   }
 }
 
 function damageArea(center, radius, dmg, owner = null) {
-  for (const s of skeletonsAlive()) if (!s.spawning && s.pos.distanceTo(center) <= radius + 0.4 * (s.size - 1)) {
+  const count = units.length;
+  for (let i = 0; i < count; i++) {
+    const s = units[i];
+    if (s.team !== 'skeleton' || s.dead || s.spawning
+      || s.pos.distanceTo(center) > radius + 0.4 * (s.size - 1)) continue;
     if (owner) heroHit(owner, s, dmg, center);
     else s.takeDamage(dmg, center);
   }

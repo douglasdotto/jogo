@@ -104,7 +104,7 @@ vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,SKILL_ANIMS,pressForward,rescueRunnerFor};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
@@ -692,8 +692,23 @@ test('cleave frontal limita raio, dano secundário e recuo',()=>{
   clear();const h=new t.Hero(cfg('crusher'));h.pos.set(0,0,0);h.root.rotation.y=0;
   const enemy=(x,z)=>{const u=new t.Skeleton('Minion',1);u.spawning=false;u.pos.set(x,0,z);u.hp=1000;return u};
   const a=enemy(0,1.8),b=enemy(1,1.5),back=enemy(0,-1.8),far=enemy(0,2.3);
-  t.damageCleave(h,a);assert.equal(a.hp,969);assert.equal(b.hp,981.4);assert.equal(back.hp,1000);assert.equal(far.hp,1000);
+  const filter=t.units.filter;b.vel.clone=()=>{throw new Error('recuo secundário não deve clonar vetores')};
+  t.units.filter=()=>{throw new Error('golpe em arco não deve filtrar uma lista temporária')};
+  try { t.damageCleave(h,a); } finally { t.units.filter=filter; }
+  assert.equal(a.hp,969);assert.equal(b.hp,981.4);assert.equal(back.hp,1000);assert.equal(far.hp,1000);
   assert.ok(b.vel.length()<a.vel.length());
+});
+test('dano em área percorre unidades sem criar lista temporária e ignora mortos ou surgindo',()=>{
+  clear();
+  const enemy=(z)=>{const u=new t.Skeleton('Minion',1);u.spawning=false;u.pos.set(0,0,z);u.hp=1000;return u};
+  const live=enemy(1),spawning=enemy(1),dead=enemy(1),far=enemy(5);
+  spawning.spawning=true;dead.dead=true;
+  const filter=t.units.filter;t.units.filter=()=>{throw new Error('dano em área não deve alocar filtro de esqueletos')};
+  try { t.damageArea(new Vector3(0,0,0),2,17); } finally { t.units.filter=filter; }
+  assert.equal(live.hp,983,'o esqueleto vivo no raio recebe dano');
+  assert.equal(spawning.hp,1000,'o esqueleto em surgimento não é atingido');
+  assert.equal(dead.hp,1000,'o esqueleto morto não recebe dano novamente');
+  assert.equal(far.hp,1000,'alvos fora do raio ficam intactos');
 });
 test('arco corpo a corpo preserva direção e alcance sem alocar vetores',()=>{
   const Vector=context.THREE.Vector3,owner={pos:new Vector(0,0,0),root:{rotation:{y:0}}};
