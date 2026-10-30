@@ -80,7 +80,8 @@ function makeSeededTerrain(seed) {
   const pointAt=s=>new Vector3(Math.sin(s*0.03+seed)*5+Math.sin(s*0.08+seed*0.4)*1.5,0,-s+Math.sin(s*0.025+seed)*1.5);
   const tangentAt=s=>new Vector3(0.15*Math.cos(s*0.03+seed)+0.12*Math.cos(s*0.08+seed*0.4),0,-1+0.0375*Math.cos(s*0.025+seed)).normalize();
   const sideOf=t=>new Vector3(-t.z,0,t.x),along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
-  return runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:false,obstacles:[]});
+  const obstacles=[];
+  return runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles,pointAt,anchorS,along})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:false,obstacles});
 }
 for(let seed=0;seed<8;seed++) {
   const sampleWorld=makeSeededTerrain(seed),zones=[3,5,7,9,10].map(p=>sampleWorld.zoneOf(p));
@@ -113,27 +114,40 @@ const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // 
 const gridStart=main.indexOf('const SEPARATION_CELL_SIZE = 3;'),gridEnd=main.indexOf('function separate() {',gridStart);
 if(gridStart<0||gridEnd<0)throw Error('Grade espacial de obstáculos ausente');
 world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));
-const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',{
+const movementSandbox={
   THREE,world,tmp:new Vector3(),moveDir:new Vector3(),gridCellKey:(x,z)=>x*65536+(z&0xffff),
-});
+};
+const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',movementSandbox);
 const {Walker,queryObstacleCandidates}=movementApi;
-function walk(from,to,guard=null) {
-  const u=new Walker();Object.assign(u,{pos:from.clone(),vel:new Vector3(),speed:3.2,size:1,face:()=>{}});
-  const guards=(Array.isArray(guard)?guard:[guard]).filter(Boolean);
-  let maxY=u.pos.y,minClearance=Infinity;
-  for(let i=0;i<4000;i++) {
+const separationStart=main.indexOf('const collisionFrom = { x: 0, z: 0 }'),separationEnd=main.indexOf('// ---------- fases ----------',separationStart);
+if(separationStart<0||separationEnd<0)throw Error('Solver de colisão ausente');
+const separationSandbox={THREE,world,units:[],gridCellKey:(x,z)=>x*65536+(z&0xffff)};
+const {separate}=runInNewContext(main.slice(separationStart,separationEnd)+';({separate})',separationSandbox);
+function walk(from,to,guard=null,maxFrames=4000,minimumClearance=1.0,label='',walker=null) {
+  const navWorld=movementSandbox.world;
+  const u=walker||new Walker();
+  if(!walker)Object.assign(u,{pos:from.clone(),vel:new Vector3(),speed:3.2,size:1,face:()=>{}});
+  separationSandbox.world=navWorld;separationSandbox.units.splice(0,separationSandbox.units.length,u);
+  const guards=guard==='world'?navWorld.obstacles:(Array.isArray(guard)?guard:[guard]).filter(Boolean);
+  let maxY=u.pos.y,minClearance=Infinity;const trace=[];
+  for(let i=0;i<maxFrames;i++) {
     const next=u.pos.clone().addScaledVector(u.vel,1/60);
-    if(world.canStep(u.pos,next))u.pos.copy(next);else u.vel.set(0,0,0);
-    u.pos.y=world.groundHeight(u.pos.x,u.pos.z);maxY=Math.max(maxY,u.pos.y);
+    if(navWorld.canStep(u.pos,next))u.pos.copy(next);else u.vel.set(0,0,0);
+    u.pos.y=navWorld.groundHeight(u.pos.x,u.pos.z);
+    separate();
+    maxY=Math.max(maxY,u.pos.y);
     for(const obstacle of guards) {
       const clearance=Math.hypot(u.pos.x-obstacle.x,u.pos.z-obstacle.z)-obstacle.r;
       minClearance=Math.min(minClearance,clearance);
-      if(clearance<1.0)throw Error(`Rota atravessou montanha/obstáculo: ${clearance.toFixed(2)} m de margem`);
+      if(clearance+0.001<minimumClearance)throw Error(`Rota atravessou montanha/obstáculo: ${clearance.toFixed(2)} m de margem (mín. ${minimumClearance.toFixed(2)}); unidade=${u.pos.x.toFixed(2)},${u.pos.z.toFixed(2)} obstáculo=${obstacle.x.toFixed(2)},${obstacle.z.toFixed(2)},r=${obstacle.r.toFixed(2)} destino=${to.x.toFixed(2)},${to.z.toFixed(2)}`);
     }
     u.moveTo(to,1/60);
+    if(i%1000===999)trace.push([i+1,+u.pos.x.toFixed(2),+u.pos.z.toFixed(2),+u.vel.x.toFixed(2),+u.vel.z.toFixed(2)]);
     if(u.pos.distanceTo(to)<0.2)return {u,maxY,minClearance};
   }
-  throw Error('Trajeto preso: '+JSON.stringify({from,to,at:u.pos,next:world.nextWaypoint(u.pos,to)}));
+  const path=u.pathing&&{stage:u.pathing.stage,side:u.pathing.side,obstacle:u.pathing.obstacle,start:u.pathing.start,end:u.pathing.end};
+  const nearby=navWorld.obstacles.filter((o)=>Math.hypot(o.x-u.pos.x,o.z-u.pos.z)<8).map(({x,z,r})=>({x,z,r}));
+  throw Error('Trajeto preso: '+JSON.stringify({label,from,to,at:u.pos,vel:u.vel,path,nearby,trace,next:navWorld.nextWaypoint(u.pos,to)}));
 }
 for(const phase of [3,7,10]) {
   const z=world.zoneOf(phase);
@@ -218,6 +232,35 @@ const aroundPair=walk(new Vector3(-12,0,0),new Vector3(12,0,0),mountainPair);
 if(aroundPair.minClearance<1.0)throw Error('A rota dupla perdeu margem entre duas montanhas');
 console.log(`Navegação: contorna sequência de montanhas com ${aroundPair.minClearance.toFixed(2)} m de folga OK`);
 console.log('Movimento real: subida, descida, contorno de platôs e lagos OK');
+
+// Campanha em oito caminhos sinuosos e semeados, com a navegação de obstáculos do jogo.
+// Os bloqueadores ocupam a faixa da estrada, como rochas, barris e troncos do mapa.
+for(let seed=1;seed<=8;seed++) {
+  const seededWorld=makeSeededTerrain(seed);
+  let obstacleSeed=(Math.imul(seed,0x9e3779b1)>>>0)||1;
+  const obstacleRandom=()=>((obstacleSeed=(Math.imul(obstacleSeed,1664525)+1013904223)>>>0)/0x100000000);
+  for(let phase=1;phase<12;phase++) {
+    const count=2+Math.floor(obstacleRandom()*3);
+    for(let i=0;i<count;i++) {
+      const s=seededWorld.anchorS(phase)+7+obstacleRandom()*9;
+      const lateral=(obstacleRandom()<0.5?-1:1)*(2.3+obstacleRandom()*4.2);
+      const at=seededWorld.along(s,lateral);
+      const kind=obstacleRandom();
+      const radius=kind<0.4?0.7+obstacleRandom()*0.4:kind<0.7?1.1:0.6;
+      seededWorld.obstacles.push({x:at.x,z:at.z,r:radius});
+    }
+  }
+  movementSandbox.world=seededWorld;
+  let at=seededWorld.pointAt(seededWorld.anchorS(1)),walker=null;
+  for(let phase=1;phase<12;phase++) {
+    const target=seededWorld.pointAt(seededWorld.anchorS(phase+1));
+    const route=walk(at,target,'world',1800,0.53,`${seed}:${phase}`,walker);
+    if(route.u.pos.distanceTo(target)>=0.2)throw Error(`Campanha não alcançou a fase ${phase+1} na seed ${seed}`);
+    at=target;walker=route.u;
+  }
+}
+movementSandbox.world=world;
+console.log('Navegação: 8 trajetos completos fase a fase em estradas sinuosas com bloqueadores semeados OK');
 
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
