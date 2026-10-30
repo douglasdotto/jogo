@@ -66,4 +66,36 @@ capped.update(10);
 assert.equal(capped.pooledCount, 1, 'não retém mais nós do que o limite');
 assert.equal(container.children.length, 0);
 
+// ticks seguidos no mesmo alvo somam num só número; outro alvo, outra classe ou fora da janela não somam
+const merging = createPopTextPool(container, { createElement, lifetime: 900, mergeWindow: 700 });
+const target = {}, other = {};
+const tick = merging.show(4.4, 'dmg', 0, 0, 0, target);
+assert.equal(tick.textContent, '4');
+assert.equal(merging.show(4.4, 'dmg', 5, 5, 650, target), tick, 'tick dentro da janela reaproveita o rótulo');
+assert.equal(tick.textContent, '9', 'soma o valor real e arredonda só na tela');
+assert.equal(tick.style.left, '5px');
+assert.equal(merging.activeCount, 1);
+merging.show(7, 'dmg', 0, 0, 700, other);
+merging.show(7, 'crit', 0, 0, 700, target);
+merging.show('+3', 'heal', 0, 0, 700, target);
+assert.equal(merging.activeCount, 4, 'alvo, classe ou texto diferentes ficam separados');
+merging.update(1549);
+assert.equal(merging.activeCount, 4, 'a soma renova a vida do rótulo');
+merging.show(2, 'dmg', 0, 0, 1300, target);
+assert.equal(merging.activeCount, 4);
+assert.equal(tick.textContent, '11');
+merging.show(2, 'dmg', 0, 0, 2001, target);
+assert.equal(tick.textContent, '11', 'fora da janela abre um rótulo novo');
+merging.clear();
+
+// limite de rótulos ativos: o mais antigo sai para o novo entrar
+const limited = createPopTextPool(container, { createElement, maxActive: 3, lifetime: 900 });
+const oldest = limited.show(1, 'dmg', 0, 0, 0);
+limited.show(2, 'dmg', 0, 0, 10);
+limited.show(3, 'dmg', 0, 0, 20);
+limited.show(4, 'dmg', 0, 0, 30);
+assert.equal(limited.activeCount, 3, 'nunca passa de maxActive');
+assert.equal(oldest.textContent, '4', 'reaproveita o nó do rótulo mais antigo');
+limited.clear();
+
 console.log('pop-text-pool ok');

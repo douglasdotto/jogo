@@ -9,7 +9,7 @@ import { LOOKS } from './looks.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
-import { synergyDamageMultiplier, synergyDamageTakenMultiplier, SYNERGIES } from './synergies.js';
+import { synergyDamageMultiplier, synergyDamageTakenMultiplier } from './synergies.js';
 import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './upgrade-branches.js';
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
@@ -1574,6 +1574,7 @@ const SKILL_GLYPHS = {
   druid: ['❀', '❧', '☘'], cleric: ['✚', '⛨', '☼'], bard: ['♫', '♪', '♬'],
   angel: ['✧', '⛨', '☼'], chronist: ['⌛', '⚡', '◷'],
   archer: ['➹', '⇊', '◎'], monk: ['✊', '≋', '❂'], alchemist: ['⚗', '✸', '♈'],
+  engineer: ['⚙', '⚡', '✹'], beast_tamer: ['♞', '≋', '✪'], oracle: ['☼', '◉', '☯'],
 };
 
 function buildSkillBar(party) {
@@ -2015,12 +2016,12 @@ class Unit {
         this.dodgeTimer = (7 - this.level) * this.skillRate;
         this.busy = this.once(Math.random() < 0.5 ? 'Dodge_Left' : 'Dodge_Right', 1.5);
         this.pendingHit = null;
-        popText(this.pos, 'Esquiva!', 'heal');
+        popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
         return;
       }
       if (this.bladeDanceT > 0 && Math.random() < 0.35) {   // girando, o Duelista desvia de parte dos golpes
-        popText(this.pos, 'Esquiva!', 'heal');
+        popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
         return;
       }
@@ -2029,7 +2030,7 @@ class Unit {
       const protection = synergyDamageTakenMultiplier(this, partyNow());
       if (protection < 1) {
         n *= protection;
-        if (this.synergyNoticeT <= 0) { popText(this.pos, SYNERGIES[2].name, 'heal'); this.synergyNoticeT = 1.2; }
+        if (this.synergyNoticeT <= 0) { popText(this.pos, '⛨−20%', 'block'); this.synergyNoticeT = 1.2; }
       }
       if (canBlock(this) && Math.random() < 0.3) {
         n *= 0.5;
@@ -2058,7 +2059,7 @@ class Unit {
     this.flash = heavy ? 0.12 : 0.14;
     this.flashHeavy = heavy;
     this.squashT = 0.25;
-    popText(this.pos, Math.round(n), this.team === 'hero' ? 'hurt' : heavy ? 'crit' : 'dmg');
+    popText(this.pos, n, this.team === 'hero' ? 'hurt' : heavy ? 'crit' : 'dmg');   // o pool arredonda e soma golpes seguidos no mesmo alvo
     audio.play(this.team === 'hero' ? 'hurt' : 'hit');
     if (from) {   // recua com o impacto
       const k = (this.boss ? 0.6 : this.team === 'hero' ? 1.6 : 3.2);
@@ -2282,7 +2283,7 @@ function applySynergy(attack, owner, target, damage) {
     && members.some((h) => ['cryo', 'druid'].includes(h.cfg.id))) {
     const multiplier = synergyDamageMultiplier('fire', target);
     if (multiplier > 1) {
-      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, 'Sinergia +20%!', 'evolve'); target.synergyNoticeT = 1.2; }
+      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, '✦+20%', 'evolve'); target.synergyNoticeT = 1.2; }
       return damage * multiplier;
     }
   }
@@ -2290,7 +2291,7 @@ function applySynergy(attack, owner, target, damage) {
     && members.some((h) => h.cfg.id === 'druid')) {
     const multiplier = synergyDamageMultiplier('piercing', target);
     if (multiplier > 1) {
-      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, 'Sinergia +20%!', 'evolve'); target.synergyNoticeT = 1.2; }
+      if ((target.synergyNoticeT || 0) <= 0) { popText(target.pos, '✦+20%', 'evolve'); target.synergyNoticeT = 1.2; }
       return damage * multiplier;
     }
   }
@@ -3222,7 +3223,7 @@ function popText(at, text, cls) {
   if (tmp.z > 1) return;
   const x = (tmp.x * 0.5 + 0.5) * innerWidth + (Math.random() * 24 - 12);
   const y = (-tmp.y * 0.5 + 0.5) * innerHeight;
-  popTextPool.show(text, cls, x, y, performance.now());
+  popTextPool.show(text, cls, x, y, performance.now(), typeof text === 'number' ? at : null);   // números somam por alvo
 }
 
 // ---------- visuais das habilidades: malhas brilhantes (aditivas), sem luzes extras ----------
@@ -6512,8 +6513,8 @@ function syncDirectControlUI() {
   if (toggle.textContent !== '🎮') toggle.textContent = '🎮';
   hint.classList.toggle('is-hidden', !directControl.enabled);
   const title = $('directControlHero');
-  const status = game.paused ? 'pausado' : game.state !== 'fight' ? 'aguarde a próxima fase' : hero?.dead ? 'herói caído · clique em outro' : hero?.cfg.name;
-  if (title) title.textContent = hero ? `Controle direto · ${status}` : 'Controle direto';
+  const status = game.paused ? 'Pausado' : game.state !== 'fight' ? 'Aguarde' : hero?.dead ? 'Caído' : hero?.cfg.name;
+  if (title) title.textContent = hero ? status : 'Herói';
   syncSkillControlKeys();
 }
 
@@ -6529,7 +6530,7 @@ function setDirectControlMode(on, hero = null, announce = true) {
     directControl.aimDirection.set(0, 0, 0);
     directControl.pointerX = directControl.pointerY = null;
     syncDirectControlUI();
-    if (announce) showBanner('A equipe voltou ao controle da IA', 1.5);
+    if (announce) showBanner('🎮 IA', 1.5);
     return !!oldHero;
   }
   if (game.over || game.paused || game.realm || pick.open || game.state !== 'fight') return false;
@@ -6543,7 +6544,7 @@ function setDirectControlMode(on, hero = null, announce = true) {
   directControl.hero = selected;
   directControl.commandDownAt = null;
   syncDirectControlUI();
-  if (announce && changed) showBanner(`Controle direto · ${selected.cfg.name} · setas ou botão direito movem · esquerdo ataca · Q/W/E habilidades`, 2.7);
+  if (announce && changed) showBanner(`🎮 ${selected.cfg.name}`, 1.5);   // os comandos ficam no tooltip do chip
   return true;
 }
 
@@ -8161,21 +8162,14 @@ aimHint.id = 'aimHint';
 aimHint.setAttribute('role', 'status');
 aimHint.hidden = true;
 document.body.appendChild(aimHint);
-// no toque não há Esc nem botão direito: um botão visível cancela a mira
-const aimCancel = document.createElement('button');
-aimCancel.id = 'aimCancel';
-aimCancel.type = 'button';
-aimCancel.textContent = 'Cancelar mira';
-aimCancel.hidden = true;
-aimCancel.onclick = () => { cancelAim(); audio.play('click'); };
-document.body.appendChild(aimCancel);
+// dica curta: alvo e alcance; Esc ou botão direito cancelam (só desktop)
+const aimMessage = (hero, spec) => `${hero.cfg.ability} · ${spec.mode === 'enemy' ? 'Inimigo' : 'Chão'} · ${spec.range.toLocaleString('pt-BR')} m · Esc`;
 
 function cancelAim() {
   if (aiming) controls.enabled = aiming.controlsEnabled;
   aiming = null;
   aimGroup.visible = false;
   aimHint.hidden = true;
-  aimCancel.hidden = true;
   renderer.domElement.style.cursor = '';
 }
 
@@ -8184,8 +8178,7 @@ function beginAim(hero) {
   hero.wantSkill = 0;
   hero.manualTarget = null;
   const spec = aimSpec(hero);
-  const modeHint = spec.mode === 'enemy' ? 'Clique em um inimigo' : 'Clique no chão para mirar';
-  const baseMessage = `${hero.cfg.ability} · ${modeHint} · Alcance ${spec.range.toLocaleString('pt-BR')} m · Esc / botão direito cancela`;
+  const baseMessage = aimMessage(hero, spec);
   aiming = {
     hero,
     controlsEnabled: controls.enabled,
@@ -8201,7 +8194,6 @@ function beginAim(hero) {
   controls.enabled = false;
   renderer.domElement.style.cursor = 'crosshair';
   aimHint.hidden = false;
-  aimCancel.hidden = false;
   updateAim();
 }
 
@@ -8214,8 +8206,7 @@ function updateAim() {
     aiming.specLevel = h.level;
     aiming.specPower = h.skillPower;
     if (aiming.spec) {
-      const modeHint = aiming.spec.mode === 'enemy' ? 'Clique em um inimigo' : 'Clique no chão para mirar';
-      aiming.baseMessage = `${h.cfg.ability} · ${modeHint} · Alcance ${aiming.spec.range.toLocaleString('pt-BR')} m · Esc / botão direito cancela`;
+      aiming.baseMessage = aimMessage(h, aiming.spec);
       aiming.hintState = null;
     }
   }
@@ -8266,7 +8257,7 @@ function updateAim() {
   const hintState = target && !valid ? 'invalid' : target ? 'valid' : 'empty';
   if (aiming.hintState !== hintState) {
     aiming.hintState = hintState;
-    aimHint.textContent = `${aiming.baseMessage}${hintState === 'invalid' ? ' · Fora do alcance ou alvo inválido' : ''}`;
+    aimHint.textContent = `${aiming.baseMessage}${hintState === 'invalid' ? ' · ✕ Fora' : ''}`;
   }
 }
 
