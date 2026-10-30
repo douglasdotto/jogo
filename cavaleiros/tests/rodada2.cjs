@@ -1217,6 +1217,14 @@ test('Pyro escolhe um grupo para a explosão em vez de um alvo isolado',()=>{
   for(const s of [...cluster,lone])s.spawning=false;
   assert.ok(cluster.includes(t.bestSkillTarget(h,[lone,...cluster])));
 });
+test('a mira de área conta o raio maior dos inimigos grandes',()=>{
+  const hero={cfg:{id:'pyro'},level:1,skillPower:1,range:8,pos:new Vector3(0,0,0)};
+  const enemy=(x,z,size=1)=>({pos:new Vector3(x,0,z),size,hp:100,maxHp:100});
+  const center=enemy(0,6,3),cluster=[center,enemy(1.7,6,3),enemy(-1.7,6,3),enemy(0,7.7,3)];
+  const lone=enemy(0,3.6);
+  assert.equal(t.bestSkillTarget(hero,[lone,...cluster],{goal:{type:'win'},party:[],friends:[],villager:null}),center,
+    'o centro cobre os inimigos grandes que o impacto realmente alcança, mesmo estando mais longe');
+});
 test('Paladino guarda a cura para aliados feridos e ainda salva um aliado crítico',()=>{
   clear();const paladin=new t.Hero(cfg('paladin')),ally=new t.Hero(cfg('berserker'));
   paladin.pos.set(0,0,0);ally.pos.set(0,0,1);ally.hp=ally.maxHp-1;

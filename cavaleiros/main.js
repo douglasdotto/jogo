@@ -2581,7 +2581,10 @@ function skillTargetScore(hero, target, candidates, context = targetContext()) {
     const radius = id === 'pyro'
       ? (1.1 + (hero.level - 1) * 0.2) * hero.skillPower
       : (1.3 + (hero.level - 1) * 0.25) * hero.skillPower;
-    const group = candidates.filter((other) => other !== target && tacticalDistance(other.pos, target.pos) <= radius + 0.4).length;
+    let group = 0;
+    for (const other of candidates) {
+      if (other !== target && tacticalDistance(other.pos, target.pos) <= radius + 0.4 * (other.size - 1)) group++;
+    }
     score -= Math.min(5, group * 1.7);
   } else if (id === 'crossbow' || id === 'ninja') {
     const dx = target.pos.x - hero.pos.x, dz = target.pos.z - hero.pos.z;
