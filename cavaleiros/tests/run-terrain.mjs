@@ -291,6 +291,11 @@ for(let seed=1;seed<=8;seed++) {
       const s=seededWorld.anchorS(phase)+7+obstacleRandom()*9;
       const lateral=(obstacleRandom()<0.5?-1:1)*(2.3+obstacleRandom()*4.2);
       const at=seededWorld.along(s,lateral);
+      const zones=[3,5,7,9,10].map((p)=>seededWorld.zoneOf(p));
+      const blocked=zones.some((zone)=>Math.hypot(at.x-zone.center.x,at.z-zone.center.z)<zone.radius+3.5
+        ||zone.ground.some((ground)=>Math.hypot(at.x-ground.x,at.z-ground.z)<3)
+        ||(zone.ramp&&Math.hypot(at.x-zone.ramp.bottom.x,at.z-zone.ramp.bottom.z)<4.5));
+      if(blocked)continue;   // createWorld mantém pedras e troncos fora das zonas e rampas de combate
       const kind=obstacleRandom();
       const radius=kind<0.4?0.7+obstacleRandom()*0.4:kind<0.7?1.1:0.6;
       seededWorld.obstacles.push({x:at.x,z:at.z,r:radius});
@@ -304,9 +309,10 @@ for(let seed=1;seed<=8;seed++) {
     if(route.u.pos.distanceTo(target)>=0.2)throw Error(`Campanha não alcançou a fase ${phase+1} na seed ${seed}`);
     at=target;walker=route.u;
   }
+  if(seed===2)walk(seededWorld.pointAt(seededWorld.anchorS(1)),seededWorld.pointAt(seededWorld.anchorS(12)),'world',9000,0.53,`${seed}:alvo-longo`);
 }
 movementSandbox.world=world;
-console.log('Navegação: 8 trajetos completos fase a fase em estradas sinuosas com bloqueadores semeados OK');
+console.log('Navegação: 8 trajetos fase a fase e 1 alvo longo em estradas sinuosas com bloqueadores semeados OK');
 
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
