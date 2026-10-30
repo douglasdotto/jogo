@@ -1561,7 +1561,7 @@ async function pumpPortraits() {
 }
 
 // ---------- barra de habilidades: três botões por herói, incluindo ultimate ----------
-let skillItems = [];
+let skillItems = [], skillHeroes = [];
 const skillParty = [], skillRoster = [];
 const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F']];
 const SKILL_GLYPHS = {
@@ -1581,6 +1581,7 @@ function buildSkillBar(party) {
   const bar = $('skills');
   bar.innerHTML = '';
   skillItems = [];
+  skillHeroes = [];
   party.forEach((h, heroIndex) => {
     const group = document.createElement('div');
     group.className = 'skillGroup';
@@ -1588,11 +1589,12 @@ function buildSkillBar(party) {
     group.style.setProperty('--cd', h.cfg.color[1]);
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', h.cfg.name);
-    const heroMark = SKILL_GLYPHS[h.cfg.id]?.[0] || '✦';
-    group.innerHTML = `<div class="skillHero"><span class="skillHeroMark" aria-hidden="true">${heroMark}</span><span class="skillHeroName">${h.cfg.name}</span></div><div class="skillSlots"></div>`;
+    // retrato com anel de vida, ícone da classe e nível; o nome fica só na dica
+    group.innerHTML = `<div class="skillHero" data-tip="${h.cfg.name}"><span class="skillHeroRing"><span><img alt=""></span></span><span class="skillHeroClass" aria-hidden="true">${PICK_CLASS_GLYPHS[h.cfg.classId] || '♜'}</span><b class="skillHeroLevel"></b></div><div class="skillSlots"></div>`;
+    skillHeroes.push({ h, ring: group.querySelector('.skillHeroRing'), img: group.querySelector('.skillHeroRing img'), lvl: group.querySelector('.skillHeroLevel'), hp: '', level: 0 });
     const slots = group.querySelector('.skillSlots');
     for (const skill of skillSetFor(h.cfg)) {
-      const slot = skill.slot, key = SKILL_KEYS[slot][heroIndex];
+      const slot = skill.slot, key = SKILL_KEYS[slot]?.[heroIndex] || '';   // slot sem tecla definida fica só no clique
       const b = document.createElement('div');
       b.className = `skill slot-${slot}${skill.ultimate ? ' ultimate' : ''}`;
       b.style.setProperty('--c', h.cfg.color[0]);
@@ -1604,7 +1606,7 @@ function buildSkillBar(party) {
       const glyph = SKILL_GLYPHS[h.cfg.id]?.[slot] || ['✦', '⚔', '☼'][slot];
       // dois botões irmãos (usar e auto): botão dentro de botão não é acessível; nome e tipo ficam na dica
       b.innerHTML = `<span class="key" aria-hidden="true">${key}</span><button type="button" class="auto" data-tip="Uso automático: liga e desliga" aria-label="Uso automático de ${skill.name}" aria-pressed="true">↻</button>
-        <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : slot === 0 ? 'assinatura' : 'técnica'}. Tecla ${key}."><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span></button>`;
+        <button type="button" class="use" aria-label="${h.cfg.name}: ${skill.name}, ${skill.ultimate ? 'ultimate' : slot === 0 ? 'assinatura' : 'técnica'}.${key ? ` Tecla ${key}.` : ''}"><span class="face"><img alt=""><span class="glyph" aria-hidden="true">${glyph}</span><span class="cd"></span><b class="secs"></b></span></button>`;
       const it = { h, skill, slot, key, b, keyEl: b.querySelector('.key'), use: b.querySelector('.use'), img: b.querySelector('img'), cd: b.querySelector('.cd'), secs: b.querySelector('.secs'), auto: b.querySelector('.auto'), level: 0, p: '', nopeT: 0, controlKey: null, classStates: {} };
       b.querySelector('.use').onclick = () => pressSkill(it);
       it.auto.onclick = (e) => {
@@ -1658,6 +1660,12 @@ function updateSkillBar() {
   }
   syncSkillControlKeys();
   const now = performance.now();
+  for (const sh of skillHeroes) {
+    const { h } = sh;
+    if (sh.level !== h.level) { sh.level = h.level; sh.img.src = h.cfg.portraits?.[h.level - 1] || h.cfg.portrait; sh.lvl.textContent = String(h.level); }
+    const hp = (h.dead ? 0 : THREE.MathUtils.clamp(h.hp / h.maxHp, 0, 1)).toFixed(2);
+    if (hp !== sh.hp) { sh.hp = hp; sh.ring.style.setProperty('--hp', hp); }
+  }
   for (const it of skillItems) {
     const { h, slot } = it;
     if (it.level !== h.level) { it.level = h.level; it.img.src = h.cfg.portraits?.[h.level - 1] || h.cfg.portrait; }
@@ -1908,7 +1916,8 @@ class Unit {
     this.synergyNoticeT = 0;
     this.bar = document.createElement('div');
     this.bar.className = `hp ${team === 'hero' ? 'ally' : ''}`;
-    this.bar.innerHTML = '<i></i>';
+    this.bar.innerHTML = '<i></i><b></b>';   // <b>: rastro claro do dano, desce com atraso por transição CSS
+    this.barTrail = this.bar.querySelector('b');
     this.barVisible = null;
     this.barScreenX = null;
     this.barScreenY = null;
@@ -7993,6 +8002,7 @@ function updateBars() {
     const healthWidth = (u.hp / u.maxHp) * 100;
     if (u.barHealthWidth !== healthWidth) {
       u.bar.firstChild.style.width = `${healthWidth}%`;
+      if (u.barTrail) u.barTrail.style.width = `${healthWidth}%`;
       u.barHealthWidth = healthWidth;
     }
   }

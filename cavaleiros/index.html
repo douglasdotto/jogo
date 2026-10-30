@@ -198,6 +198,9 @@
       box-shadow: 0 0 0 1.5px var(--wood-dark); }
     .hp > i { display: block; height: 100%; background: #ff5d6c; border-radius: 99px; }
     .hp.ally > i { background: #5fd35f; }
+    /* rastro do dano: faixa clara atrás do preenchimento que alcança a vida nova com atraso (só CSS, sem escrita por quadro) */
+    .hp > i { position: relative; z-index: 1; }
+    .hp > b { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 3px; background: rgba(255, 240, 200, .85); transition: width .45s ease-in .35s; }
     .hp.ally { overflow: visible; }
     .hp.ally > span { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 13px; color: #fff; text-shadow: 0 1px 3px #432d37, 1px 0 2px #432d37; }
     .pop.crit { font-size: 38px; color: #ffe066; }
