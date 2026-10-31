@@ -118,7 +118,8 @@ export function createTutorial() {
     seen.add(event);
     switch (event) {
       case 'pick':
-        show('Escolha seu herói', ctx.card, { pulse: [ctx.card, ctx.button] });
+        // ancorado no botão: a bolha não cobre as abas nem repete o título em cima do cartão
+        show('Escolha seu herói', ctx.button || ctx.card, { pulse: [ctx.card, ctx.button] });
         break;
       case 'battleStart':
         for (const notice of [...notices]) notice.close(false);

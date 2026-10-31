@@ -139,7 +139,7 @@ assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Palad
 view = render({ vila: 2, fazendas: 3 });
 assert.ok(view.map.children[1].classList.contains('sel'), 'a missão liberada seguinte é selecionada');
 assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo I · Sinais na estrada<\/div>/);
-assert.match(view.info.innerHTML, /ARENA 02 · MAPA ALEATÓRIO/, 'o capítulo não substitui a arena e o bioma');
+assert.match(view.info.innerHTML, /Arena 2 · Mapa aleatório/, 'o capítulo não substitui a arena e o bioma (na dica do nome)');
 assert.match(view.info.innerHTML, /Estandarte da Vila/);
 assert.match(view.info.innerHTML, /aria-valuemax="4" aria-valuenow="1"/, 'antes do desbloqueio, o progresso conta arenas com vitória');
 assert.match(view.info.innerHTML, /1 de 4 arenas concluídas; faltam 3 arenas para desbloquear/, 'estrelas de outras arenas não compensam arenas sem vitória');

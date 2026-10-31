@@ -2089,7 +2089,8 @@ const idx=id=>t.pick.options.findIndex(v=>v.id===id);
 test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de revival',()=>{
   clear();context.localStorage.data={};t.setMission(mission('lago'));t.showDifficulty();
   const subtitle=elements.get('pickSub').textContent;
-  assert.equal(subtitle,`⚑ ${context.goalText(mission('lago').goal)}`,'o objetivo da missão continua no subtítulo');
+  assert.equal(subtitle,'','tela limpa: sem subtítulo fixo');
+  assert.equal(elements.get('pickTitle').attributes['data-tip'],`⚑ ${context.goalText(mission('lago').goal)}`,'o objetivo da missão vai para a dica do título');
   const nightmareIndex=idx('pesadelo'),nightmare=t.pick.cards[nightmareIndex];
   nightmare.onfocus();
   const team='Equipe inicial para 3 heróis: Paladino (cura), Guardião (proteção) e Piromante (dano em área). Reforço sugerido: Clériga (suporte/cura).';
@@ -2101,11 +2102,11 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
   assert.ok(nightmare.attributes['aria-label'].includes('Fases 4–5.'),'o cartão mantém o trecho da missão acessível');
   assert.equal(elements.get('pickSub').textContent,subtitle,'focar a dificuldade não substitui o objetivo no subtítulo');
   t.pick.cards[idx('dificil')].onfocus();
-  assert.equal(elements.get('pickHint').textContent,'← → · Enter · Esc','a recomendação sai ao focar outra dificuldade');
+  assert.equal(elements.get('pickHint').textContent,'','a recomendação sai ao focar outra dificuldade (sem rodapé de teclas)');
 
   clear();context.localStorage.data={};t.setMission(mission('duelo'));t.showDifficulty();
   const duelSubtitle=elements.get('pickSub').textContent;
-  assert.equal(duelSubtitle,`⚑ ${context.goalText(mission('duelo').goal)}`,'o objetivo do Duelo permanece no subtítulo');
+  assert.equal(elements.get('pickTitle').attributes['data-tip'],`⚑ ${context.goalText(mission('duelo').goal)}`,'o objetivo do Duelo fica na dica do título');
   const duelNightmare=t.pick.cards[idx('pesadelo')];duelNightmare.onfocus();
   const solo='Duelo (1 herói): escolha Paladino (cura) para sustentar a luta sozinho.';
   assert.ok(elements.get('pickHint').textContent.includes(solo),'a sugestão respeita a vaga única do Duelo');
@@ -2372,7 +2373,7 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   root.querySelector=selector=>selector==='.camp-map'?map:info;
   context.renderCampaign(root,m=>started.push(m),m=>m.id==='ponte'?'Outono':'Pradaria',m=>t.campaignThreats(m.from,m.to));
   const focusedNode=map.children[1];focusedNode.classList.add('camp-node');focusedNode.onfocus();
-  assert.ok(info.innerHTML.includes('ARENA 02 · OUTONO'));
+  assert.ok(info.innerHTML.includes('Arena 2 · Outono'),'arena e mapa ficam na dica do nome');
   assert.ok(info.innerHTML.includes('Capítulo I · Sinais na estrada'),'capítulo aparece à vista na missão focada');
   assert.ok(info.innerHTML.includes('Inimigos especiais'));
   assert.ok(info.innerHTML.includes('Fase 3 · '));   // ponte 2–4: o bombardeiro estreia dentro do trecho
@@ -3053,11 +3054,11 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
   clear();t.showMenu();assert.equal(t.pick.cards.length,2,'Batalhar e Acampamento');
-  assert.match(t.pick.cards[1].innerHTML,/Acampamento/);assert.match(t.pick.cards[1].innerHTML,/◆ \d+/);   // acampamento é a loja: mostra o ouro
-  // conquistas, estrelas, ouro e maestria saíram dos cartões para a barra de perfil (ícone + número)
+  assert.match(t.pick.cards[1].innerHTML,/Acampamento/);assert.doesNotMatch(t.pick.cards[1].innerHTML,/◆ \d+/,'o ouro aparece uma vez só, na barra de perfil');
+  // ouro e estrelas ficam só na barra de perfil (ícone + número); conquistas e maestria vão para a dica do Acampamento
   const home=elements.get('pickList').children.at(-1),bar=home.children[0];
-  assert.equal(home.className,'menu-home');assert.match(bar.innerHTML,/✦<\/i>\d+\/\d+/);assert.match(bar.innerHTML,/★<\/i>\d+/);assert.match(bar.innerHTML,/✪<\/i>\d+/);
-  assert.match(t.pick.cards[0].className,/menu-battle/,'Campanha é o botão principal');assert.match(t.pick.cards[0].innerHTML,/Batalhar/);assert.match(t.pick.cards[0].innerHTML,/⚑ \d+\. /,'mostra a próxima missão');
+  assert.equal(home.className,'menu-home');assert.match(bar.innerHTML,/★<\/i>\d+/);assert.match(bar.innerHTML,/◆<\/i>\d+/);assert.match(t.pick.cards[1].attributes['data-tip'],/✦ \d+\/\d+ · ✪ \d+/);
+  assert.match(t.pick.cards[0].className,/menu-battle/,'Campanha é o botão principal');assert.match(t.pick.cards[0].innerHTML,/Batalhar/);assert.match(t.pick.cards[0].attributes['data-tip'],/⚑ \d+\. /,'a próxima missão fica na dica');
   assert.ok(t.pick.cards.every(card=>!card.innerHTML.includes('<p>')&&!card.innerHTML.includes('class="num"')),'menu sem frases nem números nos cartões: a descrição fica na dica e 1–4 só no teclado');
   assert.equal(elements.get('pickHint').textContent,'','sem rodapé de teclas no menu');
   let next;context.setTimeout=(fn,ms)=>{if(ms===450)next=fn};

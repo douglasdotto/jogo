@@ -9,7 +9,7 @@
   width: 13px; height: 13px; background: #101a30; border-right: 2px solid var(--gold, #ffe27a);
   border-bottom: 2px solid var(--gold, #ffe27a); transform: translateX(-50%) rotate(45deg); pointer-events: none; }
 .tutorial-bubble[data-side="below"]::after { bottom: auto; top: -9px; transform: translateX(-50%) rotate(225deg); }
-.tutorial-skip { position: absolute; right: 14px; top: max(64px, env(safe-area-inset-top)); padding: 7px 12px;
+.tutorial-skip { position: absolute; right: 14px; top: max(14px, env(safe-area-inset-top)); padding: 7px 12px;
   border: 1px solid #b8d4ff66; border-radius: 99px; background: #101a30ed; color: #e4edff; font-size: 13px;
   box-shadow: 0 3px 10px #0003; z-index: 1; }
 .tutorial-bubble:focus-visible, .tutorial-skip:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
