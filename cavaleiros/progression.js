@@ -408,6 +408,7 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
         const arenaProgress = `${completedArenas} de ${requiredArenas} arenas concluídas`;
         const challengeProgress = `${completedArenas} de ${requiredArenas} missões com 3★ no ${cosmetic.difficultyName}`;
         const starProgress = `${stars}/${maxStars} estrelas do capítulo`;
+        // requisito em texto: só na dica do cartão (a barra mostra o progresso)
         const requirement = challenge
           ? cosmetic.legacyEntitlement ? `Recompensa anterior preservada · ${challengeProgress}`
             : cosmetic.unlocked ? `Desafio completo · ${challengeProgress}` : challengeProgress
@@ -417,7 +418,7 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
           ? `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada · ' : ''}${challengeProgress}`
           : `${cosmetic.legacyEntitlement ? 'recompensa anterior preservada · ' : ''}${starProgress} · ${arenaProgress}`;
         const tip = cosmetic.unlocked
-          ? `${cosmetic.chapter} · visual desbloqueado · ${progressDetail}`
+          ? `${cosmetic.chapter} · visual desbloqueado · ${requirement}${challenge ? '' : ` · ${arenaProgress}`}`
           : `${cosmetic.chapter} · ${challenge ? challengeProgress : `${arenaProgress} · faltam ${requiredArenas - completedArenas} arena${requiredArenas - completedArenas === 1 ? '' : 's'} para desbloquear`}`;
         const progressLabel = cosmetic.unlocked
           ? `${cosmetic.name}: visual desbloqueado. ${progressDetail}.`
@@ -428,8 +429,8 @@ export function renderCamp(root, progress, { variants = [], onBack = () => {}, t
           ? `<details class="cosmetic-missions"><summary>${pendingSummary}</summary><ul>${pendingMissions.map((mission) => `<li>${escapeProgressText(mission.name)}</li>`).join('')}</ul></details>`
           : '';
         return `<article class="cosmetic-item${cosmetic.unlocked ? ' unlocked' : ''}${selected ? ' equipped' : ''}${challenge ? ' challenge-cosmetic' : ''}" data-track="${challenge ? 'challenge' : 'chapter'}" style="--cosmetic-color:#${cosmetic.color.toString(16).padStart(6, '0')}" data-tip="${escapeProgressText(tip)}">
-          <span class="cosmetic-icon" aria-hidden="true">${cosmetic.icon}</span><div class="cosmetic-copy"><small>${escapeProgressText(cosmetic.chapter)}</small><b>${escapeProgressText(cosmetic.name)}</b>
-          <span class="cosmetic-progress" role="progressbar" aria-label="${escapeProgressText(progressLabel)}" aria-valuemin="0" aria-valuemax="${requiredArenas}" aria-valuenow="${completedArenas}"><i style="width:${pct}%"></i></span><em>${escapeProgressText(requirement)}</em>${pendingMissionList}</div>
+          <span class="cosmetic-icon" aria-hidden="true">${cosmetic.icon}</span><div class="cosmetic-copy"><b>${escapeProgressText(cosmetic.name)}</b>
+          <span class="cosmetic-progress" role="progressbar" aria-label="${escapeProgressText(progressLabel)}" aria-valuemin="0" aria-valuemax="${requiredArenas}" aria-valuenow="${completedArenas}"><i style="width:${pct}%"></i></span>${pendingMissionList}</div>
           <button type="button" class="cosmetic-equip" data-cosmetic="${escapeProgressText(cosmetic.id)}"${!cosmetic.unlocked || selected ? ' disabled' : ''}>${selected ? 'Equipado' : cosmetic.unlocked ? 'Equipar' : 'Bloqueado'}</button></article>`;
       }).join('')}${equipped ? '<button type="button" class="cosmetic-clear">Remover visual</button>' : ''}</div>`;
     } else {

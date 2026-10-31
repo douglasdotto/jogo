@@ -826,20 +826,17 @@ export function renderCampaign(root, onPlay, mapBiome = null, getThreats = null,
         <div class="medal big" aria-hidden="true">${open ? m.icon : '\u{1F512}︎'}</div>
         <div class="camp-ident">
           <div class="camp-chapter-label">${attr(m.chapter)}</div>
-          <div class="camp-arena-tag" data-tip="${attr(squad)}" tabindex="0" aria-label="Arena ${i + 1}, ${attr(mapLabel.toLowerCase())}. ${attr(squad)}">ARENA ${String(i + 1).padStart(2, '0')} · ${mapLabel}</div>
-          <div class="camp-name">${m.name}</div>
-          <p class="camp-desc" data-tip="${attr(`${m.chapter}. ${m.story}`)}" tabindex="0">${m.desc}</p>
+          <div class="camp-name" data-tip="${attr(`Arena ${i + 1} · ${mapLabel[0]}${mapLabel.slice(1).toLowerCase()} · ${squad} · ${m.desc}`)}" tabindex="0" aria-label="${attr(`${m.name}. Arena ${i + 1}, ${mapLabel.toLowerCase()}. ${squad}. ${m.desc} ${m.story}`)}">${m.name}</div>
         </div>
       </div>
       <div class="camp-score">${starRow(stars, 'big', starTargetsFor(m.goal))}${medalSeal(medal, medalTip)}${best ? `<span class="camp-record" data-tip="${attr(recordTip)}" tabindex="0" aria-label="${attr(recordTip)}"><i aria-hidden="true">⏱</i>${best.time}</span>` : ''}</div>
-      ${chapterReward ? `<div class="camp-chapter-reward" style="--chapter-color:#${chapterReward.color.toString(16).padStart(6, '0')}">
+      ${chapterReward ? `<div class="camp-chapter-reward" data-tip="${attr(`Visual do capítulo · ${chapterReward.legacyEntitlement ? 'Desbloqueado anteriormente · recompensa preservada' : chapterReward.unlocked ? `Desbloqueado · ${chapterReward.stars}/${chapterReward.maxStars} estrelas do capítulo` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas · faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'}`}`)}" style="--chapter-color:#${chapterReward.color.toString(16).padStart(6, '0')}">
         <div class="camp-chapter-reward-head">
           <span class="camp-chapter-reward-icon" aria-hidden="true">${chapterReward.icon}</span>
-          <span class="camp-chapter-reward-copy"><small>Visual do capítulo</small><b>${attr(chapterReward.name)}</b></span>
+          <span class="camp-chapter-reward-copy"><b>${attr(chapterReward.name)}</b></span>
           <strong>${chapterReward.unlocked ? `${chapterReward.stars}/${chapterReward.maxStars} ★` : `${chapterReward.completedArenas}/${chapterReward.requiredArenas} arenas`}</strong>
         </div>
         <div class="camp-chapter-track" role="progressbar" aria-label="${attr(rewardLabel)}" aria-valuemin="0" aria-valuemax="${rewardTarget}" aria-valuenow="${rewardValue}"><i style="width:${rewardPercent}%"></i></div>
-        <span class="camp-chapter-reward-foot">${chapterReward.legacyEntitlement ? 'Desbloqueado anteriormente · recompensa preservada' : chapterReward.unlocked ? `Desbloqueado · ${chapterReward.stars}/${chapterReward.maxStars} estrelas do capítulo` : `${chapterReward.completedArenas} de ${chapterReward.requiredArenas} arenas concluídas · faltam ${rewardRemaining} arena${rewardRemaining === 1 ? '' : 's'}`}</span>
       </div>` : ''}
       <div class="camp-goal" data-tip="${attr(m.tip)}" tabindex="0" aria-label="Objetivo: ${attr(goalText(m.goal))}. Plano de batalha: ${attr(m.tip)}"><i aria-hidden="true">⚑</i>${goalText(m.goal)}</div>
       ${teamRecommendation ? `<div class="camp-team-tip" role="note" aria-label="${attr(teamRecommendation)}"><i aria-hidden="true">✦</i><span>${attr(teamRecommendation)}</span></div>` : ''}

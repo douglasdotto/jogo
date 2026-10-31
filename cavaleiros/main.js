@@ -164,7 +164,7 @@ const DIFFICULTIES = [
   { id: 'pesadelo', name: 'Pesadelo', icon: '☠︎', desc: 'Caídos só voltam uma fase depois.', color: ['#f3b1c0', '#a3324a'],
     hp: 1.18, dmg: 1.14, count: 1.25, interval: 0.86, boss: 1.15, heal: 0.15, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
-const DIFFICULTY_PICK_HINT = '← → · Enter · Esc';
+const DIFFICULTY_PICK_HINT = '';   // ← → · Enter · Esc seguem valendo, sem rodapé fixo
 const nightmareTeamIds = (mission) => {
   const goal = mission?.goal?.type;
   if (mission?.heroes === 1) return ['paladin'];
@@ -444,11 +444,19 @@ function setGoalUI(text, progress) {
 // tela de escolha estilo arcade: grade com uma linha por classe, todas as variantes à mostra
 const pick = { options: [], cards: [], classFilters: [], classRows: [], activeClass: -1, suggestedId: null, sel: 0, open: false, timer: null };
 const PICK_CLASS_GLYPHS = ['♜', '⚒', '✦', '☾', '⚕'];
-const PICK_HERO_HINT = '← → ↑ ↓ · Enter';
+const PICK_HERO_HINT = '';   // setas e Enter seguem valendo; o rodapé só mostra a recomendação
 // papéis da equipe como ícones (o nome fica na dica e no aria-label)
 const ROLE_GLYPHS = { Defesa: '⛨', Cura: '✚', Área: '✺', Controle: '❄', 'À distância': '➶', 'Dano a chefe': '☠' };
 // atributos da ficha como ícones; o número exato vai para a dica
 const STAT_GLYPHS = { Vida: '♥', Força: '⚔', Rapidez: '➤', Alcance: '◎' };
+
+// subtítulo das escolhas: fora da tela, só na dica e no nome acessível do título
+function setPickSub(sub) {
+  $('pickSub').textContent = '';
+  const title = $('pickTitle');
+  if (sub) { title.setAttribute('data-tip', sub); title.setAttribute('aria-description', sub); }
+  else { title.removeAttribute?.('data-tip'); title.removeAttribute?.('aria-description'); }
+}
 
 function showPick(title, sub) {
   pick.mode = 'hero';
@@ -463,7 +471,7 @@ function showPick(title, sub) {
     : null;
   pick.suggestedId = previousSuggestion;
   $('pickTitle').textContent = title;
-  $('pickSub').textContent = sub;
+  setPickSub(sub);
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.add('grid');
@@ -681,7 +689,7 @@ function showMenu() {
   $('camp').classList.add('hidden');
   pick.options = MODES;
   $('pickTitle').innerHTML = logoSVG();
-  $('pickSub').textContent = '';
+  setPickSub('');
   $('pickHint').textContent = '';   // sem rodapé: setas, Enter e 1–2 seguem valendo
   const list = $('pickList');
   list.innerHTML = '';
@@ -702,9 +710,7 @@ function showMenu() {
   bar.setAttribute('aria-label', 'Perfil');
   bar.innerHTML = `<div class="menu-stats">
       <span class="menu-stat gold" tabindex="0" data-tip="${GOLD.name}: ${progress.gold}" aria-label="${progress.gold} de ouro"><i aria-hidden="true">${GOLD.icon}</i>${progress.gold}</span>
-      <span class="menu-stat stars" tabindex="0" data-tip="Estrelas da campanha: ${stars} de ${maxStars}" aria-label="${stars} de ${maxStars} estrelas"><i aria-hidden="true">★</i>${stars}<small>/${maxStars}</small></span>
-      <span class="menu-stat feats" tabindex="0" data-tip="Conquistas: ${achieved} de ${achievements.length}" aria-label="${achieved} de ${achievements.length} conquistas"><i aria-hidden="true">✦</i>${achieved}/${achievements.length}</span>
-      <span class="menu-stat mastery" tabindex="0" data-tip="Maestria mais alta: ${mastery} de ${MASTERY_PERKS.length}" aria-label="Maestria mais alta ${mastery}"><i aria-hidden="true">✪</i>${mastery}</span>
+      <span class="menu-stat stars" tabindex="0" data-tip="Estrelas da campanha: ${stars} de ${maxStars}" aria-label="${stars} de ${maxStars} estrelas"><i aria-hidden="true">★</i>${stars}</span>
     </div>
     <div class="menu-tools">
       <button type="button" class="menu-tool menu-sound">${MENU_SPEAKER}</button>
@@ -719,8 +725,8 @@ function showMenu() {
   dock.className = 'menu-dock';
   const label = ['Batalhar', 'Acampamento'];
   const extra = [
-    `<small class="menu-next">${next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : '♛'}</small><span class="menu-badge-stars">★ ${stars}/${maxStars}</span>`,
-    `<small class="menu-gold">${GOLD.icon} ${progress.gold}</small>${shopReady || newAchievements ? '<span class="menu-new" aria-hidden="true">!</span>' : ''}`,
+    '',
+    `${shopReady || newAchievements ? '<span class="menu-new" aria-hidden="true">!</span>' : ''}`,
   ];
   const spoken = [`${stars} de ${maxStars} estrelas${next ? `. Próxima: ${next.name}` : ''}`,
     `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`];
@@ -731,7 +737,7 @@ function showMenu() {
     b.setAttribute('role', 'button');
     b.setAttribute('aria-keyshortcuts', String(i + 1));
     b.setAttribute('aria-label', `${m.name}: ${m.desc} ${spoken[i]}.`);
-    b.setAttribute('data-tip', i === 0 ? `${m.name} · ${m.desc}` : m.desc);
+    b.setAttribute('data-tip', i === 0 ? (next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : m.desc) : `${m.desc} · ✦ ${achieved}/${achievements.length} · ✪ ${mastery}`);
     b.style.setProperty('--c', m.color[0]);
     b.style.setProperty('--cd', m.color[1]);
     b.style.setProperty('--d', `${i === 0 ? 220 : 300 + i * 70}ms`);
@@ -850,7 +856,7 @@ function showDifficulty() {
   pick.options = DIFFICULTIES;
   const m = game.mission;
   $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : `Fases 1–${PHASES}`;
-  $('pickSub').textContent = m ? `⚑ ${goalText(m.goal)}` : '';
+  setPickSub(m ? `⚑ ${goalText(m.goal)}` : '');
   $('pickHint').textContent = DIFFICULTY_PICK_HINT;
   const list = $('pickList');
   list.innerHTML = '';
@@ -963,19 +969,18 @@ function renderInfo(cfg) {
   pick.info.style.setProperty('--c', cfg.color[0]);
   pick.info.style.setProperty('--cd', cfg.color[1]);
   pick.info.innerHTML = `<div class="hero-profile"><div class="crest"><img src="${cfg.portrait}" alt=""></div>
-      <div class="hero-profile-copy"><small>${info.name} · ${cfg.ranged ? '➶' : '⚔'}</small><div class="ribbon">${cfg.name}</div>
+      <div class="hero-profile-copy"><div class="ribbon" data-tip="${attrText(`${info.name} · ${cfg.ranged ? 'à distância' : 'corpo a corpo'}`)}">${cfg.name}</div>
         <span class="hero-role-pill" tabindex="0" data-tip="${attrText(`${CLASSES[cfg.classId].summary} ${info.tip}`)}">${info.role}</span>${masteryLine}</div></div>
     <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot > 0 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attrText(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼', '✧'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
     <div class="stats hero-stats" aria-label="Atributos">${stats}</div>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info" aria-label="Ganhe ${starsToUnlock(cfg.id)} estrelas na campanha para liberar">\u{1F512}︎ ★ ${starsToUnlock(cfg.id)}</div>`}`;
   // equipe fixa ao lado dos cartões: mini-retratos, contagem, papéis cobertos e os que faltam
   pick.team.innerHTML = `<section class="party-composition" aria-label="${attrText(canAddCandidate ? `Sua equipe com ${cfg.name}` : 'Sua equipe')}">
-      <span class="pick-team-count" aria-label="${Math.min(projectedTeam.length, teamLimit)} de ${teamLimit} heróis">${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>
+      <span class="pick-team-count" aria-label="${Math.min(projectedTeam.length, teamLimit)} de ${teamLimit} heróis"${objective ? ` data-tip="${attrText(`Objetivo: ${goalText(objective)}`)}"` : ''}>${Math.min(projectedTeam.length, teamLimit)}/${teamLimit}</span>
       <div class="party-members">${teamMembers}</div>
       <div class="party-roles" aria-label="Papéis cobertos">${coveredIcons}</div>
       ${synergyIcons ? `<div class="party-roles party-synergies" aria-label="Sinergias ativas">${synergyIcons}</div>` : ''}
       ${wantedIcons ? `<div class="party-roles party-wanted" aria-label="${objective ? 'Prioridades da missão' : 'Papéis que faltam'}">${wantedIcons}</div>` : ''}
-      ${objective ? `<span class="party-objective" tabindex="0" data-tip="Objetivo da missão"><i aria-hidden="true">⚑</i> ${goalText(objective)}</span>` : ''}
     </section>`;
   const selectButton = document.createElement('button');
   selectButton.type = 'button';
@@ -1037,12 +1042,12 @@ function selectCard(i) {
     const recommendation = game.mission && shouldRecommendMissionTeam(game.mission)
       ? `${difficulty.id === 'pesadelo' ? 'Sugestão Pesadelo' : 'Equipe recomendada'}: ${nightmareTeamPlanIds(game.mission).map((id) => VARIANTS.find((cfg) => cfg.id === id)?.name || id).join(' + ')}`
       : '';
-    $('pickHint').textContent = recommendation ? `${PICK_HERO_HINT} · ${recommendation}` : PICK_HERO_HINT;
+    $('pickHint').textContent = recommendation || PICK_HERO_HINT;
     renderInfo(pick.options[pick.sel]);
   } else if (pick.mode === 'difficulty') {
     const selected = pick.options[pick.sel];
     const recommendation = difficultyTeamRecommendation(selected, game.mission);
-    $('pickHint').textContent = recommendation ? `${DIFFICULTY_PICK_HINT} · ${recommendation}` : DIFFICULTY_PICK_HINT;
+    $('pickHint').textContent = recommendation || DIFFICULTY_PICK_HINT;
   }
 }
 
@@ -1256,8 +1261,8 @@ function showRelicPick() {
   pick.open = true;
   game.paused = true;
   $('pickTitle').textContent = 'Relíquia encontrada!';
-  $('pickSub').textContent = `Fase ${game.phase}`;
-  $('pickHint').textContent = `1–${pick.options.length} · Enter`;
+  setPickSub(`Fase ${game.phase}`);
+  $('pickHint').textContent = '';   // 1–3 e Enter seguem valendo
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
@@ -1273,7 +1278,7 @@ function showRelicPick() {
     card.style.setProperty('--c', rarity.c);
     card.style.setProperty('--cd', rarity.cd);
     card.style.setProperty('--d', `${i * 90}ms`);
-    card.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon" aria-hidden="true">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.short}</p>${relic.unique ? '<small aria-hidden="true">◆ Única</small>' : ''}`;
+    card.innerHTML = `<div class="num">${i + 1}</div><div class="relic-icon" aria-hidden="true">${relic.icon}</div><div class="ribbon">${relic.name}</div><p>${relic.short}</p>`;
     card.onclick = () => confirmPick(i);
     bindCard(card, i);
     list.appendChild(card);
@@ -1310,7 +1315,7 @@ function relicTooltip(el) {
   const relic = RELICS.find((r) => r.id === el.getAttribute('data-relic'));
   if (!relic) return '';
   const n = (game.relics || []).filter((id) => id === relic.id).length;
-  return `<div class="tt-relic rarity-${relic.rarity}"><header><span class="tt-icon" aria-hidden="true">${relic.icon}</span><div><b>${relic.name}</b><span class="tt-kind">Relíquia ${RELIC_RARITY[relic.rarity].name.toLowerCase()}${n > 1 ? ` · ×${n}` : ''}</span></div></header><p class="tt-desc">${relic.desc}</p></div>`;
+  return `<div class="tt-relic rarity-${relic.rarity}"><header><span class="tt-icon" aria-hidden="true">${relic.icon}</span><div><b>${relic.name}</b><span class="tt-kind">Relíquia ${RELIC_RARITY[relic.rarity].name.toLowerCase()}${relic.unique ? ' · única' : ''}${n > 1 ? ` · ×${n}` : ''}</span></div></header><p class="tt-desc">${relic.desc}</p></div>`;
 }
 
 function confirmRelic(i) {
@@ -1349,8 +1354,8 @@ function showEvolution() {
   pick.upgrades = availableEvolutionBranches(h);
   const recommended = chooseAutoEvolution(h)?.id;
   $('pickTitle').textContent = 'Evolução!';
-  $('pickSub').textContent = '';   // tudo vai num cartão só, dentro da lista
-  $('pickHint').textContent = `1–${pick.upgrades.length} · Enter`;
+  setPickSub('');   // tudo vai num cartão só, dentro da lista
+  $('pickHint').textContent = '';   // 1–3 e Enter seguem valendo
   $('pickList').innerHTML = '';
   $('pickList').classList.remove('grid');
   const card = document.createElement('div');
@@ -1842,12 +1847,16 @@ registerTooltip('relic', relicTooltip);
 initTooltips();
 
 addEventListener('keydown', (e) => {
+  if (e.key === 'Shift') document.body.classList.add('show-keys');   // segurar Shift mostra as teclas das habilidades
   if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')
     || pick.open || game.over || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdfzxvb]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
 });
+// teclas das habilidades ficam escondidas; aparecem ao segurar Shift (ou ao passar o mouse na barra)
+addEventListener('keyup', (e) => { if (e.key === 'Shift') document.body.classList.remove('show-keys'); });
+addEventListener('blur', () => document.body.classList.remove('show-keys'));
 
 // o navegador só libera o som depois de um clique ou tecla
 addEventListener('pointerdown', () => audio.unlock(), true);
@@ -1864,7 +1873,7 @@ function hideSoundHint() { $('soundHint').hidden = true; $('mute').classList.rem
 function showSoundHint(e) {
   if (soundHintShown || !audio.isMuted() || e.target.closest?.('#mute')) return;
   soundHintShown = true;
-  $('soundHint').hidden = false;
+  $('soundHint').hidden = false;   // a frase fica só para leitores de tela; na tela o alto-falante pulsa
   $('mute').classList.add('hint');
   setTimeout(hideSoundHint, 5000);
 }
@@ -9505,6 +9514,7 @@ function endGame(text, won = false) {
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
   $('overlayTitle').textContent = won ? 'Vitória!' : 'Derrota';
+  $('overlayTitle').setAttribute('data-tip', text);
   $('overlayText').textContent = text;
   $('overlayNext').innerHTML = '';
   const missionIndex = MISSIONS.indexOf(game.mission);
