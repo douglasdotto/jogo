@@ -20,18 +20,14 @@ export const LARGE_CLIPS = {
 const LARGE_HIPS = 0.4057 / 1.041;   // altura do quadril em repouso: Rig_Medium / Rig_Large
 export const HERO_ANIM_FILES = [...MEDIUM_ANIM_FILES, ...LARGE_ANIM_FILES];
 
-// modelos que recebem os clipes; o Ranger vem do Adventurers 2.0 (o 1.0 não tinha arqueiro);
-// Knight20 = Cavaleiro do 2.0 (prova de migração: LOOKS20 em looks.js)
-export const HERO_MODELS = ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Knight20'];
-export const HERO_MODEL_FILES = { Ranger: 'kaykit/adventurers/Characters/gltf/Ranger.glb', Knight20: 'kaykit/adventurers/Characters/gltf/Knight.glb' };
+// modelos que recebem os clipes; o Ranger vem do Adventurers 2.0 (o 1.0 não tinha arqueiro)
+export const HERO_MODELS = ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger'];
+export const HERO_MODEL_FILES = { Ranger: 'kaykit/adventurers/Characters/gltf/Ranger.glb' };
 export const heroModelFile = (model) => HERO_MODEL_FILES[model] || `${model}.glb`;
 
 // armas prontas (Fantasy Weapons Bits, CC0) usadas nas aparências: add { from: 'kaykit/weapons/Assets/gltf/<nome>', part: '<nome>' }
 export const WEAPON_DIR = 'kaykit/weapons/Assets/gltf/';
-// armas do Adventurers 2.0 (o modelo 2.0 vem sem armas): add { from: 'kaykit/adventurers/Assets/gltf/<nome>', part: '<nome>' }
-export const ADVENTURER_PROP_DIR = 'kaykit/adventurers/Assets/gltf/';
-export const HERO_PROP_FILES = [...['bow_A_withString'].map((name) => `${WEAPON_DIR}${name}.gltf`),
-  ...['sword_1handed', 'shield_round_color'].map((name) => `${ADVENTURER_PROP_DIR}${name}.gltf`)];
+export const HERO_PROP_FILES = ['bow_A_withString'].map((name) => `${WEAPON_DIR}${name}.gltf`);
 
 // nome antigo (Adventurers 1.0) -> nome no pacote 1.1; o que não aparece aqui manteve o nome
 // (Death_A/B, Hit_A/B, Dodge_*, Jump_*, Running_*, Walking_*, Throw, Use_Item, Interact, PickUp, Lie_*, Sit_*)

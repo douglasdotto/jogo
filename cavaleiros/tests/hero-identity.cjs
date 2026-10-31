@@ -6,8 +6,8 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'looks.js'), 'utf8')
   .replace(/^export /gm, '');
 const context = {};
-vm.runInNewContext(`${source}\nglobalThis.result = { LOOKS, LOOK_PREVIEW, LOOKS20, heroLook };`, context);
-const { LOOKS, LOOK_PREVIEW, LOOKS20, heroLook } = context.result;
+vm.runInNewContext(`${source}\nglobalThis.result = { LOOKS, LOOK_PREVIEW };`, context);
+const { LOOKS, LOOK_PREVIEW } = context.result;
 
 assert.ok(LOOKS.assassin.extras.some((extra) => extra.type === 'scarf'), 'Assassino mantém o cachecol vermelho');
 assert.ok(!LOOKS.assassin.extras.some((extra) => extra.type === 'mask'), 'Assassino deve deixar o rosto à mostra');
@@ -132,13 +132,5 @@ for (const v of variants) {
     assert.ok(extra.bone, `${v.id}: acessório ${extra.type} preso a um osso`);
   }
 }
-
-// prova do Adventurers 2.0: só o Paladino troca de modelo; armas do pacote com os nomes do 1.0 (use/hide) e ?v10 volta ao 1.0
-assert.deepEqual(Array.from(Object.keys(LOOKS20)), ['paladin'], 'só o Paladino está no 2.0');
-assert.equal(heroLook('paladin', 'Knight').model, 'Knight20', 'Paladino usa o Knight 2.0');
-assert.equal(heroLook('paladin', 'Knight', true).look, LOOKS.paladin, '?v10 volta ao Paladino 1.0');
-assert.equal(heroLook('guardian', 'Knight').model, 'Knight', 'Guardião continua no 1.0');
-const paladin20 = LOOKS20.paladin.add.filter((piece) => piece.bone).map((piece) => piece.name).sort().join(',');
-assert.equal(paladin20, '1H_Sword,Round_Shield', 'Paladino 2.0 segura espada e escudo do pacote com os nomes do 1.0');
 
 console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador, Oráculo, Brutamontes e Invocador com identidades próprias; 29 paletas distintas');

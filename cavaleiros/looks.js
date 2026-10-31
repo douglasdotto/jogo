@@ -366,38 +366,3 @@ export const WEAPONS = {
 };
 WEAPONS.Rogue_Hooded = WEAPONS.Rogue;
 WEAPONS.Ranger = [];   // o Ranger 2.0 vem sem armas: a besta vem do Ladino (add)
-WEAPONS.Knight20 = [];   // o Knight 2.0 também: as armas entram por LOOKS20
-
-// ---------- prova: heróis no KayKit Adventurers 2.0 ----------
-// Herói com entrada em LOOKS20 usa o modelo 2.0 da classe (MODEL20) no lugar do 1.0; apagar a entrada volta ao 1.0
-// (e ?v10 na URL força o 1.0 para comparar). O 2.0 vem sem armas: elas entram do pacote no osso da mão, com o nome
-// das armas do 1.0 (name), para use/hide, pintura e o brilho de carga continuarem valendo. Elmo, viseira e capa
-// do 2.0 são de pele (seguem o corpo).
-export const MODEL20 = { Knight: 'Knight20' };
-const ADV = 'kaykit/adventurers/Assets/gltf/';
-export const LOOKS20 = {
-  paladin: {   // mesmo santo guerreiro de LOOKS.paladin, na malha do Knight 2.0
-    shape: silhouette('Knight', { torso: 1.04, arms: 1.02, legs: 1.02, depth: 1.04 }),
-    hide: ['Knight_Cape'],
-    add: [
-      { from: 'Mage', part: 'Mage_Cape' },   // capa longa do Mago 1.0: pele religada aos ossos do 2.0 pelo nome
-      { from: `${ADV}sword_1handed`, part: 'sword_1handed', name: '1H_Sword', bone: 'handslot.r', pos: [0, 0.033, 0], rot: [0, Math.PI, 0] },
-      { from: `${ADV}shield_round_color`, part: 'shield_round_color', name: 'Round_Shield', bone: 'handslot.l', pos: [0, 0.017, 0.156] },
-    ],
-    paint: {
-      ...outfit('Knight', '#f4ecd8', '#e8dcc0', 0.55), ...face('Knight', { skin: '#f6d2b0', hair: '#f2d27a' }),
-      Mage_Cape: { tint: '#fff8e8', amount: 0.85 }, Knight_Helmet: { tint: '#fff6e0', amount: 0.45 }, Knight_HelmetVisor: { tint: '#fff6e0', amount: 0.45 },
-      '1H_Sword': { tint: '#fff0b8', amount: 0.4 }, Round_Shield: { tint: '#f2d27a', amount: 0.55 },
-    },
-    extras: [
-      { type: 'plume', bone: 'head', color: 0xffffff, tall: true, y: 1.25 },
-      { type: 'pauldrons', bone: 'chest', color: 0xf2c94c, trim: 0xfff6dc },
-      { type: 'emblem', bone: 'chest' },
-    ],
-  },
-};
-// modelo e aparência que o herói usa de fato (only10: ignora LOOKS20)
-export function heroLook(id, model, only10 = false) {
-  const look20 = !only10 && LOOKS20[id];
-  return look20 ? { model: MODEL20[model], look: look20 } : { model, look: LOOKS[id] };
-}
