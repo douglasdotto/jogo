@@ -17,14 +17,16 @@ const THEMES = [
   { style: 'Crepúsculo', gloom: 0.45, round: 0.05, pine: 0.55, rock: 0.4, density: 0.75, dead: true },   // IV: torre, cemitério
   { style: 'Crepúsculo', gloom: 0.75, round: 0, pine: 0.25, rock: 0.7, density: 0.45, dead: true },      // V: além do castelo
   { style: 'Crepúsculo', gloom: 0.9, round: 0, pine: 0.15, rock: 0.85, density: 0.35, dead: true },      // VI: coração sombrio
+  { style: 'Crepúsculo', gloom: 0.55, ash: 0.5, round: 0, pine: 0.05, rock: 1, density: 0.3, dead: true },   // VII: asas de osso (cinzas nas ameias)
 ];
+const ASH = new THREE.Color(0x7a4a36);   // chão queimado do ninho do dragão
 const GLOOM = new THREE.Color(0x4a4058);
 const CASTLE_TINT = new THREE.Color(0x3b2f52);
 const SKY = [new THREE.Color(0xa9d6f0), new THREE.Color(0x6d6488)];
 // Marco ao lado de cada missão conhecida; missões novas ficam só com o estandarte.
 const LANDMARKS = { vila: 'village', santuario: 'shrine', chamas: 'fire', fazendas: 'farm', lago: 'lake', duelo: 'arena',
   caca: 'grove', resgate: 'cage', ruinas: 'ruins', torre: 'boneTower', 'lago-sombrio': 'darkLake', cemiterio: 'graves',
-  horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne' };
+  horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne', arauto: 'herald', ninho: 'nest', 'asas-de-osso': 'dragonSkull' };
 const STATE_COLORS = { locked: 0x7c7f89, open: 0xf3c24f, done: 0xe9dfc6, lockedBanner: 0x5f636d, starOn: 0xffd84a, starOff: 0x3b3f4b, pole: 0x8a5a2e };
 
 const CAMERA_DIST = 46;   // trecho com 4–6 missões à vista
@@ -210,6 +212,25 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       P(g, 'roof', 0x3f3848, [0, 1.4, 0], [2.4, 0.8, 1.8]);
       P(g, 'box', 0x1c1824, [0, 0.55, 0.81], [0.7, 1, 0.05]);
     },
+    herald(g) {   // pináculo de ossos com o estandarte do arauto
+      P(g, 'cone', darkStone, [0, 1.3, 0], [0.7, 2.6, 0.7]);
+      P(g, 'cyl', wood, [0.75, 1.3, 0], [0.05, 2.6, 0.05]);
+      P(g, 'box', 0x9a2230, [1.05, 2.2, 0], [0.55, 0.7, 0.04]);
+      for (let k = 0; k < 3; k++) { const a = k * 2.1; P(g, 'cone', bone, [Math.cos(a) * 0.8, 0.4, Math.sin(a) * 0.8], [0.12, 0.8, 0.12], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]); }
+    },
+    nest(g) {   // costelas em círculo e três ovos de osso
+      for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; P(g, 'cone', bone, [Math.cos(a) * 1.5, 0.7, Math.sin(a) * 1.5], [0.13, 1.5, 0.13], [Math.sin(a) * -0.45, 0, Math.cos(a) * 0.45]); }
+      P(g, 'hex', 0x4a3328, [0, 0.1, 0], [1.3, 0.2, 1.3]);
+      for (const [x, z] of [[-0.4, 0.2], [0.35, 0.3], [0, -0.35]]) P(g, 'ico', 0xd8f5e8, [x, 0.5, z], [0.32, 0.42, 0.32]);
+    },
+    dragonSkull(g) {   // crânio de dragão sobre as cinzas
+      P(g, 'box', bone, [0, 0.9, 0], [1.3, 0.9, 1.2]);
+      P(g, 'box', bone, [0, 0.75, 1.1], [0.9, 0.5, 1.2]);
+      P(g, 'box', 0xcfc6b4, [0, 0.35, 1.0], [0.8, 0.2, 1.1]);
+      for (const x of [-0.35, 0.35]) P(g, 'ico', 0x7dffd0, [x, 1.05, 0.62], [0.15, 0.15, 0.15]);
+      for (const x of [-1, 1]) P(g, 'cone', 0xa89f8c, [x * 0.5, 1.7, -0.5], [0.16, 1.4, 0.16], [-0.8, 0, -x * 0.35]);
+      for (let k = 0; k < 3; k++) P(g, 'cone', bone, [0, 1.45 - k * 0.1, -0.2 - k * 0.45], [0.12, 0.6, 0.12], [-0.5, 0, 0]);
+    },
     throne(g) {
       P(g, 'box', darkStone, [0, 0.2, 0], [1.6, 0.4, 1.4]);
       P(g, 'box', bone, [0, 0.7, 0.1], [0.9, 0.6, 0.8]);
@@ -276,6 +297,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     color.setHex(wet ? style.bed : style.grass[patch]);
     if (!wet && cy > 1.2) color.setHex(style.cliffs[patch]);   // morros da borda
     color.lerp(GLOOM, theme.gloom).lerp(CASTLE_TINT, nearCastle(cx, cz) * 0.5);   // escurece rumo ao castelo
+    if (theme.ash && !wet) color.lerp(ASH, theme.ash);   // capítulo VII: chão de cinzas
     return color.multiplyScalar(0.97 + rand() * 0.05);
   };
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {

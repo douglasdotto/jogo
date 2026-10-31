@@ -59,7 +59,9 @@ function render(stars, visuals = null) {
     addEventListener() {}, removeEventListener() {},
   });
   vm.runInContext(`${source}\nthis.renderCampaign = renderCampaign; this.campaignCosmetics = campaignCosmetics; this.equippedCampaignCosmetic = equippedCampaignCosmetic;`, context);
-  context.renderCampaign(root, () => {}, null, null, '', (mission) => mission.id === 'coracao-do-castelo'
+  context.renderCampaign(root, () => {}, null, null, '', (mission) => mission.id === 'asas-de-osso'
+    ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Arqueira (dano à distância) e Clériga (suporte/cura).'
+    : mission.id === 'coracao-do-castelo'
     ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).'
     : mission.id === 'ruinas'
       ? 'Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'
@@ -81,16 +83,16 @@ function render(stars, visuals = null) {
   };
 }
 
-const allDone = { vila: 3, ponte: 3, santuario: 3, chamas: 3, fazendas: 3, lago: 3, duelo: 3, caca: 3, resgate: 3, ruinas: 3, torre: 3, 'lago-sombrio': 3, cemiterio: 3, horda: 3, castelo: 3, cripta: 3, trono: 3, 'coracao-do-castelo': 3 };
+const allDone = { vila: 3, ponte: 3, santuario: 3, chamas: 3, fazendas: 3, lago: 3, duelo: 3, caca: 3, resgate: 3, ruinas: 3, torre: 3, 'lago-sombrio': 3, cemiterio: 3, horda: 3, castelo: 3, cripta: 3, trono: 3, 'coracao-do-castelo': 3, arauto: 3, ninho: 3, 'asas-de-osso': 3 };
 const imperfect = { ...allDone, vila: 1, 'lago-sombrio': 2 };
 let view = render(imperfect);
-assert.match(view.info.innerHTML, /Espiral do Eclipse/);
-assert.match(view.info.innerHTML, /aria-valuemax="1" aria-valuenow="1"/);
-assert.match(view.info.innerHTML, /Desbloqueado · 3\/3 estrelas do capítulo/);
-assert.match(view.info.innerHTML, /class="camp-team-tip"[^>]*>.*Equipe recomendada para 4 heróis: Paladino \(cura\), Guardião \(proteção\), Viking \(dano a chefe\) e Clériga \(suporte\/cura\)\./, 'a composição sugerida aparece no resumo antes de iniciar a missão final');
-assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo VI · O coração sombrio<\/div>/);
+assert.match(view.info.innerHTML, /Asas do Dragão/);
+assert.match(view.info.innerHTML, /aria-valuemax="3" aria-valuenow="3"/);
+assert.match(view.info.innerHTML, /Desbloqueado · 9\/9 estrelas do capítulo/);
+assert.match(view.info.innerHTML, /class="camp-team-tip"[^>]*>.*Equipe recomendada para 4 heróis: Paladino \(cura\), Guardião \(proteção\), Arqueira \(dano à distância\) e Clériga \(suporte\/cura\)\./, 'a composição sugerida aparece no resumo antes de iniciar a missão final');
+assert.match(view.info.innerHTML, /class="camp-chapter-label">Capítulo VII · Asas de osso<\/div>/);
 assert.ok(view.info.innerHTML.indexOf('camp-chapter-label') < view.info.innerHTML.indexOf('camp-name'), 'o capítulo aparece antes do nome da missão');
-assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a missão final do Coração do Castelo destacada quando a campanha foi concluída');
+assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a missão final (Asas de Osso) destacada quando a campanha foi concluída');
 assert.match(view.info.innerHTML, /A Vila ainda pode render estrelas/);
 assert.match(view.info.innerHTML, /3 estrelas restantes/);
 view.replayButton.onclick();
@@ -113,9 +115,9 @@ assert.ok(view.map.children[1].classList.contains('sel'), 'a recomendação igno
 view = render(allDone);
 assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a última missão selecionada quando a campanha está perfeita');
 assert.match(view.info.innerHTML, /Campanha perfeita/);
-assert.match(view.info.innerHTML, /Espiral do Eclipse/);
-assert.match(view.info.innerHTML, /aria-valuemax="1" aria-valuenow="1"/, 'a barra continua cheia após o desbloqueio');
-assert.match(view.info.innerHTML, /Desbloqueado · 3\/3 estrelas do capítulo/, 'as estrelas de domínio continuam visíveis separadamente');
+assert.match(view.info.innerHTML, /Asas do Dragão/);
+assert.match(view.info.innerHTML, /aria-valuemax="3" aria-valuenow="3"/, 'a barra continua cheia após o desbloqueio');
+assert.match(view.info.innerHTML, /Desbloqueado · 9\/9 estrelas do capítulo/,'as estrelas de domínio continuam visíveis separadamente');
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'));
 view.map.children[9].onclick();
 assert.ok(view.map.children[9].classList.contains('sel'), 'Ruínas Antigas continua selecionável após concluir a campanha');
