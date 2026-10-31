@@ -21,7 +21,7 @@ Missão: evoluir o jogo em ciclos (analisar → priorizar → delegar → implem
 
 ## Arquitetura (resumo)
 - Jogo de navegador em Three.js, sem build: `cavaleiros/index.html` carrega módulos ES; `server.js` serve em :8080.
-- `main.js` (~8,4 mil linhas): heróis, combate, HUD, fluxo de jogo. `monsters.js`: inimigos e chefes. `skillbook.js`: técnicas e ultimates. `campaign.js`: 18 missões. `kingdom*.js`: modo Reino (RTS). `progression.js`: ouro, maestria, oficina.
+- `main.js` (~8,4 mil linhas): heróis, combate, HUD, fluxo de jogo. `monsters.js`: inimigos e chefes. `skillbook.js`: técnicas e ultimates. `campaign.js`: 18 missões (modo Reino removido por decisão do usuário; `village-models.js` guarda só as casas/castelo do mapa da campanha). `progression.js`: ouro, maestria, oficina.
 - Testes em `cavaleiros/tests/` (Node puro, `npm test`; `simulacao.cjs` leva ~2–3 min).
 
 ## Limitações reais

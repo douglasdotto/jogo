@@ -28,7 +28,6 @@ import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality, VFX_KINDS } from './vfx-shaders.js';
 import { createLoadingScreen } from './loading.js';
-import { startKingdom, linkKingdom, loadKingdomRecords, kingdomRecordText } from './kingdom.js';
 import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard, cleanseAround } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -329,7 +328,7 @@ $('restartNo').onclick = () => confirmRestart(false);
 // pausa do jogador (botão, P ou Espaço); as pausas dos menus não passam por aqui
 function setUserPause(on) {
   if (on === !!game.userPaused) return;
-  if (on && (game.paused || game.over || pick.open || (!heroes().length && !game.realm))) return;
+  if (on && (game.paused || game.over || pick.open || !heroes().length)) return;
   game.userPaused = on;
   game.paused = on;
   if (on && typeof directControl !== 'undefined') {
@@ -351,7 +350,7 @@ addEventListener('keydown', (e) => {
   }
   const typing = e.target.closest?.('button, input, select, textarea, summary, [role="button"]');
   if (e.repeat || !(e.key === 'p' || e.key === 'P' || (e.key === ' ' && !typing))) return;
-  if (!game.userPaused && (game.paused || game.over || pick.open || (!heroes().length && !game.realm))) return;
+  if (!game.userPaused && (game.paused || game.over || pick.open || !heroes().length)) return;
   e.preventDefault();
   setUserPause(!game.userPaused);
 });
@@ -702,7 +701,7 @@ function showMenu() {
   pick.options = MODES;
   $('pickTitle').innerHTML = logoSVG();
   $('pickSub').textContent = '';
-  $('pickHint').textContent = '';   // sem rodapé: setas, Enter e 1–4 seguem valendo
+  $('pickHint').textContent = '';   // sem rodapé: setas, Enter e 1–3 seguem valendo
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
@@ -876,15 +875,14 @@ function replayJourney() {
   showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos');
 }
 
-// dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão; no Reino, o recorde do Reino
-function showDifficulty(reino = false) {
+// dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão
+function showDifficulty() {
   if (typeof preloadBattleAssets === 'function') preloadBattleAssets();
   pick.mode = 'difficulty';
-  pick.reino = reino;
   $('banner').style.opacity = 0;
   pick.options = DIFFICULTIES;
-  const records = loadRecords(), m = game.mission, realm = reino ? loadKingdomRecords() : null;
-  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : reino ? 'Reino' : 'Jornada';
+  const records = loadRecords(), m = game.mission;
+  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada';
   $('pickSub').textContent = m ? `⚑ ${goalText(m.goal)}` : '';
   $('pickHint').textContent = DIFFICULTY_PICK_HINT;
   const list = $('pickList');
@@ -892,9 +890,9 @@ function showDifficulty(reino = false) {
   list.classList.remove('grid');
   // cartão: ícone, nome e o recorde da jornada; a descrição da dificuldade vai para a dica
   pick.cards = DIFFICULTIES.map((d, i) => {
-    const r = m || reino ? null : records[d.id];
-    const record = m ? '' : reino ? kingdomRecordText(realm[d.id]) || 'Sem recorde' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
-    const spoken = m ? `Fases ${m.from}–${m.to}.` : reino ? `${kingdomRecordText(realm[d.id]) ? `Recorde: ${record}` : 'Sem recorde ainda'}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
+    const r = m ? null : records[d.id];
+    const record = m ? '' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
+    const spoken = m ? `Fases ${m.from}–${m.to}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
     const recommendation = difficultyTeamRecommendation(d, m);
     const tip = [d.desc, recommendation].filter(Boolean).join(' ');
     const b = document.createElement('div');
@@ -925,7 +923,6 @@ function confirmDifficulty(i) {
   paintDifficulty();
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  if (pick.reino) { pick.timer = setTimeout(() => startGame('reino'), 450); return; }   // o Reino usa a dificuldade escolhida aqui
   const next = () => {
     const m = prepareRun();
     pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
@@ -1370,7 +1367,7 @@ function confirmRelic(i) {
 
 function showEvolution() {
   if (!evolutions.length || pick.open || game.paused || game.over) return;
-  if (autoEvolve || game.realm) {   // no Reino a evolução é sempre automática (sem pausar a estratégia)
+  if (autoEvolve) {
     while (evolutions.length && !game.over) {
       const entry = evolutions.shift();
       const option = chooseAutoEvolution(entry.hero);
@@ -1884,7 +1881,7 @@ initTooltips();
 
 addEventListener('keydown', (e) => {
   if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')
-    || pick.open || game.over || game.realm || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdfzxvb]$/i.test(e.key)) return;
+    || pick.open || game.over || e.repeat || e.ctrlKey || e.metaKey || e.altKey || !/^[1-4qwerasdfzxvb]$/i.test(e.key)) return;
   const key = e.key.toUpperCase();
   const it = skillItems.find((item) => item.key === key);
   if (it) pressSkill(it);
@@ -2114,7 +2111,7 @@ function setUnitEmissive(material, hex) {
 
 // Esqueletos KayKit 1.1: mesmos nós, ossos e malhas da versão antiga, mas sem animações embutidas (~0,3 MB
 // cada, contra ~4,8 MB). Os clipes vêm dos arquivos Rig_Medium e ganham também os nomes antigos, que o resto
-// do código (monsters.js, Reino) continua usando. Lie_Down/Lie_StandUp viram desmontar e se remontar.
+// do código (monsters.js) continua usando. Lie_Down/Lie_StandUp viram desmontar e se remontar.
 const SKELETON_CLIP_ALIASES = {
   '1H_Melee_Attack_Chop': 'Melee_1H_Attack_Chop', '1H_Melee_Attack_Jump_Chop': 'Melee_1H_Attack_Jump_Chop',
   '1H_Melee_Attack_Slice_Diagonal': 'Melee_1H_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal': 'Melee_1H_Attack_Slice_Horizontal',
@@ -2522,7 +2519,7 @@ class Unit {
           damageCleave(this, target);
           if (hit) FX.meleeHit(target, false);
         }
-        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size + (target.reach || 0)) {
+        else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) {
           if (this.team !== 'skeleton') FX.meleeHit(target, heroHit(this, target, this.dmg));
           else target.takeDamage(this.dmg, this.pos, this);
         }
@@ -7001,7 +6998,7 @@ class Hero extends Unit {
       const attackTarget = command.target;
       this.engagedWith = attackTarget || null;
       if (attackTarget) {
-        const d = attackTarget.pos.distanceTo(this.pos) - 0.4 * ((attackTarget.size || 1) - 1) - (attackTarget.reach || 0);
+        const d = attackTarget.pos.distanceTo(this.pos) - 0.4 * ((attackTarget.size || 1) - 1);
         if (this.inReach(attackTarget, d) && (this.ranged || Math.abs(attackTarget.pos.y - this.pos.y) < 0.85)) {
           const turn = this.face(attackTarget.pos, dt);
           if (this.attackTimer <= 0 && turn < 0.5) {
@@ -7023,7 +7020,7 @@ class Hero extends Unit {
       if (this.pos.distanceTo(captive.pos) > RESCUE_RADIUS - 0.8) this.moveTo(captive.pos, dt);
       else this.face(captive.pos, dt);
     } else if (engage) {
-      const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1) - (target.reach || 0);   // reach: raio de prédios e do portal
+      const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
@@ -7839,7 +7836,7 @@ class Skeleton extends Unit {
       return;
     }
     if (target) {
-      const d = target.pos.distanceTo(this.pos) - (target.reach || 0);   // prédios do Reino: golpeia a parede, não o centro
+      const d = target.pos.distanceTo(this.pos);
       if (this.ranged) this.vel.set(0, 0, 0);
       if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
       else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) {
@@ -8121,7 +8118,7 @@ function clearDirectControlOrders() {
 
 function isDirectControlActive(hero) {
   return directControl.enabled && directControl.hero === hero && !hero.dead
-    && !game.paused && !game.over && !pick.open && !game.realm && game.state === 'fight';
+    && !game.paused && !game.over && !pick.open && game.state === 'fight';
 }
 
 function syncSkillControlKeys() {
@@ -8143,7 +8140,7 @@ function syncDirectControlUI() {
   const toggle = $('directControlToggle'), hint = $('directControlHint');
   if (!toggle || !hint) return;
   const party = heroes(), hero = directControl.hero;
-  toggle.hidden = !party.length || game.over || !!game.realm;
+  toggle.hidden = !party.length || game.over;
   toggle.disabled = !directControl.enabled && game.state !== 'fight';
   const selected = hero || panelHero() || party.find((unit) => !unit.dead);
   const label = directControl.enabled
@@ -8175,7 +8172,7 @@ function setDirectControlMode(on, hero = null, announce = true) {
     if (announce) showBanner('🎮 IA', 1.5);
     return !!oldHero;
   }
-  if (game.over || game.paused || game.realm || pick.open || game.state !== 'fight') return false;
+  if (game.over || game.paused || pick.open || game.state !== 'fight') return false;
   const party = heroes();
   const selected = hero && party.includes(hero) ? hero : directControl.hero || panelHero() || party.find((unit) => !unit.dead);
   if (!selected || selected.dead) return false;
@@ -8325,7 +8322,7 @@ function moveDirectControlled(hero, dt) {
     directControl.moveTarget = null;
   }
   if (target) {
-    const d = target.pos.distanceTo(hero.pos) - 0.4 * ((target.size || 1) - 1) - (target.reach || 0);
+    const d = target.pos.distanceTo(hero.pos) - 0.4 * ((target.size || 1) - 1);
     if (d > hero.range || (!hero.ranged && Math.abs(target.pos.y - hero.pos.y) >= 0.85)) {
       hero.moveTo(target.pos, dt);
       return { target, moving: true };
@@ -8361,7 +8358,7 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (editing || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (pick.open || game.over || game.realm) return;
+  if (pick.open || game.over) return;
   if (DIRECT_MOVE_KEYS.has(e.key)) {
     if (!directControl.enabled) return;
     e.preventDefault();
@@ -8436,7 +8433,6 @@ const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false
 // { replay, team, seed } (repete a missão) ou 'journey' (repete a jornada)
 function startGame(view = 'menu') {
   setDirectControlMode(false, null, false);
-  game.realm?.stop();   // saindo do modo Reino: some a arena e volta a estrada
   battleGateId++;
   battleLoadingVisible = false;
   document.body.classList.add('no-battle');   // menu e mapa sem o HUD da batalha por trás
@@ -8479,7 +8475,6 @@ function startGame(view = 'menu') {
   else if (view?.replay) replayMission(view);   // "Repetir": mesma missão, dificuldade e equipe
   else if (view === 'journey') replayJourney();   // "Repetir" da jornada: mesma dificuldade
   else if (view?.goal) showCampaign(view);   // "Próxima missão" vai direto à dificuldade
-  else if (view === 'reino') startKingdom();
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
   syncDirectControlUI();
 }
@@ -9702,11 +9697,10 @@ function frame() {
   updateFx(dt);
   popTextPool.update(performance.now());
   FX.update(dt);
-  if (dt > 0) game.realm ? game.realm.tick(dt) : updateGame(dt);
+  if (dt > 0) updateGame(dt);
   showEvolution();
-  // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez; no Reino a câmera é livre
-  if (game.realm) game.realm.camera(real);
-  else if (typeof menuStage === 'undefined' || !menuStage.tick(real)) followParty(real);   // no menu inicial: câmera de cinema e equipe em 3D
+  // câmera e sol acompanham o grupo, sem desfazer o giro que o jogador fez
+  if (typeof menuStage === 'undefined' || !menuStage.tick(real)) followParty(real);   // no menu inicial: câmera de cinema e equipe em 3D
   controls.update();
   placeSun(follow);
   world.update(real, follow.z, camera);
@@ -10162,15 +10156,6 @@ const menuStage = (() => {
     },
   };
 })();
-
-// modo Reino (kingdom.js): recebe as peças do jogo sem importar o main.js, como o monsters.js
-linkKingdom({ Unit, Hero, Skeleton, units, scene, camera, controls, renderer, sun, follow, assets, HEROES, VARIANTS, variantOpen, militiaWeapon,
-  fireBolt, ring, poof, popText, showBanner, FX, audio, pickMonster, skeletonsAlive, skillSetFor, startGame, withBattleAssets,
-  skillGlyph: (id, slot) => SKILL_GLYPHS[id]?.[slot] || ['✦', '⚔', '☼', '✧'][slot],
-  pickOpen: () => pick.open,
-  replaceWorld(next) { world.dispose?.(); world = next; },
-  restoreWorld() { world.dispose?.(); world = createWorld(scene, ROAD, PHASES, 11); },
-  get game() { return game; }, get difficulty() { return difficulty; } });
 
 // ?bench=1: medição de desempenho (bench.js) — monta uma jornada com 4 heróis sem passar pelos menus
 const benchApi = () => ({
