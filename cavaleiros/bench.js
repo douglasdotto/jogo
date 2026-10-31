@@ -36,6 +36,49 @@ function recordRafSample(state, timestamp, visibilityState) {
   state.lastRafTimestamp = now;
 }
 
+// ?perfil=1: soma o tempo de algumas funções durante a medição (aninhadas contam uma vez por seção)
+function installProfiler(api, state) {
+  const sums = {}, depths = {};
+  const timed = (owner, key, label) => {
+    const fn = owner[key];
+    if (typeof fn !== 'function' || fn.__perfil) return;
+    const wrapped = function (...args) {
+      if (state.phase !== 'measure' || depths[label]) return fn.apply(this, args);
+      depths[label] = 1;
+      const t0 = performance.now();
+      try { return fn.apply(this, args); }
+      finally { depths[label] = 0; sums[label] = (sums[label] || 0) + performance.now() - t0; }
+    };
+    wrapped.__perfil = true;
+    owner[key] = wrapped;
+  };
+  const { scene, renderer, units } = api;
+  timed(scene, 'updateMatrixWorld', 'matrizes');
+  timed(renderer.shadowMap, 'render', 'sombra');
+  const shadowRender = renderer.shadowMap.render;   // desenhos da sombra (parte das chamadas do quadro)
+  renderer.shadowMap.render = function (...args) {
+    const before = renderer.info.render.calls;
+    try { return shadowRender.apply(this, args); }
+    finally { if (state.phase === 'measure') sums.sombraDraws = (sums.sombraDraws || 0) + renderer.info.render.calls - before; }
+  };
+  renderer.shadowMap.render.__perfil = true;
+  const seen = new Set();
+  const scan = () => {
+    for (const u of units) {
+      const proto = Object.getPrototypeOf(u);
+      if (!seen.has(proto)) { seen.add(proto); timed(proto, 'update', 'unidades'); }
+      if (u.mixer && !seen.has('mixer')) { seen.add('mixer'); timed(Object.getPrototypeOf(u.mixer), 'update', 'mixers'); }
+    }
+    if (!seen.has('skeleton')) scene.traverse((o) => {
+      if (o.isSkinnedMesh && !seen.has('skeleton')) { seen.add('skeleton'); timed(Object.getPrototypeOf(o.skeleton), 'update', 'ossosGPU'); }
+    });
+  };
+  return {
+    reset() { scan(); for (const k in sums) delete sums[k]; },
+    report(frames) { scan(); const out = {}; for (const k in sums) out[k] = round(sums[k] / Math.max(1, frames)); return out; },
+  };
+}
+
 export async function runBench(api) {
   const original = {
     requestAnimationFrame: window.requestAnimationFrame,
@@ -153,6 +196,9 @@ async function runBenchBody(api) {
     if (state.phase === 'measure') state.submits.push(performance.now() - t0);
   };
 
+  // ?perfil=1: tempo médio por quadro em seções (unidades, mixers, matrizes, ossos, sombra)
+  const prof = q.has('perfil') ? installProfiler(api, state) : null;
+
   const segments = [];
   for (let i = 0; i < phases.length; i++) {
     if (i > 0) api.jumpToPhase(phases[i]);
@@ -161,6 +207,7 @@ async function runBenchBody(api) {
     await wait(warm * 1000);
     Object.assign(state, { frames: [], keepTimes: [], callbackTimes: [], submits: [], worldUpdates: [], barsUpdates: [], calls: [], tris: [], units: [], rafIntervals: [], rafFrames: 0,
       lastRafTimestamp: null, visibilityFrameCounts: {}, visibilityStart: document.visibilityState || 'unknown' });
+    prof?.reset();
     state.phase = 'measure';
     window.__benchState = 'measure';
     const programsBefore = new Set(renderer.info.programs || []);
@@ -192,6 +239,7 @@ async function runBenchBody(api) {
       heapMB: performance.memory ? round(performance.memory.usedJSHeapSize / 1048576, 1) : null,
       sceneObjects: (() => { let n = 0; api.scene.traverse(() => n++); return n; })(),
       domNodes: document.getElementsByTagName('*').length,
+      perfilMs: prof?.report(state.frames.length),
       newPrograms: (renderer.info.programs || []).filter((p) => !programsBefore.has(p)).map((p) => p.name),   // shaders compilados durante a medição (travadas)
     });
   }

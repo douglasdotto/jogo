@@ -2077,6 +2077,7 @@ async function warmStage(onProgress = () => {}, battle = true) {
     }
     for (const material of [...Object.values(boltMats), goldMat]) add(new THREE.Mesh(warmGeo, material));
     for (const kind of VFX_KINDS) add(vfxMesh(kind, 'fire', SPRITE, { opacity: 0.01 }));   // uma paleta basta: o programa é o mesmo
+    sparkBatch(sparkGeo).mesh.visible = true;   // lote de faíscas (instâncias com cor): outro programa; o próximo quadro o esconde se vazio
   }
   group.position.copy(controls.target);
   scene.add(group);
@@ -2171,26 +2172,32 @@ function skeletonModel(model) {
 
 // esqueletos inimigos: corpo, braços e pernas usam o mesmo material e o mesmo esqueleto, então viram uma
 // malha só no modelo-base (uma vez por modelo). Cada inimigo desenha 4 peças a menos, na câmera e na sombra.
-// Cabeça, mandíbula, olhos, crânio e capa ficam soltos (a cabeça voa na morte; a capa é recolorida por nome).
+// A capa entra no corpo e a mandíbula na cabeça (ou crânio): a cabeça continua separada porque voa sozinha
+// (Enxame de Crânios); os olhos têm material próprio. userData.merged guarda os nomes para quem procura a peça
+// pelo nome (ex.: capa recolorida pinta o material compartilhado, o mesmo do corpo).
 const mergedSkeletonModels = new WeakSet();
+const SKELETON_MERGE_GROUPS = [[/_(Body|ArmLeft|ArmRight|LegLeft|LegRight|Cloak)$/, /_Body$/], [/_(Head|Skull|Jaw)$/, /_(Head|Skull)$/]];
 function mergeSkeletonLimbs(model) {
   if (!model?.traverse || mergedSkeletonModels.has(model)) return;
   mergedSkeletonModels.add(model);
   const groups = new Map();
   model.traverse((o) => {
-    if (!o.isSkinnedMesh || !/^Skeleton_.*_(Body|ArmLeft|ArmRight|LegLeft|LegRight)$/.test(o.name)) return;
-    const key = `${o.parent.uuid}|${o.material.uuid}|${o.skeleton.bones.map((b) => b.uuid).join()}`;
+    if (!o.isSkinnedMesh || !o.name.startsWith('Skeleton_')) return;
+    const role = SKELETON_MERGE_GROUPS.findIndex(([part]) => part.test(o.name));
+    if (role < 0) return;
+    const key = `${role}|${o.parent.uuid}|${o.material.uuid}|${o.skeleton.bones.map((b) => b.uuid).join()}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(o);
   });
-  for (const parts of groups.values()) {
-    const base = parts.find((o) => o.name.endsWith('_Body')) || parts[0];
+  for (const [key, parts] of groups) {
+    const base = parts.find((o) => SKELETON_MERGE_GROUPS[+key.split('|')[0]][1].test(o.name)) || parts[0];
     const same = parts.filter((o) => o.matrix.equals(base.matrix) && o.bindMatrix.equals(base.bindMatrix));
     if (same.length < 2) continue;
     const geometry = mergeGeometries(same.map((o) => o.geometry));
     if (!geometry) continue;
     const merged = new THREE.SkinnedMesh(geometry, base.material);
     merged.name = base.name;
+    merged.userData.merged = same.map((o) => o.name);
     merged.position.copy(base.position); merged.quaternion.copy(base.quaternion); merged.scale.copy(base.scale);
     base.parent.add(merged);
     merged.bind(base.skeleton, base.bindMatrix);
@@ -3777,12 +3784,69 @@ function updateSkillFx(dt) {
 
 function clearSkillFx() {
   while (skillFx.length) dropFx(skillFx.pop());
+  for (const b of sparkBatches.values()) { b.list.length = 0; b.mesh.count = 0; }
   shakeK = 0;
   stopT = slowT = 0;
 }
 
+// Faíscas aditivas (o caso comum de particle) desenham em lote: uma InstancedMesh por geometria, uma chamada só.
+// Na mistura aditiva, cor×opacidade soma o mesmo que cor com opacidade: a cor da instância já leva o desbotar.
+const SPARK_CAP = 768;
+const sparkBatches = new Map();
+const sparkE = new THREE.Euler(), sparkQ = new THREE.Quaternion(), sparkS = new THREE.Vector3(), sparkM = new THREE.Matrix4(), sparkC = new THREE.Color();
+function sparkBatch(geo) {
+  let b = sparkBatches.get(geo);
+  if (!b) {
+    const mesh = new THREE.InstancedMesh(geo, glowMaterial(0xffffff, 1), SPARK_CAP);
+    mesh.material.userData.keep = true;
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(SPARK_CAP * 3), 3);
+    mesh.count = 0;
+    mesh.frustumCulled = false;   // instâncias espalhadas: a esfera da geometria não as cobre
+    mesh.renderOrder = 1;         // depois da água e das outras transparências comuns, antes dos efeitos em shader
+    b = { mesh, list: [] };
+    sparkBatches.set(geo, b);
+  }
+  if (!b.mesh.parent) scene.add(b.mesh);
+  return b;
+}
+function updateSparks(dt) {
+  for (const b of sparkBatches.values()) {
+    const { list, mesh } = b;
+    let keep = 0, draw = 0;
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      const previous = s.t;
+      s.t += dt;
+      if (s.t >= s.life) continue;
+      list[keep++] = s;
+      if (s.t < 0) continue;   // atraso: ainda não apareceu
+      const step = s.t - Math.max(0, previous), k = s.t / s.life, o = s.o;
+      s.v.y -= (o.gravity ?? 0) * step;
+      if (o.drag) s.v.multiplyScalar(Math.max(0, 1 - o.drag * step));
+      s.p.addScaledVector(s.v, step);
+      if (o.spin !== 0) { s.rx += step * 6; s.ry += step * 4; }
+      sparkQ.setFromEuler(sparkE.set(s.rx, s.ry, 0));
+      mesh.setMatrixAt(draw, sparkM.compose(s.p, sparkQ, sparkS.setScalar(s.s0 * (1 + (o.grow ?? 0) * k))));
+      mesh.setColorAt(draw, sparkC.copy(s.color).multiplyScalar(s.base * (1 - k * k)));
+      draw++;
+    }
+    list.length = keep;
+    mesh.count = draw;
+    mesh.visible = draw > 0;   // vazio não gasta chamada de desenho
+    if (draw) { mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; }
+  }
+}
+
 // partícula que voa, cai (gravity) e some; smoke = fumaça opaca em vez de brilho
 function particle(geo, color, at, vel, life, o = {}) {
+  if (!o.solid && !o.smoke) {
+    const b = sparkBatch(geo);
+    if (b.list.length < SPARK_CAP) {
+      b.list.push({ p: at.clone(), v: vel, rx: Math.random() * 6, ry: Math.random() * 6, s0: o.size ?? 1, life, t: -(o.delay || 0),
+        base: o.opacity ?? 0.95, color: new THREE.Color(color), o });
+      return;
+    }
+  }
   const m = new THREE.Mesh(geo, (o.solid ? particleMats.solid : o.smoke ? particleMats.soft : particleMats.add).take(color, o.solid ? 1 : o.opacity ?? 0.95));
   const s0 = o.size ?? 1;
   m.position.copy(at);
@@ -5129,7 +5193,7 @@ function brokenArrow(at, from) {
   });
 }
 
-const FX = { look, update: updateSkillFx, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
+const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
   whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
