@@ -38,7 +38,10 @@ function piece(geo, mat, at = [0, 0, 0], size = 1, rot = [0, 0, 0]) {
   return m;
 }
 const boneOf = (s, name) => s.root.getObjectByName(name) || s.root;
-const meshNamed = (s, end, fn) => s.root.traverse((o) => { if (o.isMesh && o.name.endsWith(end)) fn(o.material); });
+// peças unidas no modelo-base (capa no corpo, mandíbula na cabeça) respondem pelo nome original
+const meshNamed = (s, end, fn) => s.root.traverse((o) => {
+  if (o.isMesh && (o.name.endsWith(end) || o.userData.merged?.some((n) => n.endsWith(end)))) fn(o.material);
+});
 
 // cor do corpo e brilho próprio (o main.js reaplica userData.glow quando o esqueleto não pisca)
 function paint(s, color, eyes, glow = 0) {
