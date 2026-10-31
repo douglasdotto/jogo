@@ -30,6 +30,10 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Telas sem PNG da limpeza: Evolução, fim de partida, botão "Pular" do tutorial.
 - Estrelas duplicadas no mapa da campanha.
 
+### Pausado em 2026-10-30 (retomar amanhã)
+- Duelista fraco: agente interrompido antes de entregar; refazer o balanceamento dele (poucas simulações, sem navegador — o PC fica pesado).
+- Evolução: rota já escolhida não aparece (regra "uma vez cada"); usuário pode querer mostrá-la apagada com ✓.
+
 ### Próximo ciclo (sugestões)
 - Medir FPS com a máquina livre (`?bench=1&fases=2,6,10,12&perfil=1`).
 - Simular as 21 missões com grupo aleatório; ajustar a curva se preciso.
