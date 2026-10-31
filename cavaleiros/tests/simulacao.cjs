@@ -1,4 +1,4 @@
-// Jornada: node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
+// Fases 1–12 (partida interna, sem missão): node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
 // Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|recomendado|aleatorio] [semente] [detalhe] [reta]
 // Exemplo rápido (2 por dificuldade): node cavaleiros/tests/simulacao.cjs campanha ponte todas 2 equilibrado 20261030 detalhe
 // Sem navegador. A campanha usa a estrada curva, terreno e navegação reais, com bloqueadores semeados.
@@ -184,7 +184,7 @@ function play(diff, profile, mission = null) {
     t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
     vm.runInContext('globalThis.__campaignOutcome = null', context);
   } else {
-    t.confirmPick(1);   // menu: Jornada completa
+    t.showDifficulty();   // partida interna sem missão (fases 1–12), sem passar pelo menu
     t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
   }
   t.setDifficulty(diff);

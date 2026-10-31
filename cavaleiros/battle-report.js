@@ -221,6 +221,6 @@ export function buildBattleReport({ won = false, heroes = [], falls = [], damage
         + (fallen ? ` · ${fallen} ${fallen === 1 ? 'caiu' : 'caíram'}` : ''),
     });
   }
-  highlights.push({ id: 'next-try', title: won ? (mission?.stars != null ? 'Progresso da campanha' : 'Próxima jornada') : 'Dica', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls, mission }) });
+  highlights.push({ id: 'next-try', title: won ? (mission?.stars != null ? 'Progresso da campanha' : 'Próxima partida') : 'Dica', text: tipFor({ won, heroes: party, dangerous: danger, falls: recordedFalls, mission }) });
   return highlights;
 }

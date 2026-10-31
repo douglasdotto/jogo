@@ -27,7 +27,7 @@ test('ouro: abates, fases, estrelas, vitória e dificuldade', () => {
   assert.equal(P.goldFor(run({ difficultyId: 'pesadelo' })).total, Math.round(82 * 1.5));
   assert.equal(P.goldFor(run({ difficultyId: 'facil' })).total, Math.round(82 * 0.8));
   assert.equal(P.goldFor(run({ won: false, stars: 0, phasesCleared: 0, kills: 7 })).total, 7, 'derrota ainda paga os abates');
-  assert.equal(P.goldFor(run({ mode: 'journey', stars: 0, phasesCleared: 12, last: 12, kills: 200 })).base, 200 + 72 + 60, 'jornada vencida paga mais');
+  assert.equal(P.goldFor(run({ mode: 'mission', stars: 0, phasesCleared: 12, last: 12, kills: 200 })).base, 200 + 72 + 20, 'vitória paga 20 de base');
   assert.equal(P.goldFor(run(), 2).total, Math.round(82 * 1.16), 'Bolsa de saque soma 8% por nível');
   assert.equal(P.goldFor({ kills: 'x', phasesCleared: -3 }).total, 0, 'valores estranhos não geram ouro');
 });
@@ -108,11 +108,9 @@ test('conquistas: lista, desbloqueio único e progresso', () => {
   r = p.recordMatch(run());
   assert.ok(!r.unlocked.some((a) => a.id === 'primeira-vitoria'), 'não repete o aviso');
   r = p.recordMatch(run({ mode: 'mission', missionId: 'castelo', start: 11, last: 12, phase: 12, difficultyId: 'pesadelo', partySize: 4, falls: 0 }));
-  same(r.unlocked.map((a) => a.id).sort(), ['lich', 'lich-pesadelo', 'muralha']);
-  r = p.recordMatch(run({ mode: 'journey', won: false, start: 1, last: 12, phase: 7, stars: 0, ultimates: 50, kills: 600 }));
+  same(r.unlocked.map((a) => a.id).sort(), ['lich', 'lich-pesadelo', 'muralha', 'veterano']);
+  r = p.recordMatch(run({ mode: 'mission', won: false, start: 1, last: 12, phase: 7, stars: 0, ultimates: 50, kills: 600 }));
   same(r.unlocked.map((a) => a.id).sort(), ['cacador', 'regicida', 'ultimates']);
-  r = p.recordMatch(run({ mode: 'journey', won: true, start: 1, last: 12, phase: 12, difficultyId: 'dificil', stars: 0 }));
-  assert.ok(r.unlocked.some((a) => a.id === 'jornada') && r.unlocked.some((a) => a.id === 'veterano'));
   const list = p.achievements();
   const kills = list.find((a) => a.id === 'ossario');
   assert.equal(kills.unlocked, false);

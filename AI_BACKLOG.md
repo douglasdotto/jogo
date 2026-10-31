@@ -49,7 +49,7 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | 32 | Reino: portão, sino da vila, torre melhorada — backlog Reino v2 | Reino | M/A | kingdom.js, kingdom-world.js |
 | 33 | Reino: ataque-movendo / patrulha | Reino | M/B | kingdom.js:906 |
 | 34 | Reino: tutorial e objetivos guiados | Reino | M/B | kingdom.js, tutorial.js |
-| 35 | Jornada: semente variável/modificadores, salvar run entre fases | Campanha | G/M | main.js:886 |
+| 35 | ~~Jornada: semente variável/modificadores, salvar run entre fases~~ — cancelado: modo Jornada removido do jogo | Campanha | — | — |
 | 36 | Narrativa: antagonista "necromante" x Lich; tela curta por capítulo | Campanha | M/B | campaign.js |
 | 37 | Mapa da campanha com posições geradas (hoje 18 fixas, missão 19 quebra) | Campanha | M/B | campaign.js:701 |
 | 38 | Farm de ouro repetindo a Vila | Economia | P/M | progression.js:123 |

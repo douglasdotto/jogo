@@ -88,8 +88,8 @@ async function runBenchBody(api) {
   const shadowSize = Number(q.get('sombra'));
   if ([1024, 2048].includes(shadowSize)) api.setShadowMapSize(shadowSize);
 
-  // monta a jornada sem passar pelos menus
-  api.setupJourney(phases[0]);
+  // monta a partida interna (fases 1–12, sem missão) sem passar pelos menus
+  api.setupRun(phases[0]);
   for (const id of ids) {
     const cfg = api.VARIANTS.find((v) => v.id === id);
     if (!cfg) throw new Error(`bench: herói ${id} não existe`);

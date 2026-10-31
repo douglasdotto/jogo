@@ -31,7 +31,7 @@ function measure({ party, diffId = 'normal', seconds = 70, seed = 7, horde = nul
   const diff = t.DIFFICULTIES.find((d) => d.id === diffId);
   t.setDifficulty(diff);
   t.startGame();
-  t.confirmPick(1);
+  t.showDifficulty();   // partida interna sem missão (fases 1–12), sem passar pelo menu
   t.confirmPick(t.DIFFICULTIES.indexOf(diff));
   t.setDifficulty(diff);
   let picked = 0;

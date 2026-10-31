@@ -42,7 +42,7 @@ function makeHarness(search, { failOnJump = false } = {}) {
     renderer, game, units, world: { update() {} }, updateBars() {}, scene: { traverse(callback) { callback({}); } },
     VARIANTS: [{ id: 'paladin' }],
     heroes() { return []; },
-    setupJourney() {},
+    setupRun() {},
     addHero() { return { autoSkills: [false, false, false] }; },
     withBattleAssets(ready) { ready(); },
     beginBattle() { game.paused = false; game.state = 'fight'; },
