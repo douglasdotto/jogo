@@ -2225,8 +2225,8 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
   captive.rescued=true;party[1].update(.1);assert.equal(t.game.rescueRunner,null,'a função termina após a libertação');
   clear();
 });
-test('18 missões com objetivo e todo o elenco liberado desde o início',()=>{
-  assert.equal(t.MISSIONS.length,18);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
+  assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
   assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,29);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
@@ -2453,15 +2453,15 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha concluída/);
-  assert.match(view.info.innerHTML,/36 estrelas restantes/);
+  assert.match(view.info.innerHTML,/42 estrelas restantes/);
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,3])))};
   view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.match(view.info.innerHTML,/Todas as 54 estrelas foram conquistadas/);
+  assert.match(view.info.innerHTML,/Todas as 63 estrelas foram conquistadas/);
   view=render('O save da campanha estava corrompido; uma cópia foi preservada.');
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.equal(view.map.children.length,18);
+  assert.equal(view.map.children.length,t.MISSIONS.length);
   assert.match(view.root.innerHTML,/class="storage-warning" role="status"/);
   assert.match(view.root.innerHTML,/save da campanha estava corrompido/);
   context.location=previousLocation;context.localStorage.data=previousStorage;
@@ -2625,16 +2625,22 @@ test('escolta usa snapshot pré-cura para estrelas e relatório',()=>{
 });
 test('trechos da campanha variam, crescem e missões de chefe incluem a fase 13',()=>{
   const ranges=new Set(),icons=new Set();let from=1;
+  const epilogue=m=>/Capítulo VII\b/.test(m.chapter);   // o capítulo VII volta às ameias depois do Coração do Castelo
   for(const m of t.MISSIONS){
     assert.ok(m.from>=1&&m.to<=13&&m.from<=m.to,m.id);
-    assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;
-    assert.ok(!ranges.has(m.from+'-'+m.to),`${m.id} repete trecho`);ranges.add(m.from+'-'+m.to);
+    if(epilogue(m))assert.ok(m.from>=10,`${m.id}: o epílogo fica nas ameias (fase 10+)`);
+    else{assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;}
+    const range=(epilogue(m)?'VII:':'')+m.from+'-'+m.to;
+    assert.ok(!ranges.has(range),`${m.id} repete trecho`);ranges.add(range);
     assert.ok(!icons.has(m.icon),`${m.id} repete ícone`);icons.add(m.icon);
-    const bossPhase=[6,12,13].some(p=>p>=m.from&&p<=m.to);assert.equal(bossPhase,['boss','duel','twin','bosses'].includes(m.goal.type),m.id);
+    // fase de chefe: Rei/Lich/Coração, ou um chefe próprio da missão numa fase que normalmente não tem chefe
+    const bossPhase=[6,12,13].some(p=>p>=m.from&&p<=m.to)||(!!m.boss&&![6,9,12,13].includes(m.boss.phase));
+    assert.equal(bossPhase,['boss','duel','twin','bosses'].includes(m.goal.type),m.id);
+    if(m.boss)assert.ok(m.boss.phase>=m.from&&m.boss.phase<=m.to&&t.MONSTER_TYPES[m.boss.kind],`${m.id}: chefe próprio dentro do trecho`);
     if(m.goal.type==='survive')assert.ok(m.goal.phase>=m.from&&m.goal.phase<=m.to);
     assert.ok(m.chapter&&m.story,m.id);
   }
-  assert.equal(t.MISSIONS.at(-1).to,13);
+  assert.equal(t.MISSIONS.find(m=>m.id==='coracao-do-castelo').to,13);
 });
 test('medalha guarda a melhor dificuldade vencida e desafios de 3★ nas dificuldades altas',()=>{
   context.localStorage.data={};
@@ -2662,7 +2668,7 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
     context.saveStars('chamas',1); // avanço já salvo no capítulo; a vitória de Vila cruza 4★
     begin('vila',['paladin']);t.setDifficulty(2);Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});t.updateGame(.1);
     const html=elements.get('overlayStars').innerHTML;
-    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 6/54'));
+    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 6/63'));
     assert.ok(html.includes('Cosmético novo')&&html.includes('Estandarte da Vila desbloqueado'),'avisa ao cruzar o marco de estrelas do capítulo');
     assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
     // o próximo passo virou só o botão "Próxima ▸" ao lado de "Mapa"; o nome da missão fica na dica e no aria-label
@@ -3457,7 +3463,9 @@ test('missões novas: ordem, câmara depois do castelo e nós do mapa sem sobrep
   try{
     const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
     assert.ok(i('santuario')<i('chamas')&&i('chamas')<i('fazendas'));assert.ok(i('lago')<i('duelo')&&i('duelo')<i('caca'));
-    assert.deepEqual([...t.MISSIONS.slice(-4).map(m=>m.id)],['castelo','cripta','trono','coracao-do-castelo']);
+    assert.deepEqual([...t.MISSIONS.slice(-7,-3).map(m=>m.id)],['castelo','cripta','trono','coracao-do-castelo']);
+    assert.deepEqual([...t.MISSIONS.slice(-3).map(m=>m.id)],['arauto','ninho','asas-de-osso'],'o capítulo VII fecha a campanha');
+    assert.match(mission('asas-de-osso').ending,/Dragão de Ossos/);
     assert.match(mission('castelo').ending,/recua para o salão do trono/,'a batalha do castelo prepara o confronto seguinte');
     assert.match(mission('trono').ending,/sombra escapa/,'a fuga da sombra explica sua volta na câmara final');
     assert.match(mission('coracao-do-castelo').story,/sombra do Lich se refaz/,'a missão final conclui a continuidade do vilão');
@@ -3471,13 +3479,13 @@ test('missões novas: ordem, câmara depois do castelo e nós do mapa sem sobrep
     assert.equal(t.unlocked(i('cripta')),true);assert.equal(t.unlocked(i('trono')),false,'o trono vem depois da cripta');
     context.location={search:'?tudo=1'};
     const map=el(),info=el(),root=el();map.children=[];root.isConnected=true;root.closest=()=>null;root.querySelector=s=>s==='.camp-map'?map:info;
-    context.renderCampaign(root,noop);assert.equal(map.children.length,18);
+    context.renderCampaign(root,noop);assert.equal(map.children.length,t.MISSIONS.length);
     const at=k=>[parseFloat(map.children[k].style.left),parseFloat(map.children[k].style.top)];
     for(const id of ['chamas','duelo','cripta','trono','coracao-do-castelo'])for(let k=0;k<map.children.length;k++){
       if(k===i(id))continue;const [x,y]=at(i(id)),[x2,y2]=at(k);
       assert.ok(((x-x2)/9.4)**2+((y-y2)/7.5)**2>1,`${id} não encosta em ${t.MISSIONS[k].id}`);
     }
-    const [,cy]=at(i('castelo'));for(const id of ['cripta','trono','coracao-do-castelo'])assert.ok(at(i(id))[1]<cy,id+' fica além do castelo, no alto');   // mapa gerado: só a altura importa
+    const [,cy]=at(i('castelo'));for(const id of ['cripta','trono','coracao-do-castelo','arauto','ninho','asas-de-osso'])assert.ok(at(i(id))[1]<cy,id+' fica além do castelo, no alto');   // mapa gerado: só a altura importa
   }finally{context.location=previousLocation;context.localStorage.data=previousStorage;}
 });
 // ---------- inimigos novos: enxame, xamã, cavaleiro sombrio e o Carrasco (fase 9) ----------

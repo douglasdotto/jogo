@@ -15,6 +15,9 @@ const MAT = {
   spark: glowMat(0xffd23a), green: glowMat(0x7dff9a), purple: glowMat(0xc77dff), wisp: glowMat(0x9fe8ff, 0.35),
   hood: lam(0x2a0d12), blood: lam(0x8a1020), lance: lam(0x2e2a36), plume: lam(0xb0142c),
   teal: glowMat(0x5ff2ff), ward: glowMat(0x5ff2ff, 0.22), ember: glowMat(0xff8a2a, 0.45),
+  // capítulo VII: dragão de ossos, escavador e porta-estandarte
+  wyrm: glowMat(0x7dffd0), membrane: lam(0x2f4a46, { side: THREE.DoubleSide, transparent: true, opacity: 0.82 }),
+  dirt: lam(0x7a5434), banner: lam(0x9a2230, { side: THREE.DoubleSide }), aura: glowMat(0xff8a3a, 0.5),
 };
 const GEO = {
   box: new THREE.BoxGeometry(1, 1, 1), ball: new THREE.SphereGeometry(1, 14, 10), cone: new THREE.ConeGeometry(1, 1, 6),
@@ -332,10 +335,10 @@ function keepRange(s, dt, target) {
 }
 
 // lamaçal da bruxa: área marcada que deixa lento quem pisa; some se a bruxa morrer ou ficar zonza
-function bog(owner, at, radius, time) {
+function bog(owner, at, radius, time, [fillColor, edgeColor] = [0x4a2f6e, 0xa77bff]) {
   const group = new THREE.Group();
-  const fillMat = new THREE.MeshBasicMaterial({ color: 0x4a2f6e, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
-  const edgeMat = new THREE.MeshBasicMaterial({ color: 0xa77bff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+  const fillMat = new THREE.MeshBasicMaterial({ color: fillColor, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  const edgeMat = new THREE.MeshBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
   const flatRot = [-Math.PI / 2, 0, 0];
   const fill = piece(GEO.disc, fillMat, [0, 0.01, 0], radius, flatRot), edge = piece(GEO.edge, edgeMat, [0, 0, 0], radius, flatRot);
   fill.castShadow = edge.castShadow = false;
@@ -343,7 +346,7 @@ function bog(owner, at, radius, time) {
   group.position.copy(at);
   group.position.y += 0.06;
   G.scene.add(group);
-  G.ring(at, radius, 0xa77bff, 0.7);
+  G.ring(at, radius, edgeColor, 0.7);
   // conta como aviso: a IA dos heróis tenta sair (dangerAt), mas sem barra de chefe
   return track({ owner, at: at.clone(), radius, line: null, warning: true, harmless: false, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat],
     dodge: new Map(), notice: 0.5, bog: true,
@@ -356,6 +359,179 @@ function bog(owner, at, radius, time) {
 
 let mPacking = false;   // crânios do enxame criados pelo líder não criam outro enxame
 const HARD_COUNT = 1.12;   // Difícil e Pesadelo: bando de 3 crânios, golem avulso e 2 sacerdotes/xamãs
+
+// ---------- capítulo VII ----------
+// escavador: some na terra, marca um círculo sob o herói e irrompe; depois fica zonzo (janela para revidar)
+const BURROW = { radius: 1.6, time: 1.3, stun: 1.8, cooldown: 9 };
+function surface(s) {
+  s.burrowed = false;
+  s.untargetable = false;
+  s.root.visible = true;
+  s.burrowFx = null;
+}
+function burrowDive(s, target) {
+  const at = target.pos.clone();
+  at.y = G.world.groundHeight(at.x, at.z);
+  s.cd.burrow = BURROW.cooldown;
+  s.vel.set(0, 0, 0);
+  s.pendingHit = null;
+  s.busy = BURROW.time + 0.2;
+  s.burrowed = true;
+  s.untargetable = true;   // debaixo da terra: golpes e áreas não o alcançam
+  s.root.visible = false;
+  G.poof(s.pos, 0.8);
+  G.ring(s.pos, 1, 0xd08a3a, 0.6);
+  s.burrowFx = warn(s, at, BURROW.radius, BURROW.time, () => {
+    s.pos.x = at.x; s.pos.z = at.z;
+    surface(s);
+    blast(at, BURROW.radius, s.dmg * 1.4, 0xd08a3a, { owner: s });
+    for (const u of liveAllies()) if (!u.dead && flat(u.pos, at) <= BURROW.radius + 0.3) knockDown(u, at, 3);
+    s.stunT = Math.max(s.stunT, BURROW.stun);
+    G.popText(s.pos, 'Atordoado!', 'block');
+  }, { color: 0xd08a3a });
+}
+
+// porta-estandarte: anel laranja no chão; esqueletos dentro dele atacam mais rápido enquanto o estandarte está de pé
+export const BANNER_AURA = { radius: 4.5, haste: 0.5 };
+
+// dragão de ossos: rasantes em faixas ao longo da estrada (marcadas no chão) e pouso que derruba
+const DRAGON_FLIGHTS = [0.72, 0.38];   // levanta voo ao cair abaixo destas frações de vida
+export const DRAGON_PASS = { len: 18, half: 1.4, mark: 1.5, speed: 19, high: 3.2, low: 0.4, landR: 3, land: 1.2, rest: 2.6 };
+const DRAGON_COLOR = 0x7dffd0;
+function dragonTakeOff(s) {
+  s.flights++;
+  s.flight = { state: 'rise', t: 1.1, passes: s.enraged ? 3 : 2, sign: Math.random() < 0.5 ? 1 : -1, pass: null };
+  s.pendingHit = null;
+  s.stunT = 0;
+  s.vel.set(0, 0, 0);
+  s.busy = 99;
+  s.loop?.('Jump_Idle');
+  G.showBanner('O Dragão levanta voo!', 2.2);
+  G.ring(s.pos, 3, DRAGON_COLOR, 0.9);
+}
+function dragonPass(s) {
+  const f = s.flight, foes = liveAllies().filter((u) => !u.dead);
+  if (!foes.length) return dragonLand(s);
+  const prey = foes[Math.floor(Math.random() * foes.length)];
+  const road = G.world.tangentAt(G.world.anchorS(G.game.phase));
+  const dir = new THREE.Vector3(road.x, 0, road.z).normalize().multiplyScalar(f.sign);
+  f.sign = -f.sign;   // vai e volta pela estrada
+  const from = prey.pos.clone().addScaledVector(dir, -DRAGON_PASS.len / 2);
+  from.y = G.world.groundHeight(from.x, from.z);
+  const mark = s.enraged ? DRAGON_PASS.mark - 0.25 : DRAGON_PASS.mark;
+  f.pass = { from, dir, left: DRAGON_PASS.len, hit: new Set(),
+    fx: warn(s, from, DRAGON_PASS.half, mark, null, { line: { dir, len: DRAGON_PASS.len }, color: DRAGON_COLOR, announce: 'Rasante — saia da faixa' }) };
+  f.state = 'mark';
+  f.t = mark;
+  if (s.enraged) {   // em fúria, ossos caem das asas sobre outro herói
+    const other = foes.find((u) => u !== prey) || prey;
+    const at = other.pos.clone();
+    at.y = G.world.groundHeight(at.x, at.z);
+    warn(s, at, 1.5, mark + 0.2, () => dropSkull(at, s.dmg * 0.6, null), { color: 0xb050ff, announce: 'Chuva de ossos — saia do círculo' });
+  }
+}
+function dragonLand(s) {
+  const f = s.flight, at = s.pos.clone();
+  at.y = G.world.groundHeight(at.x, at.z);
+  f.state = 'land';
+  f.t = DRAGON_PASS.land;
+  f.at = at;
+  warn(s, at, DRAGON_PASS.landR, DRAGON_PASS.land, null, { color: DRAGON_COLOR, announce: 'Pouso — saia do círculo' });
+}
+function dragonFly(s, dt) {
+  const f = s.flight;
+  s.stunT = 0;   // no ar não fica zonzo
+  s.vel.set(0, 0, 0);
+  s.busy = Math.max(s.busy, 1);
+  f.t -= dt;
+  if (f.state === 'rise' || f.state === 'turn') { if (f.t <= 0) dragonPass(s); return; }
+  if (f.state === 'mark') {
+    const p = f.pass, to = mV.subVectors(p.from, s.pos).setY(0), d = to.length();
+    if (d > 0.05) s.pos.addScaledVector(to.normalize(), Math.min(d, 16 * dt));   // voa até o começo da faixa
+    faceNow(s, s.pos.clone().add(p.dir));
+    if (!p.fx.alive && f.t > 0.05) { f.state = 'turn'; f.t = 0.6; return; }   // aviso desfeito: não ataca sem marca
+    if (f.t <= 0) { s.pos.x = p.from.x; s.pos.z = p.from.z; f.state = 'dash'; s.loop?.('Running_C'); }
+    return;
+  }
+  if (f.state === 'dash') {
+    const p = f.pass, step = Math.min(p.left, DRAGON_PASS.speed * dt);
+    s.pos.addScaledVector(p.dir, step);
+    p.left -= step;
+    for (const u of liveAllies()) if (!u.dead && !p.hit.has(u) && flat(u.pos, s.pos) <= DRAGON_PASS.half + 0.3 * (u.size || 1)) {
+      p.hit.add(u);
+      u.takeDamage(s.dmg * 1.2, s.pos, s);
+      knockDown(u, s.pos, 4);
+    }
+    if (p.left <= 0) {
+      G.poof(s.pos, 1.2);
+      if (--f.passes > 0) { f.state = 'turn'; f.t = 0.7; s.loop?.('Jump_Idle'); }
+      else dragonLand(s);
+    }
+    return;
+  }
+  if (f.state === 'land' && f.t <= 0) {
+    blast(f.at, DRAGON_PASS.landR, s.dmg, DRAGON_COLOR, { owner: s });
+    for (const u of liveAllies()) if (!u.dead && flat(u.pos, f.at) <= DRAGON_PASS.landR + 0.3) knockDown(u, f.at, 4);
+    s.flight = null;
+    s.busy = 0;
+    s.stunT = DRAGON_PASS.rest;   // exausto no chão: hora de bater
+    G.popText(s.pos, 'Exausto!', 'block');
+  }
+}
+// altura do voo: alto enquanto marca, rente ao chão no rasante (aí os golpes corpo a corpo voltam a alcançar)
+function dragonHeight(s) {
+  const f = s.flight;
+  if (!f || f.state === 'land' || f.state === 'dash') return f?.state === 'dash' ? DRAGON_PASS.low : 0;
+  return f.state === 'mark' && f.t < 0.6 ? DRAGON_PASS.low : DRAGON_PASS.high;
+}
+
+// variações de chefe por missão: mesmo golpe-base, outro visual e um golpe a mais
+export const BOSS_MODS = {
+  spectral: { name: 'Rei Espectral', icon: '♜', detail: 'Rei translúcido: chama fantasmas no lugar de soldados. Fúria abaixo de 50% com onda de choque em anel.',
+    apply(s) {
+      paint(s, 0xa8dcff, 0xcff6ff, 0x1d4f8f);
+      for (const m of s.mats) Object.assign(m, { transparent: true, opacity: 0.62, depthWrite: false });
+      boneOf(s, 'hips').add(piece(GEO.cone, MAT.wisp, [0, -0.45, -0.05], [0.4, 1.0, 0.4], [Math.PI, 0, 0]));
+      s.spectral = true;
+      G.showBanner('O Rei Espectral surge da névoa!', 2.5);
+    } },
+  drowned: { name: 'Carrasco Afogado', icon: '⚒', detail: 'Carrasco do lago: além da machadada e da corrente, marca um círculo de maré negra que deixa lento.',
+    apply(s) {
+      paint(s, 0x9fc9bd, 0x5ff2ff, 0x062a2a);
+      meshNamed(s, '_Cloak', (m) => m.color.set(0x1f4f5a));
+      s.cd.tide = 5;
+      G.showBanner('O Carrasco Afogado sobe do lago!', 2.5);
+    },
+    think(s, dt, target) {
+      if (!target || !(s.cd.tide <= 0)) return false;
+      const far = liveAllies().filter((u) => !u.dead && flat(u.pos, s.pos) < 12)
+        .sort((a, b) => (!!b.ranged - !!a.ranged) || flat(b.pos, s.pos) - flat(a.pos, s.pos))[0];
+      if (!far) return false;
+      const at = far.pos.clone();
+      at.y = G.world.groundHeight(at.x, at.z);
+      faceNow(s, at);
+      s.vel.set(0, 0, 0);
+      s.busy = s.once('Taunt', 1.2) * 0.7;
+      s.cd.tide = s.enraged ? 9 : 12;
+      s.pendingHit = null;
+      warn(s, at, 2.4, 1.3, () => {
+        blast(at, 2.4, s.dmg * 0.6, 0x3fd0c0, { owner: s });
+        bog(s, at, 2.4, 6, [0x1f4f5a, 0x5ff2ff]);
+      }, { color: 0x3fd0c0, announce: 'Maré negra — saia do círculo' });
+      return true;
+    } },
+};
+export function applyBossMod(s, id) {
+  const mod = BOSS_MODS[id];
+  if (!mod || !s) return s;
+  const base = s.kind;
+  s.kind = { ...base, name: mod.name,
+    think: mod.think ? (u, dt, target) => mod.think(u, dt, target) || !!base.think?.(u, dt, target) : base.think };
+  s.bossMod = id;
+  mod.apply?.(s);
+  G.markEmissiveDirty?.(s);
+  return s;
+}
 
 // ---------- tipos novos (atributos base; fase e dificuldade escalam no Skeleton) ----------
 export const MONSTER_TYPES = {
@@ -688,6 +864,52 @@ export const MONSTER_TYPES = {
       return keepRange(s, dt, target);
     } },
 
+  // escavador de ossos: mergulha na terra, marca um círculo sob o herói e irrompe; sair do círculo e revidar enquanto ele está zonzo
+  Burrower: { name: 'Escavador de Ossos', model: 'Rogue', hp: 34, dmg: 9, range: 1.3, speed: 1.7, cooldown: 1.3, weapon: 'Skeleton_Blade', move: 'Running_C',
+    attacks: ['1H_Melee_Attack_Stab', '1H_Melee_Attack_Slice_Horizontal'],
+    dress(s) {
+      paint(s, 0xd2b48a, 0xffb347, 0x2a1400);
+      const chest = boneOf(s, 'chest');
+      for (let k = 0; k < 3; k++) chest.add(piece(GEO.box, MAT.dirt, [0, 0.12 + k * 0.15, -0.2 - k * 0.02], [0.42 - k * 0.06, 0.08, 0.2], [0.35, 0, 0]));   // carapaça de terra
+      for (const x of [-1, 1]) for (let k = 0; k < 3; k++) boneOf(s, x < 0 ? 'handslotl' : 'handslotr')
+        .add(piece(GEO.cone, MAT.boneDark, [(k - 1) * 0.06, 0.12, 0.08], [0.03, 0.2, 0.03], [0.9, 0, 0]));   // garras
+      s.cd = { burrow: 2.5 + Math.random() * 2 };
+    },
+    tick(s, dt) {
+      s.cd.burrow -= dt;
+      if (s.burrowed && !s.burrowFx?.alive) surface(s);   // aviso desfeito (zonzo debaixo da terra): volta onde estava
+    },
+    think(s, dt, target) {
+      if (s.burrowed) return true;
+      if (!target || s.cd.burrow > 0) return false;
+      const d = flat(s.pos, target.pos);
+      if (d < 2.5 || d > 12) return false;
+      burrowDive(s, target);
+      return true;
+    },
+    death(s) { if (s.burrowed) surface(s); } },
+
+  // porta-estandarte: anel laranja no chão acelera os golpes dos esqueletos dentro dele; derrube-o primeiro ou leve a luta para fora do anel
+  Bannerbearer: { name: 'Porta-Estandarte', model: 'Warrior', hp: 54, dmg: 8, range: 1.4, speed: 1.05, cooldown: 1.9, weapon: 'Skeleton_Blade', size: 1.1, priority: 4,
+    dress(s) {
+      paint(s, 0xdccaa8, 0xff7a3a, 0x2a0c00);
+      const chest = boneOf(s, 'chest'), flag = new THREE.Group();
+      flag.add(piece(GEO.cyl, MAT.lance, [0, 0.75, 0], [0.03, 1.9, 0.03]), piece(GEO.cone, MAT.gold, [0, 1.78, 0], [0.06, 0.2, 0.06]),
+        piece(GEO.box, MAT.banner, [0.24, 1.35, 0], [0.46, 0.62, 0.02]), piece(GEO.ball, MAT.bone, [0.24, 1.4, 0.02], [0.1, 0.11, 0.04]));
+      flag.position.set(0.12, 0, -0.28);
+      chest.add(flag);
+      s.aura = piece(GEO.edge, MAT.aura, [0, 0.08, 0], BANNER_AURA.radius / s.size, [-Math.PI / 2, 0, 0]);
+      s.aura.castShadow = false;
+      s.root.add(s.aura);
+    },
+    tick(s, dt) {
+      const on = !(s.stunT > 0) && !s.spawning;   // atordoado, o estandarte para de inspirar
+      s.aura.visible = on;
+      s.aura.rotation.z += dt * 0.8;
+      if (!on) return;
+      for (const o of G.units || []) if (o !== s && o.team === 'skeleton' && !o.dead && flat(o.pos, s.pos) <= BANNER_AURA.radius) o.attackTimer -= dt * BANNER_AURA.haste;
+    } },
+
   // mini-chefe: enorme, espinhos nas costas, pancada em área que derruba
   Golem: { name: 'Golem de Ossos', title: 'Mini-chefe', model: 'Warrior', hp: 250, dmg: 15, range: 2.0, speed: 0.85, cooldown: 2.4, weapon: 'Skeleton_Axe', attack: '2H_Melee_Attack_Chop',
     attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Stab'], size: 2.2, heavy: true,
@@ -777,7 +999,7 @@ export const MONSTER_TYPES = {
         s.cd.summon = 18;
         G.popText(s.pos, 'Às armas!', 'evolve');
         around(s.pos, Math.round(1.7 * G.difficulty.count), 2.6, Math.random() * 6).forEach((p, i) =>
-          warn(s, p, 0.6, 0.9, () => summon(i % 3 === 2 ? 'Rogue' : 'Minion', p), { color: 0x9b59ff, harmless: true }));
+          warn(s, p, 0.6, 0.9, () => summon(s.spectral ? 'Ghost' : i % 3 === 2 ? 'Rogue' : 'Minion', p), { color: 0x9b59ff, harmless: true }));   // o Rei Espectral chama fantasmas
         return true;
       }
       if (s.cd.slam <= 0 && d < 3.6) { slam(s, target, 3.2, 1.3, 1, { down: false }); s.cd.slam = 9; return true; }
@@ -1011,6 +1233,106 @@ export const MONSTER_TYPES = {
       else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
       return true;
     } },
+
+  // chefe do capítulo VII: esqueleto de dragão. No chão: sopro de ossos em linha (veneno) e, em fúria, cauda em volta.
+  // Abaixo de 72% e de 38% levanta voo (só ataques à distância o alcançam), faz rasantes em faixas marcadas e pousa exausto.
+  BoneDragon: { name: 'Dragão de Ossos', title: 'Chefe', model: 'Warrior', hp: 50, dmg: 7, range: 1.9, speed: 1.35, cooldown: 2.0, attack: '2H_Melee_Attack_Chop',
+    attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice'], size: 2.3,
+    dress(s) {
+      paint(s, 0xe9e1c9, DRAGON_COLOR, 0x062a20);
+      s.root.getObjectByName('Skeleton_Warrior_Helmet')?.removeFromParent?.();
+      meshNamed(s, '_Cloak', (m) => m.color.set(0x24413c));
+      const head = boneOf(s, 'head'), chest = boneOf(s, 'chest'), hips = boneOf(s, 'hips');
+      // crânio de dragão: focinho, mandíbula, dentes, chifres e crista
+      head.add(piece(GEO.box, MAT.bone, [0, 0.3, 0.42], [0.32, 0.2, 0.52]), piece(GEO.box, MAT.boneDark, [0, 0.14, 0.38], [0.26, 0.07, 0.46]));
+      for (const x of [-1, 1]) {
+        head.add(piece(GEO.cone, MAT.boneDark, [x * 0.2, 0.62, -0.2], [0.07, 0.55, 0.07], [-0.95, 0, -x * 0.3]));
+        head.add(piece(GEO.gem, MAT.wyrm, [x * 0.08, 0.36, 0.69], 0.035));
+        for (let k = 0; k < 3; k++) head.add(piece(GEO.cone, MAT.bone, [x * 0.12, 0.17, 0.3 + k * 0.14], [0.025, 0.09, 0.025], [Math.PI, 0, 0]));
+      }
+      for (let k = 0; k < 3; k++) head.add(piece(GEO.cone, MAT.bone, [0, 0.62 - k * 0.04, -0.05 - k * 0.14], [0.05, 0.2, 0.05], [-0.6, 0, 0]));
+      for (let k = 0; k < 4; k++) chest.add(piece(GEO.cone, MAT.bone, [0, 0.1 + k * 0.15, -0.3], [0.05, 0.28, 0.05], [-1.1, 0, 0]));   // espinhos do dorso
+      // asas: braço de osso, três dedos e membrana escura entre eles
+      s.wings = [-1, 1].map((x) => {
+        const wing = new THREE.Group();
+        wing.position.set(x * 0.2, 0.45, -0.22);
+        wing.add(piece(GEO.cyl, MAT.bone, [x * 0.4, 0.26, 0], [0.05, 0.95, 0.05], [0, 0, -x * 1.0]));
+        const tip = [x * 0.8, 0.51];
+        for (const t of [0.35, 0.85, 1.35]) {
+          const dx = x * Math.sin(t), dy = -Math.cos(t), len = 1.05 - t * 0.25;
+          wing.add(piece(GEO.cyl, MAT.boneDark, [tip[0] + dx * len / 2, tip[1] + dy * len / 2, 0], [0.025, len, 0.025], [0, 0, Math.PI + x * t]));
+          wing.add(piece(GEO.cone, MAT.membrane, [tip[0] + dx * len * 0.45 - x * 0.18, tip[1] + dy * len * 0.45 + 0.05, -0.01], [0.32, len * 0.95, 0.02], [0, 0, x * t]));
+        }
+        wing.add(piece(GEO.cone, MAT.boneDark, [tip[0], tip[1] + 0.08, 0], [0.05, 0.16, 0.05], [0, 0, -x * 0.5]));
+        wing.userData = { ...wing.userData, side: x };
+        chest.add(wing);
+        return wing;
+      });
+      s.tail = new THREE.Group();
+      for (let k = 0; k < 6; k++) s.tail.add(piece(GEO.cone, k === 5 ? MAT.boneDark : MAT.bone, [0, -0.04 - k * 0.05, -0.28 - k * 0.24], [0.13 - k * 0.018, 0.32, 0.13 - k * 0.018], [-Math.PI / 2 - 0.15, 0, 0]));
+      hips.add(s.tail);
+      s.cd = { breath: 3, tail: 4 };
+      s.flights = 0;
+      s.flight = null;
+      s.flap = 0;
+      G.showBanner('O Dragão de Ossos desperta!', 2.5);
+    },
+    tick(s, dt) {
+      for (const k in s.cd) s.cd[k] -= dt;
+      s.flap += dt * (s.flight ? 9 : 2.2);
+      for (const w of s.wings || []) w.rotation.z = w.userData.side * (s.flight ? 0.15 + Math.sin(s.flap) * 0.55 : 0.35 + Math.sin(s.flap) * 0.08);
+      if (s.tail) s.tail.rotation.y = Math.sin(s.flap * 0.7) * 0.25;
+      s.hover = (s.hover || 0) + (dragonHeight(s) - (s.hover || 0)) * Math.min(1, dt * 5);
+      if (!s.enraged && s.hp < s.maxHp * 0.5) {   // fúria: mais rápido, cauda e rasantes com chuva de ossos
+        s.enraged = true;
+        s.speed *= 1.15;
+        s.cooldown *= 0.85;
+        for (const m of s.mats) if (m.userData) m.userData.glow = 0x0a4a38;
+        G.markEmissiveDirty?.(s);
+        G.showBanner('Fúria do Dragão!', 2.5);
+        G.ring(s.pos, 4, DRAGON_COLOR, 1);
+      }
+      if (s.flight) return dragonFly(s, dt);
+      if (!s.spawning && s.flights < DRAGON_FLIGHTS.length && s.hp < s.maxHp * DRAGON_FLIGHTS[s.flights]) dragonTakeOff(s);
+    },
+    think(s, dt, target) {
+      if (s.flight) return true;
+      if (!target) return false;
+      const d = flat(s.pos, target.pos);
+      if (s.enraged && s.cd.tail <= 0 && liveAllies().some((u) => !u.dead && flat(u.pos, s.pos) < 3.6)) {   // cauda em volta de si
+        s.vel.set(0, 0, 0);
+        s.once('Taunt', 1.1);
+        s.busy = 1.3 + 0.5;
+        s.cd.tail = 10;
+        s.pendingHit = null;
+        const at = s.pos.clone();
+        warn(s, at, 3.4, 1.3, () => {
+          blast(at, 3.4, s.dmg, DRAGON_COLOR, { owner: s });
+          for (const u of liveAllies()) if (!u.dead && flat(u.pos, at) <= 3.7) u.vel.add(mV.subVectors(u.pos, at).setY(0).normalize().multiplyScalar(6));
+        }, { color: DRAGON_COLOR, announce: 'Cauda — afaste-se do dragão' });
+        return true;
+      }
+      if (s.cd.breath <= 0 && d < 8.5) {   // sopro de ossos: linha verde que envenena
+        faceNow(s, target.pos);
+        const dir = new THREE.Vector3(target.pos.x - s.pos.x, 0, target.pos.z - s.pos.z).normalize(), len = 8, time = s.enraged ? 1.0 : 1.2;
+        const from = s.pos.clone();
+        s.vel.set(0, 0, 0);
+        s.once('Taunt', 1.2);
+        s.busy = time + 0.4;
+        s.cd.breath = s.enraged ? 6.5 : 8;
+        s.pendingHit = null;
+        warn(s, from, 1.0, time, () => {
+          G.beam(from, from.clone().addScaledVector(dir, len), DRAGON_COLOR);
+          for (const u of liveAllies()) if (!u.dead && inLine(u, from, dir, len, 1.0)) {
+            u.takeDamage(s.dmg * 0.9, from, s);
+            poisonHero(u, 4, s.dmg * 0.2, s);
+          }
+        }, { line: { dir, len }, color: DRAGON_COLOR, announce: 'Sopro de ossos — saia da linha' });
+        return true;
+      }
+      return false;
+    },
+    death(s) { s.flight = null; s.hover = 0; } },
 };
 
 function dropSkull(at, dmg, owner) {
@@ -1074,10 +1396,20 @@ const ROSTER = [['Shieldbearer', 2, 0.11, 0.025], ['Bomber', 3, 0.1, 0.025], ['G
 const BOSS_PHASES = [6, 9, 12, 13];
 export const isBossPhase = (p) => BOSS_PHASES.includes(p);
 // próxima fase de chefe a partir de `p` (inclusive): fonte única para HUD e dica de derrota
-export const nextBossPhase = (p) => BOSS_PHASES.find((phase) => phase >= p) ?? null;
+// `override` (mission.boss) pode pôr um chefe numa fase fora da lista (o dragão na fase 11)
+export const nextBossPhase = (p, override = null) => [...BOSS_PHASES, override?.phase].filter((phase) => phase >= p).sort((a, b) => a - b)[0] ?? null;
+export const missionBossPhase = (p, override = null) => isBossPhase(p) || override?.phase === p;
 const GOLEM_PHASES = [4, 8];
+// inimigos próprios de uma missão (mission.foes): estreiam na primeira onda e entram no sorteio só ali
+const MISSION_FOES = { Burrower: { rate: 0.08, cap: 2 }, Bannerbearer: { rate: 0.06, cap: 1 } };
 export function pickMonster(p, type) {
   const D = G.difficulty, variety = D.count / 1.1;
+  const foes = (G.game?.mission?.foes || []).filter((kind) => MISSION_FOES[kind]);
+  for (const kind of foes) if (!mSeen.has(kind)) {
+    mSeen.add(kind);
+    G.showBanner(`Novo inimigo: ${MONSTER_TYPES[kind].name}!`, 2.5);
+    return kind;
+  }
   // Campanhas e atalhos podem começar no meio da jornada: estreias anteriores
   // já são conhecidas e não devem ser forçadas todas na primeira onda.
   for (const [kind, from] of ROSTER) if (p > from) mSeen.add(kind);
@@ -1087,6 +1419,11 @@ export function pickMonster(p, type) {
     return kind;
   }
   let r = Math.random();
+  for (const kind of foes) {
+    const w = countOf(kind) >= MISSION_FOES[kind].cap ? 0 : MISSION_FOES[kind].rate * variety;
+    if (r < w) return kind;
+    r -= w;
+  }
   for (const [kind, from, max, grow] of ROSTER) {
     if (p < from) continue;
     let w = Math.min(max, grow * (p - from + 1)) * variety;
@@ -1101,7 +1438,10 @@ export function pickMonster(p, type) {
   return type;
 }
 // quem fecha a onda: Rei (6), Carrasco (9), Lich (12); golem nas fases 4 e 8
-export const waveLeader = (p, bossPending) => bossPending ? (p >= 12 ? 'Lich' : p >= 9 ? 'Executioner' : 'King') : GOLEM_PHASES.includes(p) ? 'Golem' : null;
+// `override` (mission.boss = { phase, kind, mod }) troca o chefe daquela fase numa missão
+export const waveLeader = (p, bossPending, override = null) => bossPending
+  ? (override?.phase === p && MONSTER_TYPES[override.kind] ? override.kind : p >= 12 ? 'Lich' : p >= 9 ? 'Executioner' : 'King')
+  : GOLEM_PHASES.includes(p) ? 'Golem' : null;
 
 const CAMPAIGN_TACTICS = {
   Shieldbearer: ['◈', 'Bloqueia golpes frontais; flanqueie o escudo.'],
@@ -1117,23 +1457,30 @@ const CAMPAIGN_TACTICS = {
   Shaman: ['❖', 'Cobre aliados com escudo de ossos; derrube ou atordoe o xamã e o escudo some.'],
   DarkKnight: ['⚔', 'Marca uma linha vermelha e investe com a lança; saia da linha e revide enquanto ele fica exausto. Na câmara do coração, ele guarda a fonte da maldição.'],
   Executioner: ['⚒', 'Chefe da fase 9: machadada em linha, corrente que puxa quem está longe e giro em fúria abaixo de 50%.'],
+  Burrower: ['⛏', 'Some na terra e marca um círculo marrom sob um herói; saia do círculo e bata enquanto ele fica zonzo.'],
+  Bannerbearer: ['⚑', 'Anel laranja acelera os esqueletos dentro dele; derrube o estandarte primeiro ou atordoe-o.'],
+  BoneDragon: ['☬', 'Chefe: sopro de ossos em linha. Abaixo de 72% e 38% voa (só ataques à distância alcançam), faz rasantes em faixas marcadas e pousa exausto.'],
 };
 
 /** Lista ameaças possíveis num trecho usando as mesmas fases de estreia e chefes do combate. */
-export function campaignThreats(from, to, goal = null) {
+export function campaignThreats(from, to, goal = null, mission = null) {
   const first = Math.max(1, Math.trunc(Number(from) || 1));
   const last = Math.max(first, Math.trunc(Number(to) || first));
   const found = new Map();
-  const add = (id, phase, optional = false, possible = false) => {
+  const override = mission?.boss || null;
+  const add = (id, phase, optional = false, possible = false, mod = null) => {
     const type = MONSTER_TYPES[id];
-    const [icon, detail] = CAMPAIGN_TACTICS[id] || ['✦', 'Ameaça especial do trecho.'];
-    found.set(id, { id, name: type?.name || id, icon, detail, phase: Math.max(first, phase), optional, possible });
+    const [icon, detail] = mod ? [mod.icon, mod.detail] : CAMPAIGN_TACTICS[id] || ['✦', 'Ameaça especial do trecho.'];
+    found.set(id, { id, name: mod?.name || type?.name || id, icon, detail, phase: Math.max(first, phase), optional, possible });
   };
 
   for (const [kind, debut] of ROSTER) if (last >= debut) add(kind, debut, false, first > debut);
   for (const phase of GOLEM_PHASES) if (phase >= first && phase <= last) add('Golem', phase);
   if (last >= 9 && !found.has('Golem')) add('Golem', 9, true); // só pode surgir aleatoriamente nas dificuldades altas
-  for (const phase of BOSS_PHASES) if (phase >= first && phase <= last) add(waveLeader(phase, true), phase);
+  for (const phase of new Set([...BOSS_PHASES, override?.phase])) if (phase >= first && phase <= last && missionBossPhase(phase, override)) {
+    add(waveLeader(phase, true, override), phase, false, false, override?.phase === phase ? BOSS_MODS[override.mod] : null);
+  }
+  for (const kind of mission?.foes || []) if (MISSION_FOES[kind]) add(kind, first);
   if (goal?.type === 'twin') add('Executioner', last);   // trono: o Carrasco volta ao lado do Lich
   if (goal?.type === 'bosses') for (const id of goal.bosses || []) add(id, last);
 

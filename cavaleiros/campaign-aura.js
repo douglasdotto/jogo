@@ -10,9 +10,11 @@ const auraGeometryFactories = {
   crescent: (THREE) => new THREE.TorusGeometry(1.2, 0.07, 6, 36, Math.PI * 1.55),
   crest: (THREE) => new THREE.TorusGeometry(1.16, 0.075, 5, 6),
   crownPoint: (THREE) => new THREE.ConeGeometry(0.11, 0.28, 4),
+  wingBone: (THREE) => new THREE.ConeGeometry(0.06, 0.9, 4),
 };
 
-const auraSpin = { banner: 0.11, bones: 0.34, crescent: 0.24, crest: 0.08, crown: 0.18, vanguard: 0.16, nightmare: 0.27 };
+// asas não giram: acompanham as costas do herói
+const auraSpin = { banner: 0.11, bones: 0.34, crescent: 0.24, crest: 0.08, crown: 0.18, vanguard: 0.16, nightmare: 0.27, wings: 0 };
 
 function sharedAuraGeometry(THREE, name) {
   let cache = auraGeometryCaches.get(THREE);
@@ -75,6 +77,12 @@ export function createCampaignAura(THREE, cosmetic) {
     add('knot', [0, 0.92, 0], [Math.PI / 2, 0, 0]);
     add('crescent', [0, 1.62, 0], [0, 0, Math.PI * 0.12]);
     add('crescent', [0, 1.62, 0], [0, Math.PI, -Math.PI * 0.12]);
+  } else if (style === 'wings') {
+    // três ossos por lado em leque, saindo das costas
+    for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
+      const tilt = 0.55 + k * 0.4;
+      add('wingBone', [side * (0.3 + Math.sin(tilt) * 0.42), 1.25 + Math.cos(tilt) * 0.42, -0.32], [0, 0, -side * tilt]);
+    }
   } else {
     add('ring', [0, 0.08, 0], [Math.PI / 2, 0, 0]);
     for (let i = 0; i < 5; i++) {

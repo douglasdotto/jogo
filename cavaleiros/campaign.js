@@ -13,6 +13,8 @@
 // duel = um herói só contra o chefe da fase (o herói tem vida × `heroHp`; ondas × `waves`; chefe com vida × `bossHp` e dano × `bossDmg`); 3★ pede vencer em até `time` s
 // elite = `waves` ondas de elite seguidas (mais vida e dano; cada onda × `scale`)
 // twin = Lich e Carrasco juntos na fase 12 · bosses = grupo de chefes da arena final · ending = frase de encerramento na vitória
+// boss = { phase, kind, mod }: troca o chefe de uma fase só nesta missão (mod: variação visual + golpe extra, ver BOSS_MODS em monsters.js)
+// foes = inimigos próprios da missão (estreiam na primeira onda e só aparecem ali)
 export const MISSIONS = [
   { id: 'vila', name: 'A Vila', desc: 'Os primeiros esqueletos chegaram à praça.', chapter: 'Capítulo I · Sinais na estrada', story: 'A patrulha cai na praça. No estandarte inimigo, uma marca de ossos aponta para a ponte ao norte.', tip: 'Aprenda o ritmo de ataque dos inimigos e preserve a vida do herói para buscar as três estrelas.', icon: '⌂', from: 1, to: 2, heroes: 1, level: 1, goal: { type: 'win' } },
   { id: 'ponte', name: 'A Ponte do Rio', desc: 'Atiradores no rochedo vigiam a ponte.', chapter: 'Capítulo I · Sinais na estrada', story: 'Os arqueiros fecharam a travessia. Do outro lado, tochas acendem rumo às fazendas.', tip: 'Inimigos perto do aldeão são uma ameaça imediata. Cura, provocação e empurrões ajudam a mantê-lo protegido.', icon: '≈', from: 2, to: 4, heroes: 2, level: 1, militia: 4, goal: { type: 'escort' } },
@@ -23,15 +25,18 @@ export const MISSIONS = [
   { id: 'duelo', name: 'Duelo', desc: 'Um herói. Um rei.', chapter: 'Capítulo II · A marca de ossos', story: 'O Rei Esqueleto exige um campeão: só um herói entra na arena.', tip: 'Sozinho, cada golpe conta. Leve um herói resistente e guarde a ultimate para a fúria do Rei.', icon: '⚔', from: 6, to: 6, heroes: 1, level: 3, goal: { type: 'duel', time: 75, waves: 0.25, heroHp: 2.5, bossHp: 0.45, bossDmg: 0.5 } },
   { id: 'caca', name: 'A Caçada', desc: 'Um batedor do necromante leva o mapa das ruínas.', chapter: 'Capítulo III · O véu da morte', story: 'O batedor marcado carrega o mapa das ruínas. Abata-o antes que ele desapareça na névoa do bosque.', tip: 'Até dois heróis podem sair da formação para interceptar o alvo dentro do alcance tático. Os demais protegem o grupo; atiradores, lentidão e raízes ajudam a segurá-lo.', icon: '➹', from: 7, to: 7, heroes: 3, level: 2, goal: { type: 'hunt', time: 60 } },
   { id: 'resgate', name: 'Resgate no Bosque', desc: 'Uma pessoa desaparecida foi vista entre as árvores.', chapter: 'Capítulo III · O véu da morte', story: 'Um prisioneiro conhece a origem da névoa. Encontre-o antes que os esqueletos o levem para as ruínas.', tip: 'Aproxime-se do prisioneiro para libertá-lo. Limpe o caminho ao redor antes de avançar.', icon: '⚑', from: 7, to: 8, heroes: 3, level: 2, goal: { type: 'rescue' } },
-  { id: 'ruinas', name: 'Ruínas Antigas', desc: 'Entre colunas caídas, o mundo começa a morrer.', chapter: 'Capítulo III · O véu da morte', story: 'Os totens alimentam uma névoa que cobre as ruínas. Quebre os focos para abrir a passagem ao lago sombrio.', tip: 'Totens invocam reforços com o tempo. Destruí-los cedo reduz a quantidade de inimigos na estrada.', icon: '☗', from: 8, to: 10, heroes: 3, level: 3, goal: { type: 'totems', count: 3 } },
+  { id: 'ruinas', name: 'Ruínas Antigas', desc: 'Entre colunas caídas, o mundo começa a morrer.', chapter: 'Capítulo III · O véu da morte', story: 'Os totens alimentam uma névoa que cobre as ruínas. Quebre os focos para abrir a passagem ao lago sombrio.', tip: 'Totens invocam reforços com o tempo. Destruí-los cedo reduz a quantidade de inimigos na estrada.', icon: '☗', from: 8, to: 10, heroes: 3, level: 3, goal: { type: 'totems', count: 3 }, boss: { phase: 9, kind: 'King', mod: 'spectral' } },
   { id: 'torre', name: 'Torre de Ossos', desc: 'Um farol sombrio reúne o exército do necromante.', chapter: 'Capítulo IV · A marcha final', story: 'A torre marca o caminho até o castelo. Derrube sua estrutura antes que mais reforços cheguem.', tip: 'Concentre os ataques na torre e elimine os guardiões que tentarem afastar o grupo.', icon: '☠', from: 9, to: 10, heroes: 4, level: 3, goal: { type: 'tower', count: 1 } },
-  { id: 'lago-sombrio', name: 'Lago Sombrio', desc: 'Atravesse; a missão só termina se todo o grupo cair.', chapter: 'Capítulo IV · A marcha final', story: 'A torre caiu, mas o lago escuro guarda o último caminho. Atravesse mantendo ao menos um herói de pé; a névoa vem do cemitério.', tip: 'Uma queda não encerra a missão; heróis caídos podem voltar conforme a dificuldade. Para 2★, termine sem quedas e com 75%+ de vida; para 3★, sem quedas e com 90%+.', icon: '☽', from: 9, to: 11, heroes: 4, level: 3, goal: { type: 'nofall' } },
+  { id: 'lago-sombrio', name: 'Lago Sombrio', desc: 'Atravesse; a missão só termina se todo o grupo cair.', chapter: 'Capítulo IV · A marcha final', story: 'A torre caiu, mas o lago escuro guarda o último caminho. Atravesse mantendo ao menos um herói de pé; a névoa vem do cemitério.', tip: 'Uma queda não encerra a missão; heróis caídos podem voltar conforme a dificuldade. Para 2★, termine sem quedas e com 75%+ de vida; para 3★, sem quedas e com 90%+.', icon: '☽', from: 9, to: 11, heroes: 4, level: 3, goal: { type: 'nofall' }, boss: { phase: 9, kind: 'Executioner', mod: 'drowned' } },
   { id: 'cemiterio', name: 'Cemitério', desc: 'Os mortos não descansam.', chapter: 'Capítulo IV · A marcha final', story: 'O cemitério inteiro se ergue em resposta ao chamado. Atravesse antes que os mortos cheguem ao castelo.', tip: 'O limite é de quatro minutos. Elimine rapidamente inimigos que curam ou trazem esqueletos de volta.', icon: '✝', from: 10, to: 11, heroes: 4, level: 3, goal: { type: 'timer', time: 240 } },
   { id: 'horda', name: 'Noite sem Fim', desc: 'A horda não para de chegar.', chapter: 'Capítulo IV · A marcha final', story: 'Antes do castelo, o necromante solta a horda inteira. Segure a estrada o máximo que puder até o amanhecer.', tip: 'Não há cura entre fases: cada minuto vale uma estrela. Guarde as ultimates para quando a horda engrossar.', icon: '❂', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'endless', marks: [60, 120, 180], dawn: 300 } },
   { id: 'castelo', name: 'Castelo do Necromante', desc: 'Os portões guardam o necromante.', chapter: 'Capítulo IV · A marcha final', story: 'O necromante é ferido e recua para dentro do castelo. A Cripta guarda o caminho até o trono.', tip: 'Observe os círculos de perigo, saia deles antes do impacto e concentre o dano no chefe quando houver abertura.', icon: '♜', from: 11, to: 12, heroes: 4, level: 3, goal: { type: 'boss' }, ending: 'Ferido, o necromante recua para o salão do trono. A maldição continua viva.' },
   { id: 'cripta', name: 'Cripta Sombria', desc: 'A guarda de elite desperta.', chapter: 'Capítulo V · Além do Castelo', story: 'Sob o castelo, a guarda de elite do necromante ainda marcha.', tip: 'Três ondas de elite com uma breve pausa para se recuperar. Concentre o dano num alvo por vez e aproveite a cura entre as ondas.', icon: '⚰', from: 11, to: 11, heroes: 4, level: 3, goal: { type: 'elite', waves: 3, scale: 0.4 } },
   { id: 'trono', name: 'Trono de Ossos', desc: 'O Lich guarda o trono.', chapter: 'Capítulo V · Além do Castelo', story: 'O Lich ergue o Carrasco. Atrás do trono, uma porta revela o coração da maldição.', tip: 'O Lich e o Carrasco chegam juntos. Derrube um de cada vez e fuja das áreas marcadas.', icon: '♔', from: 12, to: 12, heroes: 4, level: 3, goal: { type: 'twin', scale: 0.8 }, ending: 'O Lich cai, mas sua sombra escapa para uma câmara sem luz.' },
   { id: 'coracao-do-castelo', name: 'Coração do Castelo', desc: 'Três guardiões protegem o coração sombrio.', chapter: 'Capítulo VI · O coração sombrio', story: 'No coração da maldição, a sombra do Lich se refaz. O Carrasco e o Cavaleiro do Eclipse protegem a fonte.', tip: 'Os três chefes atacam juntos. Concentre o grupo em um por vez, interrompa os golpes marcados e guarde a cura para a investida final.', icon: '☼', from: 13, to: 13, heroes: 4, level: 3, goal: { type: 'bosses', bosses: ['Lich', 'Executioner', 'DarkKnight'], scale: 0.18 }, ending: 'O coração sombrio se parte. A maldição enfim termina.' },
+  { id: 'arauto', name: 'O Arauto das Asas', desc: 'Um arauto corre para acordar o dragão.', chapter: 'Capítulo VII · Asas de osso', story: 'Com o coração partido, a terra treme sob as ameias. Um arauto leva o chamado a algo enorme que dorme nos ossos da montanha.', tip: 'Abata o alvo antes que fuja. Círculos marrons mostram onde o Escavador vai irromper: saia e bata enquanto ele fica zonzo.', icon: '⚐', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'hunt', time: 70 }, foes: ['Burrower', 'Bannerbearer'] },
+  { id: 'ninho', name: 'Ninho de Ossos', desc: 'Totens chocam o ninho do dragão.', chapter: 'Capítulo VII · Asas de osso', story: 'O arauto caiu, mas o chamado ecoou. No ninho, totens de ossos aquecem o que está para nascer.', tip: 'Quebre os totens cedo. O anel laranja do Porta-Estandarte acelera os esqueletos: derrube-o primeiro.', icon: '❍', from: 11, to: 11, heroes: 4, level: 3, goal: { type: 'totems', count: 2 }, foes: ['Burrower', 'Bannerbearer'] },
+  { id: 'asas-de-osso', name: 'Asas de Osso', desc: 'O Dragão de Ossos levanta voo.', chapter: 'Capítulo VII · Asas de osso', story: 'Das ameias, o Dragão de Ossos abre as asas. É a última sombra da maldição.', tip: 'No ar, só ataques à distância o alcançam. Saia das faixas verdes dos rasantes e bata quando ele pousar exausto.', icon: '☬', from: 10, to: 11, heroes: 4, level: 3, goal: { type: 'boss' }, boss: { phase: 11, kind: 'BoneDragon' }, foes: ['Burrower', 'Bannerbearer'], ending: 'O Dragão de Ossos se desfaz em pó. O céu sobre o castelo enfim clareia.' },
 ];
 
 // Mantém as arenas estáveis enquanto o jogador navega entre mapa e dificuldade;
@@ -423,6 +428,7 @@ export const CHAPTER_COSMETICS = [
   { id: 'marcha', chapter: 'Capítulo IV · A marcha final', name: 'Brasão da Marcha', icon: '♜', auraStyle: 'crest', color: 0x65e1b0 },
   { id: 'trono', chapter: 'Capítulo V · Além do Castelo', name: 'Auréola do Trono', icon: '♛', auraStyle: 'crown', color: 0xffd66e },
   { id: 'coracao', chapter: 'Capítulo VI · O coração sombrio', name: 'Espiral do Eclipse', icon: '☼', auraStyle: 'nightmare', color: 0xb451d6 },
+  { id: 'asas', chapter: 'Capítulo VII · Asas de osso', name: 'Asas do Dragão', icon: '☬', auraStyle: 'wings', color: 0x7dffd0 },
 ];
 export const CHALLENGE_COSMETICS = [
   { id: 'vanguarda', chapter: 'Desafio 3★ · Difícil', name: 'Halo da Vanguarda', icon: '✹', auraStyle: 'vanguard', color: 0xffd36b, difficultyId: 'dificil', difficultyName: 'Difícil', track: 'challenge' },
@@ -430,8 +436,10 @@ export const CHALLENGE_COSMETICS = [
 ];
 const CHAPTER_COSMETIC_RULE_VERSION = 2;
 const CHAPTER_STICKY_RULE_VERSION = 1;
-const CHALLENGE_MISSION_RULE_VERSION = 1;
+const CHALLENGE_MISSION_RULE_VERSION = 2;
 const LEGACY_CHALLENGE_MISSIONS = ['vila', 'ponte', 'santuario', 'chamas', 'fazendas', 'lago', 'duelo', 'caca', 'resgate', 'ruinas', 'torre', 'lago-sombrio', 'cemiterio', 'horda', 'castelo', 'cripta', 'trono'];
+// arenas exigidas pelos desafios em cada versão da regra (índice = versão gravada no save)
+const CHALLENGE_SNAPSHOTS = [LEGACY_CHALLENGE_MISSIONS, [...LEGACY_CHALLENGE_MISSIONS, 'coracao-do-castelo']];
 // Snapshot dos IDs exigidos quando o desbloqueio de capítulo ainda não era sticky.
 // Permite reconhecer um save que só volta após novas arenas serem adicionadas.
 const CHAPTER_STICKY_MIGRATION_MISSIONS = {
@@ -470,7 +478,8 @@ export function campaignCosmetics() {
   }
   const savedMedals = readMissionMedals();
   if (!(Number(storedVisuals.challengeRulesVersion) >= CHALLENGE_MISSION_RULE_VERSION)) {
-    const previousChallengeMissions = LEGACY_CHALLENGE_MISSIONS.map((id) => MISSIONS.find((mission) => mission.id === id)).filter(Boolean);
+    const savedVersion = Math.max(0, Math.min(CHALLENGE_SNAPSHOTS.length - 1, Math.floor(Number(storedVisuals.challengeRulesVersion)) || 0));
+    const previousChallengeMissions = CHALLENGE_SNAPSHOTS[savedVersion].map((id) => MISSIONS.find((mission) => mission.id === id)).filter(Boolean);
     const previousChallengeRewards = CHALLENGE_COSMETICS.filter((cosmetic) => {
       return previousChallengeMissions.length > 0
         && previousChallengeMissions.every((mission) => savedMedals[mission.id]?.challenges?.[cosmetic.difficultyId] === true);
@@ -669,7 +678,7 @@ const medalSeal = (medal, tip = '') => medal.best
   ? `<span class="camp-seal seal-${medal.best.difficultyId}${medal.challenges.some((c) => c.done) ? ' challenge' : ''}"${tip ? ` data-tip="${attr(tip)}" tabindex="0" aria-label="${attr(tip)}"` : ' aria-hidden="true"'}>${medal.best.difficultyName[0]}</span>`
   : '';
 // DarkKnight só é chefe no Coração do Castelo (goal.bosses); nas outras arenas é inimigo comum
-const BOSSES = ['King', 'Executioner', 'Lich', 'Golem'];
+const BOSSES = ['King', 'Executioner', 'Lich', 'Golem', 'BoneDragon'];
 
 // Mapa da campanha: a estrada serpenteia de baixo (z = 0) para cima (z negativo, rumo ao castelo).
 // As posições saem da ordem das missões e dos capítulos; uma missão nova só alonga a estrada.

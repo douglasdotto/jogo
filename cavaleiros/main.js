@@ -29,7 +29,7 @@ import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MAS
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality, VFX_KINDS } from './vfx-shaders.js';
 import { createLoadingScreen } from './loading.js';
 import { startKingdom, linkKingdom, loadKingdomRecords, kingdomRecordText } from './kingdom.js';
-import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, isBossPhase, nextBossPhase, absorbWard, cleanseAround } from './monsters.js';
+import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, missionBossPhase, nextBossPhase, applyBossMod, absorbWard, cleanseAround } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -182,7 +182,8 @@ const nightmareTeamIds = (mission) => {
     return ['paladin', 'guardian', 'pyro'];
   }
   if (goal === 'elite') return ['paladin', 'guardian', 'pyro', 'viking'];
-  if (goal === 'twin' || mission?.id === 'castelo') return ['paladin', 'guardian', 'archer', 'cleric'];
+  if (goal === 'twin' || mission?.id === 'castelo' || mission?.boss?.kind === 'BoneDragon') return ['paladin', 'guardian', 'archer', 'cleric'];   // o dragão voa: só ataque à distância o alcança
+  if (goal === 'hunt') return ['paladin', 'guardian', 'viking', 'cleric'];
   if (goal === 'boss' || goal === 'bosses') return ['paladin', 'guardian', 'viking', 'cleric'];
   return ['paladin', 'guardian', 'pyro', 'cleric'];
 };
@@ -841,7 +842,7 @@ function showCampaign(autoPlay = null) {
     build();
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal), progressStorageWarning(), (m) =>
+  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal, m), progressStorageWarning(), (m) =>
     difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m), mountCampaignMap3D);
   const back = document.createElement('button');
   back.className = 'camp-back';
@@ -8557,7 +8558,7 @@ function startPhase() {
   tutorial.on('battleStart');
   for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
-  game.bossPending = isBossPhase(game.phase);   // Rei (6), Carrasco (9) e Lich (12)
+  game.bossPending = missionBossPhase(game.phase, game.mission?.boss);   // Rei (6), Carrasco (9) e Lich (12); a missão pode trocar (mission.boss)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
   const waveScale = goal?.type === 'duel' ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // encontros especiais reduzem a onda comum; os chefes continuam garantidos
@@ -9254,7 +9255,7 @@ function campaignTick(dt, skeletons, party = heroes()) {
     case 'escort': text = v ? `Aldeão ${Math.ceil(Math.max(0, v.hp) / v.maxHp * 100)}%` : 'Proteja o aldeão'; break;
     case 'rescue': text = v?.rescued ? `Pessoa resgatada · ${game.state === 'cleared' && game.phase >= game.mission.to ? 'missão concluída' : game.phase < game.mission.to ? `avance até a fase ${game.mission.to}` : 'limpe a onda'}`
       : game.rescueT > 0 ? 'Libertando o prisioneiro' : 'Encontre e resgate a pessoa'; break;
-    case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${nextBossPhase(game.phase) ?? game.mission.to}`; break;
+    case 'boss': text = game.bossDown ? 'Chefe derrotado!' : game.bossSeen ? 'Derrote o chefe!' : `Chefe na fase ${nextBossPhase(game.phase, game.mission.boss) ?? game.mission.to}`; break;
     case 'survive': text = game.phase < goal.phase ? `Aguente ${goal.time} s na fase ${goal.phase}` : game.surviveT > 0 ? `Aguente ${clockText(game.surviveT)}` : game.toSpawn > 0 || skeletons.length ? 'Sobreviveu · limpe a onda' : 'Sobreviveu!'; break;
     case 'totems': text = `Totens ${game.totemsDown}/${goal.count}${game.totemsDown >= goal.count ? ` · ${game.state === 'cleared' && game.phase >= game.mission.to ? 'missão concluída' : game.phase < game.mission.to ? `avance até a fase ${game.mission.to}` : 'limpe a onda'}` : ''}`; break;
     case 'tower': text = game.towersDown >= goal.count
@@ -9381,7 +9382,7 @@ function spawnSkeleton() {
   const zone = world.zoneOf(p);
   const onTop = zone?.type === 'plateau' && game.toSpawn <= 2;
   let type = 'Minion', boss = false;
-  const lead = game.toSpawn === 1 && !game.refilling ? waveLeader(p, game.bossPending) : null;   // Rei (6), Lich (12) ou golem
+  const lead = game.toSpawn === 1 && !game.refilling ? waveLeader(p, game.bossPending, game.mission?.boss) : null;   // Rei (6), Lich (12), golem ou o chefe da missão
   if (lead) { type = lead; boss = game.bossPending; }
   else {
     const r = Math.random();
@@ -9411,6 +9412,7 @@ function spawnSkeleton() {
   if (game.mission?.goal.type === 'defend' && !lead && Math.random() < 0.45) s.raider = true;   // saqueadores correm para o santuário
   if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.3) s.raider = true;   // corredores vão direto à ponte
   if (game.mission?.goal.type === 'elite' && !lead) makeElite(s);
+  if (lead && boss && game.mission?.boss?.phase === p && game.mission.boss.mod) applyBossMod(s, game.mission.boss.mod);   // Rei Espectral, Carrasco Afogado
   if (game.mission?.goal.type === 'twin' && lead && boss) spawnTwinBoss(s);
   if (game.mission?.goal.type === 'bosses' && lead && boss) spawnCastleBosses(s);
   if (game.mission?.goal.type === 'duel' && lead && boss) {   // o Rei do duelo é feito para um herói só
@@ -9604,7 +9606,7 @@ function endGame(text, won = false) {
       bossDown: game.bossDown,
       bossSeen: game.bossSeen,
       phase: game.phase,
-      bossPhase: nextBossPhase(game.phase) ?? game.mission.to,
+      bossPhase: nextBossPhase(game.phase, game.mission.boss) ?? game.mission.to,
       villagerDown: !!game.villager?.dead,
       totemsDown: game.totemsDown,
       surviveRemaining: game.surviveT,
