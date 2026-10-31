@@ -323,9 +323,10 @@
       background: linear-gradient(#6cc0ff, #2a86e8 55%, #1a5fbf); clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%); filter: drop-shadow(0 5px 0 var(--outline)); }
     #pickTitle::before, #pickTitle::after { display: none; }
     /* menu: o logo do jogo no lugar da faixa azul */
-    #pickTitle:has(.game-logo) { padding: 0; background: none; clip-path: none; -webkit-text-stroke: 0; filter: drop-shadow(0 8px 0 rgba(20, 10, 4, .35)); }
+    #pickTitle:has(.game-logo) { padding: 0; background: none; clip-path: none; -webkit-text-stroke: 0; filter: drop-shadow(0 6px 0 rgba(16, 22, 44, .35)) drop-shadow(0 12px 16px rgba(0, 0, 0, .35)); }
     #pickTitle .game-logo { display: block; width: min(430px, 48vw); height: auto; animation: logoBob 3.2s ease-in-out infinite; }
     @keyframes logoBob { 0%, 100% { transform: translateY(0) rotate(-.6deg); } 50% { transform: translateY(-5px) rotate(.6deg); } }
+    @media (prefers-reduced-motion: reduce) { #pickTitle .game-logo { animation: none; } }
     #pickSub { font-family: 'Lilita One', sans-serif; color: #cfe6ff; -webkit-text-stroke: 3px var(--outline); paint-order: stroke fill; }
     @media (min-width: 1051px) and (min-height: 761px) {
       #pickSub { max-width: min(92vw, 760px); text-align: center; white-space: normal; line-height: 1.25; }
