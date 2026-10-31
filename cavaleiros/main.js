@@ -2559,7 +2559,6 @@ function makeTargetContext(reuse = null) {
   context.rangedHeroes = rangedHeroes;
   context.friends = friends;
   context.villager = villager;
-  context.plateauBonus = world.zoneOf(game.phase)?.type === 'plateau' ? 7 : 0;
   context.defenseAnchor = goal?.type === 'defend' || goal?.type === 'breach'
     ? party.find((hero) => !hero.dead) || null : null;
   context.skeletons = skeletons;
@@ -2718,12 +2717,12 @@ function interceptorRanksBefore(hero, distance, other, otherDistance) {
 }
 
 function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
-  const { goal, party, plateauBonus = 0 } = context;
+  const { goal, party } = context;
   let first = null, second = null, firstDistance = Infinity, secondDistance = Infinity;
   for (const candidate of party) {
     if (candidate.dead || (fixedDefenseGoal(goal) && candidate === defenseAnchor(context))) continue;
     const distance = tacticalDistance(candidate.post, target.pos);
-    const normalReach = distance <= LEASH + candidate.range + plateauBonus;
+    const normalReach = distance <= LEASH + candidate.range;
     if (normalReach || distance > limit) continue;
     if (interceptorRanksBefore(candidate, distance, first, firstDistance)) {
       second = first; secondDistance = firstDistance;
@@ -2738,14 +2737,14 @@ function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
 }
 
 function anotherDefenseHeroCanIntercept(hero, target, context) {
-  const { party, villager, plateauBonus = 0 } = context;
+  const { party, villager } = context;
   for (const ally of party) {
     // Busy e recuo ativo impedem o Hero.update de chegar à seleção de alvo neste quadro.
     if (ally === hero || ally.dead || ally.busy > 0 || ally.kiteT > 0) continue;
     const fromPost = tacticalDistance(ally.post, target.pos);
-    if (fromPost <= LEASH + ally.range + plateauBonus
+    if (fromPost <= LEASH + ally.range
       || tacticalDistance(ally.pos, target.pos) <= ally.range + 1.5) return true;
-    if (villager && fromPost <= LEASH + ally.range + plateauBonus + 5
+    if (villager && fromPost <= LEASH + ally.range + 5
       && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
   }
   return false;
@@ -2754,16 +2753,16 @@ function anotherDefenseHeroCanIntercept(hero, target, context) {
 // quem já está brigando só larga o alvo quando ele se afasta bem do posto (evita ir e voltar na borda)
 function stillEngaged(hero, target, context = targetContext()) {
   if (hero.engagedWith !== target) return false;
-  const { villager, plateauBonus = 0 } = context;
+  const { villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
   if (hero === defenseAnchor(context)) {
-    const canCoverFromPost = fromPost <= hero.range + plateauBonus + 0.5;
+    const canCoverFromPost = fromPost <= hero.range + 0.5;
     const objectiveAttack = villager && target.pendingHit?.target === villager
-      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && fromPost <= LEASH + hero.range + 5
       && !anotherDefenseHeroCanIntercept(hero, target, context);
     const lastDefenderKeepsThreat = hero.engagedWith === target
       && hero.lastDefenderThreatTarget === target
-      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && fromPost <= LEASH + hero.range + 5
       && context.party.every((ally) => ally === hero || ally.dead);
     return canCoverFromPost || !!objectiveAttack || lastDefenderKeepsThreat;
   }
@@ -2802,7 +2801,7 @@ const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goa
 const groupedBossGoal = (goal) => goal?.type === 'twin' || goal?.type === 'bosses';
 
 function canHeroReachTarget(hero, target, context = targetContext()) {
-  const { goal, plateauBonus, party, villager } = context;
+  const { goal, party, villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
   // No resgate, o corredor precisa alcançar guardas junto ao prisioneiro mesmo fora do leash do grupo.
   if (goal?.type === 'rescue' && hero === game.rescueRunner && context.rescueThreats?.includes(target)) return true;
@@ -2812,17 +2811,17 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (goal.type === 'defend' && game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
     // A âncora luta do próprio posto. Só abandona a linha se o alvo já prepara
     // um golpe no objetivo e nenhum outro herói vivo consegue interceptá-lo.
-    if (fromPost <= hero.range + plateauBonus + 0.5) return true;
+    if (fromPost <= hero.range + 0.5) return true;
     const objectiveAttack = villager && target.pendingHit?.target === villager
-      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && fromPost <= LEASH + hero.range + 5
       && !anotherDefenseHeroCanIntercept(hero, target, context);
     const lastDefenderThreat = target.pendingHit?.target === hero
-      && fromPost <= LEASH + hero.range + plateauBonus + 5
+      && fromPost <= LEASH + hero.range + 5
       && !party.some((ally) => ally !== hero && !ally.dead);
     if (lastDefenderThreat) hero.lastDefenderThreatTarget = target;
     return !!objectiveAttack || lastDefenderThreat;
   }
-  const postReach = fromPost <= LEASH + hero.range + plateauBonus;
+  const postReach = fromPost <= LEASH + hero.range;
   const nearTarget = tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
   const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
   if (huntTarget && !postReach) {
@@ -2848,7 +2847,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   }
 
   // Na escolta, o grupo pode sair um pouco da formação para tirar um inimigo do aldeão.
-  const interceptLimit = LEASH + hero.range + plateauBonus + 5;
+  const interceptLimit = LEASH + hero.range + 5;
   if (villager && fromPost <= interceptLimit
     && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
 
@@ -7825,8 +7824,7 @@ function collisionMove(unit, dx, dz) {
     const toX = fromX + dx * fraction, toZ = fromZ + dz * fraction;
     collisionFrom.x = fromX; collisionFrom.z = fromZ;
     collisionTo.x = toX; collisionTo.z = toZ;
-    const wasOnPlateau = unit.team === 'skeleton' && unit.ranged && world.groundHeight(fromX, fromZ) >= 2.95;
-    if (!world.canStep(collisionFrom, collisionTo) || (wasOnPlateau && world.groundHeight(toX, toZ) < 2.95)) continue;
+    if (!world.canStep(collisionFrom, collisionTo)) continue;
     pos.x = toX;
     pos.z = toZ;
     return Math.hypot(dx, dz) * fraction;
@@ -9315,7 +9313,6 @@ function missionEnd(won) {
 function spawnSkeleton() {
   const p = game.phase;
   const zone = world.zoneOf(p);
-  const onTop = zone?.type === 'plateau' && game.toSpawn <= 2;
   let type = 'Minion', boss = false;
   const lead = game.toSpawn === 1 && !game.refilling ? waveLeader(p, game.bossPending) : null;   // Rei (6), Lich (12) ou golem
   if (lead) { type = lead; boss = game.bossPending; }
@@ -9327,7 +9324,8 @@ function spawnSkeleton() {
     if (p >= 2 && ['Minion', 'Warrior', 'Rogue'].includes(type) && Math.random() < difficulty.shooters)
       type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
-  if (onTop && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
+  // fases 3, 7 e 10 fecham a onda com uma dupla de atiradores no chão, atrás do grupo
+  if ((p === 3 || p === 7 || p === 10) && game.toSpawn <= 2 && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
   const behind = p >= difficulty.behindFrom && !lead && game.mission?.goal.type !== 'breach' && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
@@ -9337,7 +9335,7 @@ function spawnSkeleton() {
     if (!world.obstacles.some((o) => Math.hypot(o.x - s.pos.x, o.z - s.pos.z) < o.r + 0.8)) break;
   }
   if (zone) {
-    const points = onTop ? zone.top : zone.type === 'lake' && !boss && game.toSpawn % 3 === 0 ? zone.water : zone.ground;
+    const points = zone.type === 'lake' && !boss && game.toSpawn % 3 === 0 ? zone.water : zone.ground;
     s.pos.copy(points[game.toSpawn % points.length]);
     if (world.isShallow(s.pos.x, s.pos.z)) waterSplash(s.pos, true);
   }
@@ -9837,7 +9835,7 @@ function updateAim() {
         if (distance < best) { best = distance; target = enemy; }
       }
     } else {
-      // Procura a primeira interseção com a altura lógica do terreno, inclusive platôs.
+      // Procura a primeira interseção com a altura lógica do terreno (margem dos lagos).
       if (findGroundAimHit(aimRay.ray, world.groundHeight, aimGroundHit)) {
         aimGroundTarget.pos.copy(aimGroundHit);
         target = aimGroundTarget;

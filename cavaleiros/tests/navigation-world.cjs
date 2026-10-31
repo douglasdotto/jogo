@@ -95,11 +95,10 @@ function seedRoadObstacles(world, seed, phases = 12) {
       const s = world.anchorS(phase) + 7 + random() * 9;
       const lateral = (random() < 0.5 ? -1 : 1) * (2.3 + random() * 4.2);
       const at = world.along(s, lateral);
-      const zones = [3, 5, 7, 9, 10].map((p) => world.zoneOf(p));
+      const zones = [5, 9].map((p) => world.zoneOf(p));
       const blocked = zones.some((zone) => Math.hypot(at.x - zone.center.x, at.z - zone.center.z) < zone.radius + 3.5
-        || zone.ground.some((ground) => Math.hypot(at.x - ground.x, at.z - ground.z) < 3)
-        || (zone.ramp && Math.hypot(at.x - zone.ramp.bottom.x, at.z - zone.ramp.bottom.z) < 4.5));
-      if (blocked) continue; // createWorld mantém pedras e troncos fora das zonas e rampas de combate
+        || zone.ground.some((ground) => Math.hypot(at.x - ground.x, at.z - ground.z) < 3));
+      if (blocked) continue; // createWorld mantém pedras e troncos fora dos lagos
       const kind = random();
       const radius = kind < 0.4 ? 0.7 + random() * 0.4 : kind < 0.7 ? 1.1 : 0.6;
       world.obstacles.push({ x: at.x, z: at.z, r: radius });

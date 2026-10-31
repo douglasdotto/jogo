@@ -60,12 +60,7 @@ console.log(checkTerrain(world,THREE));
 const smoothstep=(x,a,b)=>x<=a?0:x>=b?1:(x=(x-a)/(b-a))*x*(3-2*x);
 function groundHeightBeforeBounds(zones,x,z) {
   for(const zone of zones) {
-    if(zone.type==='plateau') {
-      const dx=x-zone.center.x,dz=z-zone.center.z;
-      const px=dx*zone.side.x+dz*zone.side.z,pz=dx*zone.fwd.x+dz*zone.fwd.z;
-      if(Math.abs(px)<=1.5&&pz>=-9&&pz<=-3)return(pz+9)/2;
-      if(Math.hypot(px,pz)<zone.radius)return 3;
-    } else {
+    {
       const radius=Math.hypot(x-zone.center.x,z-zone.center.z);
       if(radius<zone.radius) {
         const angle=Math.atan2(z-zone.center.z,x-zone.center.x);
@@ -81,25 +76,16 @@ function groundHeightBeforeBounds(zones,x,z) {
 }
 const makeSeededTerrain=(seed,phases=12,castleInterior=false)=>createNavigationWorld({THREE,Vector3,seed,phases,castleInterior});
 for(let seed=0;seed<8;seed++) {
-  const sampleWorld=makeSeededTerrain(seed),zones=[3,5,7,9,10].map(p=>sampleWorld.zoneOf(p));
+  const sampleWorld=makeSeededTerrain(seed),zones=[5,9].map(p=>sampleWorld.zoneOf(p));
   const compare=(x,z,label)=>{
     const expected=groundHeightBeforeBounds(zones,x,z),actual=sampleWorld.groundHeight(x,z);
     if(!Object.is(actual,expected))throw Error(`Broadphase alterou o terreno (seed ${seed}, ${label}, ${x.toFixed(3)},${z.toFixed(3)}): ${actual} !== ${expected}`);
   };
   // Grade cobrindo o mapa inteiro, inclusive áreas sem zona.
   for(let xi=-36;xi<=36;xi++)for(let zi=-390;zi<=30;zi++)compare(xi*0.75,zi*0.75,'grade');
-  // Fronteiras exatas do retângulo/círculo do platô e do raio do lago.
+  // Fronteiras exatas do raio do lago.
   for(const zone of zones) {
-    if(zone.type==='plateau') {
-      for(const px of [-1.51,-1.5,-1.49,0,1.49,1.5,1.51])for(const pz of [-9.01,-9,-8.99,-6,-3.01,-3,-2.99]) {
-        const x=zone.center.x+zone.side.x*px+zone.fwd.x*pz,z=zone.center.z+zone.side.z*px+zone.fwd.z*pz;
-        compare(x,z,'borda da rampa');
-      }
-      for(const radius of [3.99,4,4.01])for(let i=0;i<24;i++) {
-        const a=i*Math.PI/12,x=zone.center.x+Math.cos(a)*radius,z=zone.center.z+Math.sin(a)*radius;
-        compare(x,z,'borda do platô');
-      }
-    } else for(const radius of [3.19,3.2,3.21,5.79,5.8,5.81])for(let i=0;i<24;i++) {
+    for(const radius of [3.19,3.2,3.21,5.79,5.8,5.81])for(let i=0;i<24;i++) {
       const a=i*Math.PI/12,x=zone.center.x+Math.cos(a)*radius,z=zone.center.z+Math.sin(a)*radius;
       compare(x,z,'borda do lago');
     }
@@ -151,28 +137,12 @@ function walk(from,to,guard=null,maxFrames=4000,minimumClearance=1.0,label='',wa
   const nearby=navWorld.obstacles.filter((o)=>Math.hypot(o.x-u.pos.x,o.z-u.pos.z)<8).map(({x,z,r})=>({x,z,r}));
   throw Error('Trajeto preso: '+JSON.stringify({label,from,to,at:u.pos,vel:u.vel,path,nearby,trace,next:navWorld.nextWaypoint(u.pos,to)}));
 }
-for(const phase of [3,7,10]) {
-  const z=world.zoneOf(phase);
-  for(const from of [pointAt(anchorS(phase)),...z.ground]) {
-    const reached=walk(from,z.top[0]);
-    if(reached.maxY<2.9)throw Error('Não subiu pela rampa');
-    walk(reached.u.pos,from);
-  }
-  walk(z.center.clone().addScaledVector(z.fwd,6),z.center.clone().addScaledVector(z.fwd,-11));
-  for(const side of [-1,1])for(const offset of [1.51,1.65,1.8]) {
-    const beside=z.center.clone().addScaledVector(z.side,side*offset).addScaledVector(z.fwd,-6);
-    walk(z.top[0],beside);walk(beside,z.top[0]);
-  }
-  for(let i=0;i<12;i++) {
-    const a=i*Math.PI/6,beside=z.center.clone().addScaledVector(z.side,Math.cos(a)*4.1).addScaledVector(z.fwd,Math.sin(a)*4.1);
-    if(world.groundHeight(beside.x,beside.z)===0)walk(z.top[0],beside);
-  }
-  const mid = z.ramp.bottom.clone().lerp(z.ramp.top,0.5);
-  for(let i=0;i<12;i++) {
-    const a=i*Math.PI/6;
-    const ground=z.center.clone().addScaledVector(z.side,Math.cos(a)*7).addScaledVector(z.fwd,Math.sin(a)*11);
-    if(world.groundHeight(ground.x,ground.z)!==0)continue;
-    walk(z.top[0],ground); walk(ground,mid); walk(mid,ground);
+for(const phase of [3,7,10]) {   // sem platôs: chão plano dos dois lados da estrada
+  const road=pointAt(anchorS(phase));
+  for(const lateral of [-6.5,6.5]) {
+    const off=along(anchorS(phase)-1,lateral),there=walk(road,off);
+    if(there.maxY!==0)throw Error('Fase '+phase+' ainda tem relevo de combate');
+    walk(there.u.pos,road);
   }
 }
 for(const phase of [5,9]) {
@@ -233,7 +203,7 @@ const mountainPair=[{x:-3.5,z:0,r:2},{x:3.5,z:0,r:2}];world.obstacles.push(...mo
 const aroundPair=walk(new Vector3(-12,0,0),new Vector3(12,0,0),mountainPair);
 if(aroundPair.minClearance<1.0)throw Error('A rota dupla perdeu margem entre duas montanhas');
 console.log(`Navegação: contorna sequência de montanhas com ${aroundPair.minClearance.toFixed(2)} m de folga OK`);
-console.log('Movimento real: subida, descida, contorno de platôs e lagos OK');
+console.log('Movimento real: chão plano e contorno de lagos OK');
 
 // Campanha em oito caminhos sinuosos e semeados, com a navegação de obstáculos do jogo.
 // Os bloqueadores ocupam a faixa da estrada, como rochas, barris e troncos do mapa.
@@ -292,11 +262,11 @@ difficulty.shooters=0.06;
 for(const phase of [3,7,10])for(const count of [2,1]) {
   Object.assign(spawnGame,{phase,toSpawn:count});spawn();
   const s=spawned.at(-1);
-  if(s.pos.y!==3||s.type!==(count===2?'Crossbow':'Mage'))throw Error('Atirador ausente no topo');
+  if(s.pos.y!==0||s.type!==(count===2?'Crossbow':'Mage'))throw Error('Atirador ausente no chão');
 }
-difficulty.shooters=0;   // no Fácil o platô não ganha atirador
+difficulty.shooters=0;   // no Fácil a fase não ganha atirador
 Object.assign(spawnGame,{phase:3,toSpawn:2});spawn();
-if(['Crossbow','Mage'].includes(spawned.at(-1).type))throw Error('Fácil colocou atirador no topo');
+if(['Crossbow','Mage'].includes(spawned.at(-1).type))throw Error('Fácil colocou atirador fixo');
 for(const phase of [5,9]) {
   Object.assign(spawnGame,{phase,toSpawn:3});spawn();
   const s=spawned.at(-1);if(!world.isShallow(s.pos.x,s.pos.z))throw Error('Não surgiu na água rasa');
@@ -305,7 +275,7 @@ if(splashes!==2)throw Error('Surgimento sem respingo');
 Object.assign(spawnGame,{phase:6,toSpawn:1,bossPending:true});spawn();
 if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alterado');
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};
-const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:world.zoneOf(3).top[0]}];
+const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:pointAt(anchorS(3))}];
 const tick=runInNewContext(main.slice(main.indexOf('function updateGame('),main.indexOf('function endGame('))+';updateGame',{
   game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},clearDirectControlOrders:()=>{},syncDirectControlUI:()=>{},tutorial:{on(){},wants:()=>false},showBanner:()=>{},popText:()=>{},setText:()=>{},setTip:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
   units:[],militiaAlive:()=>0,$:()=>({hidden:true,classList:{toggle(){}}})
@@ -320,4 +290,4 @@ const reset=runInNewContext(main.slice(main.indexOf('function startGame('),main.
   follow:new Vector3(),controls:{target:new Vector3()},camera:{position:new Vector3()},showMenu:()=>{chose=true;},progress:{rerolls:()=>0},renderRelicTray:()=>{}
 });
 reset();if(enemyBolts.length||removed[0]?.id!=='tiro'||resetGame.phase!==1||!chose)throw Error('Reinício deixou projétil ou não abriu escolha');
-console.log('Fases: surgimento no topo/água, chefe, último inimigo e reinício OK');
+console.log('Fases: atiradores no chão, surgimento na água, chefe, último inimigo e reinício OK');
