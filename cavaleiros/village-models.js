@@ -88,7 +88,7 @@ function roundTower(g, x, z, radius, height, roofHeight) {
 }
 
 // casas, fazendas e castelo do mapa da campanha (modelos de primitivas, sem GLB)
-export function makeBuilding(type) {
+export function makeBuilding(type, variant = 0) {
   const g = new THREE.Group();
   g.name = type;
   switch (type) {
@@ -111,19 +111,31 @@ export function makeBuilding(type) {
       box(g, C.dark, 0, 3.75, 0.96, 0.42, 0.8, 0.08);
       flag(g, 0, 6.3, -0.4, 0.85, C.gold);
       break;
-    case 'house':
-      box(g, C.wood, 0, 1.1, 0, 3.65, 2.2, 3.65);
+    case 'house': {
+      const look = ((Math.trunc(variant) % 3) + 3) % 3;
+      const walls = [C.wood, 0xd7c397, 0xc79d76][look];
+      const roof = [C.red, 0x527a9a, 0x788347][look];
+      const windowX = look === 2 ? 1.12 : -1.12;
+      const chimneyX = look === 2 ? -1.05 : 1.05;
+      box(g, C.stone, 0, 0.12, 0, 3.85, 0.24, 3.85);
+      box(g, walls, 0, 1.1, 0, 3.65, 2.2, 3.65);
       for (const x of [-1.72, 1.72]) for (const z of [-1.72, 1.72]) {
         box(g, C.beam, x, 1.1, z, 0.19, 2.2, 0.19);
       }
       box(g, C.beam, 0, 1.9, 1.84, 3.65, 0.16, 0.12);
-      part(g, 'roof', C.red, [0, 2.2, 0], [4, 1.3, 4]);
-      box(g, 0xad9b8a, 1.05, 3, -0.7, 0.48, 1.5, 0.48);
-      box(g, C.stone, 1.05, 3.76, -0.7, 0.62, 0.16, 0.62);
+      part(g, 'roof', roof, [0, 2.2, 0], [4, 1.3, 4]);
+      box(g, 0xad9b8a, chimneyX, 3, -0.7, 0.48, 1.5, 0.48);
+      box(g, C.stone, chimneyX, 3.76, -0.7, 0.62, 0.16, 0.62);
       box(g, C.dark, 0, 0.75, 1.86, 0.8, 1.5, 0.1);
       part(g, 'ico', C.gold, [0.24, 0.75, 1.94], [0.06, 0.06, 0.04]);
-      box(g, C.blue, -1.12, 1.25, 1.86, 0.55, 0.6, 0.06);
+      box(g, C.blue, windowX, 1.25, 1.86, 0.55, 0.6, 0.06);
+      box(g, 0x6f482a, 0, 0.12, 2.2, 1.5, 0.16, 0.9);
+      if (look === 1) {
+        for (const x of [-0.68, 0.68]) box(g, C.beam, x, 0.95, 2.72, 0.12, 1.9, 0.12);
+        part(g, 'roof', roof, [0, 2.05, 2.65], [2.0, 0.65, 1.7]);
+      }
       break;
+    }
     case 'farm': {
       // canteiro arado com fileiras de trigo e uma cerquinha (pegada 2x2 = 4 m)
       box(g, 0x7a5232, 0, 0.06, 0, 3.7, 0.12, 3.7);

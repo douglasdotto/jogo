@@ -34,6 +34,7 @@ const biomeApi=runInNewContext(source.slice(biomeStart,worldStart).replace('expo
 const biomeCycle=['Pradaria','Outono','Pântano','Crepúsculo'];
 for(let seed=1;seed<=8;seed++)if(biomeApi.biomeForSeed(seed)!==biomeCycle[seed%biomeCycle.length])throw Error('Prévia de bioma diverge da semente '+seed);
 if(biomeApi.biomeForSeed(11)!=='Pradaria')throw Error('Mapa-base deixou de usar a pradaria');
+if(biomeApi.biomeForSeed(2,'Cinzas')!=='Cinzas')throw Error('Capítulo VII não fixa o bioma de cinzas');
 console.log('Biomas: prévia usa o mesmo ciclo determinístico da semente OK');
 const start=source.indexOf('  const zones = new Map();');
 if(start<0) throw Error('API de zonas ausente');
@@ -45,6 +46,7 @@ const sideOf=t=>new Vector3(-t.z,0,t.x);
 const along=(s,lat)=>pointAt(s).addScaledVector(sideOf(tangentAt(s)),lat);
 const anchorS=p=>12+(p-1)*23;
 const world=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:false,obstacles:[]});
+world.isInsideGround=(x,z,padding=0)=>Number.isFinite(x)&&Number.isFinite(z);
 const castleWorld=runInNewContext(source.slice(start,end)+';({zoneOf,groundHeight,nextWaypoint,along})',{THREE,pointAt,tangentAt,sideOf,along,anchorS,interiorArenaS:350,castleInterior:true,obstacles:[]});
 const castleArena=castleWorld.zoneOf(13),castleCenter=castleWorld.along(350,0);
 if(castleArena?.type!=='castle'||castleArena.halfWidth!==17||castleArena.halfLength!==23)throw Error('A fase 13 não recebeu a arena interna do castelo');
@@ -56,6 +58,25 @@ Vector3.allocations=0;
 if(world.nextWaypoint(clearFrom,clearTo)!==clearTo)throw Error('Rota livre substituiu o destino');
 if(Vector3.allocations!==0)throw Error(`Rota livre alocou ${Vector3.allocations} vetores`);
 console.log(checkTerrain(world,THREE));
+// Usa o gerador real de posição das árvores com uma árvore controlada sobre o segmento da rota.
+const treeStart=source.indexOf('  const treePlace ='),treeEnd=source.indexOf('  // árvores procedurais redondas',treeStart);
+if(treeStart<0||treeEnd<0)throw Error('Gerador de árvores ausente');
+const treePosition=new Vector3(1005,0,1000),treeBlocked=[],treeGroves=[];
+let placedTreeScale=0;
+const makeTreePlace=runInNewContext(source.slice(treeStart,treeEnd)+';treePlace',{
+  blocked:treeBlocked,obstacles:world.obstacles,groveSpots:treeGroves,
+  nearSpot:()=>null,spot:()=>treePosition,gloomAt:()=>0,rand:()=>0.99,range:(min)=>min,
+  placeAt:(_object,_position,scale)=>{placedTreeScale=scale;},
+});
+if(!makeTreePlace(0,20)({}))throw Error('A árvore controlada não foi posicionada');
+const treeCollider=world.obstacles.at(-1);
+if(!treeCollider||treeCollider.x!==treePosition.x||treeCollider.z!==treePosition.z||treeCollider.r<=0||treeCollider.r>0.5)
+  throw Error('Tronco procedural não foi registrado como um obstáculo pequeno na posição e escala da árvore');
+if(world.nextWaypoint(clearFrom,clearTo,{size:1})===clearTo)
+  throw Error('Heróis atravessam o tronco ao seguir uma linha que cruza a árvore');
+if(Math.abs(treeCollider.r/placedTreeScale-0.26)>1e-9)
+  throw Error('O raio de colisão do tronco não acompanha a escala visual da árvore');
+console.log('Árvores: troncos escalados bloqueiam a rota sem inflar a área de colisão OK');
 // Equivalência da broadphase com a fórmula anterior, em estradas curvas e posições de borda.
 const smoothstep=(x,a,b)=>x<=a?0:x>=b?1:(x=(x-a)/(b-a))*x*(3-2*x);
 function groundHeightBeforeBounds(zones,x,z) {
@@ -98,15 +119,34 @@ if(seededCastleArena?.type!=='castle'||seededCastleWorld.groundHeight(seededCast
 if(seededCastleWorld.nextWaypoint(seededCastleWorld.pointAt(seededCastleWorld.anchorS(12)),seededCastleCenter)!==seededCastleCenter)throw Error('A fase final não alcança a câmara pela estrada semeada');
 console.log('Terreno: 13ª fase conecta a estrada curva à arena interna do castelo OK');
 const main=readFileSync(new URL('../main.js',import.meta.url),'utf8');
-const move=main.slice(main.indexOf('  moveTo(target, dt) {'),main.indexOf('  // anima a locomoção'));
+const move=main.slice(main.indexOf('  moveTo(target, dt, moveSpeed = this.speed) {'),main.indexOf('  // anima a locomoção'));
 const gridStart=main.indexOf('const SEPARATION_CELL_SIZE = 3;'),gridEnd=main.indexOf('function separate() {',gridStart);
 if(gridStart<0||gridEnd<0)throw Error('Grade espacial de obstáculos ausente');
 world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));
 const movementSandbox={
-  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),gridCellKey:(x,z)=>x*65536+(z&0xffff),
+  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),UNIT_SEPARATION_FACTOR:0.86,
+  isPlanted:u=>u.busy>0||u.vel.x*u.vel.x+u.vel.z*u.vel.z<0.0625,gridCellKey:(x,z)=>x*65536+(z&0xffff),
 };
 const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',movementSandbox);
 const {Walker,queryObstacleCandidates}=movementApi;
+const savedMovementWorld=movementSandbox.world;
+movementSandbox.world={obstacles:[],nextWaypoint:(_from,to)=>to,isShallow:()=>false};
+const crowdWalker=(id,x,z,vx,vz,size=1)=>Object.assign(new Walker(),{
+  pos:new Vector3(x,0,z),vel:new Vector3(vx,0,vz),speed:2,size,team:'hero',busy:0,root:{id},face:()=>{},
+});
+const frontalA=crowdWalker(1,-1.2,0,2,0),frontalB=crowdWalker(2,1.2,0,-2,0);
+movementSandbox.units.push(frontalA,frontalB);
+frontalA.moveTo(new Vector3(10,0,0),1/60,2);
+const frontalSideA=frontalA.vel.z;
+frontalA.vel.set(2,0,0);   // avalia o outro lado a partir do mesmo estado simultâneo
+frontalB.moveTo(new Vector3(-10,0,0),1/60,2);
+if(frontalSideA*frontalB.vel.z>=0)throw Error('Aliados em rota frontal não abriram lados opostos');
+const crowdedLead=crowdWalker(10,0,0,2,0),crowdThreats=[0.85,1.1,1.35].map((x,i)=>crowdWalker(11+i,x,0,-2,0));
+movementSandbox.units.splice(0,movementSandbox.units.length,crowdedLead,...crowdThreats);
+crowdedLead.moveTo(new Vector3(10,0,0),0.2,2);
+if(crowdedLead.vel.x/crowdedLead.vel.length()<0.249)throw Error('Desvios de vários aliados inverteram o avanço');
+movementSandbox.units.length=0;movementSandbox.world=savedMovementWorld;
+console.log('Navegação: aliados frontais abrem lados opostos e a aglomeração preserva avanço OK');
 const separationStart=main.indexOf('const collisionFrom = { x: 0, z: 0 }'),separationEnd=main.indexOf('const directControl = {',separationStart);
 if(separationStart<0||separationEnd<0)throw Error('Solver de colisão ausente');
 const separationSandbox={THREE,world,units:[],gridCellKey:(x,z)=>x*65536+(z&0xffff)};
@@ -117,10 +157,15 @@ function walk(from,to,guard=null,maxFrames=4000,minimumClearance=1.0,label='',wa
   if(!walker)Object.assign(u,{pos:from.clone(),vel:new Vector3(),speed:3.2,size:1,face:()=>{}});
   separationSandbox.world=navWorld;separationSandbox.units.splice(0,separationSandbox.units.length,u);
   const guards=guard==='world'?navWorld.obstacles:(Array.isArray(guard)?guard:[guard]).filter(Boolean);
-  let maxY=u.pos.y,minClearance=Infinity;const trace=[];
+  let maxY=u.pos.y,minClearance=Infinity,clearedGate=false;const trace=[];
   for(let i=0;i<maxFrames;i++) {
+    const previousX=u.pos.x;
     const next=u.pos.clone().addScaledVector(u.vel,1/60);
     if(navWorld.canStep(u.pos,next))u.pos.copy(next);else u.vel.set(0,0,0);
+    if(label==='recuperação anti-travamento'&&previousX<0.55&&u.pos.x>=0.55) {
+      if(Math.abs(u.pos.z)<1.15)throw Error('A unidade atravessou o bloqueio sem contornar a passagem');
+      clearedGate=true;
+    }
     u.pos.y=navWorld.groundHeight(u.pos.x,u.pos.z);
     separate();
     maxY=Math.max(maxY,u.pos.y);
@@ -131,12 +176,47 @@ function walk(from,to,guard=null,maxFrames=4000,minimumClearance=1.0,label='',wa
     }
     u.moveTo(to,1/60);
     if(i%1000===999)trace.push([i+1,+u.pos.x.toFixed(2),+u.pos.z.toFixed(2),+u.vel.x.toFixed(2),+u.vel.z.toFixed(2)]);
-    if(u.pos.distanceTo(to)<0.2)return {u,maxY,minClearance};
+    if(u.pos.distanceTo(to)<0.2)return {u,maxY,minClearance,clearedGate};
   }
   const path=u.pathing&&{stage:u.pathing.stage,side:u.pathing.side,obstacle:u.pathing.obstacle,start:u.pathing.start,end:u.pathing.end};
   const nearby=navWorld.obstacles.filter((o)=>Math.hypot(o.x-u.pos.x,o.z-u.pos.z)<8).map(({x,z,r})=>({x,z,r}));
   throw Error('Trajeto preso: '+JSON.stringify({label,from,to,at:u.pos,vel:u.vel,path,nearby,trace,next:navWorld.nextWaypoint(u.pos,to)}));
 }
+function seedRiverBankObstacles(navWorld) {
+  const crossS=(navWorld.anchorS(3)+navWorld.anchorS(4))/2,center=navWorld.pointAt(crossS);
+  const forward=navWorld.tangentAt(crossS),side=navWorld.sideOf(forward),controls=[];
+  for(let k=-90;k<=90;k+=10) {
+    const wiggle=Math.abs(k)<12?0:Math.sin(k*0.09)*7;
+    controls.push(center.clone().addScaledVector(side,k).addScaledVector(forward,wiggle));
+  }
+  for(let i=0;i<=300;i++) {
+    const t=i/300*(controls.length-1),lo=Math.floor(t),hi=Math.min(controls.length-1,lo+1);
+    const point=controls[lo].clone().lerp(controls[hi],t-lo);
+    const offset=(point.x-center.x)*side.x+(point.z-center.z)*side.z;
+    if(Math.abs(offset)>4.4)navWorld.obstacles.push({x:point.x,z:point.z,r:2.6});
+  }
+}
+for(const seed of [2,7,11]) {
+  const bridgeWorld=makeSeededTerrain(seed);seedRoadObstacles(bridgeWorld,seed);seedRiverBankObstacles(bridgeWorld);
+  movementSandbox.world=bridgeWorld;
+  const spawn=bridgeWorld.along(bridgeWorld.anchorS(3)+15,0),defense=bridgeWorld.pointAt(bridgeWorld.anchorS(3));
+  walk(spawn,defense,'world',3600,0.2,`ponte:${seed}`);
+}
+movementSandbox.world=world;
+console.log('Navegação: esqueletos atravessam a ponte em 3 seeds sem ficar presos OK');
+// Uma rota antiga pode insistir no destino mesmo depois de a colisão bloquear a passagem.
+// A recuperação de progresso deve abrir espaço lateral e então retomar o objetivo.
+const savedNextWaypoint=world.nextWaypoint,savedCanStep=world.canStep;
+world.nextWaypoint=(from,to)=>to;
+world.canStep=(from,to)=>{
+  const crossedGate=(from.x<0.55&&to.x>=0.55)||(from.x>0.55&&to.x<=0.55);
+  return !(crossedGate&&Math.abs(to.z)<1.15)&&savedCanStep(from,to);
+};
+try {
+  const gateWalk=walk(new Vector3(0,0,0),new Vector3(8,0,0),null,3600,0,'recuperação anti-travamento');
+  if(!gateWalk.clearedGate)throw Error('A unidade não contornou a passagem bloqueada');
+  console.log('Navegação: unidade bloqueada faz desvio lateral e retoma o destino OK');
+} finally {world.nextWaypoint=savedNextWaypoint;world.canStep=savedCanStep;}
 for(const phase of [3,7,10]) {   // sem platôs: chão plano dos dois lados da estrada
   const road=pointAt(anchorS(phase));
   for(const lateral of [-6.5,6.5]) {
@@ -250,11 +330,15 @@ wet.moveTo(wet.pos.clone().addScaledVector(lake.fwd,0.5),1);
 if(Math.abs(wet.vel.length()/dry.vel.length()-0.6)>0.001)throw Error('Água rasa não reduz velocidade em 40%');
 console.log('Combate: níveis, disparo inimigo, pausa e lentidão de 40% OK');
 
-const spawned=[],spawnGame={phase:3,toSpawn:2,bossPending:false};let splashes=0;
+const spawned=[],spawnHeroes=[],spawnGame={phase:3,toSpawn:2,bossPending:false};let splashes=0;
 Object.assign(world,{anchorS,along,pointAt});
-const spawn=runInNewContext(main.slice(main.indexOf('function spawnSkeleton()'),main.indexOf('function updateGame('))+';spawnSkeleton',{
+const safeSpawnStart=main.indexOf('const SKELETON_SPAWN_MIN_HERO_DISTANCE =');
+const safeSpawnEnd=main.indexOf('function findTwinBossFormation(',safeSpawnStart);
+const spawnStart=main.indexOf('function spawnSkeleton()'),spawnEnd=main.indexOf('function updateGame(',spawnStart);
+const spawn=runInNewContext(main.slice(safeSpawnStart,safeSpawnEnd)+main.slice(spawnStart,spawnEnd)+';spawnSkeleton',{
+  THREE,SKELETONS:{},
   world,game:spawnGame,ROAD:5,difficulty,waterSplash:()=>splashes++,pickMonster:(_,type)=>type,waveLeader:(_,pending)=>pending?'Warrior':null,
-  linkMonsters:()=>{},units:[],heroes:()=>[],allies:()=>[],skeletonsAlive:()=>[],
+  linkMonsters:()=>{},units:[],heroes:()=>spawnHeroes,allies:()=>[],skeletonsAlive:()=>[],queryObstacleCandidates,
   scene:{},assets:{},ring:()=>{},beam:()=>{},poof:()=>{},popText:()=>{},showBanner:()=>{},
   Skeleton:class {constructor(type,phase,boss){Object.assign(this,{type,phase,boss,pos:new Vector3(),root:{rotation:{}}});spawned.push(this);}}
 });
@@ -272,6 +356,14 @@ for(const phase of [5,9]) {
   const s=spawned.at(-1);if(!world.isShallow(s.pos.x,s.pos.z))throw Error('Não surgiu na água rasa');
 }
 if(splashes!==2)throw Error('Surgimento sem respingo');
+for(const phase of [6,5,9]) {
+  spawnHeroes.length=0;const toSpawn=phase===6?4:3,zone=world.zoneOf(phase);
+  const origin=zone&&phase!==6?zone.water[toSpawn%zone.water.length]:world.along(world.anchorS(phase),0);
+  spawnHeroes.push({dead:false,pos:origin});Object.assign(spawnGame,{phase,toSpawn,bossPending:false});spawn();
+  const s=spawned.at(-1),distance=Math.hypot(s.pos.x-origin.x,s.pos.z-origin.z);
+  if(distance<14)throw Error(`Esqueleto da fase ${phase} surgiu a ${distance.toFixed(2)} m dos heróis`);
+}
+spawnHeroes.length=0;
 Object.assign(spawnGame,{phase:6,toSpawn:1,bossPending:true});spawn();
 if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alterado');
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};

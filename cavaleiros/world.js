@@ -4,7 +4,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { recolor } from './characters.js';
 import { batchStaticMeshes, bandsByZ, disposeInstancedMeshes, isInstancedBandVisible } from './scene-perf.js';
-import { preloadSceneryAssets, sceneryModel, sceneryReady, forestMaterial, DUNGEON_MODELS } from './scenery-assets.js';
+import { preloadSceneryAssets, sceneryModel, sceneryReady, forestMaterial, DUNGEON_MODELS, VILLAGE_MODELS } from './scenery-assets.js';
+import { villageMarketPropsForStall } from './village-decor.mjs';
 
 // muitas peças já vêm sem índice; o three avisa a cada "desindexação" repetida. Mesma saída (uma cópia), sem o aviso
 const toNonIndexed = THREE.BufferGeometry.prototype.toNonIndexed;
@@ -33,12 +34,19 @@ export const MAP_STYLES = [
     river: 0x609cc8, deep: 0x365f9a, shallow: 0x9ec4e8, murky: 0x494c68, pondLeaf: 0x5f7f8a, reeds: 0x758c91,
     canopy: [0x4e708e, 0x5a789d, 0x7c78a5, 0x586f8a, 0x6c8ca2], pine: [0x435b7a, 0x4e6888, 0x5c7691], tuft: [0x82a6a9, 0x70958e, 0x93aaa2, 0x6c8789], modelHue: 205, leaves: [0x9cb4d6, 0x3e5584],
     sky: 0xb7a6d6, sun: 0xffc6c0, accent: 0xd0a8e8, meadow: 0x8aa6c0 },
+  { name: 'Cinzas', grass: [0x776a6d, 0x514b55], sand: [0xb99a83, 0x806d68], cliffs: [0x777079, 0x504c5a], bed: 0x514550, dry: 0x82726c, gloom: 0x493d4d,
+    river: 0x8d493e, deep: 0x532b3c, shallow: 0xc16a48, murky: 0x4c3543, pondLeaf: 0x514641, reeds: 0x8b6a58,
+    canopy: [0x6b6264, 0x817376, 0x59545e, 0x99847b, 0x5e5b63], pine: [0x554e56, 0x6e6264, 0x81716a], tuft: [0x9a7865, 0x827064, 0xa58b75, 0x6e625e], modelHue: 8, leaves: [0xaaa19a, 0x67565c],
+    sky: 0x76606a, sun: 0xffaa68, accent: 0xffb36a, meadow: 0x85716d },
 ];
 
-function mapStyleForSeed(seedValue = 11) {
-  return MAP_STYLES[seedValue === 11 ? 0 : Math.abs(Math.trunc(seedValue)) % MAP_STYLES.length];
+const SEEDED_MAP_STYLES = MAP_STYLES.filter((style) => style.name !== 'Cinzas');
+function mapStyleForSeed(seedValue = 11, biomeName = null) {
+  const forced = MAP_STYLES.find((style) => style.name === biomeName);
+  if (forced) return forced;
+  return SEEDED_MAP_STYLES[seedValue === 11 ? 0 : Math.abs(Math.trunc(seedValue)) % SEEDED_MAP_STYLES.length];
 }
-export function biomeForSeed(seedValue = 11) { return mapStyleForSeed(seedValue).name; }
+export function biomeForSeed(seedValue = 11, biomeName = null) { return mapStyleForSeed(seedValue, biomeName).name; }
 
 export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options = {}) {
   const castleInterior = options.castleInterior === true;
@@ -49,7 +57,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // reprodutível para cada semente
   const range = (a, b) => a + (b - a) * rand();
   const pick = (list) => list[Math.floor(rand() * list.length)];
-  const biome = mapStyleForSeed(seedValue);
+  const biome = mapStyleForSeed(seedValue, options.biome);
   const terrainWarp = [rand() * 100, rand() * 100];
 
   function releaseTrees(roots) {
@@ -434,6 +442,13 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   }
   // cor por vértice (não por triângulo): a borda entre grama e terra fica suave, sem serrilhado
   ground.computeVertexNormals();
+  ground.computeBoundingBox();
+  const isInsideGround = (x, z, padding = 0) => {
+    const { min, max } = ground.boundingBox;
+    return Number.isFinite(x) && Number.isFinite(z)
+      && x >= min.x + padding && x <= max.x - padding
+      && z >= min.z + padding && z <= max.z - padding;
+  };
   const gn = ground.attributes.normal;
   const colors = new Float32Array(gp.count * 3);
   // paleta da referência: grama verde-limão, terra alaranjada, encostas de pedra arenosa
@@ -780,6 +795,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     hallShell = shell;
     if (!sceneryReady(DUNGEON_MODELS)) hall.add(shell);
     const obsidian = mat(0x252331), ashStone = mat(0x3a3448), wornStone = mat(0x574052), rune = mat(0xb83b83, { emissive: 0x761c5d, emissiveIntensity: 0.75 });
+    const torchWood = mat(0x49301f), torchIron = mat(0x64515a), torchFlame = mat(0xff9b3d, { emissive: 0xff5a16, emissiveIntensity: 1.8 });
     mesh(new THREE.BoxGeometry(34, 0.5, 46), obsidian, 0, -0.27, 0, shell).receiveShadow = true;
     // Costuras de pedra e veios da maldição dão escala à sala sem encher o caminho de colisões.
     for (let x = -14; x <= 14; x += 4) mesh(new THREE.BoxGeometry(0.12, 0.025, 43), x % 8 ? wornStone : rune, x, 0.0, 0, shell).castShadow = false;
@@ -790,6 +806,15 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       for (const z of [-17, -7, 3, 13]) {
         mesh(new THREE.BoxGeometry(2.2, 12, 2.2), wornStone, sx * 15.2, 6, z, shell);
         mesh(new THREE.ConeGeometry(1.55, 2.4, 4), ashStone, sx * 15.2, 13.1, z, shell).rotation.y = Math.PI / 4;
+      }
+      // Tochas simples ficam visíveis enquanto o pacote visual carrega ou se estiver indisponível.
+      for (const z of [-7, 6, 19]) {
+        mesh(new THREE.BoxGeometry(0.14, 0.52, 0.38), torchIron, sx * 16.18, 3.45, z, shell);
+        const arm = mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.48, 5), torchWood, sx * 15.86, 3.38, z, shell);
+        arm.rotation.z = Math.PI / 2;
+        const shaft = mesh(new THREE.CylinderGeometry(0.055, 0.08, 0.4, 5), torchWood, sx * 15.55, 3.72, z, shell);
+        shaft.rotation.z = -sx * 0.12;
+        mesh(new THREE.ConeGeometry(0.16, 0.42, 5), torchFlame, sx * 15.52, 4.1, z, shell).castShadow = false;
       }
     }
     mesh(new THREE.BoxGeometry(34, 10, 1.5), ashStone, 0, 5, -23, shell);
@@ -806,6 +831,14 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       mesh(new THREE.BoxGeometry(1.9, 2.7, 0.12), 0x321628, x - sx * 1.5, 5.7, z, shell).rotation.z = 0.12 * sx;
       const brazier = mesh(new THREE.ConeGeometry(0.8, 1.2, 6), rune, x - sx * 1.5, 1.7, z, shell);
       brazier.castShadow = brazier.receiveShadow = false;
+    }
+    for (const sx of [-1, 1]) {
+      mesh(new THREE.BoxGeometry(0.14, 0.52, 0.38), torchIron, sx * 2.35, 3.45, -22.05, shell);
+      const arm = mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.48, 5), torchWood, sx * 2.25, 3.38, -21.72, shell);
+      arm.rotation.x = Math.PI / 2;
+      const shaft = mesh(new THREE.CylinderGeometry(0.055, 0.08, 0.4, 5), torchWood, sx * 2.2, 3.72, -21.45, shell);
+      shaft.rotation.x = 0.12;
+      mesh(new THREE.ConeGeometry(0.16, 0.42, 5), torchFlame, sx * 2.2, 4.1, -21.45, shell).castShadow = false;
     }
     const heartMat = mat(0xc0297d, { emissive: 0x8c155c, emissiveIntensity: 1.5 });
     const heart = mesh(new THREE.OctahedronGeometry(2.1, 1), heartMat, 0, 6, 0, hall);
@@ -845,12 +878,19 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       for (const z of [-12, 1, 14]) {   // colunas da nave, estandartes e tochas entre elas
         put('pillar', sx * 11.5, 0, z, 0, 1, 2, 1);
         put('banner_patternA_red', sx * 16.1, 1.2, z, -sx * R, 1.1);
-        put('torch_mounted', sx * 16.1, 3.2, z + 5, -sx * R, 1.3);
+        const torchZ = z + 5;
+        put('torch_mounted', sx * 16.1, 3.2, torchZ, -sx * R, 1.3);
+        const light = new THREE.PointLight(0xffb45f, 2.2, 12, 2);
+        light.position.set(sx * 15.1, 3.8, torchZ);
+        hall.add(light);
       }
       for (const x of [4, 8, 12, 14]) for (const y of [0, 4]) put('wall', sx * x, y, -22.6);   // fundo
       for (const x of [10, 14]) for (const y of [0, 4]) put('wall', sx * x, y, 22.6, Math.PI);   // entrada, com o vão do portão
       put('banner_thin_red', sx * 6, 2.6, -22.1, 0, 1.2);
       put('torch_mounted', sx * 2.2, 3.4, -22.1, 0, 1.3);
+      const rearLight = new THREE.PointLight(0xffb45f, 2.2, 12, 2);
+      rearLight.position.set(sx * 2.2, 4, -20.8);
+      hall.add(rearLight);
       // cantos: barris, caixotes, baú e velas (fora da arena)
       put('barrel_large', sx * 14.2, 0, -20.2, 0.4 * sx, 0.8);
       put('barrel_small_stack', sx * 14.4, 0, 19.6, -sx * R);
@@ -879,13 +919,27 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   const INSTANCE_BAND = 32;   // comprimento (em z) de cada pedaço da natureza instanciada
   // parts: [[geometria, cores], ...] — várias peças (ex.: tronco e copa) com a mesma posição
   const gloomTint = new THREE.Color(0x4f465e);
+  const foliageWindTime = { value: 0 };
+  function addFoliageWind(material) {
+    const previous = material.onBeforeCompile;
+    material.onBeforeCompile = (shader, renderer) => {
+      previous?.(shader, renderer);
+      shader.uniforms.uFoliageWind = foliageWindTime;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uFoliageWind;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nfloat windPhase = uFoliageWind * 1.1 + instanceMatrix[3][0] * 0.3 + instanceMatrix[3][2] * 0.24;\nfloat windHeight = max(position.y, 0.0);\ntransformed.x += sin(windPhase + position.y * 1.4) * 0.045 * windHeight;\ntransformed.z += cos(windPhase * 0.82 + position.y) * 0.045 * windHeight;');
+    };
+    material.customProgramCacheKey = () => 'foliage-wind-v1';
+  }
   // models (opcional): { names, fit, material, tint } troca a geometria procedural pelos modelos do Forest pack
   // (mesmas posições, escalas e sorteios; a variante sai de um hash do índice, sem gastar a semente).
   // Se os modelos ainda não chegaram, monta o procedural agora e troca quando o pré-carregamento terminar.
   const natureSwaps = [];
-  function instanced(parts, count, place, shadow = true, material = null, models = null) {
+  function instanced(parts, count, place, shadow = true, material = null, models = null, swayParts = []) {
     if (!Array.isArray(parts[0])) parts = [parts];
     const mats = parts.map(() => material || new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
+    for (const i of swayParts) addFoliageWind(mats[i]);
+    if (models?.wind) mats.forEach(addFoliageWind);
     const matrices = [], colors = parts.map(() => []), zs = [], gs = [];
     let n = 0;
     for (let tries = 0; n < count && tries < count * 6; tries++) {
@@ -933,9 +987,11 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   const accentTint = new THREE.Color(biome.accent ?? 0xfff0a0);
   const FAR_LAT = ROAD + 22;   // além disso da estrada a sombra do sol (±24 m em volta do grupo) quase nunca alcança
   function buildNatureModels(rec) {
-    const { names, fit = 1, lift = 0, tint, accent = 0 } = rec.models;
+    const { names, fit = 1, lift = 0, tint, accent = 0, wind = false } = rec.models;
     if (!sceneryReady(names)) return false;
-    const material = rec.models.material?.() || sceneryModel(names[0]).material;
+    const sourceMaterial = rec.models.material?.() || sceneryModel(names[0]).material;
+    const material = wind ? sourceMaterial.clone() : sourceMaterial;
+    if (wind) addFoliageWind(material);
     // LOD simples: o que fica longe da estrada (fora do alcance da sombra) usa só a primeira variante
     // (a mais leve: menos chamadas de desenho) e não projeta nem recebe sombra
     rec.far ??= rec.zs.map((z, i) => roadDist(rec.matrices[i].elements[12], z) > FAR_LAT);
@@ -1007,6 +1063,40 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     return g;
   }
   const toWorld = (g, x, z, y = 0) => g.localToWorld(new THREE.Vector3(x, y, z));
+  const villageKitProps = [];
+  function addVillageKitProps(stall, index) {
+    for (const prop of villageMarketPropsForStall(index)) villageKitProps.push({ group: stall, ...prop });
+  }
+  function buildVillageKitProps() {
+    if (disposed || !sceneryReady(VILLAGE_MODELS)) return;
+    const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
+    const orientation = new THREE.Quaternion(), localOrientation = new THREE.Quaternion();
+    const scale = new THREE.Vector3(), axisY = new THREE.Vector3(0, 1, 0);
+    const batches = new Map(VILLAGE_MODELS.map((name) => [name, []]));
+    for (const prop of villageKitProps) batches.get(prop.model)?.push(prop);
+    for (const [name, props] of batches) {
+      if (!props.length) continue;
+      const model = sceneryModel(name);
+      if (!model) continue;
+      const instances = new THREE.InstancedMesh(model.geometry, model.material, props.length);
+      instances.frustumCulled = false;
+      props.forEach((prop, i) => {
+        prop.group.updateWorldMatrix(true, false);
+        position.set(prop.x, 0, prop.z);
+        prop.group.localToWorld(position);
+        if (prop.collisionRadius) obstacles.push({ x: position.x, z: position.z, r: prop.collisionRadius });
+        prop.group.getWorldQuaternion(orientation).multiply(localOrientation.setFromAxisAngle(axisY, prop.ry || 0));
+        const size = prop.scale * prop.group.scale.x;
+        position.y = heightAt(position.x, position.z) + prop.lift - model.geometry.boundingBox.min.y * size;
+        matrix.compose(position, orientation, scale.setScalar(size));
+        instances.setMatrixAt(i, matrix);
+      });
+      instances.instanceMatrix.needsUpdate = true;
+      instances.computeBoundingSphere();
+      instances.castShadow = instances.receiveShadow = true;
+      scene.add(instances);
+    }
+  }
   const solid = (g, x, z, r) => { const p = toWorld(g, x, z); obstacles.push({ x: p.x, z: p.z, r }); };
   // cópias instanciadas a partir de uma lista { p, ry, rx, rz, s }
   const inst = (parts, list, material = null, shadow = true) => {
@@ -1086,6 +1176,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       }
       for (let k = 0; k < 4; k++) mesh(boulderGeo, goods[(i + k) % goods.length], -0.6 + k * 0.4, 1.05, 0.25 + (k % 2) * 0.15, s).scale.setScalar(0.28);
       blk(s, 0xb08850, 0.5, 0.35, 0.4, 0.95, 0.18, 0.9);   // caixote de frutas
+      addVillageKitProps(s, i);
       const w = toWorld(g, s.position.x, s.position.z);
       obstacles.push({ x: w.x, z: w.z, r: 1.1 });
     });
@@ -1462,7 +1553,9 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       const g = gloomAt(p.z);
       if (g > maxGloom || g < minGloom || (maxGloom === 1 && minGloom === 0 && rand() < g * 0.8)) return false;
       if (!grown && rand() < 0.65) { seedSpot = p; left = 2 + Math.floor(rand() * 4); }
-      placeAt(o, p, grown ? range(0.6, 1.25) : range(0.85, 1.5));
+      const scale = grown ? range(0.6, 1.25) : range(0.85, 1.5);
+      placeAt(o, p, scale);
+      obstacles.push({ x: p.x, z: p.z, r: 0.26 * scale });
       blocked.push({ x: p.x, z: p.z, r: 1.4 });
       if (rand() < 0.5) groveSpots.push(p);
       return true;
@@ -1486,12 +1579,12 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     new THREE.ConeGeometry(0.62, 1.4, 7).translate(0, 3.5, 0),
   ].map((g) => g.toNonIndexed()));
   const roundPlace = treePlace(ROAD + 3, ROAD + 50);
-  instanced([[roundTrunk, trunks], [roundTop, limes]], 240, roundPlace);
-  instanced([[roundTrunk2, trunks], [roundTop2, limes]], 160, roundPlace);
-  instanced([[roundTrunk, trunks], [roundTop, [0xffb7d5, 0xf9a3c8, 0xffc9e0, 0xffd6e8]]], 60, treePlace(ROAD + 3, ROAD + 40, 0.3));   // cerejeiras
+  instanced([[roundTrunk, trunks], [roundTop, limes]], 240, roundPlace, true, null, null, [1]);
+  instanced([[roundTrunk2, trunks], [roundTop2, limes]], 160, roundPlace, true, null, null, [1]);
+  instanced([[roundTrunk, trunks], [roundTop, [0xffb7d5, 0xf9a3c8, 0xffc9e0, 0xffd6e8]]], 60, treePlace(ROAD + 3, ROAD + 40, 0.3), true, null, null, [1]);   // cerejeiras
   const pinePlace = treePlace(ROAD + 6, ROAD + 55);
-  instanced([[pineTrunk, trunks], [pineTop, biome.pine]], 80, pinePlace);
-  instanced([[pineTrunk, trunks], [pineTop3, biome.pine]], 60, pinePlace);
+  instanced([[pineTrunk, trunks], [pineTop, biome.pine]], 80, pinePlace, true, null, null, [1]);
+  instanced([[pineTrunk, trunks], [pineTop3, biome.pine]], 60, pinePlace, true, null, null, [1]);
   // árvores secas: tronco torto com galhos, sem folhas
   const deadTree = mergeGeometries([
     new THREE.CylinderGeometry(0.12, 0.26, 2.8, 5).translate(0, 1.4, 0),
@@ -1511,7 +1604,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     const p = rand() < 0.45 ? skirt(ROAD + 1.3, 1.5, 3) : spot(ROAD + 1.3, ROAD + 14, 2);
     if (!p) return false;
     placeAt(o, p, range(0.55, 1.35), 0.3); o.scale.y *= 0.75; return true;
-  }, true, null, { names: FOREST.bush, fit: 1, lift: 0.4, material: () => (biome.bushLeaves ? forestMaterial(...biome.bushLeaves) : leafMat()), accent: 0.25 });
+  }, true, null, { names: FOREST.bush, fit: 1, lift: 0.4, material: () => (biome.bushLeaves ? forestMaterial(...biome.bushLeaves) : leafMat()), accent: 0.25, wind: true });
 
   const rockGeo = new THREE.DodecahedronGeometry(0.5, 0);
   instanced([rockGeo, [0xd1a06a, 0xc08c5a, 0xb9a48c]], 200, (o) => { const p = spot(ROAD + 1, ROAD + 45); if (!p) return false; placeAt(o, p, range(0.4, 1.8), 0.15); o.scale.y *= 0.6; o.rotation.x = rand() * 0.25; return true; }, true, null,
@@ -1522,7 +1615,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 280, (o) => { const p = spot(0, ROAD + 12, 1.5); if (!p) return false; placeAt(o, p, range(0.15, 0.4)); o.scale.y *= 0.5; return true; }, false);   // pedrinhas: o procedural basta
 
   const tuftGeo = mergeGeometries([0, 1, 2].map((i) => new THREE.ConeGeometry(0.06, 0.5, 3).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0.25, 0).toNonIndexed()));
-  instanced([tuftGeo, biome.tuft], 5600, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false);
+  instanced([tuftGeo, biome.tuft], 5600, (o) => { const p = spot(0, ROAD + 32, 1.6, false); if (!p) return false; placeAt(o, p, range(0.7, 1.4)); return true; }, false, null, null, [0]);
   // touceiras de capim do pack em manchas, na borda dos bosques e da estrada (sem sombra)
   const grassTint = (col, g) => tmpTint.copy(col).lerp(white, 0.45).lerp(gloomTint, g);
   let clump = null, clumpLeft = 0;
@@ -1533,7 +1626,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     const p = nearSpot(clump, 0, 1.3, ROAD - 1.5, false);
     if (!p) return false;
     placeAt(o, p, range(0.7, 1.3)); return true;
-  }, false, null, { names: FOREST.grass, fit: 1, lift: 0.02, tint: grassTint });
+  }, false, null, { names: FOREST.grass, fit: 1, lift: 0.02, tint: grassTint, wind: true });
 
   // flores em canteiros (5 a 9 juntas), não espalhadas como confete
   const flowerGeo = new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.25, 0);
@@ -1545,7 +1638,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     const p = nearSpot(flowerBed, 0, 1.1, 1, false);
     if (!p) return false;
     placeAt(o, p, range(0.8, 1.3)); return true;
-  }, false);
+  }, false, null, null, [0]);
 
   // margem do rio: juncos em touceiras e pedras meio afundadas na beira d'água (longe da ponte e da estrada)
   const bank = (minOff, maxOff, near = null) => {
@@ -1569,7 +1662,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     const p = bank(2.8, 3.8, Math.min(riverPts.length - 2, reedAt.k + Math.floor(rand() * 3)));
     if (!p || gloomAt(p.z) > 0.8) return false;
     placeAt(o, p, range(0.7, 1.2)); o.rotation.z = range(-0.12, 0.12); return true;
-  }, false);
+  }, false, null, null, [0]);
   instanced([rockGeo, [0xb9a48c, 0xc9b49a]], 130, (o) => { const p = bank(2.6, 4.4); if (!p) return false; placeAt(o, p, range(0.35, 0.9), -0.1); o.scale.y *= 0.7; return true; }, false, null,
     { names: [FOREST.rock[0], FOREST.rock[2]], fit: 0.9, tint: rockTint });
 
@@ -1763,6 +1856,10 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   // peças paradas do mesmo material viram uma malha por faixa: bem menos chamadas de desenho (câmera e sombra)
   batchStaticMeshes(scene, { merge: mergeGeometries, makeMesh: (geo, material) => new THREE.Mesh(geo, material), band: INSTANCE_BAND,
     skip: [millBlades, hallShell, ...floaters.map((f) => f.m), ...bubbles, ...clouds] });
+  if (villageKitProps.length) {
+    if (sceneryReady(VILLAGE_MODELS)) buildVillageKitProps();
+    else preloadSceneryAssets({ castle: true }).then(buildVillageKitProps);
+  }
 
   // ---------- detalhes: beira da estrada, vegetação miúda e marcos de cada trecho ----------
   // Sorteio próprio (a sequência do mapa não muda) e só visual: nada aqui entra em obstacles.
@@ -1818,7 +1915,8 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     return decoOk(p, r, min - 0.3) ? { s, p } : null;
   }
   const flowerCols = { Pradaria: [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7], Outono: [0xff8c3a, 0xf5b942, 0xe8414a, 0xfff1d0, 0xc0562f],
-    'Pântano': [0xb46ad9, 0xffffff, 0x9fd8ff, 0xf5d142, 0x7fc4a0], 'Crepúsculo': [0x9fd8ff, 0xffffff, 0xd8a8ff, 0xff9ec7, 0x7fb0ff] }[biome.name];
+    'Pântano': [0xb46ad9, 0xffffff, 0x9fd8ff, 0xf5d142, 0x7fc4a0], 'Crepúsculo': [0x9fd8ff, 0xffffff, 0xd8a8ff, 0xff9ec7, 0x7fb0ff],
+    Cinzas: [0xff8a4a, 0xffc47a, 0xd9c5b5, 0xa98c91] }[biome.name];
   const straw = [0xe0c060, 0xd8b450, 0xe8cc70], woods = [0x8a5a2e, 0x7a4e26, 0x9a6a36], mossCol = 0x5d8a34, cutWood = 0xd2a46a;
 
   // pedrinhas e tufos marcando a beira da estrada
@@ -2130,7 +2228,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     depthWrite: false, blending: THREE.AdditiveBlending }));
   motePoints.frustumCulled = false;
   scene.add(motePoints);
-  const dayMote = new THREE.Color({ Pradaria: 0xfff0a0, Outono: 0xffc070, 'Pântano': 0xc8ffb0, 'Crepúsculo': 0xb8d8ff }[biome.name]).multiplyScalar(0.55);
+  const dayMote = new THREE.Color({ Pradaria: 0xfff0a0, Outono: 0xffc070, 'Pântano': 0xc8ffb0, 'Crepúsculo': 0xb8d8ff, Cinzas: 0xffa36b }[biome.name]).multiplyScalar(0.55);
   const flyA = new THREE.Color(0xb8ff5a), flyB = new THREE.Color(0xc89cff), moteC = new THREE.Color(), flyC = new THREE.Color();
   // folhas caindo e girando (só nas terras vivas)
   const LEAVES = 40, leaves = [];
@@ -2202,6 +2300,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   const animationProjectionView = new THREE.Matrix4();
   function update(dt, viewZ = 0, camera = null) {
     time += dt;
+    foliageWindTime.value = time;
     updateAmbient(dt, viewZ);
     if (camera) {
       camera.updateMatrixWorld();
@@ -2255,6 +2354,6 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     }
   }
 
-  return { groundHeight, isShallow, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update, seed: seedValue, biome: biome.name, dispose,
+  return { groundHeight, isShallow, isInsideGround, zoneOf, nextWaypoint, canStep, gloomAt, L, pointAt, tangentAt, sideOf, along, anchorS, obstacles, update, seed: seedValue, biome: biome.name, dispose,
     sky: castleInterior ? null : biome.sky, sunTint: castleInterior ? null : biome.sun };   // céu, névoa e sol de dia do bioma (main.js mistura com as trevas)
 }

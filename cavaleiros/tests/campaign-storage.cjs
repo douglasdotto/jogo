@@ -161,6 +161,10 @@ const loadV1 = (ids) => {
 };
 const firstEighteen = cosmetics.MISSIONS.slice(0, 18).map(({ id }) => id);
 assert.equal(firstEighteen.at(-1), 'coracao-do-castelo');
+assert.deepEqual(Array.from(cosmetics.MISSIONS.slice(18), ({ id, from, to }) => [id, from, to]), [
+  ['arauto', 14, 14], ['ninho', 15, 15], ['asas-de-osso', 16, 16],
+], 'o arco após o coração continua a campanha nas fases seguintes, sem voltar às fases 10–11');
+assert.match(cosmetics.MISSIONS[17].ending, /ameias|chamado|arauto/i, 'o encerramento do Coração prepara o capítulo do dragão');
 const v1Complete = loadV1(firstEighteen).campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
 assert.equal(v1Complete.unlocked, true, 'save v1 com as 18 arenas mantém o domínio depois do capítulo VII');
 assert.equal(v1Complete.legacyEntitlement, true);

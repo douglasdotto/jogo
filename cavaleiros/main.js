@@ -28,7 +28,7 @@ import { disposeSkeletons, gridCellKey } from './scene-perf.js';
 import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality, VFX_KINDS } from './vfx-shaders.js';
 import { createLoadingScreen } from './loading.js';
-import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, missionBossPhase, nextBossPhase, applyBossMod, absorbWard, cleanseAround } from './monsters.js';
+import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, missionBossPhase, nextBossPhase, applyBossMod, absorbWard, cleanseAround, pendingMonsterSummons } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
@@ -39,6 +39,7 @@ const RANGED_INTERCEPT = 20; // cobre o surgimento à frente e a largura da form
 const RANGED_INTERCEPTORS = 2;
 const TWIN_BOSS_INTERCEPT = 16; // dois heróis podem pressionar o chefe móvel sem arrastar a equipe
 const TWIN_BOSS_INTERCEPTORS = 2;
+const CASTLE_BOSS_INTERCEPT = 31; // diagonal do salão: todos perseguem dentro da arena, sem sair pelo mapa
 const DEFENSE_CLEANUP_INTERCEPT = 22; // depois do cronômetro, a âncora pode limpar os inimigos que sobraram
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
 
@@ -137,6 +138,9 @@ const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id =
   .map((id) => VARIANTS.find((cfg) => cfg.id === id)).filter(Boolean);
 const pickGroupIndex = (cfg) => PICK_GROUPS.findIndex((group) => group.id === pickGroupId(cfg));
 const POSTS = [[0, -1.2], [-1.7, 0], [1.7, 0], [0, 1.7]];
+// Na câmara final, postos compactos se sobrepõem à separação física dos heróis;
+// a equipe ficava presa em `advance` antes do primeiro spawn.
+const CASTLE_POSTS = [[-4, -3], [4, -3], [-4, 3], [4, 3]];
 const XP_LEVELS = [0, 90, 350];   // XP acumulado para Nv2 e Nv3
 
 const SKELETONS = {
@@ -811,7 +815,7 @@ function showCampaign(autoPlay = null) {
     build();
     showDifficulty();
   };
-  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal, m), progressStorageWarning(), (m) =>
+  renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : m.biome || biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal, m), progressStorageWarning(), (m) =>
     difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m), mountCampaignMap3D);
   const back = document.createElement('button');
   back.className = 'camp-back';
@@ -826,7 +830,7 @@ function showCampaign(autoPlay = null) {
 function useMissionWorld(m, seed) {
   world.dispose?.();
   const castleInterior = m.id === 'coracao-do-castelo';
-  world = createWorld(scene, ROAD, castleInterior ? 13 : PHASES, seed, { castleInterior });
+  world = createWorld(scene, ROAD, castleInterior ? 13 : Math.max(PHASES, m.to), seed, { castleInterior, biome: m.biome });
   aimCamera(world.anchorS(m.from));
 }
 
@@ -1691,6 +1695,7 @@ const SKILL_GLYPHS = {
   summoner: ['✿', '⬢', '♆', '⚘'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -1979,7 +1984,7 @@ async function loadAssets() {
   const files = [...new Set([...VARIANTS.map((h) => heroModelFile(h.model)), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), ...HERO_ANIM_FILES, ...HERO_PROP_FILES, 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
   await loadAssetFiles(files, (done, total) => loading.progress(0.8 * done / total));
   attachHeroAnimations(assets);   // clipes do pacote de animações nos modelos de herói (mesmo esqueleto)
-  await preloadSceneryAssets({ castle: true });   // árvores/pedras e salão do trono já prontos: o cenário não troca na frente do jogador
+  await preloadSceneryAssets({ castle: true });   // árvores/pedras, salão e props da vila prontos antes de aparecerem
   // Monta cada receita uma vez; retratos e unidades reaproveitam suas peças.
   // variantes comuns ganham as cores e acessórios de looks.js
   for (const cfg of VARIANTS) {
@@ -2254,13 +2259,53 @@ class Unit {
       <= UNIT_COMBAT_SEPARATION_FACTOR * (this.size + (target.size || 1)) + MELEE_CONTACT_SLACK;
   }
 
+  stopApproach(target) {
+    const dx = target.pos.x - this.pos.x, dz = target.pos.z - this.pos.z, distance = Math.hypot(dx, dz);
+    if (distance < 0.001) return;
+    const nx = dx / distance, nz = dz / distance, closing = this.vel.x * nx + this.vel.z * nz;
+    if (closing > 0) { this.vel.x -= nx * closing; this.vel.z -= nz * closing; }
+  }
+
   // anda até o alvo desviando dos obstáculos que estão na frente
-  moveTo(target, dt) {
+  moveTo(target, dt, moveSpeed = this.speed) {
     const goal = target;   // posição de uma unidade (alvo, protegido, invocador): essa não se contorna
+    const watch = this.moveProgress || (this.moveProgress = {
+      goalX: target.x, goalZ: target.z, lastDistance: Infinity, lastX: null, lastZ: null, targetX: null, targetZ: null, stalled: 0, side: 1,
+      recovering: false, recoveryX: 0, recoveryZ: 0, waypoint: new THREE.Vector3(),
+    });
+    if (Math.hypot(target.x - watch.goalX, target.z - watch.goalZ) > 2) {
+      watch.stalled = 0; watch.lastDistance = Infinity; watch.recovering = false; this.pathing = null;
+    }
+    watch.goalX = target.x; watch.goalZ = target.z;
+    if (watch.stalled >= 0.55) {
+      const dx = goal.x - this.pos.x, dz = goal.z - this.pos.z, distance = Math.hypot(dx, dz);
+      if (distance > 0.05 && moveSpeed > 0.05) {
+        watch.side *= -1;
+        watch.recoveryX = this.pos.x - dz / distance * watch.side * 1.8;
+        watch.recoveryZ = this.pos.z + dx / distance * watch.side * 1.8;
+        watch.recovering = true; watch.stalled = 0; watch.lastDistance = Infinity; this.pathing = null;
+      }
+    }
+    if (watch.recovering && Math.hypot(this.pos.x - watch.recoveryX, this.pos.z - watch.recoveryZ) < 0.5) {
+      watch.recovering = false; watch.stalled = 0; watch.lastDistance = Infinity; this.pathing = null;
+    }
+    if (watch.recovering) target = watch.waypoint.set(watch.recoveryX, this.pos.y, watch.recoveryZ);
     target = world.nextWaypoint(this.pos, target, this, queryObstacleCandidates);
     const dir = moveDir.subVectors(target, this.pos).setY(0);
     const d = dir.length();
-    if (d < 0.05) return;
+    if (d < 0.05) { watch.stalled = 0; watch.lastDistance = Infinity; return; }
+    if (Number.isFinite(watch.lastDistance)) {
+      const progress = watch.lastDistance - d;
+      const threshold = Math.max(0.0002, moveSpeed * dt * 0.005);
+      const movedX = this.pos.x - watch.lastX, movedZ = this.pos.z - watch.lastZ;
+      const towardX = watch.targetX - watch.lastX, towardZ = watch.targetZ - watch.lastZ;
+      const towardLength = Math.hypot(towardX, towardZ);
+      const advance = towardLength > 0.001 ? (movedX * towardX + movedZ * towardZ) / towardLength : 0;
+      if (progress < threshold && advance < threshold) watch.stalled += dt;
+      else watch.stalled = 0;
+    } else watch.stalled = 0;
+    watch.lastDistance = d; watch.lastX = this.pos.x; watch.lastZ = this.pos.z;
+    watch.targetX = target.x; watch.targetZ = target.z;
     dir.divideScalar(d);
     const reach = Math.min(2.6, d);
     // O desvio acumulado pode girar a direção antes dos próximos obstáculos; cobre qualquer orientação até esse alcance.
@@ -2279,24 +2324,57 @@ class Unit {
       const px = -dir.z, pz = dir.x;
       dir.x += px * s * push; dir.z += pz * s * push;
     }
-    // Contorna quem está parado no caminho (fila atrás de quem já luta, aliado no posto) em vez de
-    // andar contra ele e deixar a separação empurrar os dois todo quadro.
+    const preferredLength = Math.hypot(dir.x, dir.z) || 1;
+    const preferredX = dir.x / preferredLength, preferredZ = dir.z / preferredLength;
+    // Contorna quem está parado e aliados em rota de colisão antes que a separação os empurre.
     if (!this.phasing) for (const u of units) {
-      if (u === this || u.dead || u.phasing || u.pos === goal || !isPlanted(u)) continue;
-      const ox = u.pos.x - this.pos.x, oz = u.pos.z - this.pos.z;
-      const ahead = ox * dir.x + oz * dir.z;
-      if (ahead <= 0 || ahead > 2.6 || ahead > d || Math.abs(u.pos.y - this.pos.y) >= 0.85) continue;
-      const side = ox * -dir.z + oz * dir.x;
+      if (u === this || u.dead || u.phasing || u.pos === goal) continue;
+      const sameFaction = (u.team === 'skeleton') === (this.team === 'skeleton');
       const clear = UNIT_SEPARATION_FACTOR * (this.size + u.size);
-      if (Math.abs(side) > clear) continue;
-      const push = (1 - Math.abs(side) / clear) * (1.6 - ahead / 2.6);
-      const s = side >= 0 ? -1 : 1;
+      const ox = u.pos.x - this.pos.x, oz = u.pos.z - this.pos.z;
+      let movingThreat = false, closestX = ox, closestZ = oz;
+      if (!isPlanted(u)) {
+        if (!sameFaction) continue;
+        const rvx = u.vel.x - this.vel.x, rvz = u.vel.z - this.vel.z;
+        const distance = Math.hypot(ox, oz);
+        const relativeSpeedSq = rvx * rvx + rvz * rvz;
+        if (relativeSpeedSq < 0.01) {
+          if (distance > clear) continue;
+          movingThreat = true;
+        } else {
+          const radial = ox * rvx + oz * rvz;
+          if (distance <= clear && radial >= 0) continue;
+          const eta = THREE.MathUtils.clamp(-radial / relativeSpeedSq, 0, 0.85);
+          closestX += rvx * eta;
+          closestZ += rvz * eta;
+          if (Math.hypot(closestX, closestZ) >= clear) continue;
+          movingThreat = true;
+        }
+      }
+      const currentAhead = ox * dir.x + oz * dir.z;
+      const ahead = movingThreat ? Math.max(0.1, currentAhead) : currentAhead;
+      const maxAhead = Math.max(2.6, clear + 0.5);
+      if ((!movingThreat && ahead <= 0) || ahead > maxAhead || ahead > d || Math.abs(u.pos.y - this.pos.y) >= 0.85) continue;
+      const side = ox * -dir.z + oz * dir.x;
+      const riskSide = movingThreat ? closestX * -dir.z + closestZ * dir.x : side;
+      if (Math.abs(riskSide) > clear) continue;
+      const push = (1 - Math.abs(riskSide) / clear) * (1.6 - ahead / maxAhead);
+      const turnSide = movingThreat ? riskSide : side;
+      const opposing = movingThreat && this.vel.x * u.vel.x + this.vel.z * u.vel.z < 0;
+      const tieTurn = (this.root.id < u.root.id || opposing) ? -1 : 1;   // de frente, o mesmo lado local abre lados opostos no mundo
+      const s = Math.abs(turnSide) > 0.05 ? turnSide >= 0 ? -1 : 1 : tieTurn;
       const px = -dir.z, pz = dir.x;
       dir.x += px * s * push; dir.z += pz * s * push;
     }
     dir.normalize();
+    const forward = dir.x * preferredX + dir.z * preferredZ;
+    if (forward < 0.25) {
+      const lateral = dir.x * -preferredZ + dir.z * preferredX;
+      const side = lateral < 0 ? -1 : 1, advance = 0.25, strafe = Math.sqrt(1 - advance * advance);
+      dir.set(preferredX * advance - preferredZ * side * strafe, 0, preferredZ * advance + preferredX * side * strafe);
+    }
     const terrainSpeed = (this.slowT > 0 ? 0.5 : 1) * (world.isShallow(this.pos.x, this.pos.z) ? 0.6 : 1);
-    const approachSpeed = Math.min(this.speed, d * 1.75) * terrainSpeed; // limita a frenagem para não ultrapassar o alvo
+    const approachSpeed = Math.min(moveSpeed, d * 1.75) * terrainSpeed; // limita a frenagem para não ultrapassar o alvo
     this.vel.lerp(dir.multiplyScalar(approachSpeed), Math.min(1, dt * 7));
     this.moving = true;
     this.face(tmp.copy(this.pos).add(this.vel), dt);
@@ -2317,7 +2395,11 @@ class Unit {
     this.attackTimer = this.cooldown;
     this.pendingHit = { target, t: dur * 0.4 };
     if (this.stats) this.stats.ataques++;
-    if (!this.ranged) this.vel.add(tmp.subVectors(target.pos, this.pos).setY(0).normalize().multiplyScalar(2.2));   // passo à frente
+    if (!this.ranged) {
+      const dir = tmp.subVectors(target.pos, this.pos).setY(0), distance = dir.length();
+      const room = distance - UNIT_COMBAT_SEPARATION_FACTOR * (this.size + (target.size || 1));
+      if (distance > 0.001 && room > 0) this.vel.add(dir.multiplyScalar(Math.min(2.2, room * 10) / distance));
+    }
   }
 
   takeDamage(n, from, owner = null, critical = false, dot = false) {   // dot: veneno e afins, sem esquiva, bloqueio nem tropeço
@@ -2520,7 +2602,7 @@ const enemyTargetAllies = () => {
     : list;
 };
 let activeTargetContext = null;
-const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], rescueThreats: [], defenseAnchor: null, twinFocusChecked: false, twinFocus: null, twinFocusWaiting: false };
+const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], rescueThreats: [], defenseAnchor: null, twinFocusChecked: false, twinFocus: null, twinFocusWaiting: false, castleUrgentChecked: false, castleUrgentTarget: null, castleUrgentHero: null };
 
 function makeTargetContext(reuse = null) {
   const goal = game.mission?.goal;
@@ -2571,6 +2653,9 @@ function makeTargetContext(reuse = null) {
   context.twinFocusChecked = false;
   context.twinFocus = null;
   context.twinFocusWaiting = false;
+  context.castleUrgentChecked = false;
+  context.castleUrgentTarget = null;
+  context.castleUrgentHero = null;
   context.goal = goal;
   context.party = party;
   context.rangedHeroes = rangedHeroes;
@@ -2769,6 +2854,7 @@ function anotherDefenseHeroCanIntercept(hero, target, context) {
 
 // quem já está brigando só larga o alvo quando ele se afasta bem do posto (evita ir e voltar na borda)
 function stillEngaged(hero, target, context = targetContext()) {
+  if (context.goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
   if (hero.engagedWith !== target) return false;
   const { villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
@@ -2788,17 +2874,19 @@ function stillEngaged(hero, target, context = targetContext()) {
 
 // Heróis à distância recuam alguns passos quando um inimigo corpo a corpo encosta, puxando para o
 // posto (atrás da linha de frente), e voltam a atirar; a recarga evita que passem a luta fugindo.
-const KITE_TRIGGER = 2.2, KITE_STEP = 2.6, KITE_TIME = 0.7, KITE_COOLDOWN = 3;
+const KITE_TRIGGER = 4.3, KITE_EMERGENCY_TRIGGER = 2.2, KITE_STEP = 3, KITE_TIME = 0.7, KITE_COOLDOWN = 2.2;
 const kiteAway = new THREE.Vector3(), kiteHome = new THREE.Vector3();
 function kiteFrom(h, dt) {
   h.kiteCd = Math.max(0, (h.kiteCd || 0) - dt);
   if (h.kiteT > 0) { h.kiteT -= dt; return h.kiteTo; }
   if (h.kiteCd > 0) return null;
-  let threat = null, best = KITE_TRIGGER;
+  let threat = null, best = Infinity;
   for (const s of activeTargetContext?.attackableSkeletons ?? skeletonsAlive()) {
-    if (s.dead || s.spawning || s.ranged || s.totem) continue;
+    if (s.dead || s.spawning || s.totem) continue;
+    const attacking = s.pendingHit?.target === h || s.target === h || s.engagedWith === h;
+    if (s.ranged && !attacking) continue;
     const d = tacticalDistance(s.pos, h.pos);
-    if (d < best) { best = d; threat = s; }
+    if (d < (attacking ? KITE_TRIGGER : KITE_EMERGENCY_TRIGGER) && d < best) { best = d; threat = s; }
   }
   if (!threat) return null;
   kiteAway.subVectors(h.pos, threat.pos).setY(0).normalize();
@@ -2812,13 +2900,38 @@ function kiteFrom(h, dt) {
   return h.kiteTo;
 }
 
+function kiteSkeletonFrom(shooter, target) {
+  if (!target || target.ranged || target.structure || target.team === 'villager') return null;
+  let dx = shooter.pos.x - target.pos.x, dz = shooter.pos.z - target.pos.z;
+  let distance = Math.hypot(dx, dz);
+  if (distance >= KITE_TRIGGER) return null;
+  if (distance < 0.001) { dx = Math.sin(shooter.root.rotation.y); dz = Math.cos(shooter.root.rotation.y); distance = 1; }
+  shooter.kiteTarget ||= new THREE.Vector3();
+  return shooter.kiteTarget.set(
+    shooter.pos.x + dx / distance * KITE_STEP,
+    shooter.pos.y,
+    shooter.pos.z + dz / distance * KITE_STEP,
+  );
+}
+
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
 // objetivos que terminam com o chefe da fase: chefe, duelo e o par Lich + Carrasco
 const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goal?.type === 'twin' || goal?.type === 'bosses';
 const groupedBossGoal = (goal) => goal?.type === 'twin' || goal?.type === 'bosses';
+function castleBossInsideRoom(target) {
+  const zone = world.zoneOf(game.phase);
+  if (zone?.type !== 'castle') return true;
+  const dx = target.pos.x - zone.center.x, dz = target.pos.z - zone.center.z;
+  const lateral = dx * zone.side.x + dz * zone.side.z;
+  const forward = dx * zone.fwd.x + dz * zone.fwd.z;
+  const margin = Math.max(0.8, (target.size || 1) * 0.55);
+  return Math.abs(lateral) <= zone.halfWidth - margin
+    && Math.abs(forward) <= zone.halfLength - margin;
+}
 
 function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, party, villager } = context;
+  if (goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
   const fromPost = tacticalDistance(hero.post, target.pos);
   // No resgate, o corredor precisa alcançar guardas junto ao prisioneiro mesmo fora do leash do grupo.
   if (goal?.type === 'rescue' && hero === game.rescueRunner && context.rescueThreats?.includes(target)) return true;
@@ -2845,9 +2958,10 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (fromPost > HUNT_PURSUIT_LIMIT) return false;
     return hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS);
   }
-  // No Trono, o Lich móvel pode parar fora do alcance normal enquanto ataca
-  // o grupo. Dois heróis o interceptam por uma distância curta e o resto guarda posição.
+  // No Trono, dois heróis interceptam o chefe móvel. No Coração, a equipe inteira
+  // avança pelo salão fechado para não deixar parte do grupo presa no posto central.
   if (groupedBossGoal(goal) && target.phaseBoss && !postReach) {
+    if (goal.type === 'bosses') return fromPost <= CASTLE_BOSS_INTERCEPT;
     if (fromPost > TWIN_BOSS_INTERCEPT) return false;
     return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
   }
@@ -3079,6 +3193,42 @@ function isUrgentBossThreat(target, context) {
     || (target.enemyKind === 'Bomber' && context.friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, target.pos) < 7));
 }
 
+function prepareCastleBossUrgentPlan(context) {
+  if (context.castleUrgentChecked) return;
+  context.castleUrgentChecked = true;
+  let target = null, bestUrgency = Infinity, bestKind = '';
+  for (const boss of context.attackableSkeletons) {
+    if (!boss.phaseBoss || !castleBossInsideRoom(boss)) continue;
+    const telegraph = boss.telegraph;
+    const warningTime = telegraph?.alive && telegraph.interruptible && telegraph.t > 0.2 ? telegraph.t : Infinity;
+    const pending = boss.pendingHit?.target?.team === 'hero' ? boss.pendingHit : null;
+    const impactTime = pending ? Number.isFinite(pending.t) ? pending.t : 0 : Infinity;
+    const urgency = Math.min(warningTime, impactTime);
+    const kind = String(boss.enemyKind || boss.kind?.name || '');
+    if (urgency < bestUrgency || (urgency === bestUrgency && kind < bestKind)) {
+      target = boss;
+      bestUrgency = urgency;
+      bestKind = kind;
+    }
+  }
+  if (!target || !Number.isFinite(bestUrgency)) return;
+  const victim = target.pendingHit?.target;
+  let hero = victim?.team === 'hero' && !victim.dead && victim.busy <= 0 && !(victim.kiteT > 0)
+    && (canHeroReachTarget(victim, target, context) || stillEngaged(victim, target, context)) ? victim : null;
+  let nearestDistance = Infinity;
+  if (!hero) for (const candidate of context.party) {
+    if (candidate.dead || candidate.busy > 0 || candidate.kiteT > 0
+      || !(canHeroReachTarget(candidate, target, context) || stillEngaged(candidate, target, context))) continue;
+    const distance = tacticalDistance(candidate.post, target.pos);
+    if (distance < nearestDistance || (distance === nearestDistance && String(candidate.cfg?.id || '') < String(hero?.cfg?.id || ''))) {
+      hero = candidate;
+      nearestDistance = distance;
+    }
+  }
+  context.castleUrgentTarget = target;
+  context.castleUrgentHero = hero;
+}
+
 function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
   let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
@@ -3107,7 +3257,32 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
       }
     }
   } else if (game.twinFocus) game.twinFocus = null;
-  if (bossGoal(goal) && urgentBossTarget) { best = urgentBossTarget; bestScore = urgentBossScore; }
+  if (goal?.type === 'bosses') {
+    let directThreat = null, directThreatScore = Infinity;
+    for (const target of candidates) {
+      if (!target.phaseBoss || target.dead || target.spawning || target.pendingHit?.target !== hero
+        || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target, context))) continue;
+      const score = heroTargetScore(hero, target, hero.pos, context);
+      if (score < directThreatScore) { directThreat = target; directThreatScore = score; }
+    }
+    if (directThreat) {
+      best = directThreat;
+      bestScore = directThreatScore;
+    } else if (urgentBossTarget && !urgentBossTarget.phaseBoss) {
+      best = urgentBossTarget;
+      bestScore = urgentBossScore;
+    } else {
+      prepareCastleBossUrgentPlan(context);
+      if (context.castleUrgentTarget && context.castleUrgentHero === hero
+        && context.castleUrgentTarget !== game.twinFocus) {
+        best = context.castleUrgentTarget;
+        bestScore = heroTargetScore(hero, best, hero.pos, context);
+      }
+    }
+  } else if (bossGoal(goal) && urgentBossTarget) {
+    best = urgentBossTarget;
+    bestScore = urgentBossScore;
+  }
   if (!best) {
     hero.targetFocus = null;
     hero.targetFocusT = 0;
@@ -3920,13 +4095,14 @@ function fireField(base, radius) {
 }
 
 // Piromante (Meteoro): rocha em chamas caindo do céu durante a preparação
-function meteorFall(h, life, active) {
+function meteorFall(h, target, impactAt, life, active) {
   const rock = vfxMesh('orb', 'fire', SPRITE, { size: 2.2 });
-  const from = V(4, 16, -6);
+  const anchor = impactAt || target?.pos?.clone() || h.pos.clone(), from = V(1.2, 16, -0.8);
   addFx(rock, life, (e, dt, k) => {
-    if (!active()) { e.done = true; return; }
+    if (!active()) { rock.position.copy(anchor).setY(anchor.y + 0.6); e.done = true; return; }
+    if (target && units.includes(target)) anchor.copy(target.pos);
     const q = k * k;
-    rock.position.copy(h.pos).add(V(from.x * (1 - q), 0.6 + from.y * (1 - q), from.z * (1 - q)));
+    rock.position.copy(anchor).add(V(from.x * (1 - q), 0.6 + from.y * (1 - q), from.z * (1 - q)));
     e.tr = (e.tr ?? 0) - dt;
     if (e.tr <= 0) {   // cauda: bolas menores que ficam para trás e se desfazem
       e.tr = lowQuality ? 0.06 : 0.03;
@@ -4103,7 +4279,7 @@ function charge(h, duration) {
     targetLock(pending.target, life, art, active);
     castLink(h, pending.target, life, art, active);
   }
-  if (ultimate && h.cfg.id === 'pyro' && pending.skill?.effect === 'meteor') meteorFall(h, life, active);   // o meteoro cai até o disparo
+  if (ultimate && h.cfg.id === 'pyro' && pending.skill?.effect === 'meteor') meteorFall(h, pending.target, pending.meteorImpact, life, active);   // o meteoro acompanha o alvo até o disparo
   if (ultimate) {   // ultimate avisa: coluna da cor do herói que acende e aperta até o disparo
     const glowCol = new THREE.Mesh(columnGeo, glow(art.color, 0.4));
     addFx(glowCol, life, (e, dt, k) => {
@@ -4276,6 +4452,10 @@ function fury(h) {
 // Esmagador: onda de choque, rachaduras com brilho de lava e pedrinhas voando
 function quake(h, reach, tremor = 0.55) {
   const c = h.pos.clone().addScaledVector(V(Math.sin(h.root.rotation.y), 0, Math.cos(h.root.rotation.y)), 1.2);
+  quakeAt(c, reach, tremor);
+}
+function quakeAt(at, reach, tremor = 0.55) {
+  const c = at.clone();
   wave(c, 0xffb060, 0.3, reach * 1.7, 0.55, { y: 0.12 });
   wave(c, 0x9a7a55, 0.3, reach * 1.3, 0.8, { geo: ringGeo, opacity: 0.55, dust: true });
   for (let i = 0; i < 9; i++) {
@@ -5025,10 +5205,12 @@ function bossDown(boss) {
 }
 
 // Partículas do elemento de cada herói ao soltar uma habilidade extra (fogo, gelo, arcano, luz, natureza, sombra, tempo, som).
-function element(h, skill, target) {
+function element(h, skill, target, impactPoint = null) {
   const id = h.cfg.id, ult = !!skill.ultimate, n = ult ? 18 : 10;
-  const area = !!skill.radius || !target, at = (area ? h.pos : target.pos).clone();
-  const reach = area ? (skill.radius || 4.5) * 0.7 : 1.4;
+  const meteor = skill.effect === 'meteor';
+  const area = !!skill.radius || !target;
+  const at = (meteor ? impactPoint || target?.pos || h.pos : area ? h.pos : target.pos).clone();
+  const reach = area ? (skill.radius || 4.5) * (meteor ? 1 : 0.7) : 1.4;
   const spot = (y = 0.2) => { const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * reach; return V(at.x + Math.cos(a) * r, at.y + y, at.z + Math.sin(a) * r); };
   if (id === 'pyro') {   // brasas subindo, anel de chamas (ou o meteoro) e fumaça em shader
     for (let i = 0; i < fewer(n); i++) particle(sparkGeo, i % 3 ? 0xff7a1a : 0xffe070, spot(), V(rnd(0.6), 2.5 + Math.random() * 2.5, rnd(0.6)), 0.9, { size: 1.3, gravity: -1, delay: Math.random() * 0.25 });
@@ -5148,7 +5330,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  whirl, fury, quake, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
@@ -5296,7 +5478,7 @@ class Hero extends Unit {
     let effect;
     if (id === 'engineer') {
       if (!manual) target ||= bestSkillTarget(this, attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(this.pos) <= 8));
-      if (!force && game.state !== 'fight') return false;
+      if (!force && (game.state !== 'fight' || !target)) return false;
       const placement = (manual && target?.groundTarget ? target.pos : target?.pos || this.pos).clone();
       const offset = placement.clone().sub(this.pos).setY(0);
       if (offset.length() > 8) placement.copy(this.pos).add(offset.setLength(8));
@@ -5307,7 +5489,7 @@ class Hero extends Unit {
         burst(placement, [0x6df4df, 0xe6fffb], 14, 3.5);
       };
     } else if (id === 'beast_tamer') {
-      if (!force && game.state !== 'fight') return false;
+      if (!force && (game.state !== 'fight' || !target)) return false;
       effect = () => {
         let companion = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
         if (companion) {
@@ -5318,7 +5500,7 @@ class Hero extends Unit {
         FX.beastCall(this, companion);
       };
     } else if (id === 'summoner') {
-      if (!force && game.state !== 'fight') return false;
+      if (!force && (game.state !== 'fight' || !target)) return false;
       effect = () => callSummon(this, 'fairy');
     } else if (id === 'oracle') {
       const candidates = attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(this.pos) <= this.range);
@@ -5368,6 +5550,7 @@ class Hero extends Unit {
     } else if (id === 'bard') {
       const party = partyNow().filter((h) => !h.dead);
       if (!party.length || (!force && !target)) return false;
+      if (!manual && !force && target && !this.inReach(target, target.pos.distanceTo(this.pos) - 0.4 * ((target.size || 1) - 1))) return false;
       effect = () => {
         const duration = (6 + level * 0.5) * power;
         for (const h of party) {
@@ -5420,6 +5603,7 @@ class Hero extends Unit {
       const urgent = caught.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
         || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
       if (!caught.length || (!force && caught.length < 2 && !urgent)) return false;
+      target = nearest(this.pos, caught);
       effect = () => {
         const stun = scaleBranchEffect(this, 'control', 0.7 + (level - 1) * 0.1) * power;
         for (const s of skeletonsAlive()) if (!s.spawning && inReach(s)) {
@@ -5587,6 +5771,7 @@ class Hero extends Unit {
       };
     } else if (id === 'king') {
       if (!target) return false;
+      if (!manual && !force && !this.inReach(target, target.pos.distanceTo(this.pos) - 0.4 * ((target.size || 1) - 1))) return false;
       effect = () => {
         const party = partyNow().filter((h) => !h.dead);
         for (const h of party) {
@@ -5629,6 +5814,7 @@ class Hero extends Unit {
     const [, pace, at, sound] = SKILL_MOVES[id];
     const run = effect;
     effect = () => { audio.play(sound); FX.release(this); run(); };
+    if (id === 'brute' && target && target.pos.distanceTo(this.pos) > this.range + 0.4 * (target.size || 1)) this.skillAdvanceTarget = target;
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
     this.busy = this.skillBody(0, pace);
     this.pendingHit = { target, effect, t: this.busy * at };
@@ -5648,12 +5834,13 @@ class Hero extends Unit {
     const attackables = activeTargetContext?.skeletons ?? skeletonsAlive();
     const partySource = partyNow();
     const enemies = [], targetPool = [];
-    const enemyReach = Math.max(radius, skill.range || 0), targetReach = Math.max(9, this.range);
+    const targetReach = Math.max(9, this.range);
+    const enemyReach = skill.effect === 'meteor' ? targetReach : Math.max(radius, skill.range || 0);
     for (const enemy of attackables) {
       if (enemy.dead || enemy.spawning) continue;
       const distance = enemy.pos.distanceTo(this.pos);
       if (distance <= enemyReach + 0.4 * (enemy.size - 1)) enemies.push(enemy);
-      if (distance <= targetReach) targetPool.push(enemy);
+      if (distance <= targetReach + (skill.effect === 'meteor' ? 0.4 * (enemy.size - 1) : 0)) targetPool.push(enemy);
     }
     const party = partySource.filter((h) => !h.dead);
     const friends = party.filter((h) => h.pos.distanceTo(this.pos) <= Math.max(radius, 5.5));
@@ -5665,6 +5852,8 @@ class Hero extends Unit {
       || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
     target ||= highestPriorityHeroTarget(this, targetPool);
     if (target && !target.groundTarget && (target.dead || !units.includes(target))) target = null;
+    if (skill.effect === 'meteor' && !target) target = highestPriorityHeroTarget(this, targetPool);
+    const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon'].includes(skill.effect);
@@ -5677,6 +5866,9 @@ class Hero extends Unit {
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
     const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
+    const canRestoreAllies = SKILLS_USEFUL_WITHOUT_ENEMIES.has(skill.effect)
+      && (missingHp > 0 || this.hp < this.maxHp);
+    if (!force && !enemies.length && !canRestoreAllies) return false;
     if (areaEffects.includes(skill.effect) && !enemies.length && !(supportSkill && (criticalAlly || missingHp > this.maxHp * 0.35))) return false;
 
     const damageOne = (enemy, multiplier = 1) => {
@@ -5708,6 +5900,14 @@ class Hero extends Unit {
     };
     const damageAreaNow = (multiplier = 1) => {
       for (const enemy of enemies) { damageOne(enemy, multiplier); control(enemy); }
+    };
+    const damageAreaAt = (center, reach, multiplier = 1) => {
+      for (const enemy of skeletonsAlive()) {
+        if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= reach + 0.4 * (enemy.size - 1)) {
+          damageOne(enemy, multiplier);
+          control(enemy);
+        }
+      }
     };
     let effect;
     switch (skill.effect) {
@@ -5895,14 +6095,23 @@ class Hero extends Unit {
             for (const enemy of enemies) FX.roots(enemy); FX.leaves(this, radius); FX.holyLight(this, healed, radius); wave(this.pos, color, 0.2, radius, 0.7); };
         } else if (skill.effect === 'shadow-storm') {
           effect = () => { for (const enemy of enemies) { damageOne(enemy); FX.slashX(enemy, this); } FX.whirl(this, radius); burst(this.pos, color, 22, 4); };
+        } else if (skill.effect === 'meteor') {
+          const meteorTarget = target;
+          effect = () => {
+            if (meteorTarget && units.includes(meteorTarget)) meteorImpactAt.copy(meteorTarget.pos);
+            const at = meteorImpactAt.clone();
+            damageAreaAt(at, radius);
+            FX.quakeAt(at, radius * 0.35);
+            wave(at, color, 0.2, radius, 0.7);
+            burst(at, color, 32, 5);
+          };
         } else {
-          effect = () => { damageAreaNow(skill.effect === 'meteor' ? 1 : 0.8);
-            if (skill.effect === 'meteor') FX.quake(this, radius * 0.35);   // pilar e explosão de fogo vêm de FX.element (shader)
-            else if (skill.effect === 'blizzard' && this.cfg.id === 'chronist') for (const enemy of enemies) FX.stasis(enemy);
+          effect = () => { damageAreaNow(0.8);
+            if (skill.effect === 'blizzard' && this.cfg.id === 'chronist') for (const enemy of enemies) FX.stasis(enemy);
             else if (skill.effect === 'blizzard') FX.iceFan(this, target || this);
             else if (skill.effect === 'storm') FX.whirl(this, radius);
             else FX.quake(this, radius * 0.35);
-            wave(this.pos, color, 0.2, radius, 0.7); burst(this.pos, color, skill.effect === 'meteor' ? 32 : 22, 5);
+            wave(this.pos, color, 0.2, radius, 0.7); burst(this.pos, color, 22, 5);
           };
         }
         break;
@@ -5917,7 +6126,8 @@ class Hero extends Unit {
           const hits = lineTargets(this.pos, s.pos, pool, Math.min(reach, s.pos.distanceTo(this.pos) + 1.6));
           if (hits.length > line.length || (hits.length === line.length && s === target)) { line = hits; aim = s; }
         }
-        if (!aim || (!force && line.length < 2 && !urgentEnemy)) return false;
+        const loneTarget = line.length === 1 && !line[0].boss && !line[0].totem;
+        if (!aim || (!force && line.length < 2 && !urgentEnemy && !loneTarget)) return false;
         target = aim;
         effect = () => {
           const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize();
@@ -5927,7 +6137,8 @@ class Hero extends Unit {
           if (world.canStep(from, end)) { this.pos.copy(end).setY(world.groundHeight(end.x, end.z)); this.vel.set(0, 0, 0); }
           else this.vel.add(dir.clone().multiplyScalar(6));
           this.face(end.clone().add(dir), 1);
-          for (const enemy of hit) { damageOne(enemy); FX.bladeCut(enemy, this, 0); }
+          const singleTargetBonus = hit.length === 1 && !hit[0].boss && !hit[0].totem ? 1.25 : 1;
+          for (const enemy of hit) { damageOne(enemy, singleTargetBonus); FX.bladeCut(enemy, this, 0); }
           FX.steelDash(from, this.pos);
         };
         break;
@@ -6425,12 +6636,15 @@ class Hero extends Unit {
           const hits = lineTargets(this.pos, s.pos, pool, reach, 0.9);
           if (hits.length > line.length) { line = hits; aim = s; }
         }
-        if (!aim || (!force && line.length < 2 && !urgentEnemy)) return false;
+        const loneTarget = line.length === 1 && !line[0].boss && !line[0].totem;
+        if (!aim || (!force && line.length < 2 && !urgentEnemy && !loneTarget)) return false;
         target = aim;
         effect = () => {
           const from = this.pos.clone(), end = from.clone().addScaledVector(new THREE.Vector3().subVectors(aim.pos, from).setY(0).normalize(), reach);
           const pass = () => {
-            for (const enemy of lineTargets(from, end, skeletonsAlive().filter((s) => !s.dead && !s.spawning), reach, 0.9)) { damageOne(enemy); FX.bladeCut(enemy, this, 0); }
+            const hit = lineTargets(from, end, skeletonsAlive().filter((s) => !s.dead && !s.spawning), reach, 0.9);
+            const singleTargetBonus = hit.length === 1 && !hit[0].boss && !hit[0].totem ? 1.25 : 1;
+            for (const enemy of hit) { damageOne(enemy, singleTargetBonus); FX.bladeCut(enemy, this, 0); }
           };
           pass();
           const mesh = groundMark(end, 0.6, color, 0.2);
@@ -6689,7 +6903,9 @@ class Hero extends Unit {
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
     this.busy = this.skillBody(slot, pace * (skill.ultimate ? 0.82 : 0.92), skill.ultimate);
     const hitAt = this.busy * at;
-    this.pendingHit = { target, skill, slot, effect: () => { audio.play(sound); FX.release(this, skill.ultimate); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target); }, t: hitAt };
+    const pending = { target, skill, slot, meteorImpact: meteorImpactAt, effect: null, t: hitAt };
+    pending.effect = () => { audio.play(sound); FX.release(this, skill.ultimate); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target, pending.meteorImpact); };
+    this.pendingHit = pending;
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
     relicAfterCast(this, slot, !!skill.ultimate);
@@ -6913,7 +7129,9 @@ class Hero extends Unit {
   setAnchor(s) {
     this.fwd.copy(world.tangentAt(s));
     const side = world.sideOf(this.fwd);
-    const [px, pz] = this.formation;
+    const slot = POSTS.indexOf(this.formation);
+    const formation = game.mission?.goal.type === 'bosses' ? CASTLE_POSTS[slot] || this.formation : this.formation;
+    const [px, pz] = formation;
     this.post.copy(world.pointAt(s)).addScaledVector(side, px).addScaledVector(this.fwd, -pz);
   }
 
@@ -6990,13 +7208,23 @@ class Hero extends Unit {
   const directControlled = isDirectControlActive(this);
   if (this.busy > 0) {
     if (directControlled) moveDirectControlled(this, dt);
+    else if (this.skillAdvanceTarget) {
+      const target = this.skillAdvanceTarget;
+      if (target.dead || !units.includes(target)) this.skillAdvanceTarget = null;
+      else if (Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z) <= this.range + 0.4 * (target.size || 1)) {
+        this.stopApproach(target);
+        this.skillAdvanceTarget = null;
+      } else this.moveTo(target.pos, dt);
+    }
     return;
   }
+  this.skillAdvanceTarget = null;
     const escape = !directControlled && game.state === 'fight' && dangerAt(this);   // sai da área marcada antes do golpe forte
     const move = this.cfg.id === 'angel' ? 'Jump_Idle' : this.cfg.run || 'Running_A';   // arqueira e besteiro correm com a arma em punho
     const walk = this.cfg.id === 'angel' ? 'Jump_Idle' : this.cfg.walk || 'Walking_A';
     if (escape) { this.moveTo(escape, dt); this.locomote(move, walk, this.cfg.idle); return; }
-    const kite = !directControlled && game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
+    const pendingManual = this.skillRequests.some((request, slot) => request > 0 && this.skillTimers[slot] <= 0);
+    const kite = !directControlled && !pendingManual && game.state === 'fight' && this.ranged && kiteFrom(this, dt);   // à distância, recua de quem encosta
     if (kite) { this.moveTo(kite, dt); this.locomote(move, walk, this.cfg.idle); return; }
     const targeting = game.state === 'fight' ? targetContext() : null;
     const captive = targeting?.captive || null;
@@ -7035,6 +7263,7 @@ class Hero extends Unit {
       if (attackTarget) {
         const d = attackTarget.pos.distanceTo(this.pos) - 0.4 * ((attackTarget.size || 1) - 1);
         if (this.inReach(attackTarget, d) && (this.ranged || Math.abs(attackTarget.pos.y - this.pos.y) < 0.85)) {
+          this.stopApproach(attackTarget);
           const turn = this.face(attackTarget.pos, dt);
           if (this.attackTimer <= 0 && turn < 0.5) {
             const attacks = this.cfg.attacks;
@@ -7058,6 +7287,7 @@ class Hero extends Unit {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
       else {
+        this.stopApproach(target);
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
         const attacks = this.cfg.attacks;
         if (this.attackTimer <= 0 && turn < 0.5) this.attack(target, attacks[Math.floor(Math.random() * attacks.length)]);
@@ -7760,6 +7990,7 @@ class Skeleton extends Unit {
     this.move = base.move || 'Walking_D_Skeletons';
     this.walk = base.walk || 'Walking_D_Skeletons';
     this.idle = base.idle || 'Idle_Combat';
+    if (this.ranged && !this.mobile && this.speed <= 0) this.speed = 1.1;   // atiradores fixos só avançam para adquirir um alvo no alcance
     this.speed *= 0.85 + Math.random() * 0.3;   // cada esqueleto num ritmo um pouco diferente
     this.size = base.size || (boss ? 1.7 : 1);
     this.root.scale.setScalar(this.size);
@@ -7840,7 +8071,6 @@ class Skeleton extends Unit {
     if (this.markT <= 0) this.markBonus = 0;
     this.sheepT = Math.max(0, this.sheepT - dt);
     if (this.stunT > 0 || this.sheepT > 0) { this.pendingHit = null; if (this.stunT > 0) this.vel.set(0, 0, 0); }
-    if (this.ranged && !this.mobile) this.vel.set(0, 0, 0);
     this.updateCommon(dt);
     this.stars.visible = !this.dead && this.stunT > 0;
     this.stars.rotation.y += dt * 5;
@@ -7866,17 +8096,31 @@ class Skeleton extends Unit {
       : this.raider && game.shrine && !game.shrine.dead ? game.shrine
         : this.raider && game.gate ? game.gate
         : nearest(this.pos, activeTargetContext?.alliedUnits ?? enemyTargetAllies());
+    this.target = target;
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)
+      if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
+      return;
+    }
+    const kite = this.ranged && !this.phasing && this.rootT <= 0 ? kiteSkeletonFrom(this, target) : null;
+    if (kite) {
+      this.moveTo(kite, dt, Math.max(this.speed, 2.4));
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
       return;
     }
     if (target) {
       const d = target.pos.distanceTo(this.pos);
-      if (this.ranged) this.vel.set(0, 0, 0);
-      if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
-      else if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) {
-        const pool = this.attackAnims;
-        this.attack(target, pool ? pool[Math.floor(Math.random() * pool.length)] : this.attackAnim);
+      const inAttackRange = this.inReach(target, d);
+      if (this.ranged) {
+        if (!this.mobile && !inAttackRange && this.rootT <= 0) this.moveTo(target.pos, dt);
+        else this.vel.set(0, 0, 0);
+      }
+      if (!inAttackRange || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
+      else {
+        this.stopApproach(target);
+        if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) {
+          const pool = this.attackAnims;
+          this.attack(target, pool ? pool[Math.floor(Math.random() * pool.length)] : this.attackAnim);
+        }
       }
     }
     if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
@@ -8463,6 +8707,178 @@ addEventListener('pointermove', (e) => {
 // state: 'fight' (onda) -> 'cleared' (comemoração + escolha de herói) -> 'advance' (sobe a estrada) -> 'fight'
 const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: 0, over: false, paused: false };
 
+const SKELETON_SPAWN_MIN_HERO_DISTANCE = 14.25;
+function skeletonSpawnSize(type, boss = false) {
+  return SKELETONS[type]?.size || (boss ? 1.7 : 1);
+}
+function isSafeSkeletonSpawn(point, { size = 1, zone = null, minHeroDistance = SKELETON_SPAWN_MIN_HERO_DISTANCE } = {}) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return false;
+  const clearance = Math.max(0.8, size * 0.55);
+  if (!world.isInsideGround(point.x, point.z, clearance) || !world.canStep(point, point)) return false;
+  const ground = world.groundHeight(point.x, point.z);
+  if (!Number.isFinite(ground)) return false;
+  if (zone?.type === 'castle') {
+    const dx = point.x - zone.center.x, dz = point.z - zone.center.z;
+    const lateral = dx * zone.side.x + dz * zone.side.z;
+    const forward = dx * zone.fwd.x + dz * zone.fwd.z;
+    // As colunas e a decoração do salão não entram no índice de obstáculos.
+    // O corredor central conservador mantém unidades fora delas.
+    if (Math.abs(lateral) > 9 - clearance || Math.abs(forward) > 17 - clearance) return false;
+  }
+  const obstacles = queryObstacleCandidates(point.x - clearance, point.x + clearance, point.z - clearance, point.z + clearance, clearance);
+  if (obstacles.some((obstacle) => Math.hypot(obstacle.x - point.x, obstacle.z - point.z) < obstacle.r + clearance)) return false;
+  for (const hero of heroes()) {
+    if (!hero.dead && Math.hypot(hero.pos.x - point.x, hero.pos.z - point.z) < minHeroDistance) return false;
+  }
+  for (const unit of units) if (unit.team === 'skeleton' && !unit.dead) {
+    if (Math.hypot(unit.pos.x - point.x, unit.pos.z - point.z) < Math.max(2.2, (size + (unit.size || 1)) * 0.85)) return false;
+  }
+  return true;
+}
+function isSafeSkeletonSummonPoint(point, type = 'Minion') {
+  if (game.over) return false;
+  return isSafeSkeletonSpawn(point, { size: skeletonSpawnSize(type), zone: world.zoneOf(game.phase) });
+}
+function findSafeSkeletonSummonPoint(center, type = 'Minion', reserved = []) {
+  if (game.over || !center) return null;
+  const size = skeletonSpawnSize(type), zone = world.zoneOf(game.phase);
+  const accepts = (point) => {
+    point.y = world.groundHeight(point.x, point.z);
+    return isSafeSkeletonSpawn(point, { size, zone })
+      && reserved.every((other) => Math.hypot(point.x - other.x, point.z - other.z) >= Math.max(3.2, size + 1.4));
+  };
+  if (accepts(center.clone())) return center.clone().setY(world.groundHeight(center.x, center.z));
+  for (let radius = 1.5; radius <= 25; radius += 1.25) {
+    for (let i = 0; i < 16; i++) {
+      const angle = i * Math.PI / 8;
+      const point = center.clone().add(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+      if (accepts(point)) return point;
+    }
+  }
+  return null;
+}
+function skeletonFormationIsSafe(points, types, bossFlags, zone = null, minHeroDistance = SKELETON_SPAWN_MIN_HERO_DISTANCE) {
+  const sizes = types.map((type, i) => skeletonSpawnSize(type, bossFlags[i]));
+  for (let i = 0; i < points.length; i++) {
+    points[i].y = world.groundHeight(points[i].x, points[i].z);
+    if (!isSafeSkeletonSpawn(points[i], { size: sizes[i], zone, minHeroDistance })) return false;
+    for (let j = 0; j < i; j++) {
+      if (Math.hypot(points[i].x - points[j].x, points[i].z - points[j].z) < Math.max(2.8, (sizes[i] + sizes[j]) * 0.85)) return false;
+    }
+  }
+  return true;
+}
+function findSafeSkeletonRouteSpawn(s0, { type = 'Minion', boss = false, preferredSign = 1, zone = null, preferredPoints = [] } = {}) {
+  const size = skeletonSpawnSize(type, boss);
+  const accept = (point) => {
+    point.y = world.groundHeight(point.x, point.z);
+    return isSafeSkeletonSpawn(point, { size, zone });
+  };
+  for (const point of preferredPoints) if (accept(point)) return point.clone();
+  const lateralOffsets = [0, -2, 2, -4, 4, -6, 6, -8, 8];
+  for (let distance = 14.5; distance <= 32; distance += 1.5) {
+    for (const sign of [preferredSign, -preferredSign]) {
+      const s = s0 + sign * distance;
+      if (s < 0 || s > world.L) continue;
+      for (const lateral of lateralOffsets) {
+        const point = world.along(s, lateral);
+        if (accept(point)) return point;
+      }
+    }
+  }
+  return null;
+}
+function findTwinBossFormation(s0, preferredSign, firstType) {
+  const types = [firstType, 'Executioner'], bossFlags = [true, true];
+  const zone = world.zoneOf(game.phase);
+  for (let distance = 14.5; distance <= 32; distance += 1.5) {
+    for (const sign of [preferredSign, -preferredSign]) {
+      const s = s0 + sign * distance;
+      if (s < 0 || s > world.L) continue;
+      const forward = world.tangentAt(s), side = world.sideOf(forward);
+      for (const lateral of [0, -2, 2, -4, 4]) {
+        const center = world.along(s, lateral);
+        for (const axis of [side, forward]) {
+          const points = [center.clone().addScaledVector(axis, -2.5), center.clone().addScaledVector(axis, 2.5)];
+          if (skeletonFormationIsSafe(points, types, bossFlags, zone)) return points;
+        }
+      }
+    }
+  }
+  return null;
+}
+function findCastleBossFormation() {
+  const zone = world.zoneOf(game.phase);
+  if (zone?.type !== 'castle') return null;
+  const types = ['Lich', 'Executioner', 'DarkKnight'], bossFlags = [true, true, true];
+  let best = null, bestScore = -Infinity;
+  for (const lateral of [-2, 0, 2]) for (const forward of [-15.5, -12, -8, -4, 0, 4, 8, 12, 15.5]) {
+    const center = zone.center.clone().addScaledVector(zone.side, lateral).addScaledVector(zone.fwd, forward);
+    const points = [-5, 0, 5].map((offset) => center.clone().addScaledVector(zone.side, offset));
+    // O salão comporta os chefes nas extremidades; 14 m de cada herói é impossível
+    // dentro da arena e fazia a única entrada da missão falhar para sempre.
+    if (!skeletonFormationIsSafe(points, types, bossFlags, zone, 8.5)) continue;
+    const minHeroDistance = Math.min(...points.flatMap((point) => heroes().filter((hero) => !hero.dead)
+      .map((hero) => Math.hypot(hero.pos.x - point.x, hero.pos.z - point.z))));
+    const score = minHeroDistance - (Math.abs(lateral) + Math.abs(forward - 16.2)) * 0.015;
+    if (score > bestScore) { best = points; bestScore = score; }
+  }
+  return best;
+}
+function findRescueGuardFormation(captive) {
+  let captiveS = game.guideS + 14, closest = Infinity;
+  for (let s = game.guideS + 14; s <= game.guideS + 20 && s <= world.L; s += 0.25) {
+    const point = world.along(s, -1.5), distance = Math.hypot(point.x - captive.pos.x, point.z - captive.pos.z);
+    if (distance < closest) { closest = distance; captiveS = s; }
+  }
+  const lateralOffsets = [-1.5, -0.5, -2.5, 0.5, -3.5, 1.5, -4.5, 2.5, -5.5, 3.5];
+  for (const advance of [2.3, 3, 4, 5.5, -2.3, -3, -4, -5.5]) {
+    const s = captiveS + advance;
+    if (s < 0 || s > world.L) continue;
+    const forward = world.tangentAt(s), side = world.sideOf(forward);
+    const axes = [side, forward, side.clone().add(forward).normalize(), side.clone().sub(forward).normalize()];
+    for (const centerLateral of lateralOffsets) {
+      const center = world.along(s, centerLateral);
+      for (const axis of axes) {
+        const points = [center.clone().addScaledVector(axis, -1.8), center.clone().addScaledVector(axis, 1.8)];
+        if (points.every((point) => Math.hypot(point.x - captive.pos.x, point.z - captive.pos.z) <= RESCUE_CLEAR_RADIUS
+          && world.canStep(captive.pos, point)) && skeletonFormationIsSafe(points, ['Warrior', 'Minion'], [false, false])) return points;
+      }
+    }
+  }
+  return null;
+}
+function spawnRescueGuards(captive) {
+  const points = findRescueGuardFormation(captive);
+  if (!points) {
+    game.rescueGuardRetries++;
+    game.rescueSpawnTimer = 0.8;
+    if (game.rescueGuardRetries >= 12) {
+      game.rescueGuardsPending = 0;
+      showBanner('O prisioneiro está sem guardas!', 2.5);
+    }
+    return false;
+  }
+  for (const [i, type] of ['Warrior', 'Minion'].entries()) {
+    const guard = new Skeleton(type, game.phase);
+    guard.pos.copy(points[i]);
+    guard.root.rotation.y = Math.atan2(captive.pos.x - guard.pos.x, captive.pos.z - guard.pos.z);
+  }
+  game.rescueGuardsPending = 0;
+  game.rescueSpawnTimer = 0;
+  return true;
+}
+function findTotemSummonPoint(totem, type) {
+  const base = totem.pos;
+  for (let radius = 2.5; radius <= 20; radius += 1.5) for (let step = 0; step < 20; step++) {
+    const angle = step * Math.PI * 2 / 20;
+    const point = new THREE.Vector3(base.x + Math.cos(angle) * radius, 0, base.z + Math.sin(angle) * radius);
+    point.y = world.groundHeight(point.x, point.z);
+    if (isSafeSkeletonSpawn(point, { size: skeletonSpawnSize(type), zone: world.zoneOf(game.phase) })) return point;
+  }
+  return null;
+}
+
 // view: 'menu' (tela inicial), 'map' (mapa da campanha), uma missão (vai à dificuldade),
 // ou { replay, team, seed } (repete a missão)
 function startGame(view = 'menu') {
@@ -8518,7 +8934,8 @@ function placeParty(first) {
   const search = new URLSearchParams(location.search);
   Object.assign(game, { phase: first, start: first, last: m ? m.to : PHASES, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0,
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, rescueRunner: null, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
-    shrine: null, huntMark: null, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
+    shrine: null, huntMark: null, huntSpawnTimer: 0, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
+    rescueGuardsPending: 0, rescueGuardRetries: 0, rescueSpawnTimer: 0,
     test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null });
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
@@ -8568,8 +8985,10 @@ function startPhase() {
   game.bossPending = missionBossPhase(game.phase, game.mission?.boss);   // Rei (6), Carrasco (9) e Lich (12); a missão pode trocar (mission.boss)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
-  const waveScale = goal?.type === 'duel' ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // encontros especiais reduzem a onda comum; os chefes continuam garantidos
-  if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
+  const waveScale = goal?.type === 'duel' || goal?.type === 'rescue' || goal?.type === 'totems'
+    ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // a escala reduz apenas a onda comum; chefes e guardas permanecem garantidos
+  if (goal?.type === 'bosses') game.toSpawn = 1;   // na câmara final, a primeira e única entrada já é o trio de chefes
+  else if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
   if (goal?.type === 'elite') { game.eliteWave = 1; game.eliteSize = game.toSpawn; }
   if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
     const n = Math.ceil((goal.count - game.totemsPlaced) / (game.last - game.phase + 1));
@@ -8579,10 +8998,10 @@ function startPhase() {
     for (let k = 0; k < goal.count - game.totemsPlaced; k++) placeTotem(k, true);
   }
   const captive = goal?.type === 'rescue' && game.phase === game.start ? captivePrisoner() : null;
-  if (captive) for (const off of [-1.8, 1.8]) {   // guardas ao lado do prisioneiro
-    const s = new Skeleton(off < 0 ? 'Warrior' : 'Minion', game.phase);
-    s.pos.set(captive.pos.x + off, 0, captive.pos.z + 1.2);
-    s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  if (captive) {
+    game.rescueGuardsPending = 2;
+    game.rescueGuardRetries = 0;
+    spawnRescueGuards(captive);
   }
   if (goal?.type === 'hunt' && !game.huntMark) spawnHuntMark();
   relicPhaseStart();
@@ -9017,40 +9436,42 @@ function makeElite(s) {
 }
 
 // trono: o Carrasco surge ao lado do Lich, com menos vida que sozinho na fase 9
-function spawnTwinBoss(lich) {
+function spawnTwinBoss(lich, position) {
   const s = new Skeleton('Executioner', game.phase, true);
   s.maxHp = s.hp = Math.round(s.hp * TWIN_HP);
-  s.pos.copy(lich.pos).addScaledVector(world.sideOf(world.tangentAt(world.anchorS(game.phase))), 3);
-  s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  s.pos.copy(position);
   s.root.rotation.y = lich.root.rotation.y;
   return s;
 }
 
-// No coração do castelo, os três guardiões entram em posições separadas e
-// com atributos reduzidos para que o perigo venha da combinação de golpes.
-function prepareCastleBoss(boss, hpScale, dmgScale, title) {
-  boss.maxHp = boss.hp = Math.round(boss.maxHp * hpScale);
-  boss.dmg = Math.round(boss.dmg * dmgScale);
+// Os guardiões mantêm atributos menores no Normal; Difícil e Pesadelo aumentam
+// a resistência e o perigo do trio sem alterar as outras fases da campanha.
+const CASTLE_BOSS_DIFFICULTY = {
+  dificil: { lichHp: 1.25, lichDmg: 1.15, guardHp: 1.5, guardDmg: 1.25 },
+  pesadelo: { lichHp: 1.5, lichDmg: 1.3, guardHp: 1.8, guardDmg: 1.5 },
+};
+function prepareCastleBoss(boss, hpScale, dmgScale, title, hpDifficultyScale = 1, dmgDifficultyScale = 1) {
+  boss.maxHp = boss.hp = Math.round(boss.maxHp * hpScale * hpDifficultyScale);
+  boss.dmg = Math.round(boss.dmg * dmgScale * dmgDifficultyScale);
   boss.kind = { ...boss.kind, title };
   boss.emissiveDirty = true;
   return boss;
 }
-function spawnCastleBosses(lich) {
+function spawnCastleBosses(lich, formation) {
   const s0 = world.anchorS(game.phase), anchor = world.pointAt(s0);
+  const tuning = CASTLE_BOSS_DIFFICULTY[difficulty.id] || { lichHp: 1, lichDmg: 1, guardHp: 1, guardDmg: 1 };
   const faceCenter = (boss) => { boss.root.rotation.y = Math.atan2(anchor.x - boss.pos.x, anchor.z - boss.pos.z); };
-  lich.pos.copy(world.along(s0 + 8, 0));
-  lich.pos.y = world.groundHeight(lich.pos.x, lich.pos.z);
-  prepareCastleBoss(lich, 0.72, 0.82, 'Coração sombrio');
+  lich.pos.copy(formation[0]);
+  prepareCastleBoss(lich, 0.72, 0.82, 'Coração sombrio', tuning.lichHp, tuning.lichDmg);
   faceCenter(lich);
   const guardians = [
-    { kind: 'Executioner', forward: 11, lateral: -6, hp: 0.42, dmg: 0.58, title: 'Carrasco do trono' },
-    { kind: 'DarkKnight', forward: 15, lateral: 6, hp: 0.46, dmg: 0.56, title: 'Cavaleiro do Eclipse' },
+    { kind: 'Executioner', position: formation[1], hp: 0.42, dmg: 0.58, title: 'Carrasco do trono' },
+    { kind: 'DarkKnight', position: formation[2], hp: 0.46, dmg: 0.56, title: 'Cavaleiro do Eclipse' },
   ];
   for (const entry of guardians) {
     const boss = new Skeleton(entry.kind, game.phase, true);
-    boss.pos.copy(world.along(s0 + entry.forward, entry.lateral));
-    boss.pos.y = world.groundHeight(boss.pos.x, boss.pos.z);
-    prepareCastleBoss(boss, entry.hp, entry.dmg, entry.title);
+    boss.pos.copy(entry.position);
+    prepareCastleBoss(boss, entry.hp, entry.dmg, entry.title, tuning.guardHp, tuning.guardDmg);
     faceCenter(boss);
   }
 }
@@ -9071,13 +9492,15 @@ function huntThink(u, dt) {
 }
 
 function spawnHuntMark() {
+  if (game.huntMark && !game.huntMark.dead) return true;
+  const point = findSafeSkeletonRouteSpawn(world.anchorS(game.phase), { type: 'Rogue', preferredSign: 1 });
+  if (!point) { game.huntSpawnTimer = 1; return false; }
   const s = new Skeleton('Rogue', game.phase);
   s.maxHp = s.hp = Math.round(s.hp * 6);
   s.speed = Math.max(s.speed, 2.6);
   s.hunted = true;
   s.kind = { ...s.kind, think: huntThink };
-  s.pos.copy(world.along(world.anchorS(game.phase) + 13, 0));
-  s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  s.pos.copy(point);
   s.bar.classList.add('boss');
   const label = document.createElement('span');
   label.textContent = 'Alvo marcado';
@@ -9085,7 +9508,8 @@ function spawnHuntMark() {
   for (const m of s.mats) { m.userData ||= {}; m.userData.glow = 0x5c1212; }
   s.emissiveDirty = true;
   game.huntMark = s;
-  return s;
+  game.huntSpawnTimer = 0;
+  return true;
 }
 
 const clockText = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -9208,9 +9632,9 @@ function campaignTick(dt, skeletons, party = heroes()) {
   if (captive && game.state === 'fight') {   // libertar leva tempo; longe dele o progresso cai devagar
     const rescueThreatened = rescueAreaThreatened(captive, skeletons);
     let near = false;
-    if (!rescueThreatened) for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS) { near = true; break; }
+    if (!rescueThreatened && game.rescueGuardsPending <= 0) for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS) { near = true; break; }
     game.rescueT = near ? game.rescueT + dt : Math.max(0, game.rescueT - dt * 0.5);
-    captive.nameTag.textContent = rescueThreatened ? 'Limpe a área'
+    captive.nameTag.textContent = game.rescueGuardsPending > 0 ? 'Guardas se aproximando' : rescueThreatened ? 'Limpe a área'
       : game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';
   }
   if (captive && game.rescueT >= RESCUE_TIME) {
@@ -9245,13 +9669,16 @@ function campaignTick(dt, skeletons, party = heroes()) {
   const lost = newGoalTick(goal, dt, skeletons);
   if (lost) return fail(lost);
   if (hasDestructionGoal(goal) && game.state === 'fight') {
+    let summonCount = skeletons.length + pendingMonsterSummons();
     for (const t of skeletons) if (t.totem && (t.spawnT -= dt) <= 0) {
+      if (summonCount >= 12) { t.spawnT = 6 * difficulty.interval; continue; }
+      const type = Math.random() < 0.3 ? 'Warrior' : 'Minion';
+      const point = findTotemSummonPoint(t, type);
+      if (!point) { t.spawnT = 0.8 * difficulty.interval; continue; }
       t.spawnT = 6 * difficulty.interval;
-      if (skeletons.length >= 12) continue;
-      const s = new Skeleton(Math.random() < 0.3 ? 'Warrior' : 'Minion', game.phase);
-      const a = Math.random() * Math.PI * 2;
-      s.pos.set(t.pos.x + Math.cos(a) * 1.6, 0, t.pos.z + Math.sin(a) * 1.6);
-      s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+      const s = new Skeleton(type, game.phase);
+      s.pos.copy(point);
+      summonCount++;
     }
   }
   // indicador no HUD
@@ -9400,36 +9827,55 @@ function spawnSkeleton() {
   }
   // fases 3, 7 e 10 fecham a onda com uma dupla de atiradores no chão, atrás do grupo
   if ((p === 3 || p === 7 || p === 10) && game.toSpawn <= 2 && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
-  const s = new Skeleton(type, p, boss);
   const s0 = world.anchorS(p);
   const behind = p >= difficulty.behindFrom && !lead && game.mission?.goal.type !== 'breach' && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
-  for (let tries = 0; tries < 12; tries++) {
-    const at = behind ? s0 - 9 - Math.random() * 3 : s0 + 11 + Math.random() * 6;
-    s.pos.copy(world.along(at, (Math.random() * 2 - 1) * (ROAD - 1)));
-    if (!world.obstacles.some((o) => Math.hypot(o.x - s.pos.x, o.z - s.pos.z) < o.r + 0.8)) break;
+  const preferredSign = behind ? -1 : 1;
+  const twinMission = game.mission?.goal.type === 'twin' && lead && boss;
+  const castleBossMission = game.mission?.goal.type === 'bosses' && lead && boss;
+  let formation;
+  if (twinMission) formation = findTwinBossFormation(s0, preferredSign, type);
+  else if (castleBossMission) formation = findCastleBossFormation();
+  else {
+    const preferredPoints = [];
+    for (let tries = 0; tries < 12; tries++) {
+      const at = s0 + preferredSign * (behind ? 9 + Math.random() * 3 : 11 + Math.random() * 6);
+      preferredPoints.push(world.along(at, (Math.random() * 2 - 1) * (ROAD - 1)));
+    }
+    const point = findSafeSkeletonRouteSpawn(s0, { type, boss, preferredSign, zone, preferredPoints });
+    if (!point) return false;
+    formation = [point];
   }
-  if (zone) {
+  if (!formation) return false;
+  if (!twinMission && !castleBossMission && zone) {
     const points = zone.type === 'lake' && !boss && game.toSpawn % 3 === 0 ? zone.water : zone.ground;
-    s.pos.copy(points[game.toSpawn % points.length]);
-    if (world.isShallow(s.pos.x, s.pos.z)) waterSplash(s.pos, true);
+    for (let i = 0; i < points.length; i++) {
+      const point = points[(game.toSpawn + i) % points.length].clone();
+      point.y = world.groundHeight(point.x, point.z);
+      if (!isSafeSkeletonSpawn(point, { size: skeletonSpawnSize(type, boss), zone })) continue;
+      formation[0] = point;
+      if (world.isShallow(point.x, point.z)) waterSplash(point, true);
+      break;
+    }
   }
-  s.pos.y = world.groundHeight(s.pos.x, s.pos.z);
+  const s = new Skeleton(type, p, boss);
+  s.pos.copy(formation[0]);
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
   if (game.mission?.goal.type === 'defend' && !lead && Math.random() < 0.45) s.raider = true;   // saqueadores correm para o santuário
   if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.3) s.raider = true;   // corredores vão direto à ponte
   if (game.mission?.goal.type === 'elite' && !lead) makeElite(s);
   if (lead && boss && game.mission?.boss?.phase === p && game.mission.boss.mod) applyBossMod(s, game.mission.boss.mod);   // Rei Espectral, Carrasco Afogado
-  if (game.mission?.goal.type === 'twin' && lead && boss) spawnTwinBoss(s);
-  if (game.mission?.goal.type === 'bosses' && lead && boss) spawnCastleBosses(s);
+  if (twinMission) spawnTwinBoss(s, formation[1]);
+  if (castleBossMission) spawnCastleBosses(s, formation);
   if (game.mission?.goal.type === 'duel' && lead && boss) {   // o Rei do duelo é feito para um herói só
     s.maxHp = s.hp = Math.round(s.hp * game.mission.goal.bossHp);
     s.dmg = Math.round(s.dmg * game.mission.goal.bossDmg);
   }
+  return true;
 }
 
 // monsters.js usa estas peças do jogo (ele não importa o main.js)
-linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, markEmissiveDirty: (unit) => { if (unit) unit.emissiveDirty = true; }, livingAllies: () => activeTargetContext?.livingAllies || allies().filter((unit) => !unit.dead), rangedHeroes: () => activeTargetContext?.rangedHeroes || heroes().filter((hero) => hero.ranged), scene, assets, get world() { return world; }, ring, beam, poof, popText, showBanner,
+linkMonsters({ Skeleton, units, heroes, allies, skeletonsAlive, isSafeSkeletonSummonPoint, findSafeSkeletonSummonPoint, markEmissiveDirty: (unit) => { if (unit) unit.emissiveDirty = true; }, livingAllies: () => activeTargetContext?.livingAllies || allies().filter((unit) => !unit.dead), rangedHeroes: () => activeTargetContext?.rangedHeroes || heroes().filter((hero) => hero.ranged), scene, assets, get world() { return world; }, ring, beam, poof, popText, showBanner,
   get game() { return game; }, get difficulty() { return difficulty; } });
 
 // Com a onda ainda longe, a formação anda ao encontro dela em vez de esperar parada no posto;
@@ -9477,6 +9923,14 @@ function updateGame(dt) {
   if (!alive.length) return endGame(game.mission?.goal.type === 'nofall'
     ? `Todo o grupo caiu na fase ${game.phase}. A missão terminou.`
     : `Os esqueletos venceram na fase ${game.phase}.`, false);
+  if (game.state === 'fight' && game.mission?.goal.type === 'rescue' && game.rescueGuardsPending > 0 && game.villager && !game.villager.dead) {
+    game.rescueSpawnTimer -= dt;
+    if (game.rescueSpawnTimer <= 0) spawnRescueGuards(game.villager);
+  }
+  if (game.state === 'fight' && game.mission?.goal.type === 'hunt' && !game.huntMark && !game.huntDown) {
+    game.huntSpawnTimer -= dt;
+    if (game.huntSpawnTimer <= 0) spawnHuntMark();
+  }
   if (game.mission && campaignTick(dt, skeletons, party)) return;
 
   if (game.state === 'fight') {
@@ -9488,7 +9942,12 @@ function updateGame(dt) {
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
       const bossWaits = game.bossPending && game.toSpawn === 1 && skeletons.length > 4;   // o chefe só entra quando a onda diminui, sem chegar junto com ela
-      if (game.spawnTimer <= 0 && !bossWaits) { spawnSkeleton(); game.toSpawn--; game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval; }
+      if (game.spawnTimer <= 0 && !bossWaits) {
+        if (spawnSkeleton()) {
+          game.toSpawn--;
+          game.spawnTimer = Math.max(0.3, 1.0 - game.phase * 0.05) * difficulty.interval;
+        } else game.spawnTimer = 0.8 * difficulty.interval;
+      }
     } else if (!skeletons.length && !captivePrisoner()) {   // o prisioneiro preso segura a fase
       if (game.mission && game.phase >= game.last) {
         let hp = 0, maxHp = 0;
@@ -9534,11 +9993,13 @@ function updateGame(dt) {
     const goal = world.anchorS(game.phase);
     game.guideS = Math.min(goal, game.guideS + MARCH * dt);
     for (const h of party) h.setAnchor(game.guideS);
-    if (game.guideS >= goal && alive.every((h) => h.pos.distanceTo(h.post) < 0.6)) startPhase();
+    const formationReady = alive.every((h) => h.pos.distanceTo(h.post) < 0.6);
+    if (game.guideS >= goal && (formationReady || game.mission?.goal.type === 'bosses')) startPhase();
   }
 
-  setText('wave', `${game.phase}/${game.last}`);
-  setTip('wave', `Fase ${game.phase} de ${game.last}`);
+  const missionNumber = game.mission ? MISSIONS.indexOf(game.mission) + 1 : 0;
+  setText('wave', game.mission ? `M${missionNumber} · ${game.phase}/${game.last}` : `${game.phase}/${game.last}`);
+  setTip('wave', `${game.mission ? `Missão ${missionNumber} · ` : ''}Fase ${game.phase} de ${game.last}`);
   // totens, torre e prisioneiro seguram a fase: sem esqueletos comuns, o HUD diz o que falta
   const objective = game.state === 'fight' && !game.toSpawn && skeletons.every((s) => s.totem) ? objectiveHint(skeletons) : null;
   let foes = game.state === 'fight' ? game.toSpawn : 0;
@@ -9584,12 +10045,13 @@ function endGame(text, won = false) {
   const missionIndex = MISSIONS.indexOf(game.mission);
   const followingWasOpen = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1);
   const missionStars = game.mission ? missionEnd(won) : null;
-  const nextMission = game.mission && won && !game.test
-    ? MISSIONS.find((mission, index) => unlocked(index) && starsOf(mission.id) === 0)?.name || null
+  const following = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1) ? MISSIONS[missionIndex + 1] : null;
+  const nextUnstarredAfter = game.mission && won && !game.test
+    ? MISSIONS.find((mission, index) => index > missionIndex && unlocked(index) && starsOf(mission.id) === 0) || null
     : null;
+  const next = !won ? null : nextUnstarredAfter;
+  const nextMission = next?.name || null;
   if (game.mission) {   // próximo passo: a missão recém-liberada (ou a seguinte) ou repetir a atual
-    const following = missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1) ? MISSIONS[missionIndex + 1] : null;
-    const next = !won ? null : MISSIONS.find((mission) => mission.name === nextMission) || following;
     const replay = { replay: game.mission, team: (game.roster || []).map((h) => h.cfg), seed: world.seed };
     $('overlayNext').innerHTML = missionNextHTML(won, next, next === following && following && !followingWasOpen);
     const nextBtn = $('overlayNext').querySelector('[data-act="next"]');

@@ -71,10 +71,10 @@ const EXTRA_SKILLS = {
   ninja: [
     { name: 'Bomba de Fumaça', description: 'Some em fumaça e atinge um alvo próximo.', effect: 'shadow', cooldown: 21, power: 1.7, color: 0x9daaff },
     { name: 'Dança dos Fantasmas', description: 'Cortes velozes atingem todos os inimigos ao redor.', effect: 'shadow-storm', cooldown: 62, radius: 5, power: 2.3, color: 0x9daaff },
-    { name: 'Shuriken Gigante', description: 'Uma shuriken enorme corta a fila na ida e na volta.', effect: 'giant-shuriken', targeting: 'enemy', cooldown: 17, range: 8, power: 0.9, color: 0x9daaff },
+    { name: 'Shuriken Gigante', description: 'Uma shuriken enorme corta a fila na ida e na volta; contra um inimigo isolado, causa 25% mais dano.', effect: 'giant-shuriken', targeting: 'enemy', cooldown: 17, range: 8, power: 0.9, color: 0x9daaff },
   ],
   duelist: [
-    { name: 'Corte em X', description: 'Avança em linha reta e corta em X todos os inimigos no caminho.', effect: 'cross-dash', cooldown: 19, radius: 6.5, range: 6.5, power: 1.6, color: 0xc9d4e2 },
+    { name: 'Corte em X', description: 'Avança em linha reta e corta em X todos os inimigos no caminho; contra um inimigo isolado, causa 25% mais dano.', effect: 'cross-dash', cooldown: 19, radius: 6.5, range: 6.5, power: 1.6, color: 0xc9d4e2 },
     { name: 'Dança de Lâminas', description: 'Gira por alguns segundos cortando todos ao redor e desviando de parte dos golpes.', effect: 'blade-dance', cooldown: 62, radius: 3.5, power: 2.6, duration: 3, color: 0xc9d4e2 },
     { name: 'Contra-ataque', description: 'Assume a guarda: apara todos os golpes por instantes e devolve um corte a cada ataque corpo a corpo.', effect: 'riposte', cooldown: 18, radius: 3, duration: 2.5, power: 1.4, color: 0xc9d4e2 },
   ],

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MAP_STYLES } from './world.js';
-import { preloadSceneryAssets, sceneryModel, sceneryReady } from './scenery-assets.js';
+import { preloadSceneryAssets, sceneryModel, sceneryReady, VILLAGE_MODELS } from './scenery-assets.js';
 import { makeBuilding, makeBridge, makeTree } from './village-models.js';
 import { CAMPAIGN_ROAD, CHAPTER_COSMETICS, campaignRoadX } from './campaign.js';
 
@@ -17,7 +17,7 @@ const THEMES = [
   { style: 'Crepúsculo', gloom: 0.45, round: 0.05, pine: 0.55, rock: 0.4, density: 0.75, dead: true },   // IV: torre, cemitério
   { style: 'Crepúsculo', gloom: 0.75, round: 0, pine: 0.25, rock: 0.7, density: 0.45, dead: true },      // V: além do castelo
   { style: 'Crepúsculo', gloom: 0.9, round: 0, pine: 0.15, rock: 0.85, density: 0.35, dead: true },      // VI: coração sombrio
-  { style: 'Crepúsculo', gloom: 0.55, ash: 0.5, round: 0, pine: 0.05, rock: 1, density: 0.3, dead: true },   // VII: asas de osso (cinzas nas ameias)
+  { style: 'Cinzas', gloom: 0.28, ash: 0.18, round: 0, pine: 0.04, rock: 1, density: 0.42, dead: true },   // VII: ameias, cinzas quentes e ossadas
 ];
 const ASH = new THREE.Color(0x7a4a36);   // chão queimado do ninho do dragão
 const GLOOM = new THREE.Color(0x4a4058);
@@ -26,7 +26,7 @@ const SKY = [new THREE.Color(0xa9d6f0), new THREE.Color(0x6d6488)];
 // Marco ao lado de cada missão conhecida; missões novas ficam só com o estandarte.
 const LANDMARKS = { vila: 'village', santuario: 'shrine', chamas: 'fire', fazendas: 'farm', lago: 'lake', duelo: 'arena',
   caca: 'grove', resgate: 'cage', ruinas: 'ruins', torre: 'boneTower', 'lago-sombrio': 'darkLake', cemiterio: 'graves',
-  horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne', arauto: 'herald', ninho: 'nest', 'asas-de-osso': 'dragonSkull' };
+  horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne', 'coracao-do-castelo': 'heart', arauto: 'herald', ninho: 'nest', 'asas-de-osso': 'dragonSkull' };
 const STATE_COLORS = { locked: 0x7c7f89, open: 0xf3c24f, done: 0xe9dfc6, lockedBanner: 0x5f636d, starOn: 0xffd84a, starOff: 0x3b3f4b, pole: 0x8a5a2e };
 
 const CAMERA_DIST = 46;   // trecho com 4–6 missões à vista
@@ -112,19 +112,54 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     P(g, 'cone', flameA, [x, 0.45 * s, z], [0.35 * s, 0.9 * s, 0.35 * s]);
     P(g, 'cone', flameB, [x + 0.08, 0.4 * s, z + 0.1], [0.2 * s, 0.65 * s, 0.2 * s]);
   }
-  function addBuilding(g, type, x, z, s, ry = 0) {
-    const b = type === 'tree' ? makeTree(2) : makeBuilding(type);
+  function addBuilding(g, type, x, z, s, ry = 0, variant = 0) {
+    const b = type === 'tree' ? makeTree(2) : makeBuilding(type, variant);
     b.position.set(x, 0, z); b.scale.setScalar(s); b.rotation.y = ry;
     g.add(b);
+  }
+  const villageKitProps = [];
+  function addVillageProp(group, model, x, z, scale, ry = 0, lift = 0) {
+    villageKitProps.push({ group, model, x, z, scale, ry, lift });
+  }
+  function fallbackVillageDecor(g) {
+    const barrel = (x, z) => {
+      P(g, 'cyl', 0x80552e, [x, 0.22, z], [0.16, 0.42, 0.16]);
+      for (const y of [0.08, 0.35]) P(g, 'cyl', 0x4f3828, [x, y, z], [0.17, 0.035, 0.17]);
+    };
+    barrel(-2.25, 0.55); barrel(2.3, -0.8);
+    P(g, 'box', 0x8a5a2e, [2.45, 0.2, -1.5], [0.48, 0.4, 0.48], [0, 0.2, 0]);
+    P(g, 'box', 0x9a6a36, [2.42, 0.57, -1.48], [0.42, 0.32, 0.42], [0, -0.12, 0]);
+    for (const [x, z] of [[-2.25, -0.8], [1.9, 1.35]]) {
+      P(g, 'box', 0x80552e, [x, 0.37, z], [0.44, 0.09, 0.4]);
+      for (const dx of [-0.16, 0.16]) for (const dz of [-0.13, 0.13]) P(g, 'box', 0x5e3d25, [x + dx, 0.18, z + dz], [0.055, 0.36, 0.055]);
+      P(g, 'box', 0x80552e, [x, 0.67, z - 0.17], [0.44, 0.58, 0.06]);
+    }
+    for (const [x, z] of [[-0.65, 1.35], [2.25, 0.1]]) {
+      P(g, 'box', 0x593c26, [x, 0.78, z], [0.055, 0.82, 0.055]);
+      P(g, 'cone', 0xff9a35, [x, 1.25, z], [0.11, 0.22, 0.11]);
+      P(g, 'cone', 0xffd45a, [x, 1.24, z], [0.06, 0.16, 0.06]);
+    }
+    P(g, 'box', 0x593c26, [-2.35, 0.82, -2.0], [0.055, 1.64, 0.055]);
+    P(g, 'box', 0x9a2230, [-2.13, 1.35, -2.0], [0.42, 0.54, 0.05]);
   }
   const extraTrees = [], windmills = [];
   const BUILD = {
     village(g) {
-      addBuilding(g, 'house', -1.3, 0.5, 0.42, 0.4);
-      addBuilding(g, 'house', 1.5, -0.6, 0.38, -0.5);
-      addBuilding(g, 'house', 0.1, -2, 0.36, 0.1);
+      addBuilding(g, 'house', -1.3, 0.5, 0.42, 0.4, 0);
+      addBuilding(g, 'house', 1.5, -0.6, 0.38, -0.5, 1);
+      addBuilding(g, 'house', 0.1, -2, 0.36, 0.1, 2);
       P(g, 'hex', stone, [0.3, 0.25, 1.2], [0.4, 0.5, 0.4]);
       P(g, 'hex', 0x3e6f9a, [0.3, 0.52, 1.2], [0.3, 0.05, 0.3]);
+      if (sceneryReady(VILLAGE_MODELS)) {
+        addVillageProp(g, 'barrel_small', -2.25, 0.55, 0.34);
+        addVillageProp(g, 'barrel_small', 2.3, -0.8, 0.31, 0.8);
+        addVillageProp(g, 'crates_stacked', 2.45, -1.5, 0.27, 0.2);
+        addVillageProp(g, 'chair', -2.25, -0.8, 0.43, -0.35);
+        addVillageProp(g, 'chair', 1.9, 1.35, 0.4, Math.PI);
+        addVillageProp(g, 'torch_mounted', -0.65, 1.35, 0.42, 0.4, 0.9);
+        addVillageProp(g, 'torch_mounted', 2.25, 0.1, 0.42, -0.5, 0.85);
+        addVillageProp(g, 'banner_patternA_red', -2.35, -2, 0.4, -0.15);
+      } else fallbackVillageDecor(g);
     },
     shrine(g) {
       P(g, 'hex', stone, [0, 0.18, 0], [1, 0.36, 1]);
@@ -236,6 +271,12 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       P(g, 'box', bone, [0, 0.7, 0.1], [0.9, 0.6, 0.8]);
       P(g, 'box', bone, [0, 1.6, -0.3], [0.9, 1.8, 0.2]);
       for (const x of [-0.45, 0, 0.45]) P(g, 'cone', bone, [x, 2.75, -0.3], [0.12, 0.6, 0.12]);
+    },
+    heart(g) {
+      P(g, 'hex', darkStone, [0, 0.16, 0], [1.7, 0.32, 1.7]);
+      P(g, 'crystal', 0xc0297d, [0, 1.25, 0], [0.62, 1.7, 0.62]);
+      P(g, 'crystal', 0x9a56e8, [0.62, 1.12, 0.18], [0.3, 0.95, 0.3], [0.18, 0, -0.32]);
+      P(g, 'cyl', 0x8b315f, [0, 0.48, 0], [1.15, 0.08, 1.15]);
     },
   };
   // 'roof' (prisma) só existe no village-models; aqui uma pirâmide de 4 lados serve
@@ -364,6 +405,32 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   own.mats.push(staticMat);
   const scene = new THREE.Scene();
   scene.add(new THREE.Mesh(staticGeo, staticMat));
+  if (villageKitProps.length && sceneryReady(VILLAGE_MODELS)) {
+    const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
+    const orientation = new THREE.Quaternion(), localOrientation = new THREE.Quaternion();
+    const scale = new THREE.Vector3(), axisY = new THREE.Vector3(0, 1, 0);
+    for (const name of VILLAGE_MODELS) {
+      const props = villageKitProps.filter((prop) => prop.model === name);
+      const model = sceneryModel(name);
+      if (!model || !props.length) continue;
+      const instances = new THREE.InstancedMesh(model.geometry, model.material, props.length);
+      instances.frustumCulled = false;
+      props.forEach((prop, i) => {
+        prop.group.updateWorldMatrix(true, false);
+        position.set(prop.x, 0, prop.z);
+        prop.group.localToWorld(position);
+        prop.group.getWorldQuaternion(orientation).multiply(localOrientation.setFromAxisAngle(axisY, prop.ry));
+        const size = prop.scale * prop.group.scale.x;
+        position.y = heightAt(position.x, position.z) + prop.lift - model.geometry.boundingBox.min.y * size;
+        matrix.compose(position, orientation, scale.setScalar(size));
+        instances.setMatrixAt(i, matrix);
+        instances.setColorAt(i, color.setHex(0xffffff).lerp(GLOOM, themeOf(chapterAt(position.x, position.z)).gloom * 0.28));
+      });
+      instances.computeBoundingSphere();
+      own.instanced.push(instances);
+      scene.add(instances);
+    }
+  }
 
   // água: rio e lagos numa malha translúcida
   {
@@ -424,16 +491,28 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   }
   for (const t of extraTrees) if (roadDist(t.x, t.z) > 1.8) plants.pine.push({ ...t, theme: themeOf(chapterAt(t.x, t.z)) });
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
+  const windTime = { value: 0 };
+  function addWind(mat, strength) {
+    const amplitude = { value: strength };
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uFoliageWind = windTime;
+      shader.uniforms.uWindStrength = amplitude;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uFoliageWind;\nuniform float uWindStrength;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nfloat windPhase = uFoliageWind * 1.1 + instanceMatrix[3][0] * 0.3 + instanceMatrix[3][2] * 0.24;\nfloat windHeight = max(position.y, 0.0);\ntransformed.x += sin(windPhase + position.y * 1.4) * uWindStrength * windHeight;\ntransformed.z += cos(windPhase * 0.82 + position.y) * uWindStrength * windHeight;');
+    };
+  }
   // giro e escala sorteados antes (na ordem de sempre): procedural e modelos prontos dão o mesmo mapa
   const spin = (items) => items.forEach((it) => { it.ry ??= rand() * Math.PI * 2; it.s ??= 0.42 + rand() * 0.25; });
   spin(plants.pine); spin(plants.round);
   plants.rock.forEach((it) => (it.s = 0.5 + rand() * 0.7));
   spin(plants.rock);
-  function instancedFrom(template, items, tint, out) {
+  function instancedFrom(template, items, tint, out, sway = false) {
     template.updateMatrixWorld(true);
     template.traverse((o) => {
       if (!o.isMesh || !items.length) return;
       const mat = new THREE.MeshLambertMaterial({ flatShading: true });
+      if (sway && !isTrunk(o)) addWind(mat, 0.04);
       const im = new THREE.InstancedMesh(o.geometry, mat, items.length);   // geometria compartilhada do village-models: não é liberada aqui
       items.forEach((it, k) => {
         q.setFromAxisAngle(up, it.ry);
@@ -455,8 +534,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   };
   const isTrunk = (o) => o.material.color.getHex() === STATE_COLORS.pole;
   // árvores procedurais de copa redonda (o usuário preferiu às copas quadradas do Forest pack)
-  instancedFrom(makeTree(0), plants.pine, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).pine, k)), []);
-  instancedFrom(makeTree(2), plants.round, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).canopy, k)), []);
+  instancedFrom(makeTree(0), plants.pine, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).pine, k)), [], true);
+  instancedFrom(makeTree(2), plants.round, (o, it, k) => (isTrunk(o) ? trunk(it) : canopy(it, styleOf(it.theme).canopy, k)), [], true);
   function proceduralRocks() {
     const out = [];
     const rock = new THREE.Group();
@@ -515,8 +594,9 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     e.set(it.rx || 0, it.ry || 0, it.rz || 0);
     return m4.compose(v3.set(it.x, it.y, it.z), q.setFromEuler(e), s3.set(it.sx, it.sy ?? it.sx, it.sz ?? it.sx));
   }
-  function instances(geo, mat, list) {
+  function instances(geo, mat, list, sway = 0) {
     if (!list.length) return null;
+    if (sway) addWind(mat, sway);
     const im = new THREE.InstancedMesh(geo, mat, list.length);
     list.forEach((it, k) => { im.setMatrixAt(k, compose(it)); im.setColorAt(k, it.c); });
     im.computeBoundingSphere();
@@ -565,8 +645,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       }
     }
   }
-  instances(blobGeo, lambert(), bushes);
-  instances(flowerGeo, lambert(), flowers);
+  instances(blobGeo, lambert(), bushes, 0.06);
+  instances(flowerGeo, lambert(), flowers, 0.12);
 
   // ruínas: colunas quebradas de pé e tombadas, sobretudo no capítulo das ruínas
   const columns = [];
@@ -645,6 +725,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   const span = 2 * W + 24;
   function animateDetails(t) {
     waterTime.value = t;
+    windTime.value = t;
     blades.forEach((b) => (b.rotation.z = -t * 0.9));
     torchGlow.opacity = 0.45 + Math.sin(t * 9) * 0.05 + Math.sin(t * 13.7) * 0.04;
     if (mistMesh) {

@@ -12,11 +12,12 @@ const DUNGEON_DIR = 'assets/kaykit/dungeon/Assets/gltf/';
 export const FOREST_MODELS = ['Bush_1_C', 'Bush_1_D', 'Bush_3_B', 'Bush_4_D', 'Grass_1_B', 'Grass_2_B',
   'Rock_1_E', 'Rock_2_C', 'Rock_3_E', 'Rock_3_G', 'Rock_1_J', 'Rock_3_Q']
   .map((n) => `${n}_Color1`);
+export const VILLAGE_MODELS = ['barrel_small', 'crates_stacked', 'chair', 'torch_mounted', 'banner_patternA_red'];
 export const DUNGEON_MODELS = ['floor_tile_large', 'wall', 'pillar_decorated', 'pillar',
-  'banner_patternA_red', 'banner_thin_red', 'torch_mounted', 'barrel_large', 'barrel_small_stack', 'chest_gold',
-  'crates_stacked', 'candle_triple', 'sword_shield', 'rubble_large'];
+  'banner_thin_red', 'barrel_large', 'barrel_small_stack', 'chest_gold', 'candle_triple', 'sword_shield', 'rubble_large',
+  ...VILLAGE_MODELS];
 
-// lista de arquivos (para a tela de carregamento); castle = true inclui o Dungeon pack (só a fase 13 usa)
+// lista de arquivos (para a tela de carregamento); castle = true inclui as peças do salão e da vila.
 export function sceneryAssetFiles({ castle = false } = {}) {
   const files = FOREST_MODELS.flatMap((n) => [`${FOREST_DIR}${n}.gltf`, `${FOREST_DIR}${n}.bin`]);
   files.push(`${FOREST_DIR}forest_texture.png`);
@@ -69,7 +70,7 @@ function loadPack(key, dir, names) {
   return packs[key];
 }
 
-// Pré-carrega o necessário (Forest sempre; Dungeon só com castle). Resolve true quando tudo chegou.
+// Pré-carrega o necessário (Forest sempre; Dungeon quando o mapa pede castelo ou decoração da vila).
 export function preloadSceneryAssets({ castle = false } = {}) {
   if (typeof document === 'undefined') return Promise.resolve(false);   // testes em Node: fica o procedural
   const forest = loadPack('forest', FOREST_DIR, FOREST_MODELS);

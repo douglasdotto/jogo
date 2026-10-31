@@ -77,6 +77,8 @@ const mSeen = new Set();   // tipos já apresentados nesta partida
 const mFxUnits = new Set();   // snapshot reutilizável para checar donos removidos sem varrer units por efeito
 const mBossWarnings = new Set();   // avisos anunciados, sem rever todos os efeitos ao atualizar a barra
 let ownedFxCount = 0;
+let mPendingSummons = 0;
+export const pendingMonsterSummons = () => mPendingSummons;
 
 function refreshFxUnits() {
   mFxUnits.clear();
@@ -107,7 +109,7 @@ function disposeFx(f) {
 
 // aviso que enche até o golpe; some sem golpear se o dono morrer ou ficar zonzo
 // hole: anel (só machuca entre hole e radius; o centro fica seguro)
-function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, harmless = false, follow = null, announce = '', notice = 0.6, hole = 0 } = {}) {
+function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, harmless = false, follow = null, announce = '', notice = 0.6, hole = 0, cleanup = null } = {}) {
   const group = new THREE.Group();
   const fillMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.34, depthWrite: false, side: THREE.DoubleSide });
   const edgeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: line ? 0.22 : 0.9, depthWrite: false, side: THREE.DoubleSide });
@@ -123,7 +125,7 @@ function warn(owner, at, radius, time, end, { color = 0xff3b30, line = null, har
   if (line) group.rotation.y = Math.atan2(line.dir.x, line.dir.z);
   G.scene.add(group);
   const effect = track({ owner, at: at.clone(), radius, line, announce: owner?.boss && !harmless ? announce : '', harmless: harmless || !!follow, interruptible: !harmless, warning: true, t: time, life: time, meshes: [group], mats: [fillMat, edgeMat], dodge: new Map(), notice, end, hole,
-    cleanup: holeGeo ? () => holeGeo.dispose?.() : undefined,
+    cleanup: (f) => { if (holeGeo) holeGeo.dispose?.(); cleanup?.(f); },
     step(f) {
       const k = 1 - Math.max(0, f.t) / f.life;
       if (follow && !follow.dead) { f.at.copy(follow.pos); group.position.copy(follow.pos); group.position.y += 0.07; }
@@ -235,6 +237,7 @@ function tickAfflictions(dt) {
 }
 
 function summon(type, at, anim) {
+  if (!G.isSafeSkeletonSummonPoint?.(at, type) || G.game.over) return null;
   const s = new G.Skeleton(type, G.game.phase);
   s.pos.copy(at);
   s.pos.y = G.world.groundHeight(at.x, at.z);
@@ -243,6 +246,44 @@ function summon(type, at, anim) {
   if (anim) s.busy = s.once(anim);
   s.summoned = true;
   return s;
+}
+
+function warnSummon(owner, type, preferredAt, { anim = null, color = 0x9b59ff, radius = 0.6, time = 0.9, retries = 1, avoid = [], grave = null, canSpawn = null, onComplete = null, token = null } = {}) {
+  const at = G.findSafeSkeletonSummonPoint?.(preferredAt, type, avoid);
+  if (!at) {
+    if (token && !token.released) {
+      token.released = true;
+      mPendingSummons = Math.max(0, mPendingSummons - 1);
+      if (grave?.reservedBy === owner) delete grave.reservedBy;
+      if (grave && !owner.dead && !G.game.over) owner.cd.revive = Math.min(owner.cd.revive || 0.8, 0.8);
+      onComplete?.(false, null);
+    } else onComplete?.(false, null);
+    return null;
+  }
+  const pending = token || { released: false };
+  if (!token) mPendingSummons++;
+  if (grave) grave.reservedBy = owner;
+  const complete = (success, created = null) => {
+    if (pending.released) return;
+    pending.released = true;
+    mPendingSummons = Math.max(0, mPendingSummons - 1);
+    if (!success && grave?.reservedBy === owner) delete grave.reservedBy;
+    onComplete?.(success, created);
+  };
+  warn(owner, at, radius, time, () => {
+    if (G.game.over || grave && (!mGraves.includes(grave) || grave.reservedBy !== owner)) { complete(false); return; }
+    const room = !canSpawn || canSpawn();
+    const created = room ? summon(type, at, anim) : null;
+    if (created) { complete(true, created); return; }
+    if (retries > 0 && warnSummon(owner, type, at, { anim, color, radius, time, retries: retries - 1, avoid, grave, canSpawn, onComplete, token: pending })) return;
+    complete(false);
+  }, { color, harmless: true, cleanup: (f) => {
+    if (f.completing) return;
+    if (grave?.reservedBy === owner) delete grave.reservedBy;
+    if (grave && !owner.dead && !G.game.over) owner.cd.revive = Math.min(owner.cd.revive || 0.8, 0.8);
+    if (!pending.released) { pending.released = true; mPendingSummons = Math.max(0, mPendingSummons - 1); }
+  } });
+  return at;
 }
 
 const around = (center, n, radius, turn = 0) => Array.from({ length: n }, (_, i) => {
@@ -611,15 +652,28 @@ export const MONSTER_TYPES = {
     tick(s, dt) { s.cd.heal -= dt; s.cd.revive -= dt; s.halo.rotation.z += dt * 2; },
     think(s, dt, target) {
       if (!target) return true;
-      if (s.cd.revive <= 0 && countAliveSkeletons() < 12) {
-        const grave = nearestOf(s.pos, mGraves.filter((g) => flat(g.pos, s.pos) < 9));
+      if (s.cd.revive <= 0 && countAliveSkeletons() + mPendingSummons < 12) {
+        const grave = nearestOf(s.pos, mGraves.filter((g) => !g.reservedBy && flat(g.pos, s.pos) < 9));
         if (grave) {
-          mGraves.splice(mGraves.indexOf(grave), 1);
           faceNow(s, grave.pos);
           s.busy = s.once('Spellcast_Summon', 1.2);
+          const at = warnSummon(s, grave.type, grave.pos, { anim: 'Death_C_Skeletons_Resurrect', color: 0x4dff7a, radius: 0.9, time: 1.2, retries: 2, grave,
+            canSpawn: () => countAliveSkeletons() + mPendingSummons <= 12,
+            onComplete: (success, revived) => {
+              if (success) {
+                const index = mGraves.indexOf(grave);
+                if (index >= 0) mGraves.splice(index, 1);
+                delete grave.reservedBy;
+                s.cd.revive = 13;
+                G.ring(revived.pos, 1.2, 0x6dff8c, 0.9);
+              } else {
+                if (grave.reservedBy === s) delete grave.reservedBy;
+                s.cd.revive = 0.8;
+              }
+            } });
+          if (!at) { s.cd.revive = 0.8; return true; }
           s.cd.revive = 13;
-          G.beam(s.pos, grave.pos, 0x6dff8c);
-          warn(s, grave.pos, 0.9, 1.2, () => { summon(grave.type, grave.pos, 'Death_C_Skeletons_Resurrect'); G.ring(grave.pos, 1.2, 0x6dff8c, 0.9); }, { color: 0x4dff7a, harmless: true });
+          G.beam(s.pos, at, 0x6dff8c);
           G.popText(s.pos, 'Levante-se!', 'heal');
           return true;
         }
@@ -695,11 +749,27 @@ export const MONSTER_TYPES = {
       s.bob += dt;
       s.hover = (s.diving ? 0.25 : 0.1) + Math.sin(s.bob * 5) * 0.08;
       s.trail.scale.y = 0.45 + Math.random() * 0.2 + (s.diving ? 0.4 : 0);
-      if (!s.pack) return;
-      const n = s.pack;
-      s.pack = 0;
+      s.packRetry = Math.max(0, (s.packRetry || 0) - dt);
+      if (!s.pack || s.packRetry > 0) return;
+      const n = Math.min(s.pack, Math.max(0, 12 - countAliveSkeletons() - mPendingSummons));
+      if (!n) return;
+      const formation = [];
+      for (const p of around(s.pos, n, 1.1, Math.random() * 6)) {
+        const safe = G.findSafeSkeletonSummonPoint?.(p, 'Skull', formation);
+        if (!safe) { formation.length = 0; break; }
+        formation.push(safe);
+      }
+      if (formation.length !== n) { s.packRetry = 0.8; return; }
       mPacking = true;
-      try { for (const p of around(s.pos, n, 1.1, Math.random() * 6)) summon('Skull', p); } finally { mPacking = false; }
+      let created = 0;
+      try {
+        for (const p of formation) {
+          if (countAliveSkeletons() + mPendingSummons >= 12 || !summon('Skull', p)) break;
+          created++;
+        }
+      } finally { mPacking = false; }
+      s.pack = Math.max(0, s.pack - created);
+      if (s.pack) s.packRetry = 0.8;
     },
     think(s, dt, target) {
       s.diving = false;
@@ -997,12 +1067,18 @@ export const MONSTER_TYPES = {
         }, { color: 0xffb020, hole, announce: 'Onda de choque — cole no Rei ou afaste-se' });
         return true;
       }
-      if (s.cd.summon <= 0 && countAliveSkeletons() < 9) {   // invoca uma onda de lacaios
+      if (s.cd.summon <= 0 && countAliveSkeletons() + mPendingSummons < 9) {   // invoca uma onda de lacaios
         s.busy = s.once('Taunt', 1.2);
         s.cd.summon = 18;
         G.popText(s.pos, 'Às armas!', 'evolve');
-        around(s.pos, Math.round(1.7 * G.difficulty.count), 2.6, Math.random() * 6).forEach((p, i) =>
-          warn(s, p, 0.6, 0.9, () => summon(s.spectral ? 'Ghost' : i % 3 === 2 ? 'Rogue' : 'Minion', p), { color: 0x9b59ff, harmless: true }));   // o Rei Espectral chama fantasmas
+        const count = Math.min(Math.round(1.7 * G.difficulty.count), Math.max(0, 9 - countAliveSkeletons() - mPendingSummons));
+        const reserved = [];
+        around(s.pos, count, 2.6, Math.random() * 6).forEach((p, i) => {
+          const type = s.spectral ? 'Ghost' : i % 3 === 2 ? 'Rogue' : 'Minion';
+          const at = warnSummon(s, type, p, { retries: 1, avoid: reserved, canSpawn: () => countAliveSkeletons() + mPendingSummons <= 9,
+            onComplete: (success) => { if (!success) s.cd.summon = Math.min(s.cd.summon || 2, 2); } });
+          if (at) reserved.push(at);
+        });   // o Rei Espectral chama fantasmas
         return true;
       }
       if (s.cd.slam <= 0 && d < 3.6) { slam(s, target, 3.2, 1.3, 1, { down: false }); s.cd.slam = 9; return true; }
@@ -1188,11 +1264,16 @@ export const MONSTER_TYPES = {
         G.ring(s.pos, 2.5, 0xb36bff, 0.9);
         return true;
       }
-      if (s.cd.summon <= 0 && countAliveSkeletons() < 10) {
+      if (s.cd.summon <= 0 && countAliveSkeletons() + mPendingSummons < 10) {
         s.busy = s.once('Spellcast_Summon', 1.2);
         s.cd.summon = fury ? 10 : 15;
-        around(s.pos, Math.round((fury ? 2.6 : 1.8) * G.difficulty.count), 2.8, Math.random() * 6).forEach((p) =>
-          warn(s, p, 0.6, 0.9, () => summon('Ghost', p), { color: 0x9b59ff, harmless: true }));
+        const count = Math.min(Math.round((fury ? 2.6 : 1.8) * G.difficulty.count), Math.max(0, 10 - countAliveSkeletons() - mPendingSummons));
+        const reserved = [];
+        around(s.pos, count, 2.8, Math.random() * 6).forEach((p) => {
+          const at = warnSummon(s, 'Ghost', p, { retries: 1, avoid: reserved, canSpawn: () => countAliveSkeletons() + mPendingSummons <= 10,
+            onComplete: (success) => { if (!success) s.cd.summon = Math.min(s.cd.summon || 2, 2); } });
+          if (at) reserved.push(at);
+        });
         return true;
       }
       if (s.cd.rain <= 0) {   // chuva de crânios nas áreas marcadas
@@ -1366,6 +1447,7 @@ export function updateMonsterFx(dt) {
     const broken = f.owner && (f.owner.dead || f.owner.stunT > 0 || !mFxUnits.has(f.owner));
     if (!broken) f.step?.(f, dt);
     if (broken || f.t <= 0) {
+      f.completing = !broken;
       mFx.splice(i, 1);
       releaseFx(f);
       if (!broken) f.end?.(f);

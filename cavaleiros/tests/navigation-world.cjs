@@ -80,10 +80,15 @@ function createNavigationWorld({ THREE, Vector3, seed = 11, phases = 12, castleI
     ? interiorArenaS
     : firstS + ((phase - 1) * (lastS - firstS)) / (castleInterior ? 11 : phases - 1);
   const obstacles = [];
+  const groundTop = controls.at(-1).z - 45;
+  const groundBottom = routeControls[0][1] + 35;
+  const isInsideGround = (x, z, padding = 0) => Number.isFinite(x) && Number.isFinite(z)
+    && x >= -90 + padding && x <= 90 - padding
+    && z >= Math.min(groundTop, groundBottom) + padding && z <= Math.max(groundTop, groundBottom) - padding;
   const world = vm.runInNewContext(source.slice(zoneStart, zoneEnd) + ';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})', {
     THREE, pointAt, tangentAt, sideOf, along, anchorS, interiorArenaS, castleInterior, obstacles,
   });
-  return { ...world, pointAt, tangentAt, sideOf, along, anchorS, L, obstacles };
+  return { ...world, pointAt, tangentAt, sideOf, along, anchorS, isInsideGround, L, obstacles };
 }
 
 function seedRoadObstacles(world, seed, phases = 12) {

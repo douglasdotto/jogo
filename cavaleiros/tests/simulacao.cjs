@@ -80,7 +80,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
   blasts: simBlasts, sentries: [],
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
-    along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
+    along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, isInsideGround: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
   poof: noop, ring: simRing, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], flames: [], wave: noop, burst: noop, column: noop,
   FX: new Proxy({}, { get: () => noop }), clearFx: noop, popTextPool: { clear: noop }, audio: new Proxy({}, { get: () => noop }) });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
@@ -107,7 +107,7 @@ vm.runInContext(part(source, 'function releaseFxMaterial(material) {', 'function
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts, chooseHeroTarget,
-  DIFFICULTIES, MISSIONS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
+  DIFFICULTIES, MISSIONS, VARIANTS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
   setWorld: (next) => { world = next; },
   setDifficulty: (d) => { difficulty = d; },
   setFrameTargetContext: () => { activeTargetContext = game.state === 'fight' && !game.paused && !game.over ? makeTargetContext(frameTargetContext) : null; },
@@ -199,7 +199,8 @@ function play(diff, profile, mission = null) {
         const free = t.pick.options.map((_, i) => i).filter((i) => !t.heroes().some((h) => h.cfg.id === t.pick.options[i].id));
         const wantedId = profile?.[nextProfileHero++];
         const wanted = wantedId ? t.pick.options.findIndex((option) => option.id === wantedId) : -1;
-        t.confirmPick(free.includes(wanted) ? wanted : free[Math.floor(Math.random() * free.length)]);
+        if (wantedId && !free.includes(wanted)) throw new Error(`A escalação ${profileName} não conseguiu escolher ${wantedId}; o benchmark foi interrompido para não registrar um time diferente.`);
+        t.confirmPick(wantedId ? wanted : free[Math.floor(Math.random() * free.length)]);
         if (mission && initialHeroes == null && t.game.picksLeft === 0 && !t.pick.open) {
           initialParty = t.heroes().map((h) => h.cfg.id);
           initialHeroes = initialParty.length;
@@ -261,6 +262,9 @@ const runs = +(campaignMode ? process.argv[5] : process.argv[3]) || 10;
 const profileName = campaignMode ? (process.argv[6] || 'aleatorio') : (process.argv[4] || 'aleatorio');
 const seedArg = campaignMode ? process.argv[7] : process.argv[5];
 const details = campaignMode ? process.argv[8] === 'detalhe' : process.argv[6] === 'detalhe';
+const explicitTeam = profileName.startsWith('equipe=')
+  ? profileName.slice('equipe='.length).split(',').filter(Boolean)
+  : null;
 const profiles = {
   inicial: ['paladin', 'berserker', 'pyro', 'assassin'],
   equilibrado: ['paladin', 'guardian', 'pyro', 'cleric'],
@@ -287,7 +291,10 @@ if (campaignMode && !campaignMission) throw new Error(`Missão desconhecida: ${m
 if (campaignMode && !['todas', ...t.DIFFICULTIES.map((d) => d.id)].includes(which)) throw new Error(`Dificuldade desconhecida: ${which}. Use: todas, ${t.DIFFICULTIES.map((d) => d.id).join(', ')}`);
 const profile = campaignMode && profileName === 'recomendado'
   ? t.nightmareTeamPlanIds(campaignMission)
-  : profiles[profileName];
+  : explicitTeam || profiles[profileName];
+if (explicitTeam && (new Set(explicitTeam).size !== explicitTeam.length
+  || explicitTeam.some((id) => !t.VARIANTS.some((hero) => hero.id === id))))
+  throw new Error(`Equipe explícita inválida: ${profileName}. Informe IDs de heróis distintos do elenco.`);
 if (profileName !== 'aleatorio' && !profile) throw new Error(`Grupo desconhecido: ${profileName}. Use: recomendado (campanha), ${Object.keys(profiles).join(', ')}`);
 const vmMath = vm.runInContext('Math', context);
 // Métricas das técnicas extras: usos por herói/slot; SIM_SEM_SLOT=3 (ou 3:paladin,cleric) desliga o slot para medir o impacto
