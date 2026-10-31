@@ -27,12 +27,12 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
     import { applyLook, buildCharacter, CHARACTERS } from './characters.js';
-    import { LOOKS, LOOK_PREVIEW, WEAPONS } from './looks.js';
+    import { LOOKS, LOOK_PREVIEW, WEAPONS, heroLook } from './looks.js';
     import { loadHeroAssets } from './hero-anims.js';
 
     const loader = new GLTFLoader();
     const assets = {};
-    await loadHeroAssets(loader, assets, ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Skeleton_Mage']);
+    await loadHeroAssets(loader, assets, ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Knight20', 'Skeleton_Mage']);
     for (const n of ['Skeleton_Quiver', 'Skeleton_Staff']) assets[n] = await loader.loadAsync(`assets/${n}.gltf`);
 
     const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
@@ -65,10 +65,11 @@
         let model, animations, name;
         const preview = LOOK_PREVIEW.find((v) => v.id === id);
         if (!preview.recipe) {
-          model = SkeletonUtils.clone(assets[preview.model].scene);
-          model.traverse((o) => { if (WEAPONS[preview.model].includes(o.name) && !preview.use.includes(o.name)) o.visible = false; });
-          applyLook(model, assets, LOOKS[id]);
-          animations = assets[preview.model].animations;
+          const hero = heroLook(id, preview.model, q.has('v10'));   // LOOKS20: herói no modelo 2.0 (?v10 mostra o 1.0)
+          model = SkeletonUtils.clone(assets[hero.model].scene);
+          model.traverse((o) => { if (WEAPONS[hero.model].includes(o.name) && !preview.use.includes(o.name)) o.visible = false; });
+          applyLook(model, assets, hero.look);
+          animations = assets[hero.model].animations;
           name = preview.name;
         } else {
           const rc = recipe(preview.recipe);

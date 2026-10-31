@@ -5,7 +5,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createWorld, biomeForSeed, preloadSceneryAssets } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook, buildBeast, animateBeast } from './characters.js';
-import { LOOKS } from './looks.js';
+import { heroLook } from './looks.js';
 import { HERO_ANIM_FILES, HERO_PROP_FILES, heroModelFile, attachHeroAnimations, HERO_HITS, HERO_DEATHS, HERO_DODGES } from './hero-anims.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
@@ -2004,7 +2004,8 @@ function withBattleAssets(ready, build = null) {
 }
 
 async function loadAssets() {
-  const files = [...new Set([...VARIANTS.map((h) => heroModelFile(h.model)), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), ...HERO_ANIM_FILES, ...HERO_PROP_FILES, 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
+  const ONLY_V10 = new URLSearchParams(location.search).has('v10');   // ?v10: heróis todos no Adventurers 1.0 (comparar)
+  const files = [...new Set([...VARIANTS.map((h) => heroModelFile(heroLook(h.id, h.model, ONLY_V10).model)), ...CHARACTER_ASSETS.map((n) => `${n}.glb`), ...HERO_ANIM_FILES, ...HERO_PROP_FILES, 'Skeleton_Staff.gltf', 'Skeleton_Quiver.gltf'])];
   await loadAssetFiles(files, (done, total) => loading.progress(0.8 * done / total));
   attachHeroAnimations(assets);   // clipes do pacote de animações nos modelos de herói (mesmo esqueleto)
   await preloadSceneryAssets({ castle: true });   // árvores/pedras e salão do trono já prontos: o cenário não troca na frente do jogador
@@ -2012,9 +2013,10 @@ async function loadAssets() {
   // variantes comuns ganham as cores e acessórios de looks.js
   for (const cfg of VARIANTS) {
     if (cfg.recipe) { cfg.built = buildCharacter(assets, cfg.recipe); continue; }
-    const scene = SkeletonUtils.clone(assets[cfg.model].scene);
-    if (LOOKS[cfg.id]) applyLook(scene, assets, LOOKS[cfg.id]);
-    cfg.built = { scene, animations: assets[cfg.model].animations };
+    const { model, look } = heroLook(cfg.id, cfg.model, ONLY_V10);   // LOOKS20 (looks.js): herói já no modelo 2.0
+    const scene = SkeletonUtils.clone(assets[model].scene);
+    if (look) applyLook(scene, assets, look);
+    cfg.built = { scene, animations: assets[model].animations };
   }
 }
 

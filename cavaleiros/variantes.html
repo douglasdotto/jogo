@@ -33,7 +33,7 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
     import { applyLook, buildCharacter, CHARACTERS } from './characters.js';
-    import { LOOKS, LOOK_PREVIEW, WEAPONS } from './looks.js';
+    import { LOOKS, LOOK_PREVIEW, WEAPONS, heroLook } from './looks.js';
     import { loadHeroAssets } from './hero-anims.js';
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -60,7 +60,7 @@
 
     const loader = new GLTFLoader();
     const assets = {};
-    await loadHeroAssets(loader, assets, ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Skeleton_Mage']);
+    await loadHeroAssets(loader, assets, ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded', 'Ranger', 'Knight20', 'Skeleton_Mage']);
     assets.Skeleton_Quiver = await loader.loadAsync('assets/Skeleton_Quiver.gltf');
     assets.Skeleton_Staff = await loader.loadAsync('assets/Skeleton_Staff.gltf');
 
@@ -68,16 +68,18 @@
     const colOf = (o) => ['Knight', 'Barbarian', 'Mage', 'Rogue'].indexOf(o.model.replace('_Hooded', '').replace('Skeleton_', '').replace('Ranger', 'Rogue'));
     // ?only=brute,crusher mostra só esses heróis, de perto (comparar um herói com os parecidos)
     const only = new URLSearchParams(location.search).get('only')?.split(',');
+    const v10 = new URLSearchParams(location.search).has('v10');
     const list = only ? LOOK_PREVIEW.filter((v) => only.includes(v.id)) : LOOK_PREVIEW;
     if (only) { camera.position.set(0, 4, 6 + 4 * list.length); controls.target.set(0, 1.4, 0); }
     const units = list.map((v, i) => {
       const col = only ? i + 2 - list.length / 2 : colOf(v), row = only ? 2.3 : list.slice(0, i).filter((o) => colOf(o) === col).length;
       // variante por receita (characters.js): a receita já esconde e troca as peças
       const recipe = v.recipe && CHARACTERS.find((r) => r.id === v.recipe);
-      const model = recipe ? buildCharacter(assets, recipe).scene : SkeletonUtils.clone(assets[v.model].scene);
+      const hero = heroLook(v.id, v.model, v10);   // LOOKS20: herói no modelo 2.0 (?v10 mostra o 1.0)
+      const model = recipe ? buildCharacter(assets, recipe).scene : SkeletonUtils.clone(assets[hero.model].scene);
       if (!recipe) {
-        model.traverse((o) => { if (WEAPONS[v.model].includes(o.name) && !v.use.includes(o.name)) o.visible = false; });
-        applyLook(model, assets, LOOKS[v.id]);
+        model.traverse((o) => { if (WEAPONS[hero.model].includes(o.name) && !v.use.includes(o.name)) o.visible = false; });
+        applyLook(model, assets, hero.look);
       }
       model.position.set((col - 1.5) * 4.2, 0, row * 2.6 - 6);
       if (v.scale) model.scale.multiplyScalar(v.scale);   // porte da variante (ex.: Brutamontes gigante)

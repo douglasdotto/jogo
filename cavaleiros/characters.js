@@ -236,12 +236,21 @@ export function applyLook(root, assets, r) {
 
   for (const name of r.hide || []) root.getObjectByName(name)?.removeFromParent();
 
-  for (const { from, part, bone, pos, rot, scale } of r.add || []) {
+  for (const { from, part, name, bone, pos, rot, scale } of r.add || []) {
     const src = assets[from]?.scene.getObjectByName(part);
     if (!src) continue;   // modelo não carregado nesta página (ex.: vitrine)
     const copy = src.clone(true);
+    if (name) copy.name = name;   // arma do pacote com o nome da arma equivalente do modelo (use/hide/pintura)
     let skinned = false;
-    copy.traverse((o) => { if (o.isSkinnedMesh) { o.bind(skeleton, o.bindMatrix); skinned = true; } });
+    copy.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      skinned = true;
+      // ossos na mesma ordem: usa o esqueleto do corpo; ordem diferente (peça do 1.0 num modelo 2.0): religa pelo nome
+      const bones = o.skeleton.bones;
+      if (bones.every((b, i) => skeleton.bones[i]?.name === b.name)) return o.bind(skeleton, o.bindMatrix);
+      const byName = (n) => skeleton.bones.find((b) => b.name === n) || skeleton.bones[0];
+      o.bind(new THREE.Skeleton(bones.map((b) => byName(b.name)), o.skeleton.boneInverses), o.bindMatrix);
+    });
     if (bone) {   // peça avulsa (ex.: aljava) num osso escolhido, com posição própria
       copy.position.fromArray(pos || [0, 0, 0]);
       copy.rotation.fromArray(rot || [0, 0, 0]);
