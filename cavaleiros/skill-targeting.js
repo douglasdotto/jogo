@@ -26,8 +26,7 @@ export function validAim(h, target) {
   return true;
 }
 
-// Marcha em passos de 2 m e refina o primeiro cruzamento; a faixa da rampa
-// do platô tem 3 m de largura, então pelo menos uma amostra cai dentro dela.
+// Marcha em passos de 2 m e refina o primeiro cruzamento com a altura do terreno.
 export function findGroundAimHit(ray, groundHeight, target, maxDistance = 250, step = 2, refinementSteps = 8) {
   const stride = Math.max(0.5, step);
   let previousDistance = 0;

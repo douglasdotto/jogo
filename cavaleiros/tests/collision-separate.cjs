@@ -21,7 +21,8 @@ const stepEnd = worldSource.indexOf('\n  }\n', stepStart) + 4;
 assert.ok(stepStart >= 0 && stepEnd > stepStart, 'world.canStep precisa existir');
 
 function harness({ obstacles = [] } = {}) {
-  // penhasco: x >= 5 fica 3 m acima; lago fundo em volta de (0, 20)
+  // degrau sintético (o mapa não tem mais platôs, mas o canStep segue barrando desnível):
+  // x >= 5 fica 3 m acima; lago fundo em volta de (0, 20)
   const groundHeight = (x) => (x >= 5 ? 3 : 0);
   const deepAt = (p) => Math.hypot(p.x, p.z - 20) < 3.2;
   const context = vm.createContext({ Math, Map, Set, Object, units: [], gridCellKey: perfContext.api.gridCellKey });
@@ -61,12 +62,6 @@ const gap = (a, b) => Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z);
   const s = unit(0, 16.9);
   assert.equal(c.api.collisionMove(s, 0, 0.2), 0, 'não entra na água funda');
   assert.equal(s.pos.z, 16.9, 'fica parado na margem');
-
-  // arqueiro esqueleto no platô não desce pela beirada
-  const archer = unit(6, 0, { team: 'skeleton', ranged: true });
-  for (let i = 0; i < 10; i++) c.api.collisionMove(archer, -1.2, 0);
-  assert.ok(archer.pos.x >= 5, `arqueiro do platô não desce pela beirada (x=${archer.pos.x})`);
-  assert.ok(archer.pos.x < 6, 'mas ainda anda em cima do platô');
 }
 
 // ---------- separate: unidades ----------

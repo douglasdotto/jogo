@@ -124,7 +124,7 @@ const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick,
   const localDefender = { cfg: { id: 'cleric' }, pos: new Vector3(52, 0, 0), post: new Vector3(50, 0, 0),
     range: 3, speed: 3, ranged: true, dead: false, targetFocus: null, targetFocusT: 0, engagedWith: null };
   const party = [interceptor, localDefender];
-  const targetContext = { goal: { type: 'bosses' }, party, friends: party, villager: null, plateauBonus: 0,
+  const targetContext = { goal: { type: 'bosses' }, party, friends: party, villager: null,
     skeletons: [boss, localThreat], attackableSkeletons: [boss, localThreat],
     twinFocus: null, twinFocusChecked: false, twinFocusWaiting: false };
   const priorFocus = t.game.twinFocus;

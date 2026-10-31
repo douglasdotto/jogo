@@ -486,7 +486,7 @@ test('mira no chão reduz amostras e ainda encontra o primeiro cruzamento na ram
   const rampHeight=x=>x<4?0:x<10?(x-4)*.5:x<16?3:0;
   const rampHit={x:0,y:0,z:0};
   assert.equal(t.findGroundAimHit(rampRay,(x)=>{samples++;return rampHeight(x);},rampHit),true);
-  assert.ok(rampHit.x>9&&rampHit.x<10,'encontra a primeira interseção dentro da rampa do platô');
+  assert.ok(rampHit.x>9&&rampHit.x<10,'encontra a primeira interseção dentro da rampa');
   assert.ok(Math.abs(rampHit.y-rampHeight(rampHit.x))<.01,'retorna a altura lógica do terreno');
   assert.ok(samples<30,'a rampa curta também usa poucas consultas');
 
@@ -2173,7 +2173,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
   runner.pos.set(0,0,13);runner.post.copy(runner.pos);t.game.rescueRunner=runner;
   const nearRunner=new t.Skeleton('Minion',t.game.phase),nearCaptive=new t.Skeleton('Minion',t.game.phase);
   nearRunner.spawning=nearCaptive.spawning=false;nearRunner.pos.set(0,0,7);nearCaptive.pos.set(0,0,.5);
-  const rescueContext={goal:mission('resgate').goal,party,friends:party,villager:null,plateauBonus:0,
+  const rescueContext={goal:mission('resgate').goal,party,friends:party,villager:null,
     rescueThreats:[nearRunner,nearCaptive],skeletons:[nearRunner,nearCaptive],attackableSkeletons:[nearRunner,nearCaptive],alliedUnits:party,livingAllies:party};
   runner.targetFocus=nearRunner;runner.targetFocusT=1;
   assert.strictEqual(t.chooseHeroTarget(runner,rescueContext.rescueThreats,.01,rescueContext),nearCaptive,
