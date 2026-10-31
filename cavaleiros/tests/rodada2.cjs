@@ -121,7 +121,7 @@ context.addEventListener=(type,handler,options)=>{
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,loadRecords,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
@@ -856,12 +856,12 @@ test('contexto tático reutiliza seus arrays sem carregar alvos removidos',()=>{
   first.dead=true;t.game.paused=true;t.frame();assert.equal(t.frameTargetContext.skeletons.length,0);
   first.remove();ranged.remove();const afterRemoval=t.makeTargetContext(t.frameTargetContext);assert.equal(afterRemoval.skeletons.length,0);assert.equal(afterRemoval.rangedHeroes.length,0);
 });
-test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à dificuldade',()=>{
+test('reinício limpa invocados, fila, efeitos e volta ao menu (Batalhar e Acampamento); partida interna leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
   assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'mode');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
-  assert.equal(t.pick.cards.length,3);assert.ok(t.pick.cards.every(c=>!/Reino/.test(c.innerHTML)),'menu sem Reino');
+  assert.equal(t.pick.cards.length,2);assert.ok(t.pick.cards.every(c=>!/Reino|Jornada/.test(c.innerHTML)),'menu sem Reino nem Jornada');
   let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
-  t.confirmPick(1);next();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
+  t.showDifficulty();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
   t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'♜','HUD mostra o ícone da dificuldade; o nome fica na dica');
   next();assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);
   context.setTimeout=noop;t.setDifficulty(1);
@@ -884,14 +884,6 @@ test('curva de dificuldade cresce em passos regulares a partir do Normal neutro'
     for(let i=1;i<t.DIFFICULTIES.length;i++)assert.ok(t.DIFFICULTIES[i][key]/t.DIFFICULTIES[i-1][key]<=1.3,`${key} não dá um salto excessivo`);
   }
   assert.ok(easy.interval>normal.interval&&normal.interval>hard.interval&&hard.interval>nightmare.interval,'as ondas surgem gradualmente mais rápido');
-});
-test('recorde guarda a melhor fase por dificuldade e marca vitória',()=>{
-  clear();context.localStorage.data={};Object.assign(t.game,{start:1,phase:5,kills:40});t.endGame('Derrota',false);
-  assert.ok(elements.get('overlayText').textContent.includes('Novo recorde'));
-  Object.assign(t.game,{over:false,phase:3,kills:90});t.endGame('Derrota',false);assert.equal(t.loadRecords().normal.phase,5);
-  Object.assign(t.game,{over:false,phase:12,kills:200});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.won,true);
-  Object.assign(t.game,{over:false,start:6,phase:12,kills:999});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.kills,200);
-  t.showDifficulty();assert.ok(t.pick.cards[1].innerHTML.includes('Vitória!'));assert.ok(t.pick.cards[0].innerHTML.includes('Sem recorde'));
 });
 test('entrada tardia recebe metade da média de XP e respeita limite de quatro',()=>{
   clear();const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('berserker'));a.xp=300;b.xp=100;
@@ -917,7 +909,7 @@ test('fase revive aliados, oferece reforço, gera chefe e termina em vitória',(
   for(const u of [...t.units])if(u.team==='skeleton')u.remove();
   Object.assign(t.game,{phase:12,state:'cleared',timer:0});t.updateGame(.1);assert.equal(t.game.over,true);
   // título grande separado; a linha de baixo diz só o motivo
-  assert.equal(elements.get('overlayTitle').textContent,'Vitória!');assert.ok(elements.get('overlayText').textContent.startsWith('O grupo chegou ao castelo'));
+  assert.equal(elements.get('overlayTitle').textContent,'Vitória!');assert.ok(elements.get('overlayText').textContent.startsWith('Fases vencidas'));
 });
 test('manual espera o jogador; pedido sem alvo avisa e não gasta a recarga',()=>{
   clear();context.localStorage.data={};
@@ -2086,13 +2078,9 @@ test('overlay distingue vitória de derrota e identifica resultado em modo de te
     assert.equal(overlay.classList.contains('won'),true);
     assert.equal(overlay.classList.contains('lost'),false);
     assert.equal(overlay.classList.contains('test-run'),false);
-    // jornada: o botão principal diz o que faz (menu) e "Repetir" mantém a dificuldade
+    // partida interna sem missão: só o botão do menu, sem "Repetir"
     assert.equal(elements.get('overlayBtn').textContent,'Menu');
-    assert.ok(elements.get('overlayNext').innerHTML.includes('↻ Repetir'));
-    t.setDifficulty(3);t.startGame('journey');
-    assert.equal(t.game.mission,null);assert.equal(t.pick.mode,'hero');assert.equal(t.pick.open,true);
-    assert.equal(t.getDifficulty().id,t.DIFFICULTIES[3].id,'não volta à escolha de dificuldade');
-    t.setDifficulty(1);
+    assert.ok(!elements.get('overlayNext').innerHTML.includes('Repetir'));
   } finally { context.location=previousLocation;context.localStorage.data=previousStorage;t.progress.recordMatch=previousRecordMatch;clear(); }
 });
 // ---------- campanha ----------
@@ -2131,8 +2119,8 @@ test('Pesadelo recomenda um grupo equilibrado sem ocultar objetivo nem dica de r
   assert.ok(!villageNightmare.attributes['aria-label'].includes('Duelo'),'a primeira missão solo não recebe uma chamada de outro objetivo');
 
   clear();context.localStorage.data={};t.showDifficulty();
-  const journeyNightmare=t.pick.cards[idx('pesadelo')];journeyNightmare.onfocus();
-  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),'a recomendação completa continua disponível na Jornada');
+  const internalNightmare=t.pick.cards[idx('pesadelo')];internalNightmare.onfocus();
+  assert.ok(elements.get('pickHint').textContent.includes('Equipe para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),'a recomendação completa continua disponível na partida interna sem missão');
   clear();t.setDifficulty(1);
 });
 test('Pesadelo recomenda Guardião para defender e mantém Piromante em metas ofensivas',()=>{
@@ -2694,7 +2682,7 @@ test('queda, revival e nova queda contam cada ocorrência no total da missão',(
   assert.equal(t.game.falls,2);assert.equal(t.game.fallLog.length,2,'o total acompanha o registro de quedas');
   clear();
 });
-test('Jornada envia à progressão a mesma contagem de quedas do relatório',()=>{
+test('partida sem missão envia à progressão a mesma contagem de quedas do relatório',()=>{
   clear();context.location={search:''};const h=hero('paladin',0,0);let recorded,reportFalls=null;
   const record=t.progress.recordMatch,summaryHTML=context.summaryHTML;
   t.progress.recordMatch=function(run){recorded={...run};return record.call(this,run);};
@@ -2703,7 +2691,7 @@ test('Jornada envia à progressão a mesma contagem de quedas do relatório',()=
   finally { t.progress.recordMatch=record;context.summaryHTML=summaryHTML; }
   assert.equal(t.game.over,true);assert.equal(t.game.fallLog.length,1);
   assert.equal(reportFalls,1,'o relatório exibe a queda registrada');
-  assert.equal(recorded?.mode,'journey');assert.equal(recorded?.falls,reportFalls,'a progressão usa a mesma contagem do relatório');
+  assert.equal(recorded?.mode,'interna');assert.equal(recorded?.falls,reportFalls,'a progressão usa a mesma contagem do relatório');
   clear();
 });
 test('unidades grandes mantêm folga visual entre heróis e inimigos e conservam colisão com obstáculos',()=>{
@@ -3010,7 +2998,7 @@ test('progressão: fim de partida credita ouro, maestria e contadores e mostra a
   t.endGame('Vitória',true);
   const after=prog.snapshot();
   const mult=vm.runInContext('DIFFICULTY_REWARD',context)[t.getDifficulty().id]*(1+0.08*prog.upgradeLevel('bounty'));
-  assert.equal(after.gold-before.gold,Math.round((150+12*6+60)*mult),'abates + fases + vitória da Jornada, pela dificuldade');
+  assert.equal(after.gold-before.gold,Math.round((150+12*6+20)*mult),'abates + fases + vitória, pela dificuldade');
   assert.equal(after.counters.ultimates-before.counters.ultimates,3);assert.equal(after.counters.relics-before.counters.relics,2);
   assert.equal(after.counters.wins-before.counters.wins,1);
   assert.ok(after.heroes.ninja.xp>(before.heroes.ninja?.xp||0));
@@ -3043,7 +3031,7 @@ test('progressão: ficha e cartão da escolha mostram a maestria com discrição
   t.pick.open=false;clear();
 });
 test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do teste',()=>withLiveGame(()=>{
-  prog.recordMatch({mode:'journey',won:false,difficultyId:'normal',kills:2000,phasesCleared:0,heroes:[]});
+  prog.recordMatch({mode:'mission',won:false,difficultyId:'normal',kills:2000,phasesCleared:0,heroes:[]});
   if(prog.upgradeLevel('relic-choice')<1)assert.equal(prog.buy('relic-choice').ok,true);
   if(prog.upgradeLevel('reroll')<1)assert.equal(prog.buy('reroll').ok,true);
   t.game.mission=mission('fazendas');vm.runInContext('placeParty(5)',context);t.game.mission=mission('fazendas');Object.assign(t.game,{phase:5,last:6});
@@ -3058,8 +3046,8 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
   t.pick.open=false;
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
-  clear();t.showMenu();assert.equal(t.pick.cards.length,3,'Batalhar, Jornada e Acampamento');
-  assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/◆ \d+/);   // acampamento é a loja: mostra o ouro
+  clear();t.showMenu();assert.equal(t.pick.cards.length,2,'Batalhar e Acampamento');
+  assert.match(t.pick.cards[1].innerHTML,/Acampamento/);assert.match(t.pick.cards[1].innerHTML,/◆ \d+/);   // acampamento é a loja: mostra o ouro
   // conquistas, estrelas, ouro e maestria saíram dos cartões para a barra de perfil (ícone + número)
   const home=elements.get('pickList').children.at(-1),bar=home.children[0];
   assert.equal(home.className,'menu-home');assert.match(bar.innerHTML,/✦<\/i>\d+\/\d+/);assert.match(bar.innerHTML,/★<\/i>\d+/);assert.match(bar.innerHTML,/✪<\/i>\d+/);
@@ -3067,7 +3055,7 @@ test('progressão: menu leva ao acampamento e Esc volta',()=>{
   assert.ok(t.pick.cards.every(card=>!card.innerHTML.includes('<p>')&&!card.innerHTML.includes('class="num"')),'menu sem frases nem números nos cartões: a descrição fica na dica e 1–4 só no teclado');
   assert.equal(elements.get('pickHint').textContent,'','sem rodapé de teclas no menu');
   let next;context.setTimeout=(fn,ms)=>{if(ms===450)next=fn};
-  t.confirmPick(2);next();context.setTimeout=noop;
+  t.confirmPick(1);next();context.setTimeout=noop;
   const camp=elements.get('camp');assert.equal(camp.classList.contains('hidden'),false);assert.equal(t.pick.open,false);
   assert.match(camp.innerHTML,/Oficina/);assert.match(camp.innerHTML,/Treino de vigor/);assert.match(camp.innerHTML,/Conquistas \d+\/\d+/);
   assert.notEqual(context.localStorage.getItem('cavaleiros-conquistas-vistas'),null,'abrir o acampamento marca as conquistas como vistas (some o selo do menu)');
@@ -3572,7 +3560,7 @@ const militiaUnits=()=>t.units.filter(u=>u.militia&&!u.dead);
 const guardMission=(id='ponte')=>{clear();const m=t.MISSIONS.find(x=>x.id===id);Object.assign(t.game,{mission:m,start:m.from,phase:m.from,last:m.to,test:true});t.game.villager=new t.Villager();t.game.villager.pos.set(0,0,0);return t.game.villager;};
 test('guarda de aldeões só aparece quando a missão manda defender alguém',()=>{
   for(const m of t.MISSIONS){clear();Object.assign(t.game,{mission:m,start:m.from,phase:m.from,test:true});t.musterMilitia();assert.equal(militiaUnits().length,0,m.id+' sem protegido');}
-  clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:true});t.musterMilitia();assert.equal(militiaUnits().length,0,'Jornada sem guarda');
+  clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:true});t.musterMilitia();assert.equal(militiaUnits().length,0,'sem missão, sem guarda');
   const v=guardMission('ponte');t.musterMilitia();const ms=militiaUnits();
   assert.equal(ms.length,4,'escolta: quatro aldeões de guarda');
   for(const m of ms)assert.ok(Math.abs(m.pos.distanceTo(v.pos)-1.9)<0.01,'em anel em volta do protegido');

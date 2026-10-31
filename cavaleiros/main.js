@@ -584,24 +584,6 @@ function focusClass(groupIndex) {
   selectCard(selected);
 }
 
-// recordes por dificuldade (melhor fase e abates), guardados no navegador quando der
-const RECORDS_KEY = 'cavaleiros-recordes';
-function loadRecords() {
-  try { return JSON.parse(localStorage.getItem(RECORDS_KEY)) || {}; } catch { return {}; }
-}
-
-// devolve true quando a partida que acabou virou o novo recorde do nível
-function saveRecord(won) {
-  if (game.start > 1 || game.mission || game.test) return false;   // atalhos de teste e campanha não gravam recordes
-  const records = loadRecords(), old = records[difficulty.id];
-  const now = { phase: game.phase, kills: game.kills, won };
-  const better = !old || (won && !old.won) || (won === !!old.won && (now.phase > old.phase || (now.phase === old.phase && now.kills > old.kills)));
-  if (!better) return false;
-  records[difficulty.id] = now;
-  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(records)); } catch { return false; }
-  return true;
-}
-
 // progressão entre partidas (ouro, maestria, oficina, conquistas); sem localStorage fica só na memória, zerada
 const progress = createProgression(typeof localStorage === 'undefined' ? null : localStorage);
 
@@ -659,15 +641,14 @@ function saveAuto(id, on, slot = null) {
   } catch {}
 }
 
-// menu inicial: Campanha (missões com estrelas) ou Jornada completa (as 12 fases seguidas)
+// menu inicial: Campanha (missões com estrelas) ou Acampamento
 const MODES = [
   { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
-  { name: 'Jornada', icon: '♛', desc: 'Jornada completa: as 12 fases seguidas até o castelo.', color: ['#bfe0ff', '#5a8fd0'] },
   { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
 ];
 // Menu inicial estilo Clash: barra de perfil em cima, logo, a equipe em 3D no meio do cenário (menuStage)
-// e uma doca embaixo: o botão grande de batalha (Campanha) entre Jornada e Acampamento. Pouco texto: os detalhes ficam na dica e no aria-label.
-// A ordem de pick.cards segue MODES (atalhos 1–3 e setas ← →).
+// e uma doca embaixo: o botão grande de batalha (Campanha) no centro e o Acampamento ao lado. Pouco texto: os detalhes ficam na dica e no aria-label.
+// A ordem de pick.cards segue MODES (atalhos 1–2 e setas ← →).
 const SEEN_ACHIEVEMENTS_KEY = 'cavaleiros-conquistas-vistas';
 const seenAchievements = () => { try { return +localStorage.getItem(SEEN_ACHIEVEMENTS_KEY) || 0; } catch { return 0; } };
 // missão sugerida: a primeira ainda sem estrelas; com todas jogadas, a primeira que ainda rende estrela
@@ -701,19 +682,16 @@ function showMenu() {
   pick.options = MODES;
   $('pickTitle').innerHTML = logoSVG();
   $('pickSub').textContent = '';
-  $('pickHint').textContent = '';   // sem rodapé: setas, Enter e 1–3 seguem valendo
+  $('pickHint').textContent = '';   // sem rodapé: setas, Enter e 1–2 seguem valendo
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
-  const records = Object.values(loadRecords());
   const achievements = progress.achievements(), achieved = achievements.filter((a) => a.unlocked).length;
-  const best = records.length ? Math.max(...records.map((r) => r.phase)) : 0;
   const stars = totalStars(), maxStars = MISSIONS.length * 3;
   const mastery = Math.max(1, ...VARIANTS.map((cfg) => progress.mastery(cfg.id).level));
   const next = recommendedMission();
   const shopReady = UPGRADES.some((u) => { const cost = progress.upgradeCost(u.id); return cost != null && progress.gold >= cost; });
   const newAchievements = Math.max(0, achieved - seenAchievements());
-  const journey = records.some((r) => r.won) ? '♛' : best ? `Fase ${best}` : '';
 
   const home = document.createElement('div');
   home.className = 'menu-home';
@@ -736,17 +714,15 @@ function showMenu() {
   bar.querySelector('.menu-gfx').onclick = () => { $('quality').onclick?.(); paintMenuBar(bar); };
   paintMenuBar(bar);
 
-  // doca embaixo: Jornada · Batalhar · Acampamento (a equipe 3D no meio também leva ao Acampamento)
+  // doca embaixo: Batalhar no centro · Acampamento ao lado (a equipe 3D no meio também leva ao Acampamento)
   const dock = document.createElement('div');
   dock.className = 'menu-dock';
-  const label = ['Batalhar', 'Jornada', 'Acampamento'];
+  const label = ['Batalhar', 'Acampamento'];
   const extra = [
     `<small class="menu-next">${next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : '♛'}</small><span class="menu-badge-stars">★ ${stars}/${maxStars}</span>`,
-    journey ? `<small>${journey}</small>` : '',
     `<small class="menu-gold">${GOLD.icon} ${progress.gold}</small>${shopReady || newAchievements ? '<span class="menu-new" aria-hidden="true">!</span>' : ''}`,
   ];
   const spoken = [`${stars} de ${maxStars} estrelas${next ? `. Próxima: ${next.name}` : ''}`,
-    records.some((r) => r.won) ? 'Jornada vencida' : best ? `Recorde: fase ${best}` : 'Sem recorde ainda',
     `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
@@ -765,7 +741,11 @@ function showMenu() {
     b.onmouseenter = () => selectCard(i);
     return b;
   });
-  dock.append(pick.cards[1], pick.cards[0], pick.cards[2]);
+  // espaçador invisível do tamanho do Acampamento: mantém Batalhar no centro da tela
+  const spacer = document.createElement('span');
+  spacer.className = 'menu-dock-spacer';
+  spacer.setAttribute('aria-hidden', 'true');
+  dock.append(spacer, pick.cards[0], pick.cards[1]);
   home.append(bar, dock);
   list.appendChild(home);
   selectCard(0);
@@ -777,7 +757,7 @@ function showMenu() {
 function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : i === 2 ? showCamp() : (game.mission = null, showDifficulty())), 450);
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : showCamp()), 450);
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
@@ -835,19 +815,12 @@ function showCampaign(autoPlay = null) {
   if (autoPlay) play(autoPlay);
 }
 
-// Cada missão da campanha recebe seu próprio cenário; a jornada completa mantém o mapa-base.
+// Cada missão da campanha recebe seu próprio cenário.
 function useMissionWorld(m, seed) {
   world.dispose?.();
   const castleInterior = m.id === 'coracao-do-castelo';
   world = createWorld(scene, ROAD, castleInterior ? 13 : PHASES, seed, { castleInterior });
   aimCamera(world.anchorS(m.from));
-}
-
-// jornada depois de uma missão: volta ao mapa-base
-const journeyWorldStale = () => world.seed != null && world.seed !== 11;
-function useJourneyWorld() {
-  world.dispose?.();
-  world = createWorld(scene, ROAD, PHASES, 11);
 }
 
 // "Repetir" da campanha: mesma missão, cenário, dificuldade e equipe, sem passar pelas escolhas
@@ -869,30 +842,22 @@ function replayTeam(m, team) {
   startMission();
 }
 
-// "Repetir" da jornada: mesma dificuldade, direto para a escolha do primeiro herói
-function replayJourney() {
-  prepareRun();
-  showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos');
-}
-
-// dificuldade: na jornada mostra o recorde de cada uma; na campanha, o trecho da missão
+// dificuldade da missão (sem missão só nos atalhos internos de simulação/bench, fases 1–12)
 function showDifficulty() {
   if (typeof preloadBattleAssets === 'function') preloadBattleAssets();
   pick.mode = 'difficulty';
   $('banner').style.opacity = 0;
   pick.options = DIFFICULTIES;
-  const records = loadRecords(), m = game.mission;
-  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : 'Jornada';
+  const m = game.mission;
+  $('pickTitle').textContent = m ? `${MISSIONS.indexOf(m) + 1}. ${m.name}` : `Fases 1–${PHASES}`;
   $('pickSub').textContent = m ? `⚑ ${goalText(m.goal)}` : '';
   $('pickHint').textContent = DIFFICULTY_PICK_HINT;
   const list = $('pickList');
   list.innerHTML = '';
   list.classList.remove('grid');
-  // cartão: ícone, nome e o recorde da jornada; a descrição da dificuldade vai para a dica
+  // cartão: ícone e nome; a descrição da dificuldade vai para a dica
   pick.cards = DIFFICULTIES.map((d, i) => {
-    const r = m ? null : records[d.id];
-    const record = m ? '' : r ? (r.won ? '♛ Vitória!' : `Fase ${r.phase}`) : 'Sem recorde';
-    const spoken = m ? `Fases ${m.from}–${m.to}.` : r ? `${r.won ? 'Vitória' : `Recorde: fase ${r.phase}`}, ${r.kills} abates.` : 'Sem recorde ainda.';
+    const spoken = m ? `Fases ${m.from}–${m.to}.` : `Fases 1–${PHASES}.`;
     const recommendation = difficultyTeamRecommendation(d, m);
     const tip = [d.desc, recommendation].filter(Boolean).join(' ');
     const b = document.createElement('div');
@@ -904,8 +869,7 @@ function showDifficulty() {
     b.style.setProperty('--c', d.color[0]);
     b.style.setProperty('--cd', d.color[1]);
     b.style.setProperty('--d', `${i * 90}ms`);
-    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${d.icon}</div><div class="ribbon">${d.name}</div>
-      ${record ? `<div class="record${r?.won ? ' won' : ''}">${record}</div>` : ''}`;
+    b.innerHTML = `<div class="num">${i + 1}</div><div class="medal">${d.icon}</div><div class="ribbon">${d.name}</div>`;
     b.onclick = () => confirmPick(i);
     b.onfocus = () => selectCard(i);
     bindCard(b, i);
@@ -928,15 +892,13 @@ function confirmDifficulty(i) {
     pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
       : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
   };
-  if (!game.mission && journeyWorldStale() && typeof withBattleAssets === 'function') return withBattleAssets(next, useJourneyWorld);   // mapa-base refeito com a tela de carregamento
   next();
 }
 
-// dificuldade já escolhida: prepara o cenário e o grupo vazio da missão (ou da jornada)
+// dificuldade já escolhida: prepara o cenário e o grupo vazio da missão
 function prepareRun() {
   const m = game.mission;
   if (m) campaignMapSession.reset();   // a próxima visita à campanha começa uma nova combinação de mapas
-  if (!m && journeyWorldStale()) useJourneyWorld();
   // ?fase=N também vale na campanha, dentro do trecho da missão
   const asked = +new URLSearchParams(location.search).get('fase');
   placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
@@ -1132,7 +1094,7 @@ function confirmPick(i) {
 // Uma escolha por vez, inclusive quando vários heróis ganham XP no mesmo golpe.
 const evolutions = [];
 
-// Relíquias: as de bônus simples acumulam; as únicas (unique) mudam o jeito de jogar e valem uma vez por jornada.
+// Relíquias: as de bônus simples acumulam; as únicas (unique) mudam o jeito de jogar e valem uma vez por partida.
 // A raridade (comum/rara/épica) pesa no sorteio e dá a cor do cartão e do ícone no HUD.
 // needs() tira da oferta o que não serve à equipe atual (ex.: bônus de mago sem mago).
 const RELIC_RARITY = {
@@ -1142,7 +1104,7 @@ const RELIC_RARITY = {
 };
 const partyHas = (test) => heroes().some((h) => !h.dead && test(h));
 const RELICS = [
-  { id: 'keen-edge', short: '+12% de dano', name: 'Lâmina afiada', icon: '⚔', rarity: 'comum', desc: 'Heróis causam 12% mais dano pelo resto da jornada.' },
+  { id: 'keen-edge', short: '+12% de dano', name: 'Lâmina afiada', icon: '⚔', rarity: 'comum', desc: 'Heróis causam 12% mais dano pelo resto da partida.' },
   { id: 'vital-medallion', short: '+15% de vida máxima', name: 'Medalhão vital', icon: '♥', rarity: 'comum', desc: 'Aumenta a vida máxima em 15% e recupera essa quantidade para cada herói.' },
   { id: 'ember-heart', short: 'Abates podem explodir', name: 'Coração de brasa', icon: '✺', rarity: 'comum', unique: true, desc: 'Ao abater um inimigo, 25% de chance de ele explodir e ferir quem estiver por perto.' },
   { id: 'dawn-ward', short: 'Escudo a cada fase', name: 'Égide da aurora', icon: '◈', rarity: 'comum', unique: true, desc: 'No início de cada fase, cada herói ganha um escudo de 20% da vida máxima.' },
@@ -1168,7 +1130,7 @@ function applyRelicToHero(hero, id) {
   } else if (id === 'archmage-prism' && hero.cfg.classId === 2) hero.extraTargets = (hero.extraTargets || 0) + 1;
 }
 
-// ganchos das relíquias que mudam o jogo; cada um só age se a relíquia estiver na jornada
+// ganchos das relíquias que mudam o jogo; cada um só age se a relíquia estiver na partida
 function relicPhaseStart() {
   for (const h of heroes()) {
     if (h.dead) continue;
@@ -8430,7 +8392,7 @@ addEventListener('pointermove', (e) => {
 const game = { phase: 1, kills: 0, toSpawn: 0, spawnTimer: 0, bossPending: false, state: 'advance', timer: 0, guideS: 0, over: false, paused: false };
 
 // view: 'menu' (tela inicial), 'map' (mapa da campanha), uma missão (vai à dificuldade),
-// { replay, team, seed } (repete a missão) ou 'journey' (repete a jornada)
+// ou { replay, team, seed } (repete a missão)
 function startGame(view = 'menu') {
   setDirectControlMode(false, null, false);
   battleGateId++;
@@ -8473,7 +8435,6 @@ function startGame(view = 'menu') {
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
   else if (view?.replay) replayMission(view);   // "Repetir": mesma missão, dificuldade e equipe
-  else if (view === 'journey') replayJourney();   // "Repetir" da jornada: mesma dificuldade
   else if (view?.goal) showCampaign(view);   // "Próxima missão" vai direto à dificuldade
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
   syncDirectControlUI();
@@ -9488,7 +9449,7 @@ function updateGame(dt) {
   } else if (game.state === 'cleared') {
     game.timer -= dt;
     if (game.timer <= 0) {
-      if (game.phase >= game.last) return endGame(game.mission ? game.mission.ending || `Missão cumprida: ${game.mission.name}!` : 'O grupo chegou ao castelo!', true);
+      if (game.phase >= game.last) return endGame(game.mission ? game.mission.ending || `Missão cumprida: ${game.mission.name}!` : 'Fases vencidas!', true);
       game.phase++;
       game.state = 'advance';
       clearDirectControlOrders();
@@ -9527,7 +9488,7 @@ function objectiveHint(skeletons) {
 // resumo da partida para a progressão entre partidas
 function matchSummary(won, stars) {
   return {
-    mode: game.mission ? 'mission' : 'journey', missionId: game.mission?.id || null, won, difficultyId: difficulty.id,
+    mode: game.mission ? 'mission' : 'interna', missionId: game.mission?.id || null, won, difficultyId: difficulty.id,
     kills: game.kills, start: game.start, last: game.last, phase: game.phase,
     phasesCleared: won ? game.last - game.start + 1 : Math.max(0, game.phase - game.start),
     stars: stars || 0, totalStars: totalStars(), falls: game.fallLog?.length || 0, partySize: heroes().length,
@@ -9544,7 +9505,7 @@ function endGame(text, won = false) {
   audio.stopMusic();
   audio.play(won ? 'victory' : 'defeat');
   $('overlayTitle').textContent = won ? 'Vitória!' : 'Derrota';
-  $('overlayText').textContent = text + (saveRecord(won) ? ' · Novo recorde!' : '');
+  $('overlayText').textContent = text;
   $('overlayNext').innerHTML = '';
   const missionIndex = MISSIONS.indexOf(game.mission);
   const followingWasOpen = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1);
@@ -9561,10 +9522,6 @@ function endGame(text, won = false) {
     if (nextBtn) nextBtn.onclick = () => startGame(next);
     const replayBtn = $('overlayNext').querySelector('[data-act="replay"]');
     if (replayBtn) replayBtn.onclick = () => startGame(replay);
-  } else {   // jornada: repetir na mesma dificuldade; o botão principal volta ao menu
-    $('overlayNext').innerHTML = `<button class="mission-next-btn" type="button" data-act="replay" data-tip="Mesma dificuldade">↻ Repetir</button>`;
-    const replayBtn = $('overlayNext').querySelector('[data-act="replay"]');
-    if (replayBtn) replayBtn.onclick = () => startGame('journey');
   }
   const party = game.roster;
   const report = buildBattleReport({
@@ -9736,7 +9693,7 @@ function frame() {
   audio.setGloom(world.gloomAt(follow.z));   // música mais sombria rumo ao castelo
 }
 
-// enquadra o grupo e a briga por perto (Campanha e Jornada)
+// enquadra o grupo e a briga por perto
 function followParty(real) {
   frameHeroes.length = 0;
   frameFoes.length = 0;
@@ -10157,7 +10114,7 @@ const menuStage = (() => {
   };
 })();
 
-// ?bench=1: medição de desempenho (bench.js) — monta uma jornada com 4 heróis sem passar pelos menus
+// ?bench=1: medição de desempenho (bench.js) — monta uma partida interna (fases 1–12, sem missão) com 4 heróis sem passar pelos menus
 const benchApi = () => ({
   renderer, scene, game, units, heroes, world, VARIANTS, frame, spawnSkeleton, withBattleAssets,
   // O adaptador só é criado quando ?bench está ativo. O setter troca a função
@@ -10170,7 +10127,7 @@ const benchApi = () => ({
     sun.shadow.mapSize.set(size, size);
     sun.shadow.needsUpdate = true;
   },
-  setupJourney(phase) {
+  setupRun(phase) {
     clearTimeout(pick.timer);
     pick.open = false;
     $('pick').classList.add('hidden');

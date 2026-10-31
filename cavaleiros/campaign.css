@@ -187,7 +187,7 @@
 .menu-btn.chosen { transform: scale(1.1); filter: brightness(1.2); }
 .menu-btn.gone { opacity: 0; transform: scale(.9) translateY(14px); }
 
-/* doca embaixo: Jornada · Batalhar · Acampamento */
+/* doca embaixo: Batalhar no centro · Acampamento ao lado (o espaçador espelha o Acampamento) */
 .menu-dock { position: absolute; z-index: 1; left: 50%; bottom: clamp(24px, 4.5vh, 44px); translate: -50% 0; display: flex; align-items: flex-end; gap: 24px; }
 
 /* botão principal: dourado, brilho passando e pulso suave */
@@ -211,6 +211,7 @@
   background: radial-gradient(circle at 50% 28%, rgba(255, 255, 255, .35), transparent 55%), linear-gradient(var(--c), var(--cd));
   box-shadow: inset 0 4px 0 rgba(255, 255, 255, .45), inset 0 -6px 0 rgba(0, 0, 0, .22), 0 7px 0 var(--outline), 0 10px 22px rgba(0, 0, 0, .35); }
 .menu-side .menu-icon { font-size: 46px; }
+.menu-dock-spacer { width: 124px; flex: none; visibility: hidden; }
 .menu-side b { font-size: 18px; line-height: 1.05; -webkit-text-stroke-width: 4px; }
 .menu-side small { position: absolute; left: 50%; bottom: -16px; translate: -50% 0; white-space: nowrap; background: linear-gradient(#2c4272, #1b2c50); border: 2px solid var(--outline); }
 .menu-side.sel, .menu-side:hover { box-shadow: inset 0 4px 0 rgba(255, 255, 255, .45), inset 0 -6px 0 rgba(0, 0, 0, .22), 0 7px 0 var(--outline), 0 0 0 3px #fff, 0 0 26px 4px var(--c); }
@@ -227,7 +228,7 @@
   #pick:has(.menu-home) { padding-top: 50px; }
   #pick:has(.menu-home) #pickTitle .game-logo { width: clamp(220px, 19vw, 280px); }
   .menu-battle { width: 320px; padding: 12px 20px; } .menu-battle b { font-size: 40px; } .menu-battle .menu-icon { font-size: 48px; }
-  .menu-side { width: 116px; height: 106px; } .menu-side .menu-icon { font-size: 38px; } .menu-side b { font-size: 15px; }
+  .menu-side, .menu-dock-spacer { width: 116px; } .menu-side { height: 106px; } .menu-side .menu-icon { font-size: 38px; } .menu-side b { font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .menu-btn, .menu-bar, .menu-new, .menu-battle::after { animation: none !important; }

@@ -1,6 +1,6 @@
 # Age of Popozitos
 
-Jogo de navegador em Three.js: heróis contra esqueletos em campanha e Jornada.
+Jogo de navegador em Three.js: heróis contra esqueletos em uma campanha de missões, com Acampamento para a progressão.
 
 ```bash
 node cavaleiros/server.js

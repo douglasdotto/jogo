@@ -37,7 +37,7 @@ const findUpgrade = (id) => UPGRADES.find((u) => u.id === id);
 const clearedPhase = (run, p) => run.start <= p && (run.phase > p || (run.won && run.last >= p));
 // test(state, run): run é a partida recém-terminada ou null (compra na oficina, abertura do acampamento)
 export const ACHIEVEMENTS = [
-  { id: 'primeira-vitoria', icon: '⚑', name: 'Primeira vitória', desc: 'Vença uma missão ou a Jornada.', test: (s) => s.counters.wins >= 1 },
+  { id: 'primeira-vitoria', icon: '⚑', name: 'Primeira vitória', desc: 'Vença uma missão.', test: (s) => s.counters.wins >= 1 },
   { id: 'cacador', icon: '⚔', name: 'Caçador de ossos', desc: 'Derrote 500 esqueletos no total.', goal: 500, count: (s) => s.counters.kills },
   { id: 'ossario', icon: '☠', name: 'Ossário', desc: 'Derrote 2000 esqueletos no total.', goal: 2000, count: (s) => s.counters.kills },
   { id: 'ultimates', icon: '☼', name: 'Poder supremo', desc: 'Use 50 ultimates.', goal: 50, count: (s) => s.counters.ultimates },
@@ -50,8 +50,7 @@ export const ACHIEVEMENTS = [
   { id: 'alem-do-castelo', icon: '♔', name: 'Além do Castelo', desc: 'Vença o Trono de Ossos.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.missionId === 'trono' },
   { id: 'coracao-sombrio', icon: '☼', name: 'Fim da maldição', desc: 'Vença os três guardiões no Coração do Castelo.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.missionId === 'coracao-do-castelo' },
   { id: 'duelista', icon: '⚔', name: 'Duelista', desc: 'Vença o Duelo contra o Rei.', test: (s, r) => !!r && r.won && r.mode === 'mission' && r.missionId === 'duelo' },
-  { id: 'jornada', icon: '♜', name: 'Até o castelo', desc: 'Vença a Jornada completa.', test: (s, r) => !!r && r.won && r.mode === 'journey' },
-  { id: 'veterano', icon: '⚒', name: 'Veterano', desc: 'Vença a Jornada no Difícil ou no Pesadelo.', test: (s, r) => !!r && r.won && r.mode === 'journey' && (r.difficultyId === 'dificil' || r.difficultyId === 'pesadelo') },
+  { id: 'veterano', icon: '⚒', name: 'Veterano', desc: 'Vença uma missão no Difícil ou no Pesadelo.', test: (s, r) => !!r && r.won && r.mode === 'mission' && (r.difficultyId === 'dificil' || r.difficultyId === 'pesadelo') },
   { id: 'elenco', icon: '♣', name: 'Elenco variado', desc: 'Jogue partidas com 10 heróis diferentes.', goal: 10, count: (s) => Object.values(s.heroes).filter((h) => h.games > 0).length },
   { id: 'mestre', icon: '✦', name: 'Mestre de armas', desc: `Leve um herói à maestria ${MASTERY_MAX}.`, test: (s) => Object.values(s.heroes).some((h) => h.xp >= MASTERY_XP[MASTERY_MAX - 1]) },
   { id: 'colecionador', icon: '⚱', name: 'Colecionador', desc: 'Escolha 30 relíquias.', goal: 30, count: (s) => s.counters.relics },
@@ -121,7 +120,7 @@ export function goldFor(run, bountyLevel = 0) {
     ['Abates', toCount(run.kills)],
     ['Fases vencidas', toCount(run.phasesCleared) * 6],
     ['Estrelas', toCount(run.stars) * 10],
-    ['Vitória', run.won ? (run.mode === 'journey' ? 60 : 20) : 0],
+    ['Vitória', run.won ? 20 : 0],
   ].filter(([, v]) => v > 0);
   const base = lines.reduce((s, [, v]) => s + v, 0);
   const mult = (DIFFICULTY_REWARD[run.difficultyId] ?? 1) * (1 + bountyLevel * findUpgrade('bounty').per);
