@@ -1,7 +1,7 @@
 // Animações dos heróis: pacote KayKit Character Animations 1.1 (Rig_Medium, CC0), aplicado por nome de osso.
 // Os modelos de herói (Adventurers 1.0 sem os clipes embutidos e o Ranger 2.0) usam o mesmo esqueleto do
 // pacote, então um único conjunto de clipes serve a todos. Os nomes antigos do 1.0 continuam valendo como
-// apelidos (LEGACY_CLIPS), assim SKILL_ANIMS, VARIANTS, Reino e monstros não precisam mudar.
+// apelidos (LEGACY_CLIPS), assim SKILL_ANIMS, VARIANTS e monstros não precisam mudar.
 // Sem import: os testes leem este arquivo direto (como looks.js).
 
 const ANIM_DIR = 'kaykit/animations/Animations/gltf/Rig_Medium/Rig_Medium_';

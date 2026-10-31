@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MAP_STYLES } from './world.js';
 import { preloadSceneryAssets, sceneryModel, sceneryReady } from './scenery-assets.js';
-import { makeBuilding, makeBridge, makeTree } from './kingdom-models.js';
+import { makeBuilding, makeBridge, makeTree } from './village-models.js';
 import { CAMPAIGN_ROAD, CHAPTER_COSMETICS, campaignRoadX } from './campaign.js';
 
 // Uma linha por capítulo, na ordem em que aparecem: paleta do mundo (world.js), quanto "morreu" e o que cresce.
@@ -110,7 +110,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     P(g, 'cone', flameA, [x, 0.45 * s, z], [0.35 * s, 0.9 * s, 0.35 * s]);
     P(g, 'cone', flameB, [x + 0.08, 0.4 * s, z + 0.1], [0.2 * s, 0.65 * s, 0.2 * s]);
   }
-  function addKingdom(g, type, x, z, s, ry = 0) {
+  function addBuilding(g, type, x, z, s, ry = 0) {
     const b = type === 'tree' ? makeTree(2) : makeBuilding(type);
     b.position.set(x, 0, z); b.scale.setScalar(s); b.rotation.y = ry;
     g.add(b);
@@ -118,9 +118,9 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
   const extraTrees = [], windmills = [];
   const BUILD = {
     village(g) {
-      addKingdom(g, 'house', -1.3, 0.5, 0.42, 0.4);
-      addKingdom(g, 'house', 1.5, -0.6, 0.38, -0.5);
-      addKingdom(g, 'house', 0.1, -2, 0.36, 0.1);
+      addBuilding(g, 'house', -1.3, 0.5, 0.42, 0.4);
+      addBuilding(g, 'house', 1.5, -0.6, 0.38, -0.5);
+      addBuilding(g, 'house', 0.1, -2, 0.36, 0.1);
       P(g, 'hex', stone, [0.3, 0.25, 1.2], [0.4, 0.5, 0.4]);
       P(g, 'hex', 0x3e6f9a, [0.3, 0.52, 1.2], [0.3, 0.05, 0.3]);
     },
@@ -135,8 +135,8 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       flames(g, -0.5, 0.2, 1.2); flames(g, 0.5, -0.2, 0.9); flames(g, 0.1, 0.7, 0.7);
     },
     farm(g) {
-      addKingdom(g, 'farm', -0.9, 0, 0.6, 0.2);
-      addKingdom(g, 'farm', 1.4, 0.8, 0.5, -0.1);
+      addBuilding(g, 'farm', -0.9, 0, 0.6, 0.2);
+      addBuilding(g, 'farm', 1.4, 0.8, 0.5, -0.1);
       P(g, 'ico', 0xe2c04a, [1.2, 0.45, -1.4], [0.6, 0.55, 0.6]);
       // moinho atrás das fazendas; as pás giram numa malha à parte (ver `windmills`)
       P(g, 'tower', 0xeadfca, [-0.4, 1.2, -2.9], [0.75, 2.4, 0.75]);
@@ -217,7 +217,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
       for (const x of [-0.45, 0, 0.45]) P(g, 'cone', bone, [x, 2.75, -0.3], [0.12, 0.6, 0.12]);
     },
   };
-  // 'roof' (prisma) só existe no kingdom-models; aqui uma pirâmide de 4 lados serve
+  // 'roof' (prisma) só existe no village-models; aqui uma pirâmide de 4 lados serve
   tmpGeos.set('roof', new THREE.ConeGeometry(0.75, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0));
   tmpGeos.set('tower', new THREE.CylinderGeometry(0.62, 1, 1, 8));
   function reeds(g) { for (let k = 0; k < 7; k++) { const a = k * 0.9 + 0.3; P(g, 'cone', 0x6f8f3e, [Math.cos(a) * 2.7, 0.35, Math.sin(a) * 2.7], [0.08, 0.7, 0.08]); } }
@@ -379,7 +379,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     }
   }
 
-  // ---------- natureza instanciada: árvores do Reino (pinheiro e copa redonda) e pedras ----------
+  // ---------- natureza instanciada: árvores da vila (pinheiro e copa redonda) e pedras ----------
   const plants = { pine: [], round: [], rock: [] };
   const free = (x, z, r = 0) => exclusions.every((e) => Math.hypot(x - e.x, z - e.z) > e.r + r);
   // plantações cercadas nos dois primeiros capítulos (reservam o espaço antes das árvores)
@@ -412,7 +412,7 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     template.traverse((o) => {
       if (!o.isMesh || !items.length) return;
       const mat = new THREE.MeshLambertMaterial({ flatShading: true });
-      const im = new THREE.InstancedMesh(o.geometry, mat, items.length);   // geometria compartilhada do Reino: não é liberada aqui
+      const im = new THREE.InstancedMesh(o.geometry, mat, items.length);   // geometria compartilhada do village-models: não é liberada aqui
       items.forEach((it, k) => {
         q.setFromAxisAngle(up, it.ry);
         m4.compose(v3.set(it.x, heightAt(it.x, it.z) - 0.05, it.z), q, s3.setScalar(it.s)).multiply(o.matrixWorld);

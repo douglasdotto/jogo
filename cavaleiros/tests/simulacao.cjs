@@ -75,7 +75,6 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   addEventListener: noop, requestAnimationFrame: noop, hideTooltip: noop, logoSVG: () => "", tutorial: { on: noop, wants: () => false }, setTimeout: (fn) => fn(), clearTimeout: noop, innerWidth: 1440, innerHeight: 1000, aiming: null, battleGateId: 0, battleLoadingVisible: false,
   SkeletonUtils: { clone: root }, scene: { add: noop, remove: noop }, assets, ringGeo: {}, haloGeo: {}, goldMat: {}, starGeo: {}, puffGeo: {},
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
-  loadKingdomRecords: () => ({}), kingdomRecordText: () => "",   // Reino fica fora da simulação
   newStats: stats, openHeroPanel: noop, closeHeroPanel: noop, panelHero: () => null, tickHeroPanel: noop, summaryHTML: () => '', LOOKS: {}, applyLook: noop, buildBeast: () => ({ root: root(), flash: [], materials: [] }), animateBeast: noop,
   buildSummon: () => { const o = () => Object.assign(root(), { userData: { side: 1 }, visible: false, getWorldPosition: (v) => v }); return { core: o(), head: o(), jaw: o(), tail: o(), mouth: o(), aura: o(), shell: o(), wings: [o(), o()], legs: [o(), o()], arms: [o(), o()], hover: 1, shellR: 1, auraR: 1 }; },   // corpos das criaturas do Invocador (summon-models.js)
   renderer: { render: noop, domElement: { addEventListener: noop } }, camera: { position: new Vector3() }, follow: new Vector3(), controls: { target: new Vector3(), update: noop },
@@ -83,8 +82,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
     along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
   poof: noop, ring: simRing, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], flames: [], wave: noop, burst: noop, column: noop,
-  FX: new Proxy({}, { get: () => noop }), clearFx: noop, popTextPool: { clear: noop }, audio: new Proxy({}, { get: () => noop }),
-  loadKingdomRecords: () => ({}), kingdomRecordText: () => '' });
+  FX: new Proxy({}, { get: () => noop }), clearFx: noop, popTextPool: { clear: noop }, audio: new Proxy({}, { get: () => noop }) });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
 vm.runInContext(campaign.replaceAll('export ', ''), context);

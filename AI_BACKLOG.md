@@ -2,6 +2,7 @@
 
 Legenda: esforço P/M/G · risco B/M/A · área. Referências `arquivo:linha` são do commit 10adb93 (podem ter mudado).
 Fora de escopo por decisão do usuário: qualquer trabalho de mobile/toque.
+Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 22, 30–34 cancelados.
 
 ## P0 — bugs e correções de base
 | # | Item | Área | Esf/Risco | Onde |

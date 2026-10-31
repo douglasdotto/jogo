@@ -73,7 +73,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
   boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
-  mountCampaignMap3D:noop,loadKingdomRecords:()=>context.kingdomRecords||{},kingdomRecordText:r=>r?.bestTime!=null?`♛ ${r.bestTime}`:r?.maxWave?`☠ ${r.maxWave}`:'',
+  mountCampaignMap3D:noop,
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop, buildBeast:()=>({root:root(),flash:[],materials:[]}), animateBeast:noop,
   buildSummon:()=>{const o=()=>Object.assign(root(),{userData:{side:1},visible:false,getWorldPosition:v=>v});return {core:o(),head:o(),jaw:o(),tail:o(),mouth:o(),aura:o(),shell:o(),wings:[o(),o()],legs:[o(),o()],arms:[o(),o()],hover:1,shellR:1,auraR:1};},   // corpos das criaturas do Invocador (summon-models.js)
   renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop},shadow:{camera:{left:-24,right:24},mapSize:{x:1024}}},
@@ -859,7 +859,7 @@ test('contexto tático reutiliza seus arrays sem carregar alvos removidos',()=>{
 test('reinício limpa invocados, fila, efeitos e volta ao menu; Jornada leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
   assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'mode');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
-  assert.equal(t.pick.cards.length,4);assert.match(t.pick.cards[3].innerHTML,/Reino/);
+  assert.equal(t.pick.cards.length,3);assert.match(t.pick.cards[2].innerHTML,/Acampamento/);
   let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
   t.confirmPick(1);next();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
   t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'♜','HUD mostra o ícone da dificuldade; o nome fica na dica');
@@ -892,14 +892,6 @@ test('recorde guarda a melhor fase por dificuldade e marca vitória',()=>{
   Object.assign(t.game,{over:false,phase:12,kills:200});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.won,true);
   Object.assign(t.game,{over:false,start:6,phase:12,kills:999});t.endGame('Vitória',true);assert.equal(t.loadRecords().normal.kills,200);
   t.showDifficulty();assert.ok(t.pick.cards[1].innerHTML.includes('Vitória!'));assert.ok(t.pick.cards[0].innerHTML.includes('Sem recorde'));
-});
-test('Reino: escolhe dificuldade própria, mostra o recorde do Reino e entra no modo',()=>{
-  clear();context.kingdomRecords={dificil:{bestTime:null,maxWave:6}};t.showDifficulty(true);
-  assert.equal(t.pick.reino,true);assert.equal(elements.get('pickTitle').textContent,'Reino');
-  assert.ok(t.pick.cards[2].innerHTML.includes('☠ 6'));assert.ok(t.pick.cards[0].innerHTML.includes('Sem recorde'));
-  let go;context.setTimeout=(fn)=>{go=fn};
-  t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.ok(go);
-  context.kingdomRecords=null;context.setTimeout=noop;t.showDifficulty();assert.equal(t.pick.reino,false,'Jornada não herda o Reino');
 });
 test('entrada tardia recebe metade da média de XP e respeita limite de quatro',()=>{
   clear();const a=new t.Hero(cfg('paladin')),b=new t.Hero(cfg('berserker'));a.xp=300;b.xp=100;
@@ -3066,7 +3058,7 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
   t.pick.open=false;
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
-  clear();t.showMenu();assert.equal(t.pick.cards.length,4);
+  clear();t.showMenu();assert.equal(t.pick.cards.length,3);
   assert.match(t.pick.cards[2].innerHTML,/Acampamento/);assert.match(t.pick.cards[2].innerHTML,/◆ \d+/);   // acampamento é a loja: mostra o ouro
   // conquistas, estrelas, ouro e maestria saíram dos cartões para a barra de perfil (ícone + número)
   const home=elements.get('pickList').children.at(-1),bar=home.children[0];
