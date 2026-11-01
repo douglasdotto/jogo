@@ -431,8 +431,8 @@ const readGltf=f=>{if(f.endsWith('.gltf'))return JSON.parse(fs.readFileSync(f,'u
 const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS),...Object.keys(heroAnims.LARGE_CLIPS)];
 const modelGltf=n=>{const f=path.join(dir,'assets',heroAnims.HERO_MODEL_FILES[n]||n+'.glb');return readGltf(fs.existsSync(f)?f:path.join(dir,'assets',n+'.gltf'))};
 const clipsOf=n=>heroAnims.HERO_MODELS.includes(n)?heroClipNames:modelGltf(n).animations.map(a=>a.name);
-test('29 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,29);
+test('30 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,30);
   const glb=modelGltf;
   for(const v of t.VARIANTS){
     const clips=clipsOf(v.recipe?.base||v.model);
@@ -440,7 +440,7 @@ test('29 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('120 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
     const anims=t.SKILL_ANIMS[v.id],clips=clipsOf(v.recipe?.base||v.model);
@@ -457,15 +457,15 @@ test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes n
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,4,v.id+': as quatro habilidades devem ter corpos diferentes');
     assert.equal(new Set(anims.map(a=>a.clip)).size,4,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,116);
-  assert.equal(new Set(allNames).size,116,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,120);
+  assert.equal(new Set(allNames).size,120,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
   assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,116,
-    `cada uma das 116 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,120,
+    `cada uma das 120 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -617,7 +617,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
   assert.deepEqual(Array.from(t.pick.classFilters,filter=>filter.innerHTML.match(/<span>(.*?)<\/span>/)?.[1]),
     ['Guerreiros','Bárbaros','Magos','Ladinos','Suporte']);
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
-  assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute']);
+  assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute','lancer']);
   assert.deepEqual(Array.from(rowFor('Bárbaros').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','monk','beast_tamer']);
   assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist']);
   for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=8,'cada aba tem de 5 a 8 heróis');
@@ -637,7 +637,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
 });
 test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,29);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,30);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -1150,7 +1150,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas, segundas técnicas e ultimates das 29 variantes executam seus efeitos sem erro',()=>{
+test('técnicas, segundas técnicas e ultimates das 30 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2,3]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -2330,7 +2330,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
 test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,29);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,30);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));
@@ -3883,5 +3883,35 @@ test('resultado avisa quando o navegador não consegue salvar a campanha',()=>{
     clear();
   }
 });
+test('Lanceiro: estocada em linha com empurrão, postura de lança que alonga e freia, carga que atordoa comuns e volta ao posto',()=>{
+  clear();const l=cfg('lancer');
+  assert.ok(l.hp>cfg('champion').hp&&l.hp<=cfg('guardian').hp&&l.range>cfg('guardian').range&&!l.ranged,'guerreiro de alcance médio, vida entre Campeão e Guardião');
+  assert.equal(t.variantOpen('lancer'),true,'aberto desde o início');
+  const h=hero('lancer',0,0),a=foe('Warrior',0,2),b=foe('Warrior',0,3.5),c=foe('Warrior',4,1);for(const e of [a,b,c])e.hp=e.maxHp=1e4;
+  h.skillTimers.fill(0);
+  assert.equal(h.useSkill(a,false,false,0),true,'a Estocada dispara contra a fila');
+  for(let i=0;i<40&&(h.busy>0||h.pendingHit);i++)h.update(.05);
+  assert.ok(a.hp<a.maxHp&&b.hp<b.maxHp,'fere todos da linha');assert.equal(c.hp,c.maxHp,'não fere quem está fora da linha');
+  assert.ok(a.vel.z>0,'empurra o da frente');
+  // postura: alcance maior só enquanto dura
+  clear();const s=hero('lancer',0,0),e1=foe('Warrior',0,3.5),e2=foe('Warrior',0,3.8);for(const e of [e1,e2])e.hp=e.maxHp=1e4;
+  const base=s.range;s.skillTimers.fill(0);
+  assert.equal(s.useSkill(null,false,false,1),true,'a IA firma a postura com inimigos chegando');
+  for(let i=0;i<30&&(s.busy>0||s.pendingHit);i++)s.update(.05);
+  assert.ok(s.spearT>0&&Math.abs(s.range-base*1.4)<1e-6,'alcance maior na postura');
+  s.update(.5);assert.ok(e1.hp<e1.maxHp&&e1.slowT>0,'quem chega ao alcance leva dano e fica lento');
+  s.updateSkillStates(6);assert.ok(Math.abs(s.range-base)<1e-6&&!s.spearOn,'alcance volta ao normal');
+  // carga: comuns atordoados, chefe só leva dano, volta ao posto
+  clear();const k=hero('lancer',0,0),x=foe('Warrior',0,3),y=foe('Warrior',0,5),boss=foe('Warrior',0,7,true);for(const e of [x,y,boss])e.hp=e.maxHp=1e4;
+  k.skillTimers.fill(0);
+  assert.equal(k.useSkill(x,false,true,2),true,'a Carga da Cavalaria dispara');
+  for(let i=0;i<40&&k.pendingHit;i++)k.update(.05);
+  assert.ok(x.stunT>0&&y.stunT>0,'comuns atordoados');assert.ok(!(boss.stunT>0)&&boss.hp<=boss.maxHp,'chefe não é atordoado');
+  assert.ok(k.pos.z>3,'atravessou a linha');
+  for(let i=0;i<30;i++)k.update(.05);
+  assert.ok(k.pos.distanceTo(k.post)<.5,'volta ao posto depois da carga');
+  clear();
+});
+
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}

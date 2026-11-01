@@ -27,7 +27,7 @@ export const heroModelFile = (model) => HERO_MODEL_FILES[model] || `${model}.glb
 
 // armas prontas (Fantasy Weapons Bits, CC0) usadas nas aparências: add { from: 'kaykit/weapons/Assets/gltf/<nome>', part: '<nome>' }
 export const WEAPON_DIR = 'kaykit/weapons/Assets/gltf/';
-export const HERO_PROP_FILES = ['bow_A_withString'].map((name) => `${WEAPON_DIR}${name}.gltf`);
+export const HERO_PROP_FILES = ['bow_A_withString', 'spear_A'].map((name) => `${WEAPON_DIR}${name}.gltf`);
 
 // nome antigo (Adventurers 1.0) -> nome no pacote 1.1; o que não aparece aqui manteve o nome
 // (Death_A/B, Hit_A/B, Dodge_*, Jump_*, Running_*, Walking_*, Throw, Use_Item, Interact, PickUp, Lie_*, Sit_*)

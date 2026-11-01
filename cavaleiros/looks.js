@@ -91,6 +91,20 @@ export const LOOKS = {
       { type: 'beard', bone: 'head', color: 0x5a2a14 },
     ],
   },
+  lancer: {   // lanceiro: azul-marinho e dourado, elmo dourado com pena, capa curta, ombreiras e lança longa (Fantasy Weapons)
+    shape: silhouette('Knight', { torso: 0.98, arms: 0.98, legs: 1.04, height: 1.03, depth: 1 }),
+    hide: ['Knight_Cape'],
+    add: [{ from: 'Barbarian', part: 'Barbarian_Cape', scale: 0.9 },
+      { from: 'kaykit/weapons/Assets/gltf/spear_A', part: 'spear_A', bone: 'handslot.r', scale: 0.85 }],
+    paint: {
+      ...outfit('Knight', '#1f2f5c', '#c8a038', 0.75), ...face('Knight', { skin: '#e8bc98', hair: '#2a1a10' }),
+      Barbarian_Cape: { tint: '#14214a', amount: 0.85 }, Knight_Helmet: { tint: '#d8b048', amount: 0.55 },
+    },
+    extras: [
+      { type: 'plume', bone: 'head', color: 0xe8c040, tall: true, y: 1.1 },
+      { type: 'pauldrons', bone: 'chest', color: 0xd8b048, trim: 0x1f2f5c, size: 1.05 },
+    ],
+  },
   // ---------- Bárbaro ----------
   berserker: {   // moicano ruivo, barba ruiva
     shape: silhouette('Barbarian', { torso: 1.08, arms: 1.1, legs: 1.06, depth: 1.08 }),
@@ -356,6 +370,7 @@ export const LOOK_PREVIEW = [
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
   { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6, clips: { Idle: 'Brute_Idle', Running_A: 'Brute_Run' } },   // luta de punhos; anda e respira como gigante (Rig_Large)
+  { id: 'lancer', name: 'Lanceiro', model: 'Knight', use: [] },
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
 ];
 export const WEAPONS = {

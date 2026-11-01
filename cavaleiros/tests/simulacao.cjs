@@ -269,6 +269,7 @@ const profiles = {
   inicial: ['paladin', 'berserker', 'pyro', 'assassin'],
   equilibrado: ['paladin', 'guardian', 'pyro', 'cleric'],
   brutamontes: ['paladin', 'brute', 'pyro', 'cleric'],
+  lanceiro: ['paladin', 'lancer', 'pyro', 'cleric'],
   sustentacao: ['guardian', 'cleric', 'druid', 'pyro'],
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],

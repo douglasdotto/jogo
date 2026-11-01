@@ -148,6 +148,11 @@ const EXTRA_SKILLS = {
     { name: 'Pele de Pedra', description: 'Cresce por 8 s: recebe 60% menos dano, devolve 30% dos golpes corpo a corpo e provoca quem está em volta.', effect: 'stone-skin', cooldown: 64, radius: 6, duration: 8, color: 0xb8a88a },
     { name: 'Muralha', description: 'Finca-se no chão por 3 s: fica imóvel, recebe metade do dano e bloqueia os projéteis que passam por ele.', effect: 'stone-wall', cooldown: 18, radius: 1.4, range: 9, duration: 3, color: 0xc9bba2 },
   ],
+  lancer: [
+    { name: 'Postura de Lança', description: 'Por 5 s a lança alcança mais longe; quem chega perto leva dano e fica lento.', effect: 'spear-stance', cooldown: 18, radius: 5, duration: 5, power: 0.3, color: 0xbcd0ff },
+    { name: 'Carga da Cavalaria', description: 'Avança em linha pela fila: comuns levam dano e ficam atordoados, chefes só levam dano. Depois volta ao posto.', effect: 'cavalry-charge', cooldown: 62, radius: 2.2, range: 9, power: 1.4, control: 'stun', color: 0x7fa0ff },
+    { name: 'Lança Cravada', description: 'Crava a lança num inimigo: fere e prende no chão (chefe só fica lento).', effect: 'pin-spear', targeting: 'enemy', cooldown: 16, radius: 1.2, range: 7, power: 1.3, duration: 2.5, color: 0xffe27a },
+  ],
 };
 
 export function cooldownForSkill(cfg, slot = 0, level = 1, rate = 1) {
