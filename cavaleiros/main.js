@@ -172,8 +172,9 @@ function formationSpread() {
   for (const h of heroes()) if (!h.dead) { const s = h.size || 1; if (s > a) { b = a; a = s; } else if (s > b) b = s; }
   return Math.max(1, (UNIT_SEPARATION_FACTOR * (a + b) + 0.15) / POST_GAP);
 }
-const XP_LEVELS = [0, 90, 350, 800, 1400];
+const XP_LEVELS = [0, 90, 600, 1600, 2700];
 const MAX_HERO_LEVEL = XP_LEVELS.length;
+const levelGain = (level) => level >= 4 ? 1.15 : 1.1;   // vida e dano por nível: +10% até o Nv3, +15% no Nv4 e Nv5
 // só há 3 retratos/nomes por herói: Nv4 e Nv5 usam os do Nv3 com selo próprio (prata no 4, ouro no 5)
 const artLevel = (level) => Math.min(level, 3);
 const heroLevelName = (cfg, level) => cfg.names?.[artLevel(level) - 1] || cfg.name;
@@ -1822,10 +1823,11 @@ function showEvolution() {
 // destaque de quem evolui: retrato com raios, nome e nível antes → depois e o ganho de vida/dano do nível
 function evolutionHeroHTML(entry) {
   const h = entry.hero, cfg = h.cfg, level = entry.level;
-  const hp = entry.hp || [Math.round(h.maxHp / 1.1), h.maxHp], dmg = entry.dmg || [h.dmg / 1.1, h.dmg];
+  const gain = levelGain(level), pct = Math.round((gain - 1) * 100);
+  const hp = entry.hp || [Math.round(h.maxHp / gain), h.maxHp], dmg = entry.dmg || [h.dmg / gain, h.dmg];
   const img = heroLevelPortrait(cfg, level);
   const oldName = heroLevelName(cfg, level - 1), newName = heroLevelName(cfg, level);
-  const stat = (glyph, tip, [a, b]) => `<span class="evo-stat" data-tip="${tip} +10%"><i aria-hidden="true">${glyph}</i>${Math.round(a)}<em>→</em><b>${Math.round(b)}</b></span>`;
+  const stat = (glyph, tip, [a, b]) => `<span class="evo-stat" data-tip="${tip} +${pct}%"><i aria-hidden="true">${glyph}</i>${Math.round(a)}<em>→</em><b>${Math.round(b)}</b></span>`;
   return `<span class="evo-hero ${levelTierClass(level)}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" aria-label="${attrText(`${oldName} evolui para ${newName}, nível ${level}`)}">
     <span class="evo-portrait"><span class="evo-rays" aria-hidden="true"></span><img src="${img}" alt=""><span class="evo-class" aria-hidden="true">${PICK_CLASS_GLYPHS[cfg.classId] || '♜'}</span></span>
     <span class="evo-info">
@@ -6413,9 +6415,10 @@ class Hero extends Unit {
     while (this.level < MAX_HERO_LEVEL && this.xp >= XP_LEVELS[this.level]) {
       const oldHp = this.maxHp, oldDmg = this.dmg;
       this.level++;
-      this.maxHp = Math.round(this.maxHp * 1.1);
+      const gain = levelGain(this.level);
+      this.maxHp = Math.round(this.maxHp * gain);
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp - oldHp);
-      this.dmg *= 1.1;
+      this.dmg *= gain;
       evolutions.push({ hero: this, level: this.level, hp: [oldHp, this.maxHp], dmg: [oldDmg, this.dmg] });   // antes → depois, para a tela de evolução
       this.size = this.heroSize();
       this.levelLabel.textContent = 'Nv' + this.level;
@@ -9774,8 +9777,9 @@ class Skeleton extends Unit {
   constructor(type, phase, boss = false) {
     const base = SKELETONS[type];
     const D = difficulty;
-    const hpScale = (1 + (phase - 1) * 0.19) * D.hp * (boss ? 9 * D.boss : 1) * (game.partyScale?.hp || 1);   // equipe maior que a da missão: inimigos mais resistentes
-    const dmgScale = (1 + (phase - 1) * 0.14) * D.dmg * (boss ? 2.5 * D.boss : 1);
+    const F = game.mission?.foeScale;   // ajuste fino da missão (fases altas da campanha): vida e dano de todos os inimigos
+    const hpScale = (1 + (phase - 1) * 0.19) * D.hp * (boss ? 9 * D.boss : 1) * (game.partyScale?.hp || 1) * (F?.hp ?? 1);   // equipe maior que a da missão: inimigos mais resistentes
+    const dmgScale = (1 + (phase - 1) * 0.14) * D.dmg * (boss ? 2.5 * D.boss : 1) * (F?.dmg ?? 1);
     super(skeletonModel(base.model || type), { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss || !!base.heavy;   // o golem é pesado como um chefe, mas sem a vida de chefe
     this.phaseBoss = !!boss;             // só o chefe da fase encerra objetivos de chefe na campanha
@@ -11034,7 +11038,7 @@ function startMission() {
 // Equipe contínua: cada missão foi calibrada para m.heroes heróis no nível m.level, com um aliado
 // a mais a cada fase vencida (até 4). Um grupo maior que esse, ou mais evoluído que m.level,
 // engrossa a onda e a vida dos inimigos daquela fase, de forma suave e com teto.
-const PARTY_SCALE = { count: 0.6, countMax: 1.6, hp: 0.45, hpMax: 1.6, level: 0.2, levelMax: 1.4, cap: 1.4 };
+const PARTY_SCALE = { count: 0.6, countMax: 1.6, hp: 0.45, hpMax: 1.6, level: 0.08, levelMax: 1.15, cap: 1.4 };
 function partyScale(m, party, phase) {
   // o Duelo é sempre um herói só; na ponte em chamas grupo maior não deixa a defesa mais fácil (mais corpos não interceptam melhor)
   if (!m || m.goal.type === 'duel' || m.goal.type === 'breach' || !party.length) return { count: 1, hp: 1 };
