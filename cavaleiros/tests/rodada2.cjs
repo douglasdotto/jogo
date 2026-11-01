@@ -80,7 +80,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,isInsideGround:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
   poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],sentries:[],fx:[],updateFx:noop,
-  wave:noop,burst:noop,column:noop,
+  wave:noop,burst:noop,column:noop,addFx:noop,puffs:noop,shake:noop,ringGeo:{},crackGeo:{},fewer:n=>n,lowQuality:false,rnd:(a=1)=>a*0.5,V:(x,y,z)=>new Vector3(x,y,z),
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
   FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
@@ -431,8 +431,8 @@ const readGltf=f=>{if(f.endsWith('.gltf'))return JSON.parse(fs.readFileSync(f,'u
 const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS),...Object.keys(heroAnims.LARGE_CLIPS)];
 const modelGltf=n=>{const f=path.join(dir,'assets',heroAnims.HERO_MODEL_FILES[n]||n+'.glb');return readGltf(fs.existsSync(f)?f:path.join(dir,'assets',n+'.gltf'))};
 const clipsOf=n=>heroAnims.HERO_MODELS.includes(n)?heroClipNames:modelGltf(n).animations.map(a=>a.name);
-test('29 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,29);
+test('30 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,30);
   const glb=modelGltf;
   for(const v of t.VARIANTS){
     const clips=clipsOf(v.recipe?.base||v.model);
@@ -440,7 +440,7 @@ test('29 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('120 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
     const anims=t.SKILL_ANIMS[v.id],clips=clipsOf(v.recipe?.base||v.model);
@@ -457,15 +457,15 @@ test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes n
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,4,v.id+': as quatro habilidades devem ter corpos diferentes');
     assert.equal(new Set(anims.map(a=>a.clip)).size,4,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,116);
-  assert.equal(new Set(allNames).size,116,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,120);
+  assert.equal(new Set(allNames).size,120,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
   assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,116,
-    `cada uma das 116 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,120,
+    `cada uma das 120 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -637,7 +637,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
 });
 test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,29);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,30);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -659,7 +659,7 @@ test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa pos
   t.moveGrid(0,1);assert.equal(t.pick.sel,at('iceviking'));
   t.moveGrid(0,1);assert.equal(t.pick.sel,at('chronist'),'na aba seguinte, pula os ocupados da mesma coluna');
   t.moveGrid(0,-1);assert.equal(t.pick.sel,at('cryo'));
-  t.moveGrid(-1,0);assert.equal(t.pick.sel,at('summoner'),'← volta pela aba e pula os ocupados');
+  t.moveGrid(-1,0);assert.equal(t.pick.sel,at('geomancer'),'← volta pela aba e pula os ocupados');
   t.moveGrid(1,0);assert.equal(t.pick.sel,at('cryo'));
   t.moveGrid(0,-1);assert.equal(t.pick.sel,at('beast_tamer'),'↑ entra pela última linha da aba anterior');
 });
@@ -1150,7 +1150,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas, segundas técnicas e ultimates das 29 variantes executam seus efeitos sem erro',()=>{
+test('técnicas, segundas técnicas e ultimates das 30 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2,3]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -1556,6 +1556,42 @@ test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo
   assert.equal(tank.hp,hp,'ovelhas não atacam');assert.ok(herd.every(s=>!s.pendingHit));
   for(let i=0;i<60;i++)for(const s of herd)s.update(.1);
   assert.ok(herd.every(s=>s.sheepT===0),'a transmutação acaba');
+  clear();
+});
+test('Geomante: espinhos, muralha que só segura comuns, terremoto e pilar sem atordoar chefes',()=>{
+  const g=cfg('geomancer'),run=(x,s)=>vm.runInContext(x,context);
+  assert.equal(g.hp,180);assert.equal(t.pickGroupId(g),'magos');assert.ok(t.variantOpen('geomancer'),'começa aberto');
+  const boss=()=>{const b=new t.Skeleton('Warrior',1,true);b.spawning=false;b.busy=99;b.hp=b.maxHp=100000;return b;};
+  // assinatura: fere e atordoa de leve quem está na linha; chefe só fica lento
+  clear();let h=new t.Hero(g);h.pos.set(0,0,0);const a=newFoe(0,-3,'Minion'),b=newFoe(0,-5,'Minion'),side=newFoe(4,-4,'Minion'),bs=boss();bs.pos.set(0,0,-6);
+  assert.equal(h.useSkill(null),true);h.pendingHit.effect();
+  assert.ok(a.hp<a.maxHp&&b.hp<b.maxHp,'atinge a linha');assert.equal(side.hp,side.maxHp,'não atinge fora da linha');
+  assert.ok(a.stunT>0&&a.stunT<1.2,'atordoamento leve');assert.equal(bs.stunT||0,0,'chefe não é atordoado');assert.ok(bs.slowT>0);
+  // muralha: comuns não atravessam, chefe passa, heróis não são afetados e ela some sozinha
+  clear();h=new t.Hero(g);h.pos.set(0,0,0);h.skillTimers.fill(0);
+  const foes=[newFoe(0,-6,'Minion'),newFoe(1,-6.3,'Minion')],big=boss();big.pos.set(-1,0,-6);
+  assert.equal(h.useSkill(null,false,false,1),true);h.pendingHit.effect();
+  assert.ok(run('geoWalls.length')>=4,'pedras na muralha');
+  const walker=newFoe(0,-8.5,'Minion');walker.pos.z=-9;
+  for(let i=0;i<30;i++){walker.pos.z+=0.1;run('for (const u of units) pushFromGeoWalls(u)');}
+  assert.ok(walker.pos.z<=-3.9,'comum fica do lado de lá da muralha');
+  const wallZ=run('geoWalls[0].z');big.pos.z=wallZ;run('for (const u of units) pushFromGeoWalls(u)');assert.equal(big.pos.z,wallZ,'chefe não é empurrado');
+  const ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,wallZ);run('for (const u of units) pushFromGeoWalls(u)');assert.equal(ally.pos.z,wallZ,'herói passa pela muralha');
+  const stuck=newFoe(0.2,wallZ,'Minion');for(let i=0;i<8;i++)run('for (const u of units) pushFromGeoWalls(u)');
+  assert.ok(run('geoWalls').every(w=>Math.hypot(stuck.pos.x-w.x,stuck.pos.z-w.z)>=w.r),'quem estava no lugar da muralha é empurrado para fora, sem ficar preso');
+  run('updateGeoWalls(10)');assert.equal(run('geoWalls.length'),0,'a muralha desmorona');
+  // terremoto: comuns atordoados, chefe lento, rachaduras deixam o chão lento
+  clear();context.flames.length=0;h=new t.Hero(g);h.pos.set(0,0,0);h.skillTimers.fill(0);
+  const crowd=[newFoe(0,-2,'Minion'),newFoe(2,-1,'Minion'),newFoe(-2,1,'Minion')],tough=boss();tough.pos.set(0,0,3);
+  assert.equal(h.useSkill(null,false,false,2),true);h.pendingHit.effect();
+  for(const s of crowd)assert.ok(s.hp<s.maxHp&&s.stunT>0,'derruba e fere');
+  assert.equal(tough.stunT||0,0,'chefe não cai');assert.ok(tough.slowT>0&&tough.hp<tough.maxHp);
+  assert.ok(context.flames.some(f=>f.every===0.5&&f.radius>=6),'rachaduras com o raio real');
+  context.flames.length=0;
+  // pilar: prende o mais forte; chefe só fica lento
+  clear();h=new t.Hero(g);h.pos.set(0,0,0);h.skillTimers.fill(0);const weak=newFoe(0,-3,'Minion'),strong=newFoe(1,-4);strong.hp=strong.maxHp=200000;
+  assert.equal(h.useSkill(null,false,false,3),true);h.pendingHit.effect();
+  assert.ok(strong.stunT>0&&strong.hp<strong.maxHp&&weak.hp===weak.maxHp);
   clear();
 });
 test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
@@ -2330,7 +2366,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
 test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,29);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,30);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

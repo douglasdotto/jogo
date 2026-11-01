@@ -29,7 +29,7 @@ assert.ok(LOOKS.ninja.hide.includes('Knife') && LOOKS.ninja.hide.includes('Throw
 assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'shuriken' && extra.bone === 'handslotr'), 'Ninja segura uma shuriken');
 assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'shurikenBelt'), 'Ninja leva shurikens no cinto');
 
-// ---------- paletas: as 29 variantes (18 de looks.js + 11 receitas de characters.js) ----------
+// ---------- paletas: as 30 variantes (19 de looks.js + 11 receitas de characters.js) ----------
 const recipes = fs.readFileSync(path.join(__dirname, '..', 'characters.js'), 'utf8');
 const slice = recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '');
 vm.runInNewContext(`${slice}\nglobalThis.result = CHARACTERS;`, context);
@@ -37,7 +37,7 @@ const heroes = [
   ...LOOK_PREVIEW.filter((v) => !v.recipe).map((v) => ({ id: v.id, model: v.model === 'Rogue_Hooded' ? 'Rogue' : v.model, paint: LOOKS[v.id].paint })),
   ...context.result.map((c) => ({ id: c.id, model: c.base, paint: c.paint })),
 ];
-assert.equal(heroes.length, 29, '29 variantes com aparência própria');
+assert.equal(heroes.length, 30, '30 variantes com aparência própria');
 const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
 const dist = (a, b) => Math.hypot(...hex(a).map((v, i) => v - hex(b)[i]));
 const palette = (h) => {
@@ -51,7 +51,7 @@ const palette = (h) => {
 };
 const palettes = heroes.map((h) => ({ ...h, pal: palette(h) }));
 const signatures = new Set(palettes.map((h) => JSON.stringify(h.pal)));
-assert.equal(signatures.size, 29, 'as 29 variantes têm paletas distintas');
+assert.equal(signatures.size, 30, 'as 30 variantes têm paletas distintas');
 // mesmo modelo base: roupa + cabelo + pele precisam se afastar bastante (não só um tom vizinho)
 for (const a of palettes) for (const b of palettes) {
   if (a.id >= b.id || a.model !== b.model) continue;
@@ -115,7 +115,7 @@ for (const id of ['archer', 'monk', 'alchemist', 'summoner']) for (const extra o
 const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
 const variantBlock = main.slice(main.indexOf('const VARIANTS = ['), main.indexOf('].map((v) => ({ ...HEROES'));
 const variants = variantBlock.split(/\n  \{ id: '/).slice(1).map((body) => ({ id: body.slice(0, body.indexOf("'")), recipe: /recipe: CHARACTERS\[(\d+)\]/.exec(body)?.[1] }));
-assert.equal(variants.length, 29, 'VARIANTS lido de main.js');
+assert.equal(variants.length, 30, 'VARIANTS lido de main.js');
 assert.deepEqual(Array.from(LOOK_PREVIEW, (v) => v.id), variants.map((v) => v.id), 'LOOK_PREVIEW lista todas as variantes na ordem de VARIANTS');
 for (const v of variants) {
   const preview = LOOK_PREVIEW.find((p) => p.id === v.id);
@@ -133,4 +133,4 @@ for (const v of variants) {
   }
 }
 
-console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador, Oráculo, Brutamontes e Invocador com identidades próprias; 29 paletas distintas');
+console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador, Oráculo, Brutamontes e Invocador e Geomante com identidades próprias; 30 paletas distintas');

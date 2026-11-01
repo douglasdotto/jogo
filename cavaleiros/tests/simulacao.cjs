@@ -81,7 +81,7 @@ const context = vm.createContext({ THREE, document: { createElement: el, body: e
   blasts: simBlasts, sentries: [],
   world: { obstacles: [], pointAt: (s) => new Vector3(0, 0, -s), tangentAt: () => new Vector3(0, 0, -1), sideOf: () => new Vector3(1, 0, 0), anchorS: (p) => p * 23,
     along: (s, x) => new Vector3(x, 0, -s), canStep: () => true, isInsideGround: () => true, groundHeight: () => 0, isShallow: () => false, nextWaypoint: (a, b) => b, zoneOf: () => null },
-  poof: noop, ring: simRing, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], flames: [], wave: noop, burst: noop, column: noop,
+  poof: noop, ring: simRing, beam: noop, popText: noop, colors: {}, fx: [], bolts: [], flames: [], wave: noop, burst: noop, column: noop, addFx: noop, puffs: noop, shake: noop, ringGeo: {}, crackGeo: {}, fewer: (n) => n, lowQuality: false, rnd: (a = 1) => a * 0.5, V: (x, y, z) => new Vector3(x, y, z),
   FX: new Proxy({}, { get: () => noop }), clearFx: noop, popTextPool: { clear: noop }, audio: new Proxy({}, { get: () => noop }) });
 const part = (text, a, b) => text.slice(text.indexOf(a), text.indexOf(b));
 vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace('export ', ''), context);
@@ -273,6 +273,7 @@ const profiles = {
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
   invocador: ['summoner', 'guardian', 'pyro', 'cleric'],
+  geomante: ['geomancer', 'paladin', 'guardian', 'cleric'],
   fazendas: ['paladin', 'viking', 'guardian', 'cleric'],
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],

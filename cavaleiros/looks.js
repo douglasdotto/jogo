@@ -323,6 +323,21 @@ export const LOOKS = {
       { type: 'motes', bone: 'root', color: 0xffb8dc, n: 4, size: 0.04, y: 1.1 },
     ],
   },
+  // ---------- Geomante ----------
+  geomancer: {   // mago da terra: manto ocre e capa de musgo, barba grisalha, ombreira de pedra e cajado de pedra (sem chapéu)
+    shape: silhouette('Mage', { torso: 1.06, arms: 1.02, legs: 1, height: 0.99, depth: 1.08 }),
+    hide: ['Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    paint: {
+      ...outfit('Mage', '#b8843a', '#5a4430', 0.8), ...face('Mage', { skin: '#d8a478', hair: '#cfc8b8' }),
+      Mage_Cape: { tint: '#5a7a3a', amount: 0.85 },
+    },
+    extras: [
+      { type: 'stoneStaff', bone: 'handslotr' },
+      { type: 'pauldrons', bone: 'chest', color: 0x8e887c, trim: 0x4a4440, size: 1.1, spikes: true },
+      { type: 'beard', bone: 'head', style: 'long', color: 0xcfc8b8 },
+      { type: 'motes', bone: 'root', color: 0xb8a078, n: 4, size: 0.04, y: 0.5 },
+    ],
+  },
 };
 
 // para a vitrine: modelo e armas visíveis de cada variante, na ordem de VARIANTS em main.js (o jogo usa aquela lista);
@@ -355,6 +370,7 @@ export const LOOK_PREVIEW = [
   { id: 'engineer', name: 'Engenheira', model: 'Rogue', recipe: 'engineer' },
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
+  { id: 'geomancer', name: 'Geomante', model: 'Mage', use: [] },
   { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6, clips: { Idle: 'Brute_Idle', Running_A: 'Brute_Run' } },   // luta de punhos; anda e respira como gigante (Rig_Large)
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
 ];
