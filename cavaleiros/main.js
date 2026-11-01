@@ -36,6 +36,8 @@ const PHASES = 12;          // a última fase fica no topo, no castelo
 const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
 const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
+const ESCORT_GUARD_REACH = 10;   // escolta/resgate: o guarda ataca quem chega a esta distância do protegido
+const ESCORT_HUNT_LIMIT = 16;    // escolta/resgate: os demais heróis não caçam além desta distância do protegido
 const HERO_HUNT_RADIUS = 18; // arena visível em volta do ponto do grupo: herói ocioso caça qualquer inimigo dentro dela
 const RANGED_INTERCEPT = 20; // cobre o surgimento à frente e a largura da formação, sem perseguição pelo mapa
 const RANGED_INTERCEPTORS = 2;
@@ -2899,6 +2901,8 @@ function makeTargetContext(reuse = null) {
   context.escortGuard = villager?.team === 'villager' && !villager.structure && (goal?.type === 'escort' || goal?.type === 'rescue')
     ? escortGuardOf(party) : null;
   context.arenaCenter = world.pointAt(game.guideS);
+  // com protegido, a caça fica a ESCORT_HUNT_LIMIT dele; se não resta inimigo dentro do limite, a trava abre para não emperrar a fase
+  context.huntLimited = !!context.escortGuard && attackableSkeletons.some((enemy) => tacticalDistance(villager.pos, enemy.pos) <= ESCORT_HUNT_LIMIT);
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
   const destructionGoal = goal?.type === 'totems' || goal?.type === 'tower';
@@ -2936,7 +2940,16 @@ function escortGuardOf(party) {
 function inHuntArena(hero, target, context, slack = 0) {
   if (game.state !== 'fight' || hero === context.escortGuard || !context.arenaCenter) return false;
   if (fixedDefenseGoal(context.goal) && hero === defenseAnchor(context)) return false;
+  // com protegido, a caça não larga o objetivo: o alvo precisa estar perto dele
+  if (context.huntLimited && tacticalDistance(context.villager.pos, target.pos) > ESCORT_HUNT_LIMIT + slack) return false;
   return tacticalDistance(context.arenaCenter, target.pos) <= HERO_HUNT_RADIUS + slack;
+}
+
+// o guarda do protegido ataca quem chega perto do protegido ou dele, mesmo fora do leash do posto
+function escortGuardReach(hero, target, context) {
+  if (hero !== context.escortGuard || !context.villager) return false;
+  return tacticalDistance(context.villager.pos, target.pos) <= ESCORT_GUARD_REACH
+    || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
 }
 const partyNow = () => activeTargetContext?.party || heroes();   // grupo do quadro, sem refiltrar as unidades a cada golpe
 
@@ -3124,7 +3137,7 @@ function stillEngaged(hero, target, context = targetContext()) {
       && context.party.every((ally) => ally === hero || ally.dead);
     return canCoverFromPost || !!objectiveAttack || lastDefenderKeepsThreat;
   }
-  return fromPost <= LEASH + hero.range + ENGAGE_SLACK || inHuntArena(hero, target, context, ENGAGE_SLACK);
+  return fromPost <= LEASH + hero.range + ENGAGE_SLACK || escortGuardReach(hero, target, context) || inHuntArena(hero, target, context, ENGAGE_SLACK);
 }
 
 // Heróis à distância recuam alguns passos quando um inimigo corpo a corpo encosta, puxando para o
@@ -3222,7 +3235,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (fromPost > TWIN_BOSS_INTERCEPT) return false;
     return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
   }
-  if (postReach || nearTarget || inHuntArena(hero, target, context)) return true;
+  if (postReach || nearTarget || escortGuardReach(hero, target, context) || inHuntArena(hero, target, context)) return true;
 
   // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
   // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.
@@ -7463,6 +7476,7 @@ class Hero extends Unit {
   holdsGround(context) {
     if (!context || game.state !== 'fight' || this === context.escortGuard) return false;
     if (fixedDefenseGoal(context.goal) && this === defenseAnchor(context)) return false;
+    if (context.huntLimited && tacticalDistance(context.villager.pos, this.pos) > ESCORT_HUNT_LIMIT) return false;   // longe do protegido: volta
     return !context.arenaCenter || tacticalDistance(context.arenaCenter, this.pos) <= HERO_HUNT_RADIUS;
   }
 
@@ -10454,7 +10468,9 @@ const STUCK_ENEMY_TIME = 15, STUCK_ENEMY_MOVE = 2.5, STUCK_ENEMY_HERO_GAP = 7;
 const ADVANCE_WAIT = 4;   // espera máxima pela formação ao chegar numa fase
 function reapStuckEnemies(dt, skeletons, party) {
   for (const s of skeletons) {
-    if (s.dead || s.spawning || s.boss || s.totem || s === game.huntMark || !party.length) { s.stuckT = 0; continue; }
+    // nascendo há mais de 8 s (ponto de spawn inválido, fora do mapa) também conta como trancado
+    const stuckSpawn = s.spawning && (s.spawnAge = (s.spawnAge || 0) + dt) > 8;
+    if (s.dead || (s.spawning && !stuckSpawn) || s.boss || s.totem || s === game.huntMark || !party.length) { s.stuckT = 0; continue; }
     if (!s.stuckAt) { s.stuckAt = s.pos.clone(); s.stuckHp = s.hp; s.stuckT = 0; continue; }
     const moved = s.pos.distanceTo(s.stuckAt) > STUCK_ENEMY_MOVE, hurt = s.hp < s.stuckHp;
     s.stuckHp = s.hp;

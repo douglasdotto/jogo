@@ -3990,6 +3990,40 @@ test('heróis ociosos caçam o inimigo a ~10 m; um guarda fica com o aldeão e n
     for(const h of hunters)assert.ok(h.pos.distanceTo(spot.get(h))<1.5,h.cfg.id+' fica perto de onde lutou');
   }finally{t.world.obstacles=saved;clear();}
 });
+test('escolta: o guarda ataca quem chega a 10 m do aldeão, os caçadores respeitam o limite e o aldeão nunca fica sozinho',()=>{
+  clear();const m=t.MISSIONS.find(x=>x.id==='ponte');Object.assign(t.game,{mission:m,start:m.from,phase:m.from,last:m.to,test:true,state:'advance',guideS:30});
+  const saved=t.world.obstacles;t.world.obstacles=[];
+  try{
+    for(const id of ['paladin','champion','cleric','archer'])new t.Hero(cfg(id));
+    t.arrangeParty();for(const h of t.heroes()){h.pos.copy(h.post);h.autoSkills.fill(false);}
+    const v=t.game.villager=new t.Villager();t.musterMilitia();
+    t.game.state='fight';t.game.toSpawn=0;
+    const guard=t.heroes().find(h=>h.cfg.id==='cleric'),hunters=t.heroes().filter(h=>h!==guard);
+    const center=t.world.pointAt(t.game.guideS),fwd=t.world.tangentAt(t.game.guideS);
+    // 1) inimigo a 9 m do aldeão, para o lado: fora do leash do posto do guarda, mas dentro do raio de guarda
+    const side=t.world.sideOf(fwd);
+    const near=foe('Warrior',v.pos.x+side.x*9,v.pos.z+side.z*9);near.hp=near.maxHp=1e6;near.speed=0;
+    const ctx=t.makeTargetContext();
+    assert.equal(ctx.escortGuard,guard,'o curandeiro é o guarda');
+    assert.ok(t.canHeroReachTarget(guard,near,ctx),'o guarda alcança o inimigo a 9 m do aldeão');
+    for(let i=0;i<150;i++){for(const u of [...t.units])u.update(1/30);t.separate();
+      assert.ok(guard.pos.distanceTo(v.pos)<=10.5,'o aldeão nunca fica sem o guarda por perto ('+guard.pos.distanceTo(v.pos).toFixed(1)+' m)');}
+    assert.equal(guard.engagedWith,near,'o guarda enfrenta o inimigo perto do aldeão');
+    near.dead=true;
+    // 2) com um inimigo perto do aldeão, ninguém caça um alvo a mais de 16 m dele (mesmo dentro da arena de 18 m do grupo)
+    const decoy=foe('Warrior',v.pos.x-fwd.x*5,v.pos.z-fwd.z*5);decoy.hp=decoy.maxHp=1e6;decoy.speed=0;
+    const far=foe('Warrior',center.x+fwd.x*17,center.z+fwd.z*17);far.hp=far.maxHp=1e6;far.speed=0;
+    assert.ok(far.pos.distanceTo(v.pos)>16,'o alvo distante passa do limite do aldeão');
+    const lim=t.makeTargetContext();
+    for(const h of hunters)assert.equal(t.canHeroReachTarget(h,far,lim),false,h.cfg.id+' não caça além do limite do aldeão');
+    for(const h of hunters)h.pos.copy(far.pos);
+    assert.equal(hunters.some(h=>h.holdsGround(lim)),false,'caçadores longe do aldeão voltam ao posto');
+    // 3) sem inimigo perto do aldeão a trava abre, para o último inimigo não emperrar a fase
+    decoy.dead=true;
+    const open=t.makeTargetContext();
+    assert.ok(hunters.some(h=>t.canHeroReachTarget(h,far,open)),'sem inimigo dentro do limite, a caça alcança o distante');
+  }finally{t.world.obstacles=saved;clear();}
+});
 test('guarda: quem cai não volta e não pesa em derrota, quedas ou estrelas',()=>{
   guardMission('ponte');const h=hero('paladin',30,0);t.musterMilitia();const [m]=militiaUnits();
   m.takeDamage(1e5,null,null);assert.equal(m.dead,true);
