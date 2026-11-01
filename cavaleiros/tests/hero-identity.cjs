@@ -116,7 +116,7 @@ for (const id of ['archer', 'monk', 'alchemist', 'summoner']) for (const extra o
 const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
 const variantBlock = main.slice(main.indexOf('const VARIANTS = ['), main.indexOf('].map((v) => ({ ...HEROES'));
 const variants = variantBlock.split(/\n  \{ id: '/).slice(1).map((body) => ({ id: body.slice(0, body.indexOf("'")), recipe: /recipe: CHARACTERS\[(\d+)\]/.exec(body)?.[1] }));
-assert.equal(variants.length, 30, 'VARIANTS lido de main.js');
+assert.equal(variants.length, 31, 'VARIANTS lido de main.js');
 assert.deepEqual(Array.from(LOOK_PREVIEW, (v) => v.id), variants.map((v) => v.id), 'LOOK_PREVIEW lista todas as variantes na ordem de VARIANTS');
 for (const v of variants) {
   const preview = LOOK_PREVIEW.find((p) => p.id === v.id);
