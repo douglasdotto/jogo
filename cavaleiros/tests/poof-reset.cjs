@@ -19,7 +19,7 @@ const pooled = {
 };
 const plain = { userData: {}, dispose() { plainDisposals++; } };
 const fx = [{ material: pooled }, { material: plain }];
-const context = vm.createContext({ fx, scene: { remove(mesh) { removed.push(mesh); } } });
+const context = vm.createContext({ fx, geoWalls: [], scene: { remove(mesh) { removed.push(mesh); } } });
 vm.runInContext(cleanup, context);
 vm.runInContext('clearFx()', context);
 

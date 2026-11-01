@@ -79,8 +79,8 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop},shadow:{camera:{left:-24,right:24},mapSize:{x:1024}}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,isInsideGround:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
-  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],sentries:[],fewer:n=>n,lowQuality:false,fx:[],updateFx:noop,
-  wave:noop,burst:noop,column:noop,
+  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],sentries:[],fx:[],updateFx:noop,
+  wave:noop,burst:noop,column:noop,addFx:noop,puffs:noop,shake:noop,ringGeo:{},crackGeo:{},fewer:n=>n,lowQuality:false,rnd:(a=1)=>a*0.5,V:(x,y,z)=>new Vector3(x,y,z),
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
   FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
@@ -659,7 +659,7 @@ test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa pos
   t.moveGrid(0,1);assert.equal(t.pick.sel,at('iceviking'));
   t.moveGrid(0,1);assert.equal(t.pick.sel,at('chronist'),'na aba seguinte, pula os ocupados da mesma coluna');
   t.moveGrid(0,-1);assert.equal(t.pick.sel,at('cryo'));
-  t.moveGrid(-1,0);assert.equal(t.pick.sel,at('summoner'),'← volta pela aba e pula os ocupados');
+  t.moveGrid(-1,0);assert.equal(t.pick.sel,at('geomancer'),'← volta pela aba e pula os ocupados');
   t.moveGrid(1,0);assert.equal(t.pick.sel,at('cryo'));
   t.moveGrid(0,-1);assert.equal(t.pick.sel,at('beast_tamer'),'↑ entra pela última linha da aba anterior');
 });
@@ -1664,6 +1664,42 @@ test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acele
   runPools(4);assert.equal(context.flames.length,0,'a mesa some');
   assert.ok(ally.skillTimers.every(x=>x<30&&x>20),'recargas encurtadas só um pouco');assert.ok(far.skillTimers.every(x=>x===30),'longe não é afetado');
   clear();context.flames.length=0;
+});
+test('Geomante: espinhos, muralha que só segura comuns, terremoto e pilar sem atordoar chefes',()=>{
+  const g=cfg('geomancer'),run=(x,s)=>vm.runInContext(x,context);
+  assert.equal(g.hp,180);assert.equal(t.pickGroupId(g),'magos');assert.ok(t.variantOpen('geomancer'),'começa aberto');
+  const boss=()=>{const b=new t.Skeleton('Warrior',1,true);b.spawning=false;b.busy=99;b.hp=b.maxHp=100000;return b;};
+  // assinatura: fere e atordoa de leve quem está na linha; chefe só fica lento
+  clear();let h=new t.Hero(g);h.pos.set(0,0,0);const a=newFoe(0,-3,'Minion'),b=newFoe(0,-5,'Minion'),side=newFoe(4,-4,'Minion'),bs=boss();bs.pos.set(0,0,-6);
+  assert.equal(h.useSkill(null),true);h.pendingHit.effect();
+  assert.ok(a.hp<a.maxHp&&b.hp<b.maxHp,'atinge a linha');assert.equal(side.hp,side.maxHp,'não atinge fora da linha');
+  assert.ok(a.stunT>0&&a.stunT<1.2,'atordoamento leve');assert.equal(bs.stunT||0,0,'chefe não é atordoado');assert.ok(bs.slowT>0);
+  // muralha: comuns não atravessam, chefe passa, heróis não são afetados e ela some sozinha
+  clear();h=new t.Hero(g);h.pos.set(0,0,0);h.skillTimers.fill(0);
+  const foes=[newFoe(0,-6,'Minion'),newFoe(1,-6.3,'Minion')],big=boss();big.pos.set(-1,0,-6);
+  assert.equal(h.useSkill(null,false,false,1),true);h.pendingHit.effect();
+  assert.ok(run('geoWalls.length')>=4,'pedras na muralha');
+  const walker=newFoe(0,-8.5,'Minion');walker.pos.z=-9;
+  for(let i=0;i<30;i++){walker.pos.z+=0.1;run('for (const u of units) pushFromGeoWalls(u)');}
+  assert.ok(walker.pos.z<=-3.9,'comum fica do lado de lá da muralha');
+  const wallZ=run('geoWalls[0].z');big.pos.z=wallZ;run('for (const u of units) pushFromGeoWalls(u)');assert.equal(big.pos.z,wallZ,'chefe não é empurrado');
+  const ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,wallZ);run('for (const u of units) pushFromGeoWalls(u)');assert.equal(ally.pos.z,wallZ,'herói passa pela muralha');
+  const stuck=newFoe(0.2,wallZ,'Minion');for(let i=0;i<8;i++)run('for (const u of units) pushFromGeoWalls(u)');
+  assert.ok(run('geoWalls').every(w=>Math.hypot(stuck.pos.x-w.x,stuck.pos.z-w.z)>=w.r),'quem estava no lugar da muralha é empurrado para fora, sem ficar preso');
+  run('updateGeoWalls(10)');assert.equal(run('geoWalls.length'),0,'a muralha desmorona');
+  // terremoto: comuns atordoados, chefe lento, rachaduras deixam o chão lento
+  clear();context.flames.length=0;h=new t.Hero(g);h.pos.set(0,0,0);h.skillTimers.fill(0);
+  const crowd=[newFoe(0,-2,'Minion'),newFoe(2,-1,'Minion'),newFoe(-2,1,'Minion')],tough=boss();tough.pos.set(0,0,3);
+  assert.equal(h.useSkill(null,false,false,2),true);h.pendingHit.effect();
+  for(const s of crowd)assert.ok(s.hp<s.maxHp&&s.stunT>0,'derruba e fere');
+  assert.equal(tough.stunT||0,0,'chefe não cai');assert.ok(tough.slowT>0&&tough.hp<tough.maxHp);
+  assert.ok(context.flames.some(f=>f.every===0.5&&f.radius>=6),'rachaduras com o raio real');
+  context.flames.length=0;
+  // pilar: prende o mais forte; chefe só fica lento
+  clear();h=new t.Hero(g);h.pos.set(0,0,0);h.skillTimers.fill(0);const weak=newFoe(0,-3,'Minion'),strong=newFoe(1,-4);strong.hp=strong.maxHp=200000;
+  assert.equal(h.useSkill(null,false,false,3),true);h.pendingHit.effect();
+  assert.ok(strong.stunT>0&&strong.hp<strong.maxHp&&weak.hp===weak.maxHp);
+  clear();
 });
 test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
   clear();const b=new t.Hero(cfg('berserker')),a=new t.Hero(cfg('assassin'));b.pos.set(0,0,0);a.pos.set(3,0,0);

@@ -1356,6 +1356,16 @@ const ACCESSORIES = {
     g.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55).rotateX(Math.PI).translate(0, 0.66, 0), lambert(metal, { side: THREE.DoubleSide })));
     return g;
   },
+  // cajado de pedra (geomante): cabo de madeira e um cacho de pedras lascadas flutuando no topo, sem brilho
+  stoneStaff({ stone = 0x9a8e78, moss = 0x6a9a4a, wood = 0x6a4a2a, y = 1.25 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(piece(new THREE.CylinderGeometry(0.03, 0.04, y + 0.15, 6), [0, y / 2 - 0.05, 0]), lambert(wood)));
+    const rocks = [[0, y + 0.12, 0, 0.13], [0.12, y - 0.02, 0.03, 0.07], [-0.1, y + 0.04, -0.05, 0.075], [0.03, y + 0.3, -0.03, 0.06]]
+      .map(([x, yy, z, r], i) => piece(new THREE.DodecahedronGeometry(r), [x, yy, z], [i, i * 2, 0], [0.9, 1.25, 0.9]));
+    g.add(new THREE.Mesh(merged(rocks), lambert(stone)));
+    g.add(new THREE.Mesh(piece(new THREE.CylinderGeometry(0.055, 0.045, 0.06, 6), [0, y - 0.12, 0]), lambert(moss)));
+    return g;
+  },
   // cristal de gelo flutuando na mão
   iceShard() {
     const g = new THREE.Group();

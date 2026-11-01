@@ -3,8 +3,8 @@ import { skillLevel } from './class-info.js';
 
 export function aimSpec(h) {
   const id = h.cfg.id, power = h.skillPower, level = skillLevel(h.level);
-  if (['assassin', 'arcane', 'viking', 'iceviking', 'oracle'].includes(id)) return {
-    mode: 'enemy', range: id === 'arcane' || id === 'oracle' ? h.range : id === 'assassin' ? 7 : 9,
+  if (['assassin', 'arcane', 'viking', 'iceviking', 'oracle', 'geomancer'].includes(id)) return {
+    mode: 'enemy', range: id === 'arcane' || id === 'oracle' ? h.range : id === 'assassin' || id === 'geomancer' ? 7 : 9,
     min: id.includes('viking') ? 2 : 0,
     radius: id === 'iceviking' ? (1.3 + (level - 1) * 0.25) * power : 0.65,
   };

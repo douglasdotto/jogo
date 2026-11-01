@@ -117,6 +117,8 @@ const VARIANTS = [
     stats: { Vida: 4, Força: 4, Rapidez: 3, Alcance: 2 }, hp: 225, dmg: 23, range: 1.7, speed: 3.2, cooldown: 1, attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal'], classId: 1, pickGroup: 'beast-tamer', recipe: CHARACTERS[9] },
   { id: 'oracle', names: ['Oráculo', 'Vidente do Véu', 'Profeta das Estrelas'], desc: 'Prevê ataques anunciados e interrompe os golpes dos chefes.', ability: 'Estilhaço do augúrio', color: ['#c6b4ff', '#7862c5'],
     stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle', recipe: CHARACTERS[10] },
+  { id: 'geomancer', names: ['Geomante', 'Mestre das Pedras', 'Senhor da Terra'], desc: 'Ergue espinhos e muralhas de pedra.', ability: 'Espinhos de pedra', color: ['#d8c8a0', '#8a7a58'],
+    use: [], stats: { Vida: 3, Força: 3, Rapidez: 2, Alcance: 4 }, hp: 180, dmg: 17, range: 6.5, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0.4, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'geomancer' },
   // tanque de punhos: mais vida e menos dano que o Guardião, lento; armor tira um pouco de cada golpe (takeDamage)
   { id: 'brute', names: ['Brutamontes', 'Rocha Viva', 'Colosso'], desc: 'Aguenta a horda na frente do grupo.', ability: 'Pancada', color: ['#c9bba2', '#7d7464'],
     use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.65, cooldown: 1.35, idle: 'Brute_Idle', walk: 'Brute_Walk', run: 'Brute_Run',   // guarda, passo e corrida de gigante (Rig_Large)
@@ -144,7 +146,7 @@ const variantsOf = (classId) => VARIANTS.filter((v) => v.classId === classId);
 const PICK_GROUPS = [
   { id: 'guerreiros', name: 'Guerreiros', icon: '♜', heroes: ['paladin', 'guardian', 'champion', 'king', 'brute', 'lancer'] },
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
-  { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner'] },
+  { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner', 'geomancer'] },
   { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
   { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook', 'shaman'] },
 ];
@@ -1630,10 +1632,10 @@ function evolutionGain(hero, id) {
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
-    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem']);
+    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
     'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
-  const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist']);
+  const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
   const controlSkills = skills.filter((skill) => skill.control || controlEffects.has(skill.effect));
@@ -1883,6 +1885,7 @@ const SKILL_GLYPHS = {
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
   brute: ['⛰', '⤴', '⬢', '▥'],
   lancer: ['↟', '⇈', '♞', '⇥'],
+  geomancer: ['⛰', '▤', '≋', '▲'],
   summoner: ['✿', '⬢', '♆', '⚘'],
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
@@ -3790,6 +3793,7 @@ function updateBolts(dt) {
     if (b.kind === 'viking' || b.kind === 'iceviking') b.mesh.rotateZ(dt * 18);
     if (b.life <= 0) { scene.remove(b.mesh); bolts.splice(i, 1); }
   }
+  if (geoWalls.length) updateGeoWalls(dt);
   for (let i = flames.length - 1; i >= 0; i--) {
     const f = flames[i];
     if (f.wait > 0) { f.wait -= dt; continue; }   // aviso no chão antes do golpe (chuva de flechas, frasco no ar)
@@ -4046,6 +4050,97 @@ function arrowRain(owner, at, radius, total) {
   FX.rainMark(mesh, radius);
 }
 
+// Geomante: pedras low-poly que brotam da terra (geometria e material compartilhados, sem brilho; os efeitos somem sozinhos)
+const rockMat = new THREE.MeshLambertMaterial({ color: 0x9a8e78, flatShading: true });
+const rockDarkMat = new THREE.MeshLambertMaterial({ color: 0x4a3f33, flatShading: true });
+rockMat.userData.keep = rockDarkMat.userData.keep = true;   // dropFx não descarta materiais compartilhados
+const stoneSpikeGeo = new THREE.ConeGeometry(0.3, 1, 5), chunkGeo = new THREE.DodecahedronGeometry(0.55, 0);   // altura 1 e 1,1 centradas na origem: stoneRise ergue pela metade da altura
+const geoWalls = [];   // pedras da muralha enquanto bloqueiam: { x, z, r, t, nx, nz }
+const GEO_WALL_STONE = 0.75;
+
+function stoneRise(at, geo, mat, w, h, life, { delay = 0, rise = 0.16, sink = 0.35 } = {}) {
+  const m = new THREE.Mesh(geo, mat), y0 = world.groundHeight(at.x, at.z) - 0.02, half = geo === chunkGeo ? 0.55 : 0.5;
+  m.position.set(at.x, y0, at.z);
+  m.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.4);
+  m.scale.set(w, 0.01, w);
+  return addFx(m, life, (e) => {
+    const sy = h * Math.max(0.01, Math.min(1, e.t / rise, (life - e.t) / sink));
+    m.scale.set(w, sy, w);
+    m.position.y = y0 + half * sy;
+  }, delay);
+}
+
+// Espinhos de pedra: fileira à frente do Geomante; ferem e atordoam de leve quem está no caminho (chefes só ficam lentos)
+function geoSpikes(owner, aim, reach, dmg) {
+  const from = owner.pos.clone(), dir = new THREE.Vector3().subVectors(aim, from).setY(0);
+  if (dir.lengthSq() < 0.01) dir.copy(owner.fwd).setY(0);
+  dir.normalize();
+  const end = from.clone().addScaledVector(dir, reach);
+  for (const s of lineTargets(from, end, skeletonsAlive().filter((u) => !u.spawning && Math.abs(u.pos.y - from.y) < 0.85), reach, 0.8)) {
+    heroHit(owner, s, dmg);
+    if (s.dead) continue;
+    if (s.boss || s.totem) controlEnemy(s, 'slowT', 1.5);
+    else if (controlEnemy(s, 'stunT', scaleBranchEffect(owner, 'control', 0.7) * owner.skillPower)) s.pendingHit = null;
+  }
+  const side = new THREE.Vector3(-dir.z, 0, dir.x);
+  for (let i = 0, d = 1.1; d <= reach; i++, d += 0.9) {
+    for (const o of lowQuality ? [0] : [-0.4, 0.4]) {
+      const p = from.clone().addScaledVector(dir, d).addScaledVector(side, o + rnd(0.1));
+      stoneRise(p, stoneSpikeGeo, rockMat, 0.9 + Math.random() * 0.4, 0.9 + Math.random() * 0.5, 1.1, { delay: i * 0.045 });
+    }
+    if (i % 2 === 0) puffs(from.clone().addScaledVector(dir, d), 1, 'dust', { size: 0.6, rise: 0.6, life: 0.7, delay: i * 0.045 });
+  }
+}
+
+// Muralha de pedra: pedras que só seguram inimigos comuns (separate() as empurra); os heróis passam livres e ela some sozinha
+function geoWall(owner, at, dir, halfLength, life) {
+  const side = new THREE.Vector3(-dir.z, 0, dir.x), n = Math.max(2, Math.round(halfLength * 2 / 1.1) + 1);
+  for (let i = 0; i < n; i++) {
+    const p = at.clone().addScaledVector(side, (i - (n - 1) / 2) * 1.1);
+    if (!world.isInsideGround(p.x, p.z, 0.5)) continue;
+    geoWalls.push({ x: p.x, z: p.z, r: GEO_WALL_STONE, t: life - 0.4, nx: dir.x, nz: dir.z });
+    stoneRise(p, chunkGeo, rockMat, 1.25 + Math.random() * 0.3, 1.5 + Math.random() * 0.6, life, { rise: 0.22, sink: 0.5 });
+    if (i % 2 === 0) puffs(p, 2, 'dust', { size: 0.7, rise: 0.7, life: 0.8 });
+  }
+  shake(0.25);
+}
+function updateGeoWalls(dt) {
+  for (let i = geoWalls.length - 1; i >= 0; i--) if ((geoWalls[i].t -= dt) <= 0) geoWalls.splice(i, 1);
+}
+function pushFromGeoWalls(u) {
+  if (u.team !== 'skeleton' || u.boss || u.phasing || u.structure || u.totem) return false;
+  let pushed = false;
+  for (const w of geoWalls) {
+    const min = w.r + 0.53 * u.size;
+    let dx = u.pos.x - w.x, dz = u.pos.z - w.z;
+    if (Math.abs(dx) > min || Math.abs(dz) > min) continue;
+    const distance = Math.hypot(dx, dz);
+    if (distance >= min) continue;
+    if (distance < 0.001) { dx = w.nx; dz = w.nz; } else { dx /= distance; dz /= distance; }
+    collisionMove(u, dx * (min - distance), dz * (min - distance));
+    pushed = true;
+  }
+  return pushed;
+}
+
+// Terremoto: rachaduras escuras no chão (duram a duração da lentidão), pedras que brotam e poeira; o raio dos efeitos é o raio real
+function geoCracks(at, radius, life) {
+  wave(at, 0x9a7a55, 0.3, radius, 0.7, { geo: ringGeo, opacity: 0.5, dust: true });
+  for (let i = 0; i < (lowQuality ? 5 : 9); i++) {
+    const m = new THREE.Mesh(crackGeo, rockDarkMat);
+    m.position.set(at.x, world.groundHeight(at.x, at.z) + 0.07, at.z);
+    m.rotation.y = (i / 9) * Math.PI * 2 + rnd(0.3);
+    const len = radius * (0.65 + Math.random() * 0.35);
+    addFx(m, life, (e) => m.scale.set(len * Math.min(1, e.t / 0.25), 1, 1.8 * Math.max(0.01, Math.min(1, (life - e.t) / 0.6))));
+  }
+  for (let i = 0; i < fewer(9); i++) {
+    const a = Math.random() * Math.PI * 2, d = radius * Math.sqrt(Math.random()) * 0.9;
+    stoneRise(V(at.x + Math.cos(a) * d, at.y, at.z + Math.sin(a) * d), chunkGeo, rockMat, 0.5 + Math.random() * 0.4, 0.5 + Math.random() * 0.6, 1.2, { delay: Math.random() * 0.3 });
+  }
+  puffs(at.clone().setY(at.y + 0.3), 8, 'dust', { spread: radius * 0.8, size: 1, rise: 0.8, life: 1 });
+  shake(0.5);
+}
+
 // Alquimista: o frasco voa, explode empurrando o grupo e deixa uma poça de veneno menor
 const flaskPush = new THREE.Vector3();
 function volatileFlask(owner, at, radius, dmg) {
@@ -4153,6 +4248,7 @@ function releaseFxMaterial(material) {
 }
 
 function clearFx() {
+  geoWalls.length = 0;   // as pedras da Muralha somem junto com os efeitos
   while (fx.length) {
     const m = fx.pop();
     scene.remove(m);
@@ -4290,6 +4386,7 @@ const SKILL_ART = {
   vampire: { color: 0xa81c34, accent: 0xff9aaa, glyph: slashGeo, scale: 0.6 },
   cook: { color: 0xffb347, accent: 0xfff0d0, glyph: shellGeo, scale: 1.6 },
   shaman: { color: 0x6fe0a0, accent: 0xffe6a1, glyph: leafGeo, scale: 3 },
+  geomancer: { color: 0xb8a888, accent: 0xe8dcc0, glyph: rockGeo, scale: 2.4 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0, slowT = 0;
@@ -6354,6 +6451,20 @@ class Hero extends Unit {
       }
       if (!target || target.pos.distanceTo(this.pos) > reach) return false;
       effect = () => fireBolt(this, target, 'archer', 0, true);
+    } else if (id === 'geomancer') {
+      // espinhos de pedra: mira a linha com mais inimigos à frente; ferem e atordoam de leve quem está no caminho
+      const reach = 7;
+      if (!manual) {
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= reach);
+        let most = 0;
+        target = null;
+        for (const s of pool) {
+          const n = lineTargets(this.pos, s.pos, pool, reach, 0.8).length + (s.boss ? 0.5 : 0);
+          if (n > most) { most = n; target = s; }
+        }
+      }
+      if (!target || target.pos.distanceTo(this.pos) > reach) return false;
+      effect = () => geoSpikes(this, target.dead ? this.pos.clone().addScaledVector(this.fwd, 2) : target.pos, reach, this.dmg * power);
     } else if (id === 'alchemist') {
       // frasco: tônico na poça de quem está ferido; sem ferido, veneno no grupo de inimigos
       const reach = this.range + 1;
@@ -6998,6 +7109,63 @@ class Hero extends Unit {
           FX.quake(this, radius * 0.4);
           wave(this.pos, color, 0.3, radius, 0.7);
           column(this.pos, 0xb8a88a, 0.8, 2.6, this.stoneT, { follow: this, opacity: 0.16 });
+        };
+        break;
+      }
+      // ---------- Geomante ----------
+      case 'geo-wall': {
+        // Muralha de pedra: atravessada entre o grupo inimigo e os heróis; só segura inimigos comuns
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const ground = force && target?.groundTarget ? target : null;
+        const { center, count } = densest(pool, 2.5, force && !ground ? target : null);
+        const spot = ground || center;
+        if (!spot || (!ground && !force && count < 2 && !urgentEnemy)) return false;
+        target = spot;
+        const dir = new THREE.Vector3().subVectors(spot.pos, this.pos).setY(0);
+        if (dir.lengthSq() < 0.01) dir.copy(this.fwd).setY(0);
+        dir.normalize();
+        const at = spot.pos.clone().addScaledVector(dir, -1.6);   // um pouco antes do grupo: quem está em cima é empurrado para fora, ninguém fica preso
+        effect = () => geoWall(this, at, dir, radius, scaleBranchEffect(this, 'control', skill.duration || 5) * (0.9 + 0.1 * power));
+        break;
+      }
+      case 'geo-quake': {
+        // Terremoto: inimigos comuns caem atordoados, todos levam dano, e as rachaduras deixam o chão lento
+        if (!force && enemies.length < 3 && !urgentEnemy) return false;
+        effect = () => {
+          const at = this.pos.clone(), life = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
+          for (const enemy of enemies) {
+            if (enemy.dead) continue;
+            damageOne(enemy);
+            if (enemy.dead) continue;
+            if (enemy.boss || enemy.totem) { controlEnemy(enemy, 'slowT', 2.5); continue; }
+            if (controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 1.6) * power)) enemy.pendingHit = null;
+          }
+          const mesh = groundMark(at, radius, 0x4a3a28, 0.3);
+          flames.push({ mesh, radius, owner: this, t: life, tick: 0, every: 0.5, dmg: this.dmg * power * 0.08,
+            onTick: (f) => { for (const s of skeletonsAlive()) if (!s.dead && !s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1)) s.slowT = Math.max(s.slowT || 0, 0.8); } });
+          geoCracks(at, radius, life);
+          popText(this.pos, 'Fúria da Terra!', 'evolve');
+        };
+        break;
+      }
+      case 'rock-pillar': {
+        // Pilar de pedra: brota sob o inimigo mais forte ao alcance; prende comuns por instantes, chefe só fica lento
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        const worth = (s) => (s.boss || s.totem ? 1e6 : 0) + s.hp;
+        const prey = force && pool.includes(target) ? target : pool.reduce((best, s) => (!best || worth(s) > worth(best) ? s : best), null);
+        if (!prey) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          const at = prey.pos.clone();
+          damageOne(prey);
+          if (!prey.dead) {
+            if (prey.boss || prey.totem) controlEnemy(prey, 'slowT', 2.5);
+            else if (controlEnemy(prey, 'stunT', scaleBranchEffect(this, 'control', skill.duration || 1.4) * power)) prey.pendingHit = null;
+          }
+          stoneRise(at, stoneSpikeGeo, rockMat, 1.3, 2.4, 1.2, { rise: 0.12, sink: 0.4 });
+          puffs(at.clone().setY(at.y + 0.2), 3, 'dust', { size: 0.8, rise: 0.8, life: 0.8 });
+          shake(0.2);
         };
         break;
       }
@@ -8297,6 +8465,7 @@ const SKILL_MOVES = {
   vampire: ['2H_Melee_Attack_Slice', 1.3, 0.4, 'hit'],
   cook: ['Throw', 1.4, 0.45, 'ice'],
   shaman: ['1H_Melee_Attack_Stab', 1.4, 0.5, 'heal'],
+  geomancer: ['Spellcast_Raise', 1.5, 0.42, 'slam'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate, segunda técnica]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -8502,6 +8671,12 @@ const SKILL_ANIMS = {
     { clip: 'PickUp', f: 0.55, lean: 0.2, hop: 0.1 },   // abaixa e planta o totem de raízes
     { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: 0.6, float: 0.3, lean: -0.12 },   // ergue os braços e chama os ancestrais
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.1, float: 0.12 },
+  ],
+  geomancer: [
+    { clip: '1H_Melee_Attack_Jump_Chop', hold: 'Spellcasting', f: 0.5, arc: 'thrust', lean: 0.22, kick: 0.3 },   // crava o cajado no chão e os espinhos correm
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.58, float: 0.12, lean: -0.1 },   // ergue a muralha
+    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.62, arc: 'ring', hop: 0.35, lean: 0.12 },   // pisa forte e o chão racha
+    { clip: 'Spellcasting', hold: 'Spellcast_Raise', f: 0.5, lean: 0.2, kick: 0.2 },   // pilar sob o alvo
   ],
 };
 
@@ -11517,7 +11692,7 @@ function frame() {
   animationCulling = false;   // fora do laço das unidades (testes, menu) o mixer volta a andar sempre
   frameUnits.length = 0;
   activeTargetContext = null;
-  if (dt > 0 && !game.over) separate();
+  if (dt > 0 && !game.over) { separate(); if (geoWalls.length) for (const unit of units) pushFromGeoWalls(unit); }   // Muralha de pedra do Geomante
   updateBolts(dt);
   updateEnemyBolts(dt);
   updateFx(dt);

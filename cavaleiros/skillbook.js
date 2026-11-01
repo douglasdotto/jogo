@@ -158,6 +158,11 @@ const EXTRA_SKILLS = {
     { name: 'Destino Reescrito', description: 'Cancela os golpes anunciados por chefes próximos e os atordoa por um breve instante.', effect: 'rewrite-fate', cooldown: 72, radius: 9, duration: 1.1, control: 'stun', color: 0xe3d7ff },
     { name: 'Presságio', description: 'Mostra aos aliados próximos o próximo golpe: cada um esquiva o próximo dano em alguns segundos.', effect: 'omen', cooldown: 18, radius: 9, duration: 5, color: 0xc6b4ff },
   ],
+  geomancer: [
+    { name: 'Muralha de Pedra', description: 'Ergue uma muralha curta que barra inimigos comuns por alguns segundos e depois desmorona. Chefes não são detidos.', effect: 'geo-wall', targeting: 'ground', cooldown: 18, range: 8, radius: 3, duration: 5, color: 0xb8a888 },
+    { name: 'Fúria da Terra', description: 'O chão treme: inimigos comuns caem atordoados, todos levam dano e as rachaduras deixam o terreno lento.', effect: 'geo-quake', cooldown: 66, radius: 6.5, power: 1.5, duration: 4, control: 'stun', color: 0xb8a888 },
+    { name: 'Pilar de Pedra', description: 'Um pilar brota sob o inimigo mais forte: fere e prende comuns por instantes; chefes só ficam lentos.', effect: 'rock-pillar', targeting: 'enemy', cooldown: 17, range: 8, power: 1.5, duration: 1.4, control: 'stun', color: 0xb8a888 },
+  ],
   brute: [
     { name: 'Arremesso', description: 'Agarra o inimigo comum mais perto e o arremessa no grupo mais denso; a queda fere todos em volta.', effect: 'grab-throw', cooldown: 16, radius: 2.4, range: 8, splash: 2.6, power: 1, color: 0xc9bba2 },
     { name: 'Pele de Pedra', description: 'Cresce por 8 s: recebe 60% menos dano, devolve 30% dos golpes corpo a corpo e provoca quem está em volta.', effect: 'stone-skin', cooldown: 64, radius: 6, duration: 8, color: 0xb8a88a },
