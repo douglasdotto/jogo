@@ -703,7 +703,7 @@ test('escolha na campanha mostra objetivo e papéis prioritários projetados',()
   clear();t.game.campaignSquadSuggestion=[];context.location=previousLocation;context.localStorage.data=previousStorage;t.setMission(previousMission);t.setDifficulty(1);
 });
 test('evoluções simultâneas pausam em fila e oferecem três opções distintas',()=>{
-  clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(350);b.gainXp(90);
+  clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));a.gainXp(vm.runInContext('XP_LEVELS[2]',context));b.gainXp(90);
   assert.equal(t.evolutions.length,3);assert.equal(a.level,3);assert.ok(Math.abs(a.dmg-22*1.1**2)<.001);
   t.showEvolution();assert.equal(t.game.paused,true);assert.equal(new Set(t.pick.upgrades.map(o=>o.id)).size,3);
   t.confirmPick(0);assert.equal(t.evolutions.length,2);assert.equal(t.game.paused,true);
@@ -760,7 +760,7 @@ test('todas as rotas acumulam sem perder os ganhos anteriores',()=>{
   h.gainXp(90);assert.ok(h.dmg>dmg*1.12);
 });
 test('missão que começa em nível alto aplica as rotas de evolução, sem sorteio',()=>{
-  const evolve=id=>{clear();const h=new t.Hero(cfg(id));const hp=h.maxHp,dmg=h.dmg;h.gainXp(350);t.autoUpgrade();
+  const evolve=id=>{clear();const h=new t.Hero(cfg(id));const hp=h.maxHp,dmg=h.dmg;h.gainXp(vm.runInContext('XP_LEVELS[2]',context));t.autoUpgrade();
     assert.equal(t.evolutions.length,0);assert.equal(t.pick.open,false);assert.equal(h.maxHp>hp*1.3,false,id);
     assert.equal(Object.keys(h.evolutionBranches).length,2,id);assert.ok(h.dmg<=dmg*1.1**2*1.12+1e-9,id);return Object.keys(h.evolutionBranches).sort().join()};
   for(const id of ['guardian','paladin','pyro','angel'])assert.equal(evolve(id),evolve(id),id);
@@ -771,7 +771,7 @@ test('Nv4 e Nv5: quatro evoluções, arte do Nv3 e selo prata/ouro',()=>{
   const levels=vm.runInContext('XP_LEVELS',context);assert.equal(levels.length,5);assert.ok(levels.every((xp,i)=>!i||xp-levels[i-1]>(levels[i-1]-(levels[i-2]||0))),'degraus crescentes');
   clear();const h=new t.Hero(cfg('pyro')),hp=h.maxHp,dmg=h.dmg,size=h.heroSize();
   h.gainXp(levels[4]+5000);assert.equal(h.level,5,'teto no Nv5');assert.equal(t.evolutions.length,4,'quatro evoluções');
-  assert.equal(h.maxHp,Math.round(Math.round(Math.round(Math.round(hp*1.1)*1.1)*1.1)*1.1));assert.ok(Math.abs(h.dmg-dmg*1.1**4)<1e-9);
+  assert.equal(h.maxHp,Math.round(Math.round(Math.round(Math.round(hp*1.1)*1.1)*1.15)*1.15));assert.ok(Math.abs(h.dmg-dmg*1.1*1.1*1.15*1.15)<1e-9);
   assert.ok(h.heroSize()<=size*1.23&&h.heroSize()>size*1.16,'cresce pouco depois do Nv3');
   assert.equal(h.levelLabel.textContent,'Nv5');assert.equal(h.levelLabel.className,'tier-5');assert.equal(h.levelLabel.title,h.cfg.names[2]);assert.equal(h.halo.visible,true);
   t.showEvolution();const card=()=>elements.get('pickList').children.at(-1).innerHTML;
@@ -3647,7 +3647,7 @@ test('ponte em chamas: corredores vão à ponte, quem cruza conta e o tempo salv
   assert.equal(runner.raider,true,'corredor corpo a corpo vai direto à ponte');assert.ok(runner.pos.z<gate.pos.z,'ninguém nasce atrás da ponte');
   Object.assign(t.game,{state:'fight',toSpawn:0});
   const crosser=foe('Warrior',gate.pos.x,gate.pos.z);t.updateGame(.1);
-  assert.equal(t.game.leaks,1);assert.equal(crosser.dead,true);assert.match(gate.nameTag.textContent,/♨ 5/);
+  assert.equal(t.game.leaks,1);assert.equal(crosser.dead,true);assert.match(gate.nameTag.textContent,/♨ 6/);
   for(const s of t.skeletonsAlive())s.remove();t.game.toSpawn=0;t.updateGame(1);
   assert.ok(t.game.toSpawn>0&&t.game.refilling,'reforços chegam enquanto o tempo corre');assert.ok(t.game.surviveT<70);
   t.game.toSpawn=1;t.spawnSkeleton();assert.notEqual(t.skeletonsAlive().at(-1).enemyKind,'Golem','reforço não traz outro golem');
@@ -3655,13 +3655,13 @@ test('ponte em chamas: corredores vão à ponte, quem cruza conta e o tempo salv
   Object.assign(t.game,{surviveT:.05,toSpawn:0});t.updateGame(.1);assert.equal(t.game.last,t.game.phase,'o tempo acabou: a ponte está salva');
   t.updateGame(.1);t.game.timer=0;t.updateGame(.1);
   assert.equal(t.game.over,true);assert.match(elements.get('overlayText').textContent,/Missão cumprida/);assert.equal(t.starsOf('chamas'),2,'1 passou: 2 estrelas');
-  begin('chamas',party(2));t.startPhase();for(const s of t.skeletonsAlive())s.remove();Object.assign(t.game,{state:'fight',toSpawn:0,leaks:5});
+  begin('chamas',party(2));t.startPhase();for(const s of t.skeletonsAlive())s.remove();Object.assign(t.game,{state:'fight',toSpawn:0,leaks:6});
   foe('Warrior',t.game.gate.pos.x,t.game.gate.pos.z);t.updateGame(.1);
   assert.equal(t.game.over,true);assert.match(elements.get('overlayText').textContent,/cruzaram a ponte/);
   const goal=mission('chamas').goal;
   assert.equal(context.starsFor({won:true,goal,leaks:0}),3);assert.equal(context.starsFor({won:true,goal,leaks:2}),2);assert.equal(context.starsFor({won:true,goal,leaks:3}),1);
   assert.equal(context.starTargetsFor(goal).length,3);
-  assert.match(lossTip({goal,leaks:6}),/cruzaram a ponte/);assert.match(lossTip({goal,leaks:1}),/caiu antes/);
+  assert.match(lossTip({goal,leaks:7}),/cruzaram a ponte/);assert.match(lossTip({goal,leaks:1}),/caiu antes/);
   clear();
 });
 test('duelo: um herói só, ondas menores e o chefe encerra; 3★ pede vida e tempo',()=>{
