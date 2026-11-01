@@ -4372,9 +4372,9 @@ function meteorFall(h, target, impactAt, life, active) {
 
 // Piromante (Meteoro): impacto com anel de fogo, explosão, pilar de chamas e fumaça
 function meteorImpact(at, reach) {
-  flameRing(at, reach * 1.05, 18, 1.0, 'fire', 1.6);
-  blast(at.clone().setY(at.y + 1.2), reach * 1.1, 0.75);
-  blast(at.clone().setY(at.y + 2.6), reach * 0.6, 0.6);
+  flameRing(at, reach, 16, 0.9, 'fire', 1.4);
+  blast(at.clone().setY(at.y + 1.2), reach, 0.65);
+  blast(at.clone().setY(at.y + 2.4), reach * 0.45, 0.5, 'fire', 0.08);
   const pillar = vfxMesh('flame', 'fire', SPRITE, { size: 5 });
   const p = pillar.userData.fx;
   pillar.position.copy(at);
@@ -4393,7 +4393,7 @@ function burst(at, color, n = 12, speed = 4, o = {}) {
 
 // anel no chão que cresce de "from" até "to" e some
 function wave(at, color, from, to, life = 0.6, o = {}) {
-  const m = new THREE.Mesh(o.geo || thinRingGeo, glow(color, o.opacity ?? 0.9, !o.dust));
+  const m = new THREE.Mesh(o.geo || thinRingGeo, glow(color, o.opacity ?? 0.6, !o.dust));   // anel fino e translúcido: o movimento (abrir e sumir) é que chama a atenção
   m.rotation.x = -Math.PI / 2;
   m.position.copy(at).setY(at.y + (o.y ?? 0.1));
   m.scale.setScalar(from);
@@ -4406,7 +4406,7 @@ function wave(at, color, from, to, life = 0.6, o = {}) {
 
 // coluna de luz que sobe do chão (follow = acompanha a unidade)
 function column(at, color, radius, height, life, o = {}) {
-  const m = new THREE.Mesh(columnGeo, glow(color, o.opacity ?? 0.55));
+  const m = new THREE.Mesh(columnGeo, glow(color, o.opacity ?? 0.38));
   m.position.copy(at);
   return addFx(m, life, (e, dt, k) => {
     const pop = Math.min(1, e.t / 0.15);
@@ -4453,14 +4453,14 @@ function skillSigil(h, life, art, active, ultimate = false) {
     ground.material.opacity = 0.12 * Math.sin(Math.PI * k);
     outer.scale.setScalar(0.7 + k * 1.15);
     outer.rotation.z += dt * 1.8;
-    outer.material.opacity = 0.82 * Math.sin(Math.PI * k);
+    outer.material.opacity = 0.55 * Math.sin(Math.PI * k);
     inner.scale.setScalar(0.8 + Math.sin(k * Math.PI) * 0.32);
     inner.rotation.z -= dt * 2.6;
     inner.material.opacity = 0.8 * Math.sin(Math.PI * k);
     if (ultRing) {
       ultRing.scale.setScalar((0.75 + k * 1.9) * pulse);
       ultRing.rotation.z -= dt * 3.5;
-      ultRing.material.opacity = 0.9 * Math.sin(Math.PI * k);
+      ultRing.material.opacity = 0.55 * Math.sin(Math.PI * k);
     }
     crest.position.set(Math.sin(h.root.rotation.y) * 0.35, 1.7 + Math.sin(e.t * 7) * 0.12, Math.cos(h.root.rotation.y) * 0.35);
     crest.rotation.y += dt * (h.cfg.id === 'ninja' ? 8 : 2.5);
@@ -4540,20 +4540,20 @@ function charge(h, duration) {
   }
   if (ultimate && h.cfg.id === 'pyro' && pending.skill?.effect === 'meteor') meteorFall(h, pending.target, pending.meteorImpact, life, active);   // o meteoro acompanha o alvo até o disparo
   if (ultimate) {   // ultimate avisa: coluna da cor do herói que acende e aperta até o disparo
-    const glowCol = new THREE.Mesh(columnGeo, glow(art.color, 0.4));
+    const glowCol = new THREE.Mesh(columnGeo, glow(art.color, 0.25));
     addFx(glowCol, life, (e, dt, k) => {
       if (!active()) { e.done = true; return; }
       glowCol.position.copy(h.pos);
       const r = 1.15 - 0.6 * k + Math.sin(e.t * 26) * 0.05 * k;
       glowCol.scale.set(r, 2.4 + k * 1.6, r);
       glowCol.rotation.y += dt * 4;
-      glowCol.material.opacity = 0.12 + 0.38 * k * k;
+      glowCol.material.opacity = 0.06 + 0.2 * k * k;
     });
   }
   // Trajetórias curvas, em vez de faíscas retas: convergem à frente do peito.
   const sparkCount = ultimate ? 16 : 10;
   for (let i = 0; i < sparkCount; i++) {
-    const spark = new THREE.Mesh(sparkGeo, glow(i % 3 ? color : 0xffffff));
+    const spark = new THREE.Mesh(sparkGeo, glow(i % 3 ? color : art.accent, 0.8));
     const angle = i / sparkCount * TAU;
     addFx(spark, life, (e, dt, k) => {
       if (!active()) { e.done = true; return; }
@@ -4564,49 +4564,56 @@ function charge(h, duration) {
         h.pos.y + 0.25 + k * 1.1 + Math.sin(k * Math.PI) * 0.4,
         h.pos.z + Math.sin(a) * radius + Math.cos(h.root.rotation.y) * forward);
       spark.scale.setScalar(0.5 + Math.sin(Math.PI * k) * 1.1);
-      spark.material.opacity = Math.sin(Math.PI * k);
+      spark.material.opacity = 0.8 * Math.sin(Math.PI * k);
     });
   }
 }
 
-// Pulso breve na liberação, sem encobrir os combatentes.
-function release(h, ultimate = false) {
+// Pulso breve na liberação, sem encobrir os combatentes: o brilho é pequeno e curto; o resto é movimento
+// (selo que salta com ease-out, anel que abre e some, fagulhas que sobem).
+const easeOutBack = (k) => 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2;   // passa um pouco do ponto e volta: "pop" de desenho
+function release(h, ultimate = false, radius = 0) {
   const art = SKILL_ART[h.cfg.id] || { color: h.cfg.color[0], accent: 0xffffff, glyph: shellGeo, scale: 0.5 };
-  const color = art.color;
+  const color = art.color, calm = calmMotion?.matches;
   const origin = h.pos.clone().setY(h.pos.y + 1.15);
   origin.addScaledVector(V(Math.sin(h.root.rotation.y), 0, Math.cos(h.root.rotation.y)), 0.45);
-  const flash = new THREE.Mesh(shellGeo, glow(0xffffff, 0.85));
+  const flash = new THREE.Mesh(shellGeo, glow(art.accent, 0.4));   // estalo pequeno na cor do herói (antes: branco a 0,85)
   flash.position.copy(origin);
-  addFx(flash, 0.2, (e, dt, k) => {
-    flash.scale.setScalar(0.7 + 3 * (1 - (1 - k) ** 3));
+  addFx(flash, 0.16, (e, dt, k) => {
+    flash.scale.setScalar(0.6 + 1.5 * (1 - (1 - k) ** 3));
     flash.material.opacity = e.base * (1 - k) ** 2;
   });
-  const crest = new THREE.Mesh(art.glyph, glow(art.accent, 0.9));
+  const crest = new THREE.Mesh(art.glyph, glow(art.accent, 0.8));
   crest.position.copy(origin);
-  addFx(crest, 0.38, (e, dt, k) => {
-    crest.scale.setScalar(art.scale * (0.3 + k * 1.2));
+  addFx(crest, 0.42, (e, dt, k) => {
+    crest.scale.setScalar(art.scale * (0.25 + 1.0 * easeOutBack(Math.min(1, k * 1.6))));
+    crest.position.y = origin.y + k * 0.35;
     crest.rotation.y += dt * (h.cfg.id === 'ninja' ? 13 : 4);
     crest.rotation.z += dt * (h.cfg.id === 'assassin' ? 7 : 1.5);
-    crest.material.opacity = 0.9 * (1 - k) ** 1.5;
+    crest.material.opacity = 0.8 * (1 - k) ** 1.5;
   });
-  burst(origin, [art.color, art.accent, 0xffffff], 8, 5, { life: 0.42, size: 1.25 });
-  wave(h.pos, color, 0.65, 1.9, 0.38, { opacity: 0.65 });
+  burst(origin, [art.color, art.accent], fewer(7), 4.5, { life: 0.4, size: 1.1 });
+  wave(h.pos, color, 0.55, 1.6, 0.36, { opacity: 0.45 });
   if (ultimate) {
-    wave(h.pos, art.accent, 0.35, 6.2, 0.82, { geo: ringGeo, opacity: 0.82, spin: 3.5 });
-    wave(h.pos, art.color, 0.55, 4.8, 0.68, { delay: 0.08, geo: ringGeo, opacity: 0.72, spin: -2.5 });
-    burst(origin, [art.color, art.accent, 0xfff2b0, 0xffffff], 18, 7, { life: 0.68, size: 1.35 });
-    const blaze = new THREE.Mesh(shellGeo, glow(0xffffff, 0.9));
-    blaze.position.copy(origin);
-    addFx(blaze, 0.28, (e, dt, k) => { blaze.scale.setScalar(1 + 9 * (1 - (1 - k) ** 3)); blaze.material.opacity = e.base * (1 - k) ** 2; });
+    // anéis do tamanho da área real (antes: 6,2 e 4,8 fixos); a esfera branca de raio 2 saiu
+    const reach = radius ? Math.min(Math.max(radius, 2), 6) : 2;   // área em volta do herói; habilidade em alvo distante: pulso curto
+    wave(h.pos, art.accent, 0.35, reach, 0.7, { geo: ringGeo, opacity: 0.45, spin: calm ? 0 : 3 });
+    wave(h.pos, art.color, 0.3, reach * 0.7, 0.6, { delay: 0.1, opacity: 0.4, spin: calm ? 0 : -2 });
+    burst(origin, [art.color, art.accent, 0xfff2b0], fewer(12), 6, { life: 0.6, size: 1.2 });
+    for (let i = 0; i < fewer(12); i++) {   // fagulhas que sobem em volta do herói, no lugar do clarão
+      const a = (i / 12) * TAU + rnd(0.2), r = 0.5 + Math.random() * 0.6;
+      particle(sparkGeo, i % 2 ? art.accent : art.color, V(h.pos.x + Math.cos(a) * r, h.pos.y + 0.2, h.pos.z + Math.sin(a) * r),
+        V(Math.cos(a) * 0.4, 2.2 + Math.random() * 1.4, Math.sin(a) * 0.4), 0.8, { size: 1, gravity: -0.8, drag: 0.8, opacity: 0.8, delay: Math.random() * 0.15 });
+    }
     shake(0.3);
     hitStop(0.07);
   }
   for (let i = 0; i < 2; i++) {
-    const arc = new THREE.Mesh(arcGeo, glow(color, 0.8));
+    const arc = new THREE.Mesh(arcGeo, glow(color, 0.6));
     arc.rotation.set(-Math.PI / 2 + (i ? 0.5 : -0.5), h.root.rotation.y, i * Math.PI);
     addFx(arc, 0.32, (e, dt, k) => {
       arc.position.copy(origin);
-      arc.scale.setScalar(0.45 + k * 1.25);
+      arc.scale.setScalar(0.45 + 1.1 * (1 - (1 - k) ** 2));
       arc.rotation.z += dt * (i ? -7 : 7);
       arc.material.opacity = e.base * (1 - k) ** 2;
     });
@@ -4615,17 +4622,16 @@ function release(h, ultimate = false) {
 
 // Paladino: coluna de luz dourada, faíscas subindo e cura verde em quem foi curado
 function holyLight(h, friends, reach) {
-  rays(h.pos, 'holy', 1.1, 9, 1.4);   // raios de luz em shader
-  column(h.pos, 0xffffff, 0.4, 9, 1.0, { opacity: 0.5 });
-  wave(h.pos, 0xfff0a0, 0.5, reach, 0.9);
-  wave(h.pos, 0x8af5a8, 0.3, reach * 0.8, 1.1, { geo: ringGeo, opacity: 0.6, delay: 0.15 });
-  for (let i = 0; i < 28; i++) {
+  rays(h.pos, 'holy', 0.9, 6, 1.1, { opacity: 0.7 });   // raios de luz em shader (a coluna branca por cima saiu)
+  wave(h.pos, 0xffe27a, 0.5, reach, 0.8, { opacity: 0.5 });
+  wave(h.pos, 0x8af5a8, 0.3, reach * 0.8, 1, { geo: ringGeo, opacity: 0.35, delay: 0.15 });
+  for (let i = 0; i < fewer(18); i++) {   // fagulhas que sobem devagar
     const a = Math.random() * TAU, r = Math.random() * 1.2;
-    particle(sparkGeo, i % 3 ? 0xffe27a : 0xffffff, V(h.pos.x + Math.cos(a) * r, h.pos.y + 0.2, h.pos.z + Math.sin(a) * r), V(0, 2.5 + Math.random() * 3, 0), 1.3, { size: 1.4, delay: Math.random() * 0.5 });
+    particle(sparkGeo, i % 3 ? 0xffe27a : 0xfff2c8, V(h.pos.x + Math.cos(a) * r, h.pos.y + 0.2, h.pos.z + Math.sin(a) * r), V(rnd(0.3), 2 + Math.random() * 2, rnd(0.3)), 1.2, { size: 1.1, opacity: 0.8, gravity: -0.4, delay: Math.random() * 0.5 });
   }
   for (const f of friends) if (f !== h) {
-    rays(f.pos, 'nature', 0.55, 3.5, 0.9, { follow: f });   // cura: raios verdes
-    burst(f.pos.clone().setY(f.pos.y + 1), [0x8af5a8, 0xffffff], 8, 3, { gravity: -2 });
+    rays(f.pos, 'nature', 0.5, 3, 0.8, { follow: f, opacity: 0.7 });   // cura: raios verdes
+    burst(f.pos.clone().setY(f.pos.y + 1), [0x8af5a8, 0xd8ffe0], 6, 2.5, { gravity: -2 });
   }
 }
 
@@ -4667,14 +4673,14 @@ function dome(h, radius) {
     base.material.opacity = (0.55 + 0.15 * Math.sin(e.t * 6)) * fade;
     if (h.dead || h.guardT <= 0 || !units.includes(h)) e.done = true;
   });
-  wave(h.pos, 0x6fc3ff, 0.5, radius, 0.7);
-  burst(h.pos.clone().setY(h.pos.y + 1), [0x6fc3ff, 0xffffff], 14, 5);
+  wave(h.pos, 0x6fc3ff, 0.5, radius, 0.7, { opacity: 0.55 });
+  burst(h.pos.clone().setY(h.pos.y + 1), [0x6fc3ff, 0xcdeaff], fewer(12), 5);
 }
 
 // Campeão: lâminas de luz girando em volta e rastro circular no chão
 function whirl(h, radius) {
   for (let i = 0; i < 3; i++) {
-    const m = new THREE.Mesh(arcGeo, glow(i ? 0xffe59b : 0xffffff, 0.95));
+    const m = new THREE.Mesh(arcGeo, glow(i ? 0xffe59b : 0xfff6d8, 0.75));
     m.rotation.set(-Math.PI / 2, 0, (i * TAU) / 3);
     addFx(m, 0.75, (e, dt, k) => {
       m.position.copy(h.pos).setY(h.pos.y + 0.7 + i * 0.3);
@@ -4683,8 +4689,8 @@ function whirl(h, radius) {
       m.material.opacity = e.base * (1 - k);
     });
   }
-  wave(h.pos, 0xffe59b, 0.5, radius, 0.55, { geo: ringGeo, opacity: 0.7, spin: 9 });
-  burst(h.pos.clone().setY(h.pos.y + 1), [0xffe59b, 0xffffff], 22, 8, { up: 0.3 });
+  wave(h.pos, 0xffe59b, 0.5, radius, 0.55, { geo: ringGeo, opacity: 0.45, spin: 9 });
+  burst(h.pos.clone().setY(h.pos.y + 1), [0xffe59b, 0xfff6d8], fewer(16), 8, { up: 0.3 });
   shake(0.25);
 }
 
@@ -4692,12 +4698,12 @@ function whirl(h, radius) {
 function fury(h) {
   wave(h.pos, 0xff3b3b, 0.4, 3.2, 0.6);
   burst(h.pos.clone().setY(h.pos.y + 1), [0xff5a3a, 0xffd0a0], 18, 5);
-  const aura = new THREE.Mesh(columnGeo, glow(0xff2a2a, 0.35));
+  const aura = new THREE.Mesh(columnGeo, glow(0xff2a2a, 0.22));
   addFx(aura, 30, (e, dt) => {
     aura.position.copy(h.pos);
     const pulse = 1 + Math.sin(e.t * 10) * 0.12;
     aura.scale.set(0.75 * pulse, 2.4 + Math.sin(e.t * 10) * 0.2, 0.75 * pulse);
-    aura.material.opacity = (0.3 + 0.12 * Math.sin(e.t * 10)) * Math.min(1, Math.max(0, h.furyT) / 0.4);
+    aura.material.opacity = (0.16 + 0.07 * Math.sin(e.t * 10)) * Math.min(1, Math.max(0, h.furyT) / 0.4);
     e.smoke = (e.smoke ?? 0) - dt;
     if (e.smoke <= 0) {   // labaredas rubras nos pés (shader) e faíscas
       e.smoke = lowQuality ? 0.2 : 0.1;
@@ -4715,11 +4721,11 @@ function quake(h, reach, tremor = 0.55) {
 }
 function quakeAt(at, reach, tremor = 0.55) {
   const c = at.clone();
-  wave(c, 0xffb060, 0.3, reach * 1.7, 0.55, { y: 0.12 });
+  wave(c, 0xffb060, 0.3, reach, 0.5, { y: 0.12, opacity: 0.55 });
   wave(c, 0x9a7a55, 0.3, reach * 1.3, 0.8, { geo: ringGeo, opacity: 0.55, dust: true });
   for (let i = 0; i < 9; i++) {
     const m = new THREE.Mesh(crackGeo, glow(0x2a1c10, 0.9, false));
-    const lava = new THREE.Mesh(crackGeo, glow(0xff8a30, 0.9));
+    const lava = new THREE.Mesh(crackGeo, glow(0xff8a30, 0.65));
     lava.scale.set(1, 1.3, 0.45);
     lava.position.y = 0.01;
     m.add(lava);
@@ -4729,7 +4735,7 @@ function quakeAt(at, reach, tremor = 0.55) {
     addFx(m, 1.8, (e, dt, k) => {
       m.scale.x = len * Math.min(1, e.t / 0.15);
       m.material.opacity = e.base * (k > 0.7 ? (1 - k) / 0.3 : 1);
-      lava.material.opacity = 0.9 * (1 - k) ** 2;
+      lava.material.opacity = 0.65 * (1 - k) ** 2;
     });
   }
   for (let i = 0; i < 14; i++)
@@ -4750,30 +4756,30 @@ function impact(kind, at, radius, lookId) {
     const [a, c] = TRAIL[lookId] || [0xffffff, 0xffffff];
     if (lookId === 'pyro' || lookId === 'arcane' || lookId === 'necro') blast(p, lookId === 'pyro' ? 1.5 : 1.1, 0.32, lookId === 'pyro' ? 'fire' : lookId);   // estouro em shader
     else {
-      const m = new THREE.Mesh(shellGeo, glow(a, 0.95));
+      const m = new THREE.Mesh(shellGeo, glow(a, 0.5));
       m.position.copy(p);
-      addFx(m, 0.3, (e, dt, k) => { m.scale.setScalar(1 + k * 4); m.material.opacity = e.base * (1 - k); });
+      addFx(m, 0.22, (e, dt, k) => { m.scale.setScalar(1 + 2.2 * (1 - (1 - k) ** 3)); m.material.opacity = e.base * (1 - k) ** 2; });
     }
     burst(p, lookId === 'pyro' ? [0xff7a2a, 0xffe070, 0xff3a1a] : [a, c], lookId === 'pyro' ? 6 : 10, 4, { gravity: 6, geo: lookId === 'druid' ? leafGeo : sparkGeo });
   } else if (kind === 'pyro') {   // bola de fogo: explosão que se rasga, anel de chamas no chão e fumaça
-    flameRing(at, radius * 1.6, 12, 0.75, 'fire', 1.15);
-    blast(p, radius * 2.6, 0.55);
+    flameRing(at, radius, 12, 0.7, 'fire', 1);
+    blast(p, radius * 2.2, 0.5);
     blast(p.clone().setY(p.y + 0.5), radius * 1.3, 0.4);
     burst(p, [0xff7a2a, 0xffe070, 0xff3a1a], fewer(20), 8, { gravity: 8, size: 1.6, life: 0.9 });
     puffs(p, 6, 'smoke', { spread: 0.6, size: 1.1, rise: 1.5, life: 1.2 });
-    wave(at, 0xff9a40, 0.4, radius * 1.4, 0.5);
+    wave(at, 0xff9a40, 0.4, radius, 0.45, { opacity: 0.55 });
     audio.play('fire');
     shake(0.45);
   } else if (kind === 'cryo' || kind === 'iceviking') {
     crystals(at, radius);
-    burst(p, [0xbff6ff, 0xffffff], 18, 5);
-    wave(at, 0x8be8ff, 0.4, radius * 1.3, 0.6);
+    burst(p, [0xbff6ff, 0x8be8ff], fewer(14), 5);
+    wave(at, 0x8be8ff, 0.4, radius, 0.55, { opacity: 0.55 });
     puffs(at.clone().setY(at.y + 0.4), 4, 'frostMist', { spread: radius * 0.6, rise: 0.3, size: 1.2, opacity: 0.7, life: 1.3 });   // névoa fria
     audio.play('ice');
     if (kind === 'iceviking') shake(0.2);
   } else if (kind === 'viking') {
-    burst(p, [0xffffff, 0xd6e9ef, 0xffd84a], 16, 6);
-    wave(at, 0xd6e9ef, 0.3, 1.6, 0.4);
+    burst(p, [0xd6e9ef, 0xffd84a], fewer(12), 6);
+    wave(at, 0xd6e9ef, 0.3, 1.6, 0.4, { opacity: 0.55 });
     puffs(at.clone().setY(at.y + 0.3), 2, 'dust', { size: 0.7, rise: 0.6, life: 0.7 });
     audio.play('hit');
     shake(0.2);
@@ -4782,7 +4788,7 @@ function impact(kind, at, radius, lookId) {
 
 // Criomante e Viking do Gelo: cristais de gelo brotando do chão
 function crystals(at, radius) {
-  const disc = new THREE.Mesh(groundGeo, glow(0x8be8ff, 0.35));
+  const disc = new THREE.Mesh(groundGeo, glow(0x8be8ff, 0.22, false));
   disc.rotation.x = -Math.PI / 2;
   disc.position.copy(at).setY(at.y + 0.08);
   disc.scale.setScalar(radius);
@@ -4945,20 +4951,21 @@ function golemSlam(golem, radius) {
 }
 // dragãozinho: baforada em cone saindo da boca: brasa na boca, chamas que crescem, faíscas e fumaça no fim
 function dragonBreath(from, dir, reach) {
-  blast(from.clone(), 0.55, 0.35, 'fire', 0.08);
+  blast(from.clone(), 0.45, 0.35, 'fire', 0.06);
+  const gy = world.groundHeight(from.x, from.z), drop = Math.max(0.8, from.y - gy);   // a boca está alto: o cone desce até o chão
   const n = fewer(14);
   for (let i = 0; i < n; i++) {
     const side = rnd(0.45), c = Math.cos(side), s = Math.sin(side);
     const d = V(dir.x * c + dir.z * s, 0, dir.z * c - dir.x * s).multiplyScalar(reach * (1.8 + Math.random() * 0.8));
-    sprite(i % 3 ? 'puff' : 'orb', 'fire', from.clone(), d.setY(-0.8 + rnd(0.3)), 0.5 + Math.random() * 0.2,
+    sprite(i % 3 ? 'puff' : 'orb', 'fire', from.clone(), d.setY(-drop * 2.6 * (0.8 + Math.random() * 0.35)), 0.5 + Math.random() * 0.2,
       { size: 0.35 + Math.random() * 0.2, grow: 2.2, drag: 1.6, delay: 0.1 + i * 0.022 });
   }
   for (let i = 0; i < fewer(8); i++) {
     const side = rnd(0.5), c = Math.cos(side), s = Math.sin(side);
-    particle(sparkGeo, i % 2 ? 0xffd27a : 0xff7a3a, from.clone(), V(dir.x * c + dir.z * s, 0, dir.z * c - dir.x * s).multiplyScalar(reach * 1.6).setY(0.6), 0.55,
-      { gravity: 3, size: 0.8, delay: 0.1 + i * 0.03 });
+    particle(sparkGeo, i % 2 ? 0xe8b060 : 0xd8642e, from.clone(), V(dir.x * c + dir.z * s, 0, dir.z * c - dir.x * s).multiplyScalar(reach * 1.6).setY(-drop * 1.1), 0.55,
+      { gravity: 3, size: 0.65, delay: 0.1 + i * 0.03 });
   }
-  puffs(from.clone().addScaledVector(dir, reach * 0.8).setY(from.y - 0.7), 3, 'smoke', { spread: 0.6, size: 0.7, life: 0.8, delay: 0.5 });
+  puffs(from.clone().addScaledVector(dir, reach * 0.8).setY(gy + 0.4), 3, 'smoke', { spread: 0.6, size: 0.7, life: 0.8, delay: 0.5 });
 }
 // criatura que some: o golem desmorona em pedaços que caem e afundam; fada e dragãozinho encolhem num brilho
 function summonFade(creature) {
@@ -5229,8 +5236,8 @@ function flaskBlast(at, radius) {
   const p = at.clone().setY(at.y + 0.8);
   blast(p, radius * 1.6, 0.5, 'venom');
   puffs(at.clone().setY(at.y + 0.3), 6, 'venom', { spread: radius * 0.5, size: 1.1, rise: 1.2, life: 1.1 });
-  burst(p, [0x9cff3a, 0xe8ffb0, 0xffffff], fewer(16), 7, { size: 1.4 });
-  wave(at, 0x9cff3a, 0.4, radius * 1.3, 0.5);
+  burst(p, [0x9cff3a, 0xe8ffb0], fewer(14), 7, { size: 1.3 });
+  wave(at, 0x9cff3a, 0.4, radius, 0.45, { opacity: 0.55 });
   shake(0.3);
 }
 
@@ -5274,16 +5281,16 @@ function royal(h, party) {
     crown.scale.setScalar(1.9 * (1 - (1 - pop) ** 3) + Math.sin(pop * Math.PI) * 0.5);
     mat.opacity = 0.95 * (k > 0.7 ? (1 - k) / 0.3 : 1);
   });
-  for (let i = 0; i < 3; i++) wave(h.pos, 0xffd84a, 0.5, 7, 1, { delay: i * 0.18 });
+  for (let i = 0; i < 2; i++) wave(h.pos, 0xffd84a, 0.5, 6, 0.9, { delay: i * 0.2, opacity: 0.45 });
   for (const f of party) {
-    rays(f.pos, 'holy', 0.55, 3.2, 0.9, { follow: f });   // luz dourada em shader sobre cada herói
-    burst(f.pos.clone().setY(f.pos.y + 1.2), [0xffd84a, 0xffffff], 8, 3, { gravity: -2 });
+    rays(f.pos, 'holy', 0.5, 3, 0.8, { follow: f, opacity: 0.7 });   // luz dourada em shader sobre cada herói
+    burst(f.pos.clone().setY(f.pos.y + 1.2), [0xffd84a, 0xfff2c8], 6, 2.5, { gravity: -2 });
   }
 }
 
 // Bardo: pulsos violeta e pequenas notas luminosas percorrem o grupo.
 function song(h, party) {
-  for (let i = 0; i < 3; i++) wave(h.pos, i === 1 ? 0xffe27a : 0xe9a7ff, 0.35, 6.2, 0.95, { delay: i * 0.16, opacity: 0.65 });
+  for (let i = 0; i < 2; i++) wave(h.pos, i ? 0xffe27a : 0xe9a7ff, 0.35, 6, 0.9, { delay: i * 0.18, opacity: 0.4 });
   for (const friend of party) {
     column(friend.pos, 0xe9a7ff, 0.32, 2.6, 0.95, { follow: friend });
     for (let i = 0; i < 3; i++) {
@@ -5438,14 +5445,14 @@ function meleeHit(target, critical) {
 function heroFall(h) {
   wave(h.pos, 0xff5a4a, 0.4, 2.2, 0.7, { opacity: 0.7 });
   puffs(h.pos, 4, 'dust', { size: 0.8, rise: 0.5, life: 0.8 });
-  burst(h.pos.clone().setY(h.pos.y + 1), [0xff6a5a, 0xffffff], 10, 3, { gravity: 5 });
+  burst(h.pos.clone().setY(h.pos.y + 1), [0xff6a5a, 0xffc0b0], 10, 3, { gravity: 5 });
 }
 
 // herói de volta: raios de luz dourada, anel e faíscas subindo
 function heroRise(h) {
   rays(h.pos, 'holy', 0.7, 5, 1.1, { follow: h });
   wave(h.pos, 0xfff0a0, 0.4, 2.4, 0.7);
-  burst(h.pos.clone().setY(h.pos.y + 0.6), [0xffe27a, 0xffffff], 14, 3, { gravity: -2 });
+  burst(h.pos.clone().setY(h.pos.y + 0.6), [0xffe27a, 0xfff2c8], 12, 3, { gravity: -2 });
 }
 
 // chefe derrotado: câmera lenta, tremida e explosão de luz
@@ -5455,12 +5462,10 @@ function bossDown(boss) {
   if (!boss) return;
   const p = boss.pos.clone().setY(boss.pos.y + 1.2);
   rays(boss.pos, 'holy', 1.4, 10, 1.4);
-  wave(boss.pos, 0xfff2b0, 0.5, 7, 0.9, { geo: ringGeo, opacity: 0.8, spin: 3 });
-  wave(boss.pos, 0xffffff, 0.4, 4.5, 0.6, { delay: 0.08 });
-  burst(p, [0xffffff, 0xfff2b0, 0xffd04a], fewer(26), 8, { life: 0.8, size: 1.4 });
-  const blaze = new THREE.Mesh(shellGeo, glow(0xffffff, 0.9));
-  blaze.position.copy(p);
-  addFx(blaze, 0.4, (e, dt, k) => { blaze.scale.setScalar(1 + 12 * (1 - (1 - k) ** 3)); blaze.material.opacity = e.base * (1 - k) ** 2; });
+  wave(boss.pos, 0xfff2b0, 0.5, 6, 0.9, { geo: ringGeo, opacity: 0.5, spin: 3 });
+  wave(boss.pos, 0xffd04a, 0.4, 4, 0.6, { delay: 0.08, opacity: 0.5 });
+  burst(p, [0xfff2b0, 0xffd04a], fewer(22), 8, { life: 0.8, size: 1.3 });
+  puffs(boss.pos.clone().setY(boss.pos.y + 0.4), 6, 'dust', { spread: 1, size: 1.2, rise: 0.8, life: 1.1 });
 }
 
 // Partículas do elemento de cada herói ao soltar uma habilidade extra (fogo, gelo, arcano, luz, natureza, sombra, tempo, som).
@@ -5820,8 +5825,8 @@ class Hero extends Unit {
           h.songHaste = Math.min(h.songHaste || 1, 0.78);
           popText(h.pos, 'Ritmo!', 'evolve');
         }
-        wave(this.pos, 0xe9a7ff, 0.2, 7, 0.85);
-        burst(this.pos, [0xf2c6ff, 0xffe27a, 0xffffff], 24, 4.5);
+        wave(this.pos, 0xe9a7ff, 0.2, 6, 0.8, { opacity: 0.45 });
+        burst(this.pos, [0xf2c6ff, 0xffe27a], 16, 4.5);
         FX.song(this, party);
       };
     } else if (id === 'angel') {
@@ -5838,9 +5843,9 @@ class Hero extends Unit {
           heroHit(this, enemy, this.dmg * (0.9 + level * 0.08) * power, center);
           enemy.vel.add(new THREE.Vector3(0, 0.7, 0));
         }
-        column(center, 0xffe27a, 1.1, 8, 1.1);
-        wave(center, 0xfff4bd, 0.3, radius, 0.75);
-        burst(center, [0xffe27a, 0xffffff, 0xffc6ed], 26, 5);
+        FX.rays(center, 'holy', 0.8, 6, 0.9, { opacity: 0.75 });
+        wave(center, 0xfff4bd, 0.3, radius, 0.7, { opacity: 0.55 });
+        burst(center, [0xffe27a, 0xffc6ed], 18, 5);
         FX.holyLight(this, healed, reach);
       };
     } else if (id === 'chronist') {
@@ -6546,7 +6551,7 @@ class Hero extends Unit {
           popText(this.pos, 'Pedra!', 'evolve');
           FX.quake(this, radius * 0.4);
           wave(this.pos, color, 0.3, radius, 0.7);
-          column(this.pos, 0xb8a88a, 0.8, 2.6, this.stoneT, { follow: this, opacity: 0.25 });
+          column(this.pos, 0xb8a88a, 0.8, 2.6, this.stoneT, { follow: this, opacity: 0.16 });
         };
         break;
       }
@@ -6564,7 +6569,7 @@ class Hero extends Unit {
           this.loop('Blocking');
           popText(this.pos, 'Muralha!', 'evolve');
           FX.quake(this, 1.2);
-          column(this.pos, color, 1.1, 2.4, this.wallT, { follow: this, opacity: 0.3 });
+          column(this.pos, color, 0.9, 2.4, this.wallT, { follow: this, opacity: 0.18 });
         };
         break;
       }
@@ -6727,7 +6732,7 @@ class Hero extends Unit {
           this.guardT = Math.max(this.guardT, 2.5);
           popText(this.pos, 'Brado!', 'evolve');
           wave(this.pos, color, 0.3, radius, 0.6);
-          wave(this.pos, 0xffffff, 0.2, radius * 0.7, 0.45);
+          wave(this.pos, 0xfff2c8, 0.2, radius * 0.7, 0.45, { opacity: 0.45 });
         };
         break;
       }
@@ -7166,7 +7171,7 @@ class Hero extends Unit {
     this.busy = this.skillBody(slot, pace * (skill.ultimate ? 0.82 : 0.92), skill.ultimate);
     const hitAt = this.busy * at;
     const pending = { target, skill, slot, meteorImpact: meteorImpactAt, effect: null, t: hitAt };
-    pending.effect = () => { audio.play(sound); FX.release(this, skill.ultimate); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target, pending.meteorImpact); };
+    pending.effect = () => { audio.play(sound); FX.release(this, skill.ultimate, skill.effect === 'meteor' ? 0 : radius); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target, pending.meteorImpact); };
     this.pendingHit = pending;
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
@@ -7924,8 +7929,9 @@ class BeastCompanion extends Unit {
 const SUMMON_RULES = {
   fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 2.15, color: 0xffb8dc },
   golem: { hp: 240, dmg: 14, range: 1.6, speed: 2.7, cooldown: 1.5, every: 6, life: 15, size: 1.05, bar: 2.95, color: 0xd8c29a },
-  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 3.75, color: 0xff7a3a, flying: true },   // voa alto: inimigos não o miram nem acertam
+  dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 6.6, color: 0xff7a3a, flying: true },   // voa alto: inimigos não o miram nem acertam
 };
+const SUMMON_DRAGON_SCALE = 1.9;   // só o visual do dragãozinho cresce; tamanho de colisão (rule.size) e alcance não mudam
 const SUMMON_TAUNT = 3, SUMMON_SLAM_RADIUS = 2.4, SUMMON_STUN = 0.9, SUMMON_BOSS_CONTROL = 0.35;   // chefes: controle mais curto
 const EMPTY_GLTF = { scene: new THREE.Group(), animations: [] };
 const summonAt = new THREE.Vector3();
@@ -8109,9 +8115,10 @@ class SummonedCreature extends Unit {
   // dragãozinho: voo ondulado com asas batendo, cauda balançando, cabeça que empina e avança na baforada; entra rodopiando
   poseDragon(p, t, act, speed, fury) {
     const v = this.visual, { head, jaw, tail, wings } = p, flap = Math.sin(t * (fury ? 13 : 9));
-    let y = p.hover + Math.sin(t * 2.1) * 0.12 + flap * 0.05, spin = 0, recoil = 0;
-    if (this.spawnT < 0.9) { const e = this.spawnT / 0.9; spin = (1 - e) ** 2 * Math.PI * 2 * 2; y += (1 - e) ** 2 * 1.6; }
-    for (const w of wings) w.rotation.set(0, w.userData.side * -0.15, w.userData.side * (0.2 + flap * 0.65));
+    let y = p.hover + Math.sin(t * 1.7) * 0.3 + flap * 0.1, spin = 0, recoil = 0;   // paira alto, subindo e descendo devagar a cada batida
+    if (this.spawnT < 0.9) { const e = this.spawnT / 0.9; spin = (1 - e) ** 2 * Math.PI * 2 * 2; y += (1 - e) ** 2 * 3; }
+    v.scale.setScalar(SUMMON_DRAGON_SCALE);
+    for (const w of wings) w.rotation.set(0, w.userData.side * -0.15, w.userData.side * (0.15 + flap * 0.95));
     tail.rotation.set(Math.sin(t * 2.1) * 0.12, Math.sin(t * 3) * 0.4, 0);
     let headX = Math.sin(t * 2.1 + 0.6) * 0.08, jawX = 0.05 + Math.sin(t * 2) * 0.03;
     if (this.actKind === 'breath' && act >= 0) {   // empina, depois avança com a boca aberta
@@ -8123,7 +8130,7 @@ class SummonedCreature extends Unit {
     head.rotation.set(headX, Math.sin(t * 0.9) * 0.15, 0);
     jaw.rotation.x = jawX;
     v.position.set(0, y, recoil);
-    v.rotation.set(Math.min(0.25, speed * 0.06) + Math.sin(t * 2.1 + 1) * 0.05, spin, Math.sin(t * 1.3) * 0.06);
+    v.rotation.set(Math.min(0.25, speed * 0.06) + Math.sin(t * 1.7 + 1) * 0.08, spin, Math.sin(t * 1.3) * 0.12);   // balanço leve ao pairar
   }
 
   // segue o herói mais ferido e cura em pulsos

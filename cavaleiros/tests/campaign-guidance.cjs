@@ -110,7 +110,7 @@ view = render({ ...allDone, ponte: 2 });
 assert.ok(view.map.children.at(-1).classList.contains('sel'));
 assert.match(view.info.innerHTML, /A Ponte do Rio ainda pode render estrelas/);
 view.replayButton.onclick();
-assert.ok(view.map.children[1].classList.contains('sel'), 'a recomendação ignora arenas perfeitas e abre a próxima que pode melhorar');
+assert.ok(view.map.children[2].classList.contains('sel'), 'a recomendação ignora arenas perfeitas e abre a próxima que pode melhorar');
 
 view = render(allDone);
 assert.ok(view.map.children.at(-1).classList.contains('sel'), 'mantém a última missão selecionada quando a campanha está perfeita');
@@ -126,8 +126,8 @@ view.map.children[9].onclick();
 assert.ok(view.map.children[9].classList.contains('sel'), 'Ruínas Antigas continua selecionável após concluir a campanha');
 assert.ok(view.info.innerHTML.includes('Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'),
   'o resumo de Ruínas explica a composição de área e o reforço recomendado');
-view.map.children[2].onclick();
-assert.ok(view.map.children[2].classList.contains('sel'), 'O Santuário continua selecionável após concluir a campanha');
+view.map.children[1].onclick();
+assert.ok(view.map.children[1].classList.contains('sel'), 'O Santuário continua selecionável após concluir a campanha');
 assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).'),
   'o resumo do Santuário não promete reforços numa missão de uma fase');
 view.map.children[3].onclick();

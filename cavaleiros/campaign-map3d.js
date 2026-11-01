@@ -59,8 +59,9 @@ export function mountCampaignMap3D(map, { layout, nodes: buttons, missions, stat
     return chapter;
   }
 
-  // água: o rio cruza a estrada entre as duas primeiras missões; lagos ficam ao lado das missões do lago
-  const n0 = layout.nodes[0], n1 = layout.nodes[1];
+  // água: o rio cruza a estrada logo antes da missão da ponte (entre ela e a anterior); lagos ficam ao lado das missões do lago
+  const bridgeAt = Math.max(1, missions.findIndex((m) => m.id === 'ponte'));
+  const n0 = layout.nodes[bridgeAt - 1], n1 = layout.nodes[bridgeAt];
   const river = n1 && n1.chapter === n0.chapter ? { z: (n0.z + n1.z) / 2, half: 1.3 } : null;
   const riverZ = (x) => river.z + Math.sin(x * 0.35) * 0.7;
   const lakes = [];

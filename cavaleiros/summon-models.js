@@ -290,7 +290,8 @@ const SUMMON_BODIES = {
       pivot.userData.side = side;
       return pivot;
     });
-    return { core, head, jaw, mouth, tail, wings, hover: 2.2, shellY: 0.15, shellR: 1.1, auraR: 1.0 };
+    core.traverse((o) => { o.frustumCulled = false; });   // alto e com asas em movimento: a esfera estática da geometria não pode cortá-lo
+    return { core, head, jaw, mouth, tail, wings, hover: 4.4, shellY: 0.15, shellR: 1.1, auraR: 1.9 };
   },
 };
 

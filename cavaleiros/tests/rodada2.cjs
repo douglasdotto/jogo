@@ -2184,7 +2184,7 @@ test('resultado da vitória inclui o desbloqueio real da próxima arena',()=>{
     t.game.test=false;t.game.roster=[];t.game.mission=t.MISSIONS.find(m=>m.id==='vila');
     t.endGame('Missão cumprida',true);
     const progress=report.find(item=>item.id==='next-try');
-    assert.equal(progress.title,'Progresso da campanha');assert.match(progress.text,/Próxima missão liberada: A Ponte do Rio\./);
+    assert.equal(progress.title,'Progresso da campanha');assert.match(progress.text,/Próxima missão liberada: O Santuário\./);
     assert.equal(t.starsOf('vila'),2);
     t.game.mission=t.MISSIONS.find(m=>m.id==='vila');
     context.localStorage.data={};
@@ -2527,8 +2527,8 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   map.children=[];info.querySelector=()=>playButton;root.isConnected=true;root.closest=()=>null;
   root.querySelector=selector=>selector==='.camp-map'?map:info;
   context.renderCampaign(root,m=>started.push(m),m=>m.id==='ponte'?'Outono':'Pradaria',m=>t.campaignThreats(m.from,m.to));
-  const focusedNode=map.children[1];focusedNode.classList.add('camp-node');focusedNode.onfocus();
-  assert.ok(info.innerHTML.includes('Arena 2 · Outono'),'arena e mapa ficam na dica do nome');
+  const focusedNode=map.children[2];focusedNode.classList.add('camp-node');focusedNode.onfocus();
+  assert.ok(info.innerHTML.includes('Arena 3 · Outono'),'arena e mapa ficam na dica do nome');
   assert.ok(info.innerHTML.includes('Capítulo I · Sinais na estrada'),'capítulo aparece à vista na missão focada');
   assert.ok(info.innerHTML.includes('Inimigos especiais'));
   assert.ok(info.innerHTML.includes('Fase 3 · '));   // ponte 2–4: o bombardeiro estreia dentro do trecho
@@ -2553,7 +2553,7 @@ test('campanha acompanha o foco e Enter só inicia a missão focada',()=>{
   playButton.onclick();assert.equal(started.length,2);assert.equal(started[1].id,'ponte');
   // defesa tem duração fixa: um recorde antigo salvo não aparece no mapa
   context.localStorage.data['cavaleiros-recordes-missao']=JSON.stringify({santuario:{normal:{seconds:50}}});
-  map.children[2].onfocus();
+  map.children[1].onfocus();
   assert.ok(info.innerHTML.includes('O Santuário')&&!info.innerHTML.includes('Seus melhores tempos'),'sem recorde de tempo na defesa');
   // Cavaleiro Sombrio é chefe só no Coração do Castelo
   const knightMap=el(),knightInfo=el(),knightRoot=el();knightMap.children=[];knightRoot.isConnected=true;knightRoot.closest=()=>null;
@@ -2765,7 +2765,7 @@ test('trechos da campanha variam, crescem e os capítulos do dragão e da brasa 
   for(const m of t.MISSIONS){
     assert.ok(m.from>=1&&m.to<=19&&m.from<=m.to,m.id);
     if(epilogue(m))assert.ok(m.from>=14,`${m.id}: o epílogo começa depois da fase 13`);
-    else{assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;}
+    else if(m.id!=='ponte'){assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;}   // a ponte vem depois do santuário no mapa, mesmo começando na fase 2
     const range=(epilogue(m)?'VII:':'')+m.from+'-'+m.to;
     assert.ok(!ranges.has(range),`${m.id} repete trecho`);ranges.add(range);
     assert.ok(!icons.has(m.icon),`${m.id} repete ícone`);icons.add(m.icon);
@@ -2796,7 +2796,7 @@ test('medalha guarda a melhor dificuldade vencida e desafios de 3★ nas dificul
   root.querySelector=selector=>selector==='.camp-map'?map:info;
   context.location={search:'?tudo=1'};context.renderCampaign(root,noop);context.location={search:''};
   assert.ok(map.children[0].innerHTML.includes('camp-seal seal-dificil challenge'));
-  assert.ok(map.children[1].innerHTML.includes('seal-pesadelo'));assert.ok(!map.children[2].innerHTML.includes('camp-seal'));
+  assert.ok(map.children[2].innerHTML.includes('seal-pesadelo'));assert.ok(!map.children[1].innerHTML.includes('camp-seal'));
   assert.ok(info.innerHTML.includes('Desafios opcionais')&&info.innerHTML.includes('Vencida no Difícil'));
 });
 test('fim da missão mostra recompensa, medalha e o botão da próxima missão',()=>{
@@ -3589,7 +3589,7 @@ test('missões novas entram na ordem da campanha sem travar saves antigos',()=>{
   const previousLocation=context.location,previousStorage=context.localStorage.data;
   try{
     const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
-    assert.ok(i('ponte')<i('santuario')&&i('santuario')<i('fazendas'));assert.ok(i('lago')<i('caca')&&i('caca')<i('resgate'));assert.ok(i('cemiterio')<i('horda')&&i('horda')<i('castelo'));
+    assert.ok(i('vila')<i('santuario')&&i('santuario')<i('ponte')&&i('ponte')<i('chamas')&&i('chamas')<i('fazendas'));assert.ok(i('lago')<i('caca')&&i('caca')<i('resgate'));assert.ok(i('cemiterio')<i('horda')&&i('horda')<i('castelo'));
     context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:2})};
     assert.equal(t.unlocked(i('santuario')),true);assert.equal(t.unlocked(i('fazendas')),false,'a nova missão vem antes das fazendas');
     context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:3,ponte:2,fazendas:1,lago:1,resgate:2})};

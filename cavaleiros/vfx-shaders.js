@@ -173,7 +173,7 @@ const FRAG = {
       float ray = smoothstep(0.35, 0.85, n);
       float fade = pow(1.0 - vUv.y, 1.4) * smoothstep(0.0, 0.08, vUv.y);
       vec3 c = mix(uMid, uCore, ray);
-      gl_FragColor = vec4(c, (0.18 + ray * 0.82) * fade * uOpacity);
+      gl_FragColor = vec4(c, (0.1 + ray * 0.6) * fade * uOpacity);   // aditivo: contido para não estourar em branco
     }`,
   // gelo facetado: normal de cada face, borda clara (fresnel) e brilho que corre pelas faces
   ice: `
