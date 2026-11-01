@@ -28,7 +28,7 @@ jobs:
       - name: Preparar arquivos públicos
         run: |
           mkdir -p _site
-          cp cavaleiros/*.html cavaleiros/*.css cavaleiros/*.js _site/
+          cp cavaleiros/*.html cavaleiros/*.css cavaleiros/*.js cavaleiros/*.mjs _site/
           rm _site/server.js
           cp -R cavaleiros/assets _site/assets
           touch _site/.nojekyll
