@@ -281,6 +281,7 @@ const profiles = {
   sustentacao: ['guardian', 'cleric', 'druid', 'pyro'],
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
+  runica: ['runic', 'guardian', 'pyro', 'cleric'],
   invocador: ['summoner', 'guardian', 'pyro', 'cleric'],
   vampira: ['vampire', 'guardian', 'pyro', 'paladin'],
   cozinheira: ['cook', 'guardian', 'pyro', 'assassin'],

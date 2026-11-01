@@ -130,6 +130,8 @@ const VARIANTS = [
   { id: 'lancer', names: ['Lanceiro', 'Lanceiro Real', 'Cavalaria Dourada'], desc: 'Fere a fila inteira com a lança.', ability: 'Estocada', color: ['#8fb0ff', '#3a5aa8'],
     use: [], stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 3 }, hp: 290, dmg: 27, range: 2.4, speed: 3.1, cooldown: 1, idle: '2H_Melee_Idle',
     attacks: ['2H_Melee_Attack_Stab', '2H_Melee_Attack_Slice'], classId: 0 },
+  { id: 'runic', names: ['Rúnica', 'Tecelã de Escudos', 'Guardiã das Runas'], desc: 'Runas de escudo que protegem antes do golpe.', ability: 'Runa-escudo', color: ['#9be0ee', '#2e7d8c'],
+    use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 12, range: 6, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'runic' },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 175, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
   { id: 'cook', names: ['Cozinheira', 'Chef de Campanha', 'Mestra do Banquete'], desc: 'Tortas e marmitas que curam e dão ânimo.', ability: 'Torta quente', color: ['#ffd9a0', '#d9803a'],
@@ -151,7 +153,7 @@ const PICK_GROUPS = [
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner', 'geomancer'] },
   { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer', 'illusionist'] },
-  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook', 'shaman'] },
+  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook', 'shaman', 'runic'] },
 ];
 const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
 const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id === groupId)?.heroes || [])
@@ -1889,6 +1891,7 @@ const SKILL_GLYPHS = {
   brute: ['⛰', '⤴', '⬢', '▥'],
   lancer: ['↟', '⇈', '♞', '⇥'],
   geomancer: ['⛰', '▤', '≋', '▲'],
+  runic: ['◈', '⬡', '◍', '✺'],
   summoner: ['✿', '⬢', '♆', '⚘'],
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
@@ -3824,6 +3827,7 @@ function updateBolts(dt) {
   }
   updateSentries(dt);
   updateSpiritTotems(dt);
+  updateRuneDomes(dt);
 }
 
 function removeSentry(sentry) {
@@ -6011,6 +6015,43 @@ const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: c
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
   whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+
+// Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
+BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
+BOLT_LOOKS.runic.shells[0][0].userData.keep = true;
+TRAIL.runic = [0x6fd8e0, 0xffffff];
+SIGIL_RUNES.runic = 'runic';
+SKILL_ART.runic = { color: 0x6fd8e0, accent: 0xffffff, glyph: domeGeo, scale: 0.4 };
+const runeBubbleGeo = new THREE.SphereGeometry(1, 16, 10);
+// bolha translúcida (brilho só na borda, sem aditivo) e runas girando em anel no chão enquanto a runa-escudo durar
+FX.runeShield = (h) => {
+  const m = new THREE.Mesh(runeBubbleGeo, shieldMaterial(0x6fd8e0));
+  addFx(m, 60, (e) => {
+    m.position.copy(h.pos).setY(h.pos.y + 1);
+    m.scale.setScalar(0.95 + Math.sin(e.t * 3) * 0.02);
+    m.material.uniforms.time.value = e.t;
+    m.material.uniforms.opacity.value = 0.5 * Math.min(1, 0.4 + h.runeHp / Math.max(1, h.runeMax)) * Math.min(1, Math.max(0, h.runeT) / 0.5);
+    if (h.dead || !(h.runeHp > 0) || !units.includes(h)) e.done = true;
+  });
+  shaderDisc('rune', 'runic', h.pos, 1.15, 60, { follow: h, opacity: 0.6, active: () => h.runeHp > 0 && !h.dead });
+};
+FX.runeBreak = (h, radius) => {   // o anel cresce até o raio real do empurrão
+  wave(h.pos, 0x6fd8e0, 0.3, radius, 0.45, { dust: true, opacity: 0.7 });
+  burst(h.pos.clone().setY(h.pos.y + 1), [0x6fd8e0, 0xffffff], fewer(8), 4);
+};
+FX.runeDome = (dome) => {   // raio da cúpula = raio real da proteção
+  const m = new THREE.Mesh(domeGeo, shieldMaterial(0x6fd8e0));
+  addFx(m, dome.t + 1, (e) => {
+    m.position.copy(dome.pos);
+    m.scale.setScalar(dome.r * (1 - (1 - Math.min(1, e.t / 0.3)) ** 3));
+    m.material.uniforms.time.value = e.t;
+    m.material.uniforms.opacity.value = 0.5 * Math.min(1, Math.max(0, dome.t) / 0.5);
+    if (dome.t <= 0) e.done = true;
+  });
+  shaderDisc('rune', 'runic', dome.pos, dome.r, dome.t, { opacity: 0.7, active: () => dome.t > 0 });
+  wave(dome.pos, 0x6fd8e0, dome.r * 0.2, dome.r, 0.5, { dust: true, opacity: 0.7 });
+  burst(dome.pos.clone().setY(dome.pos.y + 1), [0x6fd8e0, 0xffffff], fewer(12), 5);
+};
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
 // Ilusionista: fumaça violeta translúcida (sombra em shader, sem brilho aditivo)
@@ -6515,6 +6556,19 @@ class Hero extends Unit {
       }
       if (!target || target.pos.distanceTo(this.pos) > reach) return false;
       effect = () => cookPool(this, target.pos.clone());
+    } else if (id === 'runic') {
+      // runa-escudo no aliado mais ferido que ainda não tem uma; ao quebrar, cura um pouco e empurra quem está colado
+      if (!force && game.state !== 'fight') return false;
+      const ally = partyNow().filter((h) => !h.dead && !(h.runeHp > 0) && h.pos.distanceTo(this.pos) <= this.range + 2)
+        .reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+      if (!ally) return false;
+      if (!force && !attackables.some((s) => !s.dead && !s.spawning && s.pos.distanceTo(ally.pos) <= 9)) return false;
+      target = ally;
+      effect = () => {
+        if (ally.dead) return;
+        runeShieldOn(ally, this, scaleBranchEffect(this, 'support', 22 + level * 6) * power, 8, scaleBranchEffect(this, 'support', 6 + level * 2) * power, true);
+        popText(ally.pos, 'Runa!', 'heal');
+      };
     } else if (id === 'viking' || id === 'iceviking') {
       if (!manual) target = highestPriorityHeroTarget(this, attackables.filter((s) => !s.dead && !s.spawning
         && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
@@ -8015,6 +8069,38 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'rune-ward': {
+        // Runas de grupo: runa fraca (absorve pouco, dura mais) em todos os aliados próximos
+        const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
+        const amount = scaleBranchEffect(this, 'support', 10 + level * 3) * power;
+        if (!force && (!enemies.length || allies.every((h) => h.runeHp >= amount))) return false;
+        effect = () => {
+          for (const h of allies) if (!h.dead) runeShieldOn(h, this, amount, skill.duration || 12);
+          wave(this.pos, RUNE_COLOR, 0.3, radius, 0.6, { dust: true, opacity: 0.6 });
+          popText(this.pos, 'Runas!', 'heal');
+        };
+        break;
+      }
+      case 'rune-dome': {
+        // Cúpula rúnica: ninguém dentro cai abaixo de 1 de vida e a cúpula afasta os inimigos que a tocam
+        if (!force && !criticalAlly && enemies.length < 3 && !urgentEnemy) return false;
+        effect = () => raiseRuneDome(this, this.pos, radius, scaleBranchEffect(this, 'support', skill.duration || 5) * (0.9 + 0.1 * power));
+        break;
+      }
+      case 'rune-pulse': {
+        // Pulso rúnico: afasta e atrasa quem está colado e deixa uma runa pequena em quem lançou
+        if (!force && !enemies.some((s) => s.pos.distanceTo(this.pos) <= radius)) return false;
+        effect = () => {
+          for (const enemy of enemies) if (!enemy.dead && enemy.pos.distanceTo(this.pos) <= radius + 0.4 * (enemy.size - 1)) {
+            runePushAway(enemy, this.pos, enemy.boss ? 2 : 9);
+            controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', skill.duration || 1.5) * power);
+          }
+          if (!(this.runeHp > 0)) runeShieldOn(this, this, scaleBranchEffect(this, 'support', 10 + level * 2) * power, 6);
+          wave(this.pos, RUNE_COLOR, 0.3, radius, 0.5, { dust: true, opacity: 0.7 });
+          burst(this.pos.clone().setY(this.pos.y + 1), [RUNE_COLOR, 0xffffff], 8, 5);
+        };
+        break;
+      }
       case 'omen': {
         // Presságio: cada aliado próximo esquiva o próximo dano nos próximos segundos
         const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
@@ -8226,6 +8312,7 @@ class Hero extends Unit {
     this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
     if (this.spearOn) this.range /= SPEAR_REACH;
     this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
+    this.runeHp = 0; this.runeMax = 0; this.runeT = 0; this.runeHeal = 0; this.runePush = false; this.runeBy = null;   // runa-escudo da Rúnica
   }
 
   // Lanceiro: a postura estende o alcance e, a cada pulso, fere e freia quem está ao alcance da lança
@@ -8256,6 +8343,7 @@ class Hero extends Unit {
 
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
+    if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
     this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
@@ -8287,6 +8375,7 @@ class Hero extends Unit {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.wallT > 0) n *= 0.5;
+    if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
     if (this.riposteT > 0) {
       popText(this.pos, 'Aparou!', 'block');
@@ -8316,6 +8405,10 @@ class Hero extends Unit {
       this.blessT = 0;
       popText(this.pos, 'Bênção!', 'evolve');
       FX.rays(this.pos, 'holy', 0.45, 4, 0.8, { follow: this });
+    }
+    if (n >= this.hp && runeDomeCovers(this)) {   // cúpula rúnica: ninguém dentro cai
+      n = Math.max(0, this.hp - 1);
+      if (this.synergyNoticeT <= 0) { popText(this.pos, 'Cúpula!', 'block'); this.synergyNoticeT = 0.8; }
     }
     return n;
   }
@@ -8563,6 +8656,7 @@ const SKILL_MOVES = {
   oracle: ['1H_Ranged_Shoot', 1.3, 0.35, 'zap'],
   brute: ['Jump_Full_Short', 0.9, 0.7, 'slam'],
   lancer: ['1H_Melee_Attack_Stab', 1.3, 0.45, 'sword'],
+  runic: ['Spellcast_Raise', 1.6, 0.42, 'heal'],
   summoner: ['2H_Melee_Attack_Stab', 1.5, 0.45, 'summon'],
   vampire: ['2H_Melee_Attack_Slice', 1.3, 0.4, 'hit'],
   cook: ['Throw', 1.4, 0.45, 'ice'],
@@ -8751,6 +8845,12 @@ const SKILL_ANIMS = {
     { clip: 'Dodge_Forward', hold: '2H_Melee_Idle', f: 0.5, arc: 'thrust', lean: 0.25, kick: 0.6 },          // arranca para a carga
     { clip: '2H_Melee_Attack_Stab', hold: '2H_Melee_Idle', f: 0.5, arc: 'thrust', lean: 0.3, kick: 0.5 },    // crava a lança no alvo
   ],
+  runic: [
+    { clip: 'Waving', hold: 'Spellcasting', f: 0.5, lean: 0.1, float: 0.12 },   // acena e a runa pousa no aliado
+    { clip: 'Cheer', hold: 'Spellcasting', f: 0.45, float: 0.2, lean: -0.1 },   // sela o grupo todo
+    { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.6, spin: 0.8, float: 0.4, lean: -0.14 },   // fecha a cúpula
+    { clip: 'Spellcast_Shoot', hold: 'Spellcasting', f: 0.45, lean: 0.12, kick: -0.6 },   // pulso curto
+  ],
   summoner: [
     { clip: '2H_Melee_Attack_Stab', hold: 'Spellcasting', f: 0.5, lean: 0.12, float: 0.18 },   // finca o cajado e a fada sai da gema
     { clip: '1H_Melee_Attack_Stab', f: 0.55, arc: 'thrust', lean: 0.22, kick: 0.35 },          // bate no chão e o golem brota
@@ -8791,6 +8891,69 @@ const SKILL_ANIMS = {
 
 const LEGION_SIZE = 6;   // esqueletos da ultimate do Necromante
 const LEGION_RISE = 0.8;   // tempo que cada um leva para sair da terra
+// ---------- Rúnica: runa-escudo, runas de grupo, pulso e cúpula rúnica (os visuais ficam em FX.rune*) ----------
+const RUNE_COLOR = 0x6fd8e0, RUNE_PUSH_R = 2.2;
+const runeDomes = [];   // cúpulas ativas: { pos, r, t, owner }
+
+function runePushAway(enemy, from, k) {
+  enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, from).setY(0).normalize().multiplyScalar(k));
+}
+
+// escudo de runa: absorve dano até acabar (ou o tempo passar); heal/push valem só ao quebrar
+function runeShieldOn(h, owner, amount, duration, heal = 0, push = false) {
+  const fresh = !(h.runeHp > 0);
+  h.runeHp = Math.max(fresh ? 0 : h.runeHp, amount);
+  h.runeMax = Math.max(fresh ? 0 : h.runeMax, h.runeHp);
+  h.runeT = Math.max(fresh ? 0 : h.runeT, duration);
+  h.runeHeal = Math.max(fresh ? 0 : h.runeHeal, heal);
+  h.runePush = (fresh ? false : h.runePush) || push;
+  h.runeBy = owner;
+  if (fresh) FX.runeShield(h);
+}
+
+// dano chegando ao herói com runa: a runa come primeiro; ao quebrar cura um pouco e afasta quem está colado
+function runicSoak(h, n) {
+  const soak = Math.min(n, h.runeHp);
+  h.runeHp -= soak;
+  if (h.synergyNoticeT <= 0) { popText(h.pos, '⛨' + Math.round(soak), 'block'); h.synergyNoticeT = 0.6; }
+  if (h.runeHp > 0.01) return n - soak;
+  h.runeHp = 0;
+  const heal = Math.min(h.maxHp - h.hp, h.runeHeal);
+  if (heal > 0) { h.hp += heal; if (h.runeBy?.stats) h.runeBy.stats.cura += heal; popText(h.pos, '+' + Math.round(heal), 'heal'); }
+  if (h.runePush) for (const enemy of skeletonsAlive()) {
+    if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(h.pos) <= RUNE_PUSH_R + 0.4 * (enemy.size - 1)) runePushAway(enemy, h.pos, enemy.boss ? 2 : 8);
+  }
+  FX.runeBreak(h, RUNE_PUSH_R);
+  return n - soak;
+}
+
+const runeDomeCovers = (h) => runeDomes.some((d) => (h.pos.x - d.pos.x) ** 2 + (h.pos.z - d.pos.z) ** 2 <= d.r * d.r);
+
+function raiseRuneDome(owner, at, radius, duration) {
+  const dome = { pos: at.clone(), r: radius, t: duration, owner };
+  runeDomes.push(dome);
+  FX.runeDome(dome);
+}
+
+// a cúpula empurra para fora quem encosta (chefes cedem menos)
+function updateRuneDomes(dt) {
+  for (let i = runeDomes.length - 1; i >= 0; i--) {
+    const d = runeDomes[i];
+    d.t -= dt;
+    if (d.t <= 0 || !units.includes(d.owner)) { runeDomes.splice(i, 1); continue; }
+    for (const enemy of skeletonsAlive()) {
+      if (enemy.dead || enemy.spawning) continue;
+      const reach = d.r + 0.4 * (enemy.size - 1);
+      let dx = enemy.pos.x - d.pos.x, dz = enemy.pos.z - d.pos.z;
+      let dist = Math.hypot(dx, dz);
+      if (dist >= reach) continue;
+      if (dist < 0.01) { dx = 1; dz = 0; dist = 1; }
+      const step = Math.min(reach - dist + 0.05, (enemy.boss ? 3 : 9) * dt);
+      enemy.pos.x += dx / dist * step;
+      enemy.pos.z += dz / dist * step;
+    }
+  }
+}
 
 class Minion extends Unit {
   constructor(summoner, side, o = {}) {

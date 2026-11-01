@@ -619,8 +619,8 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute','lancer']);
   assert.deepEqual(Array.from(rowFor('Bárbaros').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','monk','beast_tamer']);
-  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist','vampire','cook','shaman']);
-  for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=8,'cada aba tem de 5 a 8 heróis');
+  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist','vampire','cook','shaman','runic']);
+  for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=9,'cada aba tem de 5 a 9 heróis');
   assert.equal(t.pick.classRows.reduce((sum,row)=>sum+row.children.length,0),t.VARIANTS.length,'todo herói está em exatamente uma aba');
   const filterFor=name=>t.pick.classFilters[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.match(filterFor('Magos').innerHTML,/pick-filter-count[^>]*>1</,'a aba mostra quantos do grupo já estão nela');
@@ -1206,6 +1206,25 @@ test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio
   const trap=context.flames.at(-1);assert.ok(trap,'Armadilha fica no chão');prey.pos.copy(trap.mesh.position);
   t.updateBolts(0.5);t.updateBolts(0.2);assert.ok(prey.rootT>0&&prey.hp<prey.maxHp,'quem pisa fica preso e ferido');
   context.flames.length=0;clear();
+});
+test('Rúnica: runa-escudo absorve e ao quebrar cura e empurra; runas de grupo são mais fracas; cúpula segura a queda; pulso afasta',()=>{
+  const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
+  const cast=(h,slot,target)=>{h.busy=0;h.skillTimers[slot]=0;assert.equal(h.useSkill(target,false,true,slot),true,'slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
+  clear();const r=new t.Hero(cfg('runic')),ally=new t.Hero(cfg('guardian'));r.pos.set(0,0,0);ally.pos.set(2,0,0);ally.hp=ally.maxHp*.4;
+  const e=foe(2.8,0);cast(r,0,e);
+  assert.ok(ally.runeHp>0,'a runa vai para o aliado mais ferido');assert.equal(r.runeHp,0);
+  const signature=ally.runeHp,hp0=ally.hp;ally.takeDamage(6,null,e);assert.equal(ally.hp,hp0,'a runa absorve o golpe');assert.ok(ally.runeHp<signature);
+  ally.runeHp=3;ally.takeDamage(30,null,e);assert.equal(ally.runeHp,0,'a runa quebra');assert.ok(e.vel.length()>1,'ao quebrar empurra quem está colado');
+  clear();const r2=new t.Hero(cfg('runic')),a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('cryo'));r2.pos.set(0,0,0);a.pos.set(2,0,0);b.pos.set(-2,0,1);foe(3,0);
+  cast(r2,1,null);assert.ok(a.runeHp>0&&b.runeHp>0&&r2.runeHp>0,'runa de grupo em todos os próximos');assert.ok(a.runeHp<signature,'a de grupo absorve menos');assert.ok(a.runeT>8,'e dura mais');
+  clear();const dr=new t.Hero(cfg('runic')),f=new t.Hero(cfg('guardian')),far=new t.Hero(cfg('pyro'));dr.pos.set(0,0,0);f.pos.set(2,0,0);far.pos.set(12,0,0);const e2=foe(1,0);foe(0,2);foe(0,-2);
+  cast(dr,2,null);f.takeDamage(99999,null,null);assert.equal(f.dead,false,'dentro da cúpula ninguém cai');assert.equal(Math.round(f.hp),1);
+  const before=Math.hypot(e2.pos.x,e2.pos.z);t.updateBolts(.4);assert.ok(Math.hypot(e2.pos.x,e2.pos.z)>before,'a cúpula afasta quem toca');
+  far.takeDamage(99999,null,null);assert.equal(far.dead,true,'fora da cúpula cai normalmente');
+  t.updateBolts(6);const g=new t.Hero(cfg('guardian'));g.pos.set(1,0,0);g.takeDamage(99999,null,null);assert.equal(g.dead,true,'a cúpula acaba');
+  clear();const pr=new t.Hero(cfg('runic'));pr.pos.set(0,0,0);const e3=foe(0,2);cast(pr,3,e3);
+  assert.ok(e3.vel.length()>1&&e3.slowT>0,'o pulso afasta e atrasa');assert.ok(pr.runeHp>0,'e deixa uma runa em quem lançou');
+  clear();
 });
 test('habilidades principais dos quatro novos heróis têm efeitos funcionais',()=>{
   clear();

@@ -303,6 +303,19 @@ export const LOOKS = {
       { type: 'ladle', bone: 'handslotr' },
     ],
   },
+  runic: {   // tecelã de escudos: túnica azul-petróleo, cabelo dourado, diadema com pedra e anel de runas aos pés
+    shape: silhouette('Mage', { torso: 1, arms: 0.98, legs: 1, height: 1, depth: 1 }),
+    hide: ['Mage_Hat', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'],
+    paint: {
+      ...outfit('Mage', '#2e7d8c', '#1f4a5a', 0.8), ...face('Mage', { skin: '#d8a27a', hair: '#ffd23a' }),
+      Mage_Cape: { tint: '#cfe9ee', amount: 0.8 },
+    },
+    extras: [
+      { type: 'circlet', bone: 'head', color: 0xdfe8f5, gem: 0x6fd8e0 },
+      { type: 'robeSkirt', bone: 'hips', color: 0x2e7d8c, trim: 0xdfe8f5, height: 0.5, flare: 0.44 },
+      { type: 'runeRing', bone: 'root', color: 0x6fd8e0 },
+    ],
+  },
   // ---------- Bárbaro (tanque) ----------
   // gigante de punhos (como o Barbarian large): ombros, braços e punhos enormes, cabeça pequena, pernas curtas e grossas,
   // costas curvadas; pele curtida, tanga de pele com cinto largo, ombreira de pedra de um lado só e corrente no peito
@@ -442,6 +455,7 @@ export const LOOK_PREVIEW = [
   { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6, clips: { Idle: 'Brute_Idle', Running_A: 'Brute_Run' } },   // luta de punhos; anda e respira como gigante (Rig_Large)
   { id: 'vampire', name: 'Vampira', model: 'Mage', use: [] },
   { id: 'lancer', name: 'Lanceiro', model: 'Knight', use: [] },
+  { id: 'runic', name: 'Rúnica', model: 'Mage', use: [] },
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
   { id: 'cook', name: 'Cozinheira', model: 'Barbarian', use: [] },
   { id: 'shaman', name: 'Xamã dos totens', model: 'Barbarian', use: [] },
