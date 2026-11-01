@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { recolor } from './characters.js';
 import { batchStaticMeshes, bandsByZ, disposeInstancedMeshes, isInstancedBandVisible } from './scene-perf.js';
-import { preloadSceneryAssets, sceneryModel, sceneryReady, forestMaterial, DUNGEON_MODELS, VILLAGE_MODELS } from './scenery-assets.js';
+import { preloadSceneryAssets, preloadSceneryProps, sceneryModel, sceneryReady, forestMaterial, DUNGEON_MODELS, VILLAGE_MODELS } from './scenery-assets.js';
 import { villageMarketPropsForStall } from './village-decor.mjs';
 
 // muitas peças já vêm sem índice; o three avisa a cada "desindexação" repetida. Mesma saída (uma cópia), sem o aviso
@@ -50,6 +50,8 @@ export function biomeForSeed(seedValue = 11, biomeName = null) { return mapStyle
 
 export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options = {}) {
   const castleInterior = options.castleInterior === true;
+  // Gráficos leves (mesma chave do botão em main.js): metade dos enfeites do kit e sem os halos pequenos
+  const lowDetail = options.lowQuality ?? (() => { try { return localStorage.getItem('cavaleiros-graficos') === 'baixa'; } catch { return false; } })();
   const scene = new THREE.Group();
   parentScene.add(scene);
   let disposed = false, modelScenes = [];
@@ -658,10 +660,27 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
 
   // postes de lanterna só perto de algumas casas
   const lantern = mat(0xffe08a, { emissive: 0xffa53a, emissiveIntensity: 1 });
+  // brilho das chamas: sprites aditivos (dois THREE.Points no mapa todo), nunca PointLight. big = tochas e
+  // braseiros; small = lampiões e velas (some nos gráficos leves). Só guarda a posição: não gasta a semente.
+  const halos = { big: [], small: [] };
+  const WARM = 0xffa040, VIOLET = 0xa868ff;
+  const addHalo = (list, x, y, z, color = WARM) => { if (list === halos.big || !lowDetail) list.push({ x, y, z, color, g: gloomAt(z) }); };
+  const haloIn = (list, m, x, y, z, color) => { const v = new THREE.Vector3(x, y, z).applyMatrix4(m); addHalo(list, v.x, v.y, v.z, color); };
+  // halo de um modelo do pacote (tochas e velas): só entra quando o modelo é montado. Antes dos Points do mapa
+  // existirem vai para as listas; depois vira Points próprios (haloPoints). late = { big: [], small: [] }
+  let haloPoints = null;
+  const lateHalo = (late, kind, x, y, z, color = WARM) => { if (kind === 'big' || !lowDetail) late[kind].push({ x, y, z, color, g: gloomAt(z) }); };
+  function showHalos(late) {
+    for (const kind of ['big', 'small']) {
+      if (!late[kind].length) continue;
+      if (haloPoints) haloPoints(late[kind], kind); else halos[kind].push(...late[kind]);
+    }
+  }
   function lamp(x, z) {
     mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.6, 6), darkWood, x, 1.3, z).rotation.z = range(-0.05, 0.05);
     mesh(new THREE.BoxGeometry(0.6, 0.08, 0.08), darkWood, x + 0.3, 2.5, z);
     mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), lantern, x + 0.55, 2.25, z).castShadow = false;
+    addHalo(halos.small, x + 0.55, 2.25, z);
   }
 
   // casas espalhadas sem ordem: distância, lado e direção sorteados
@@ -1065,10 +1084,13 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   const toWorld = (g, x, z, y = 0) => g.localToWorld(new THREE.Vector3(x, y, z));
   const villageKitProps = [];
   function addVillageKitProps(stall, index) {
-    for (const prop of villageMarketPropsForStall(index)) villageKitProps.push({ group: stall, ...prop });
+    for (const prop of villageMarketPropsForStall(index)) {
+      villageKitProps.push({ group: stall, ...prop });
+    }
   }
   function buildVillageKitProps() {
     if (disposed || !sceneryReady(VILLAGE_MODELS)) return;
+    const late = { big: [], small: [] }, flame = new THREE.Vector3();
     const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
     const orientation = new THREE.Quaternion(), localOrientation = new THREE.Quaternion();
     const scale = new THREE.Vector3(), axisY = new THREE.Vector3(0, 1, 0);
@@ -1090,12 +1112,18 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
         position.y = heightAt(position.x, position.z) + prop.lift - model.geometry.boundingBox.min.y * size;
         matrix.compose(position, orientation, scale.setScalar(size));
         instances.setMatrixAt(i, matrix);
+        if (name !== 'torch_mounted') return;   // chama do torch_mounted: ~0,92 acima da base e 0,19 à frente
+        const ry = prop.ry || 0;
+        flame.set(prop.x + Math.sin(ry) * 0.19 * prop.scale, 0, prop.z + Math.cos(ry) * 0.19 * prop.scale);
+        prop.group.localToWorld(flame);
+        lateHalo(late, 'big', flame.x, position.y + (model.geometry.boundingBox.min.y + 0.92) * size, flame.z);
       });
       instances.instanceMatrix.needsUpdate = true;
       instances.computeBoundingSphere();
       instances.castShadow = instances.receiveShadow = true;
       scene.add(instances);
     }
+    showHalos(late);
   }
   const solid = (g, x, z, r) => { const p = toWorld(g, x, z); obstacles.push({ x: p.x, z: p.z, r }); };
   // cópias instanciadas a partir de uma lista { p, ry, rx, rz, s }
@@ -1355,6 +1383,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     new THREE.BoxGeometry(0.55, 0.6, 0.14).translate(0, 0.3, 0),
     new THREE.CylinderGeometry(0.275, 0.275, 0.14, 8, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 0.6, 0),
   ].map((g) => g.toNonIndexed()));
+  const graveSpots = [];
   if (sites.cemiterio) {
     const st = sites.cemiterio, g = siteGroup(st), gl = gloomAt(st.z);
     const W = 6, back = -5.5, front = 4.5, bars = [], stones = [];
@@ -1409,6 +1438,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       if (Math.abs(x) < 1 || rand() < 0.15) continue;
       stones.push({ p: toWorld(g, x + range(-0.2, 0.2), 2.6 - row * 1.7 + range(-0.2, 0.2)), ry: g.rotation.y + range(-0.25, 0.25), rz: range(-0.18, 0.18), s: range(0.9, 1.3) });
     }
+    stones.forEach((t, i) => { if (i % 3 === 1) graveSpots.push({ p: t.p, ry: t.ry }); });   // velas do kit (enfeites)
     inst([barGeo, [0xffffff]], bars, new THREE.MeshLambertMaterial({ color: 0x2e2a36, flatShading: true }), false);
     inst([tomb, [0x8a8794, 0x9a97a4, 0x7a7784]], stones);
   }
@@ -1486,6 +1516,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       for (const ex of [-0.07, 0.07]) blk(g, 0x1e1a24, 0.06, 0.06, 0.04, x + ex, 0.22, z + 0.18).castShadow = false;
     }
     solid(g, 0, 0, 1.3);
+    haloIn(halos.big, g.matrixWorld, 0, 0.55, 0);
   }
 
   // ----- 5. Caminho: placa com o número de cada fase e tochas nas regiões claras -----
@@ -1501,6 +1532,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     if (gloomAt(p.z) > 0.3 || roadDist(p.x, p.z) < ROAD + 1.2 || !isFree(p.x, p.z, 0.6)) continue;
     p.y = heightAt(p.x, p.z);
     torches.push({ p, s: 1, ry: 0 });
+    addHalo(halos.big, p.x, p.y + 2.1, p.z);
     obstacles.push({ x: p.x, z: p.z, r: 0.3 });
     blocked.push({ x: p.x, z: p.z, r: 0.9 });
   }
@@ -2036,6 +2068,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     piece(f, D.box, darkWood, x + 0.28, 2.3, z, 0.6, 0.08, 0.08);
     piece(f, D.box, 0xffe08a, x + 0.52, 2.0, z, 0.26, 0.34, 0.26, 0, 0, 0, 'g');
     piece(f, D.cone, 0x3a3a3a, x + 0.52, 2.25, z, 0.42, 0.18, 0.42, 0, Math.PI / 4);
+    haloIn(halos.small, f.m, x + 0.52, 2.0, z);
   }
   function decoBarrel(f, x, z, y = 0, lying = false) {
     if (lying) {
@@ -2074,6 +2107,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     piece(f, D.box, dpick(straw), 1.5, 0.75, -0.8, 1, 0.5, 0.6, 0, 0.1, 0, 's');
   }
   function decoCandles(f) {
+    haloIn(halos.small, f.m, 0, 0.45, 0, VIOLET);
     for (let k = 3 + Math.floor(dr() * 5); k > 0; k--) {
       const x = drange(-0.6, 0.6), z = drange(-0.6, 0.6), h = drange(0.15, 0.45);
       piece(f, D.cyl, 0xd8d0c0, x, h / 2, z, 0.11, h, 0.11);
@@ -2085,10 +2119,12 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       for (const e of [-0.06, 0.06]) piece(f, D.box, 0x241e2a, x + Math.cos(ry) * e + Math.sin(ry) * 0.13, 0.17, z - Math.sin(ry) * e + Math.cos(ry) * 0.13, 0.05);
     }
   }
+  const decoTaken = [];   // paradas já ocupadas (os enfeites do kit, mais abaixo, desviam delas)
   for (let s = 26 + drange(0, 12); s < sMax; s += drange(26, 40)) {
     const p = along(s, (dr() < 0.5 ? -1 : 1) * (ROAD + drange(4.4, 7)));
     if (nearBridge(s) || !decoOk(p, 1.6, 4)) continue;
     const f = frameAt(p.x, p.z, faceRoad(p, s) + drange(-0.7, 0.7)), roll = dr();
+    decoTaken.push({ x: p.x, z: p.z, r: 2.6 });
     if (f.g > 0.5) {
       if (roll < 0.35) decoCart(f, true); else decoCandles(f);
       if (dr() < 0.4) decoBarrel(f, 1.4, 1, 0, true);
@@ -2116,6 +2152,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       piece(f, D.box, darkWood, sx * (BW - 0.15), 1.35, sz * 5, 0.12, 0.6, 0.12);
       piece(f, D.box, darkWood, sx * (BW - 0.15), 1.62, sz * 5, 0.5, 0.07, 0.07);
       piece(f, D.box, 0xffe08a, sx * (BW + 0.05), 1.42, sz * 5, 0.22, 0.28, 0.22, 0, 0, 0, 'g');
+      haloIn(halos.small, f.m, sx * (BW + 0.05), 1.42, sz * 5);
       for (let k = 0; k < 3; k++) piece(f, D.rock, dpick(stoneGrays), sx * (BW + drange(0.4, 1.4)), 0.05, sz * (5.6 + drange(-0.8, 0.8)), drange(0.4, 0.8), drange(0.3, 0.5), drange(0.4, 0.8), 0, dr() * 3);
     }
     for (let z = -4.6; z <= 4.6; z += 0.9) if (dr() < 0.5) piece(f, D.box, 0x9a6a36, drange(-1.5, 1.5), 0.035, z + 0.45, drange(1.5, 3), 0.04, 0.3);
@@ -2186,7 +2223,213 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     piece(b, D.cyl, 0x5a5468, 0, 0.35, 0, 0.3, 0.7, 0.3);
     piece(b, D.cone, 0x6a6478, 0, 0.85, 0, 0.8, 0.4, 0.8, Math.PI);
     piece(b, D.cone, 0xffffff, 0, 1.15, 0, 0.45, 0.6, 0.45, 0, 0, 0, 'p');
+    haloIn(halos.big, b.m, 0, 1.25, 0, VIOLET);
   }
+
+  // ---------- enfeites do kit pronto (Dungeon pack + árvores secas do Forest pack) ----------
+  // Lugares sorteados agora, com semente própria (o resto do mapa não muda); os modelos chegam depois, sem
+  // segurar o carregamento, e viram UMA malha fundida por atlas e faixa de z (≤ 2 chamadas por faixa, com
+  // cor por vértice para apagar rumo ao castelo). Só visual: nada entra em obstacles, e tudo fica fora da
+  // estrada (decoOk). Gráficos leves: metade dos grupos (os mesmos lugares; só pula um sim, outro não).
+  let kitSeed = (Math.abs(Math.trunc(seedValue * 104723 + 7)) % 2147483646) + 1;
+  const kr = () => (kitSeed = (kitSeed * 48271) % 2147483647) / 2147483647;
+  const krange = (a, b) => a + (b - a) * kr();
+  const kpick = (list) => list[Math.floor(kr() * list.length)];
+  const kitList = [], kitTaken = [];
+  let kitGroups = 0;
+  // quadro de um grupo; skip (gráficos leves) mantém o sorteio igual e só não desenha
+  const kitFrame = (x, z, ry, y) => { const f = frameAt(x, z, ry, y); f.skip = lowDetail && kitGroups++ % 2 === 1; return f; };
+  // modelo na posição local do quadro, com a base no chão (raw: a origem do modelo fica em y)
+  const kit = (f, name, x, y, z, ry = 0, sc = 1, extra = null) => { if (!f.skip) kitList.push({ name, f, x, y, z, ry, s: sc, ...extra }); };
+  const kp = (f, ...args) => { if (!f.skip) piece(f, ...args); };
+  const kitOk = (p, r, minLat) => decoOk(p, r, minLat) && ![...decoTaken, ...kitTaken].some((o) => Math.hypot(o.x - p.x, o.z - p.z) < o.r + r);
+  function kitSpot(min, max, r, sFrom = 6, sTo = sMax, gMin = 0, gMax = 1) {
+    const s = krange(sFrom, sTo), p = along(s, (kr() < 0.5 ? -1 : 1) * (ROAD + krange(min, max)));
+    if (nearBridge(s) || !kitOk(p, r, min - 0.3)) return null;
+    const g = gloomAt(p.z);
+    if (g < gMin || g > gMax) return null;
+    kitTaken.push({ x: p.x, z: p.z, r });
+    return { s, p };
+  }
+  function campfire(f, x, z) {
+    for (let k = 0; k < 7; k++) { const a = k * 0.9 + kr() * 0.3; kp(f, D.rock, kpick(stoneGrays), x + Math.cos(a) * 0.5, 0.08, z + Math.sin(a) * 0.5, 0.26, 0.18, 0.24, 0, a); }
+    for (const ry of [0.4, 2.1]) kp(f, D.cyl, 0x5e3b1d, x, 0.12, z, 0.14, 0.75, 0.14, 0, ry, Math.PI / 2);
+    kp(f, D.cone, 0xffffff, x, 0.38, z, 0.36, 0.55, 0.36, 0, 0, 0, 'g');
+    kp(f, D.cone, 0xffffff, x + 0.08, 0.3, z - 0.06, 0.22, 0.36, 0.22, 0, 1, 0, 'g');
+    if (!f.skip) haloIn(halos.big, f.m, x, 0.8, z);
+  }
+  // barraca de lona em A (duas águas) com as pontas em madeira
+  function tent(f, x, z, ry, cloth) {
+    for (const sx of [-1, 1]) kp(f, D.box, cloth, x + Math.cos(ry) * sx * 0.5, 0.62, z - Math.sin(ry) * sx * 0.5, 1.5, 0.05, 2.2, 0, ry, sx * -0.92, 's');
+    for (const sz of [-1, 1]) kp(f, D.box, 0x5e3b1d, x + Math.sin(ry) * sz * 1.05, 0.62, z + Math.cos(ry) * sz * 1.05, 0.08, 1.3, 0.08, 0, ry, 0);
+  }
+  // halo: [tipo, x, y, z(, cor)] no quadro do grupo; entra junto com o modelo (buildKitProps)
+  const torchStick = (f, x, z, sc = 1.7) => kit(f, 'torch_lit', x, 0, z, kr() * 6.3, sc, { halo: ['big', x, 0.9 * sc, z] });
+
+  // acampamentos de viajantes nas terras vivas: fogueira, barraca, banquinhos, mesinha com garrafa e prato
+  const clothes = [0xe8d2a0, 0xd9604a, 0x6f9ad6, 0x8bc34a];
+  for (let n = 0, made = 0; n < 300 && made < 7; n++) {
+    const at = kitSpot(4.6, 12, 2.1, 8, sMax, 0, 0.4);
+    if (!at) continue;
+    made++;
+    const f = kitFrame(at.p.x, at.p.z, faceRoad(at.p, at.s) + krange(-0.5, 0.5));
+    campfire(f, 0, 0.3);
+    if (kr() < 0.7) tent(f, krange(-0.4, 0.4), -1.9, krange(-0.3, 0.3), kpick(clothes));
+    for (const a of [0.6, 2.4]) kit(f, 'stool', Math.cos(a) * 1.25, 0, 0.3 + Math.sin(a) * 1.25, kr() * 6.3, 0.62);
+    kit(f, 'table_small', 1.6, 0, -0.7, kr(), 0.62);
+    kit(f, 'bottle_A_green', 1.5, 0.62, -0.65, kr() * 6.3, 0.42);
+    kit(f, 'plate_food_B', 1.72, 0.62, -0.82, kr() * 6.3, 0.34);
+    if (kr() < 0.6) kit(f, 'keg', -1.7, 0, -0.6, krange(-0.4, 0.4) + Math.PI / 2, 0.42);
+    else kit(f, 'trunk_medium_A', -1.6, 0, -0.5, krange(-0.4, 0.4), 0.7);
+    torchStick(f, -1.4, 1.3, 1.5);
+  }
+  // cargas de mercador perto da vila e das fazendas: caixas, baú e barril
+  for (let n = 0, made = 0; n < 200 && made < 5; n++) {
+    const at = kitSpot(3.4, 6.5, 1.7, 8, anchorS(6) + 10, 0, 0.35);
+    if (!at) continue;
+    made++;
+    const f = kitFrame(at.p.x, at.p.z, faceRoad(at.p, at.s) + krange(-0.6, 0.6));
+    kit(f, 'box_large', 0, 0, 0, krange(-0.2, 0.2), 0.55);
+    kit(f, 'box_small', krange(-0.1, 0.1), 0.82, 0, krange(-0.5, 0.5), 0.5);
+    kit(f, 'box_small', 0.85, 0, 0.25, krange(-0.5, 0.5), 0.5);
+    kit(f, kr() < 0.5 ? 'trunk_small_B' : 'trunk_medium_A', -0.9, 0, 0.35, krange(-0.6, 0.6), 0.8);
+    if (kr() < 0.5) kit(f, 'keg', 0.2, 0, -1.1, krange(-0.3, 0.3), 0.4);
+  }
+  // estandartes em postes na entrada da vila e nas cabeceiras da ponte
+  const bannerAt = (s, side, name) => {
+    const p = along(s, side * (ROAD + 2.4));
+    if (!kitOk(p, 0.5, 2)) return;
+    const f = kitFrame(p.x, p.z, faceRoad(p, s));
+    kp(f, D.box, 0x5e3b1d, 0, 1.55, -0.12, 0.14, 3.1, 0.14, 0, 0, 0, 's');
+    kp(f, D.cone, 0xd9a83a, 0, 3.18, -0.12, 0.2, 0.2, 0.2, 0, Math.PI / 4);
+    kit(f, name, 0, 3.0 - 3.73 * 0.55, 0, 0, 0.55, { raw: true });   // a barra do estandarte no alto do poste
+  };
+  for (const side of [-1, 1]) {
+    bannerAt(anchorS(2) - 14, side, 'banner_thin_yellow');
+    for (const ds of [-10, 10]) if (gloomAt(pointAt(crossS + ds).z) < 0.4) bannerAt(crossS + ds, side, 'banner_patternB_blue');
+  }
+
+  // ruínas no meio do caminho: pedaços de muralha, colunas e entulho (longe da estrada: não cobrem a câmera)
+  for (let n = 0, made = 0; n < 300 && made < 9; n++) {
+    const at = kitSpot(8, 16, 2.2, anchorS(5), anchorS(10), 0.15, 0.8);
+    if (!at) continue;
+    made++;
+    const f = kitFrame(at.p.x, at.p.z, faceRoad(at.p, at.s) + krange(-0.8, 0.8));
+    kit(f, kr() < 0.5 ? 'wall_broken' : 'wall_half', 0, 0, -0.6, krange(-0.15, 0.15), 0.62);
+    kit(f, 'column', krange(1.6, 2.2), 0, 0.4, kr() * 6.3, 0.9);
+    if (kr() < 0.6) kit(f, 'column', -1.9, 0.32, 0.6, kr() * 6.3, 0.9, { rz: Math.PI / 2, raw: true });   // coluna tombada
+    kit(f, 'rubble_half', krange(-0.6, 0.6), 0, 1.3, kr() * 6.3, 0.3);
+    if (kr() < 0.35) kit(f, 'sword_shield_broken', 1, 0.5, 1.4, krange(-0.6, 0.6), 0.55, { rx: -0.25, raw: true });
+  }
+
+  // tochas fincadas na beira da estrada onde os postes de lampião acabam (até os braseiros roxos do castelo)
+  for (let s = 18, k = 0; s < castleS - 36; s += 13, k++) {
+    const side = k % 2 ? -1 : 1, p = along(s, side * (ROAD + 2.4));
+    if (nearBridge(s) || gloomAt(p.z) <= 0.3 || !kitOk(p, 0.4, 1.8)) continue;
+    torchStick(kitFrame(p.x, p.z, 0), 0, 0);
+  }
+
+  // terras sombrias: acampamentos largados (mesa quebrada, baú com moedas, garrafas, velas) e árvores secas do pack
+  for (let n = 0, made = 0; n < 250 && made < 6; n++) {
+    const at = kitSpot(3.6, 9, 1.9, 8, sMax, 0.5, 1);
+    if (!at) continue;
+    made++;
+    const f = kitFrame(at.p.x, at.p.z, faceRoad(at.p, at.s) + krange(-0.7, 0.7));
+    kit(f, 'table_medium_broken', 0, 0, -0.3, krange(-0.4, 0.4), 0.55);
+    kit(f, 'stool', 1.1, 0.19, 0.5, kr() * 6.3, 0.6, { rx: Math.PI / 2, raw: true });   // banquinho tombado
+    kit(f, kpick(['bottle_C_green', 'bottle_B_brown']), -0.7, 0.14, 0.8, kr() * 6.3, 0.45, { rz: Math.PI / 2, raw: true });
+    if (kr() < 0.5) { kit(f, 'chest', -1.3, 0, -0.5, krange(-0.5, 0.5), 0.4); kit(f, 'coin_stack_small', -0.7, 0, -1.1, kr() * 6.3, 0.45); }
+    [[0.6, -1.1], [-0.2, 1.2]].forEach(([x, z], i) => kit(f, kr() < 0.5 ? 'candle_melted' : 'candle_lit', x, 0, z, 0, 0.45,
+      i ? null : { halo: ['small', 0.2, 0.45, 0] }));
+  }
+  for (let n = 0, made = 0; n < 400 && made < 26; n++) {
+    const at = kitSpot(3, 18, 0.9, 6, sMax, 0.45, 1);
+    if (!at) continue;
+    made++;
+    const f = kitFrame(at.p.x, at.p.z, kr() * 6.3);
+    kit(f, `${kpick(['Tree_Bare_1_A', 'Tree_Bare_1_B', 'Tree_Bare_2_A'])}_Color1`, 0, 0, 0, 0, krange(0.75, 1.15), { raw: true, tint: 0x9a8f98 });
+  }
+  // velas acesas no pé de algumas lápides do cemitério
+  for (const t of graveSpots) {
+    const f = kitFrame(t.p.x, t.p.z, t.ry);
+    kit(f, 'candle_lit', krange(-0.15, 0.15), 0, 0.32, 0, 0.42, { halo: ['small', 0, 0.42, 0.32] });
+    if (kr() < 0.5) kit(f, 'candle_melted', 0.22, 0, 0.36, 0, 0.36);
+  }
+
+  // castelo do necromante: tochas de parede nas torres do portão e no muro (chama do modelo, brilho sem luz)
+  castle.updateMatrix();
+  { const f = { z: castle.position.z, g: gloomAt(castle.position.z), m: castle.matrix.clone() };
+    for (const sx of [-1, 1]) {
+      for (const [x, y, z] of [[sx * (ROAD + 1.4), 3, 1.95], [sx * (ROAD + 3.6), 3.2, 0.82], [sx * (ROAD + 10), 3.2, 0.82], [sx * (ROAD + 17.5), 3.2, 0.82]]) {
+        kit(f, 'torch_mounted', x, y, z, 0, 1.1, { raw: true, halo: ['big', x, y + 0.6, z + 0.25] });
+      }
+    }
+  }
+  // salão do trono: brilho nas tochas de parede (as luzes de verdade já estão lá)
+  if (castleInterior) {
+    const t = tangentAt(interiorArenaS), hm = new THREE.Matrix4().compose(pointAt(interiorArenaS),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.atan2(-t.x, -t.z), 0)), new THREE.Vector3(1, 1, 1));
+    for (const sx of [-1, 1]) {
+      for (const z of [-7, 6, 19]) haloIn(halos.big, hm, sx * 15.5, 4.05, z);
+      haloIn(halos.big, hm, sx * 2.2, 4.1, -21.45);
+    }
+  }
+
+  // junta os modelos do kit numa malha por atlas e faixa: posição, normal, uv e a cor (apagada pelas trevas).
+  // Por item: monta só o que já está no cache e ainda não foi montado (pode ser chamada de novo quando outro
+  // pacote chegar); o halo de cada tocha/vela entra junto com o seu modelo.
+  const kitMats = new Map();
+  function buildKitProps() {
+    if (disposed) return;
+    const buckets = new Map(), late = { big: [], small: [] };
+    const local = new THREE.Matrix4(), full = new THREE.Matrix4(), nm = new THREE.Matrix3(), q = new THREE.Quaternion(),
+      e = new THREE.Euler(), v = new THREE.Vector3(), sv = new THREE.Vector3(), col = new THREE.Color();
+    for (const k of kitList) {
+      const model = !k.done && sceneryModel(k.name);
+      if (!model) continue;
+      k.done = true;
+      const { geometry: geo, material } = model;
+      if (!geo.attributes.normal) geo.computeVertexNormals();   // modelo sem normal: calcula uma vez (fica no cache)
+      if (k.halo) { const [kind, hx, hy, hz, color] = k.halo; v.set(hx, hy, hz).applyMatrix4(k.f.m); lateHalo(late, kind, v.x, v.y, v.z, color); }
+      const key = `${material.uuid}|${Math.floor(k.f.z / INSTANCE_BAND)}`;
+      let b = buckets.get(key);
+      if (!b) buckets.set(key, (b = { material, pos: [], nrm: [], uv: [], col: [], idx: [] }));
+      local.compose(v.set(k.x, k.raw ? k.y : k.y - geo.boundingBox.min.y * k.s, k.z), q.setFromEuler(e.set(k.rx || 0, k.ry, k.rz || 0)), sv.setScalar(k.s));
+      full.multiplyMatrices(k.f.m, local);
+      nm.getNormalMatrix(full);
+      col.set(k.tint ?? 0xffffff).lerp(gloomTint, k.f.g * 0.55);
+      const p = geo.attributes.position, n = geo.attributes.normal, uv = geo.attributes.uv, base = b.pos.length / 3;
+      for (let i = 0; i < p.count; i++) {
+        v.fromBufferAttribute(p, i).applyMatrix4(full);
+        b.pos.push(v.x, v.y, v.z);
+        v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize();
+        b.nrm.push(v.x, v.y, v.z);
+        b.uv.push(uv ? uv.getX(i) : 0, uv ? uv.getY(i) : 0);
+        b.col.push(col.r, col.g, col.b);
+      }
+      if (geo.index) for (let i = 0; i < geo.index.count; i++) b.idx.push(base + geo.index.getX(i));
+      else for (let i = 0; i < p.count; i++) b.idx.push(base + i);
+    }
+    for (const b of buckets.values()) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nrm, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+      g.setIndex(b.idx);
+      g.computeBoundingSphere();
+      if (!kitMats.has(b.material)) kitMats.set(b.material, new THREE.MeshLambertMaterial({ map: b.material.map, vertexColors: true }));
+      const m = new THREE.Mesh(g, kitMats.get(b.material));
+      m.castShadow = m.receiveShadow = true;
+      scene.add(m);
+    }
+    showHalos(late);
+  }
+  // as tochas de parede (torch_mounted) vêm do pacote Dungeon: se ele ainda não chegou (mundo do menu), espera
+  if (kitList.length) preloadSceneryProps().then(() => {
+    buildKitProps();
+    if (!disposed && kitList.some((k) => !k.done && DUNGEON_MODELS.includes(k.name))) preloadSceneryAssets({ castle: true }).then(buildKitProps);
+  });
 
   for (const b of decoBuckets.values()) {
     const g = new THREE.BufferGeometry();
@@ -2228,6 +2471,24 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     depthWrite: false, blending: THREE.AdditiveBlending }));
   motePoints.frustumCulled = false;
   scene.add(motePoints);
+  // halos das chamas (tochas, braseiros, fogueiras, lampiões e velas): mais fortes nas trevas, piscam com a lanterna
+  const haloMats = [];
+  function makeHaloPoints(list, kind) {
+    const size = kind === 'big' ? 2.2 : 1.2;
+    const pos = new Float32Array(list.length * 3), col = new Float32Array(list.length * 3);
+    list.forEach((h, i) => { pos.set([h.x, h.y, h.z], i * 3); c.set(h.color).multiplyScalar(0.35 + 0.65 * h.g).toArray(col, i * 3); });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.computeBoundingSphere();
+    const material = new THREE.PointsMaterial({ size, map: moteTex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const points = new THREE.Points(geo, material);
+    points.renderOrder = 2;
+    scene.add(points);
+    haloMats.push(material);
+  }
+  for (const kind of ['big', 'small']) if (halos[kind].length) makeHaloPoints(halos[kind], kind);
+  haloPoints = makeHaloPoints;   // halos que chegarem com os modelos depois daqui viram Points próprios
   const dayMote = new THREE.Color({ Pradaria: 0xfff0a0, Outono: 0xffc070, 'Pântano': 0xc8ffb0, 'Crepúsculo': 0xb8d8ff, Cinzas: 0xffa36b }[biome.name]).multiplyScalar(0.55);
   const flyA = new THREE.Color(0xb8ff5a), flyB = new THREE.Color(0xc89cff), moteC = new THREE.Color(), flyC = new THREE.Color();
   // folhas caindo e girando (só nas terras vivas)
@@ -2342,6 +2603,7 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
       right.instanceMatrix.needsUpdate = true;
     }
     lantern.emissiveIntensity = 0.9 + Math.sin(time * 9) * 0.1 + Math.sin(time * 23) * 0.05;
+    for (const m of haloMats) m.opacity = lantern.emissiveIntensity * 0.9;
     water.material.color.copy(riverTint).offsetHSL(0, 0, Math.sin(time * 1.5) * 0.02);
     for (const lake of lakes) lake.material.opacity = 0.8 + Math.sin(time * 1.8) * 0.04;
     for (const cl of clouds) { cl.position.x += dt * 0.8; if (cl.position.x > 90) cl.position.x = -90; }

@@ -16,6 +16,13 @@ export const VILLAGE_MODELS = ['barrel_small', 'crates_stacked', 'chair', 'torch
 export const DUNGEON_MODELS = ['floor_tile_large', 'wall', 'pillar_decorated', 'pillar',
   'banner_thin_red', 'barrel_large', 'barrel_small_stack', 'chest_gold', 'candle_triple', 'sword_shield', 'rubble_large',
   ...VILLAGE_MODELS];
+// enfeites da beira da estrada (acampamentos, ruínas, tochas, terras sombrias): carregam depois do mapa,
+// sem segurar a tela de carregamento; viram poucas malhas fundidas por faixa (world.js, kitProps)
+export const PROP_MODELS = ['torch_lit', 'candle_lit', 'candle_melted', 'table_small', 'table_medium_broken', 'stool',
+  'bottle_A_green', 'bottle_B_brown', 'bottle_C_green', 'plate_food_B', 'keg', 'box_large', 'box_small', 'trunk_medium_A',
+  'trunk_small_B', 'wall_half', 'wall_broken', 'column', 'rubble_half', 'sword_shield_broken', 'chest', 'coin_stack_small',
+  'banner_thin_yellow', 'banner_patternB_blue'];
+export const PROP_TREES = ['Tree_Bare_1_A', 'Tree_Bare_1_B', 'Tree_Bare_2_A'].map((n) => `${n}_Color1`);
 
 // lista de arquivos (para a tela de carregamento); castle = true inclui as peças do salão e da vila.
 export function sceneryAssetFiles({ castle = false } = {}) {
@@ -29,7 +36,8 @@ export function sceneryAssetFiles({ castle = false } = {}) {
 }
 
 const cache = new Map();   // nome -> { geometry, material }
-const packs = {};          // 'forest' | 'dungeon' -> Promise<boolean>
+const packs = {};          // 'forest' | 'dungeon' | 'props' | 'propTrees' -> Promise<boolean>
+const sharedByDir = {};    // pacotes da mesma pasta usam o mesmo atlas: um material (e uma textura) só
 let loader = null;
 
 // Junta as malhas do gltf (com a transformação de cada nó) numa geometria só, com um material Lambert
@@ -40,6 +48,7 @@ function extract(gltf, shared) {
   gltf.scene.traverse((o) => {
     if (!o.isMesh) return;
     const g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    if (!g.attributes.normal) g.computeVertexNormals();   // sem normal o Lambert e a fusão (mergeGeometries) quebram
     for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
     geos.push(g);
     if (!shared.material && o.material?.map) {
@@ -59,12 +68,16 @@ function extract(gltf, shared) {
 function loadPack(key, dir, names) {
   if (packs[key]) return packs[key];
   loader ??= new GLTFLoader();
-  const shared = { material: null };
-  packs[key] = Promise.all(names.map((name) => loader.loadAsync(`${dir}${name}.gltf`).then((gltf) => [name, extract(gltf, shared)])))
+  const shared = (sharedByDir[dir] ??= { material: null });
+  // cada modelo carrega por conta própria: o que chegar fica no cache mesmo se outro do pacote falhar.
+  // true só com o pacote inteiro (quem precisa de todos continua no procedural)
+  packs[key] = Promise.all(names.map((name) => loader.loadAsync(`${dir}${name}.gltf`)
+    .then((gltf) => [name, extract(gltf, shared)])
+    .catch((e) => { console.warn(`cenário pronto: ${name} não carregou`, e); return [name, null]; })))
     .then((list) => {
-      if (!shared.material || list.some(([, g]) => !g)) return false;
-      for (const [name, geometry] of list) cache.set(name, { geometry, material: shared.material });
-      return true;
+      if (!shared.material) return false;
+      for (const [name, geometry] of list) if (geometry) cache.set(name, { geometry, material: shared.material });
+      return list.every(([, g]) => g);
     })
     .catch((e) => { console.warn('cenário pronto não carregou; usando o procedural', e); return false; });
   return packs[key];
@@ -76,6 +89,13 @@ export function preloadSceneryAssets({ castle = false } = {}) {
   const forest = loadPack('forest', FOREST_DIR, FOREST_MODELS);
   if (!castle) return forest;
   return Promise.all([forest, loadPack('dungeon', DUNGEON_DIR, DUNGEON_MODELS)]).then(([a, b]) => a && b);
+}
+// Enfeites extras (Dungeon + árvores secas do Forest): pedidos pelo mapa depois de montado. Resolve quando os
+// dois pacotes terminam (true se algum veio inteiro); quem usa monta por item o que estiver no cache.
+export function preloadSceneryProps() {
+  if (typeof document === 'undefined') return Promise.resolve(false);
+  return Promise.all([loadPack('props', DUNGEON_DIR, PROP_MODELS), loadPack('propTrees', FOREST_DIR, PROP_TREES)])
+    .then(([a, b]) => a || b);
 }
 export const sceneryModel = (name) => cache.get(name) || null;
 export const sceneryReady = (names) => names.every((n) => cache.has(n));
