@@ -133,6 +133,11 @@ const EXTRA_SKILLS = {
     { name: 'Alfa Ancestral', description: 'Fortalece a fera, recupera parte de sua vida e a faz golpear em uma onda de impacto.', effect: 'alpha-beast', cooldown: 70, radius: 5.5, duration: 8, power: 2.1, color: 0xe5ca75 },
     { name: 'Comando de Ataque', description: 'A fera salta no inimigo prioritário, morde e o faz sangrar; sem fera, o Domador lança uma rede.', effect: 'sic-em', targeting: 'enemy', cooldown: 17, range: 10, power: 1.4, duration: 4, color: 0xcbb36f },
   ],
+  runic: [
+    { name: 'Runas de Grupo', description: 'Cada aliado próximo ganha uma runa fraca: absorve pouco dano, mas dura mais.', effect: 'rune-ward', cooldown: 20, radius: 6, duration: 12, color: 0x6fd8e0 },
+    { name: 'Cúpula Rúnica', description: 'Uma cúpula de runas por alguns segundos: quem está dentro não cai abaixo de 1 de vida e os inimigos que a tocam são afastados.', effect: 'rune-dome', cooldown: 72, radius: 4.5, duration: 5, control: 'push', color: 0x6fd8e0 },
+    { name: 'Pulso Rúnico', description: 'Um pulso afasta e atrasa os inimigos colados e deixa uma runa pequena em quem o lançou.', effect: 'rune-pulse', cooldown: 16, radius: 3.4, duration: 1.5, control: 'push', color: 0x6fd8e0 },
+  ],
   summoner: [
     { name: 'Golem', description: 'Um golem de pedra provoca os inimigos próximos e dá pancadas que atordoam.', effect: 'stone-golem', cooldown: 22, radius: 4.5, duration: 15, control: 'stun', color: 0xd8c29a },
     { name: 'Dragãozinho', description: 'Um dragãozinho voa até os inimigos e cospe fogo em cone, deixando-os queimando.', effect: 'little-dragon', cooldown: 68, radius: 4.5, duration: 18, control: 'burn', color: 0xff7a3a },

@@ -34,6 +34,7 @@ const VARIANT_INFO = {
   alchemist: ['Poções e controle', 'Arremessa um frasco: o tônico cura quem pisa na poça; sem feridos, o veneno fere os inimigos aos poucos.', 'Deixe as poças onde a briga acontece. A transmutação desarma hordas de inimigos comuns.'],
   engineer: ['Construção e controle', 'Monta uma torre por alguns segundos. Ela escolhe ameaças próximas e dispara automaticamente; o pulso eletromagnético interrompe inimigos agrupados.', 'Posicione a torre perto da frente sem deixá-la exposta. A ultimate acelera e fortalece uma torre ativa; sem uma, ergue outra.'],
   beast_tamer: ['Invocação e proteção', 'Chama uma fera temporária que luta perto do grupo e prioriza inimigos que ameaçam os aliados.', 'O rugido da fera atrai a atenção dos inimigos; a ultimate a fortalece e ampara aliados ao redor. A fera não ocupa uma vaga de herói.'],
+  runic: ['Escudos e runas', 'Põe uma runa-escudo no aliado mais ferido: ela absorve dano e, ao quebrar, cura um pouco e empurra quem está colado.', 'Cubra o grupo antes da onda. As runas de grupo são fracas mas duram; a cúpula segura todos com 1 de vida.'],
   summoner: ['Invocação e cura', 'Invoca uma fada que segue o aliado mais ferido e o cura em pulsos por alguns segundos.', 'O golem provoca e atordoa quem chega perto; o dragãozinho cospe fogo em cone. Uma criatura de cada tipo; chamar de novo renova.'],
   oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Passo Previsto durante um aviso para garantir que os heróis tentem escapar. Destino Reescrito interrompe ameaças próximas.'],
   brute: ['Tanque pesado', 'Soca o chão: atordoa por instantes e provoca quem está em volta. Golpes fracos quase não o ferem (−3 por golpe).', 'Deixe-o na frente contra hordas. Mais lento e com menos dano que o Guardião, mas aguenta mais.'],
@@ -50,6 +51,7 @@ const TEAM_ROLE_RULES = {
   archer: ['À distância', 'Área', 'Dano a chefe'], monk: ['Defesa', 'Controle', 'Cura'], alchemist: ['À distância', 'Cura', 'Controle'],
   engineer: ['À distância', 'Área', 'Controle'], beast_tamer: ['Defesa', 'Controle', 'Dano a chefe'], oracle: ['À distância', 'Controle', 'Dano a chefe'],
   brute: ['Defesa', 'Controle'],
+  runic: ['Defesa', 'Cura', 'Controle'],
   summoner: ['À distância', 'Cura', 'Controle'],
 };
 const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];

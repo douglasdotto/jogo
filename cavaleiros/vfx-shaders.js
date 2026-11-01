@@ -21,6 +21,7 @@ export const PALETTES = {
   hunt:   { core: 0xeafff8, mid: 0x5ff0c8, edge: 0x1f9a7a },   // Arqueira: verde-água da marca de caça
   venom:  { core: 0xf0ffb0, mid: 0x9cff3a, edge: 0x3f9a1a },   // Alquimista: veneno borbulhando
   tonic:  { core: 0xfff0fb, mid: 0xff8ad8, edge: 0xc23a9a },   // Alquimista: tônico e transmutação
+  runic:  { core: 0xeafcff, mid: 0x6fd8e0, edge: 0x2e7d8c },   // Rúnica: runas e escudos azul-petróleo
 };
 
 const vfxTime = { value: 0 };
