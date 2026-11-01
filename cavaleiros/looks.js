@@ -292,6 +292,17 @@ export const LOOKS = {
       { type: 'flask', bone: 'handslotr', liquid: 0x9cff3a, size: 1.2 },
     ],
   },
+  cook: {   // cozinheira de campanha: túnica creme, calça terracota, avental, chapéu alto e concha na mão
+    shape: silhouette('Barbarian', { torso: 1.06, arms: 0.96, legs: 1, height: 0.97, depth: 1.08 }),
+    hide: ['1H_Axe_Offhand', 'Barbarian_Round_Shield', '1H_Axe', '2H_Axe', 'Mug'],
+    paint: {
+      ...outfit('Barbarian', '#f6ecd8', '#b8442e', 0.8), ...face('Barbarian', { skin: '#f0c49e', hair: '#7a4a2a' }),
+    },
+    extras: [
+      { type: 'chefHat', bone: 'head' }, { type: 'apron', bone: 'hips' },
+      { type: 'ladle', bone: 'handslotr' },
+    ],
+  },
   // ---------- Bárbaro (tanque) ----------
   // gigante de punhos (como o Barbarian large): ombros, braços e punhos enormes, cabeça pequena, pernas curtas e grossas,
   // costas curvadas; pele curtida, tanga de pele com cinto largo, ombreira de pedra de um lado só e corrente no peito
@@ -387,6 +398,7 @@ export const LOOK_PREVIEW = [
   { id: 'vampire', name: 'Vampira', model: 'Mage', use: [] },
   { id: 'lancer', name: 'Lanceiro', model: 'Knight', use: [] },
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
+  { id: 'cook', name: 'Cozinheira', model: 'Barbarian', use: [] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],

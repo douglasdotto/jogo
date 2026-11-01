@@ -34,6 +34,7 @@ const VARIANT_INFO = {
   alchemist: ['Poções e controle', 'Arremessa um frasco: o tônico cura quem pisa na poça; sem feridos, o veneno fere os inimigos aos poucos.', 'Deixe as poças onde a briga acontece. A transmutação desarma hordas de inimigos comuns.'],
   engineer: ['Construção e controle', 'Monta uma torre por alguns segundos. Ela escolhe ameaças próximas e dispara automaticamente; o pulso eletromagnético interrompe inimigos agrupados.', 'Posicione a torre perto da frente sem deixá-la exposta. A ultimate acelera e fortalece uma torre ativa; sem uma, ergue outra.'],
   beast_tamer: ['Invocação e proteção', 'Chama uma fera temporária que luta perto do grupo e prioriza inimigos que ameaçam os aliados.', 'O rugido da fera atrai a atenção dos inimigos; a ultimate a fortalece e ampara aliados ao redor. A fera não ocupa uma vaga de herói.'],
+  cook: ['Comida que cura', 'Arremessa uma torta no chão: quem estiver nela se cura aos poucos e bate um pouco mais forte.', 'Jogue a torta onde o grupo briga. A marmita acelera um aliado e o banquete cura todos e agiliza as habilidades.'],
   summoner: ['Invocação e cura', 'Invoca uma fada que segue o aliado mais ferido e o cura em pulsos por alguns segundos.', 'O golem provoca e atordoa quem chega perto; o dragãozinho cospe fogo em cone. Uma criatura de cada tipo; chamar de novo renova.'],
   vampire: ['Cura roubando vida', 'Rasga os inimigos à frente com uma garra; o dano causado vira cura no aliado mais ferido.', 'O vínculo divide o dano entre dois aliados. Na noite de sangue o grupo todo cura ao bater: comece a briga antes de ativar.'],
   oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Passo Previsto durante um aviso para garantir que os heróis tentem escapar. Destino Reescrito interrompe ameaças próximas.'],
@@ -55,6 +56,7 @@ const TEAM_ROLE_RULES = {
   lancer: ['Defesa', 'Controle', 'Área'],
   summoner: ['À distância', 'Cura', 'Controle'],
   vampire: ['À distância', 'Cura'],
+  cook: ['À distância', 'Cura'],
 };
 const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];
 const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe');
@@ -106,5 +108,5 @@ export const SKILL_LEVEL_CAP = 3;
 export const skillLevel = (level) => Math.min(level, SKILL_LEVEL_CAP);
 
 export function skillCooldown(id, level = 1, rate = 1) {
-  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 10, bard: 10, angel: 10, chronist: 8, brute: 8, lancer: 9, summoner: 15 }[id] ?? 6) - (skillLevel(level) - 1) * 0.7) * rate;
+  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 10, bard: 10, angel: 10, chronist: 8, brute: 8, lancer: 9, summoner: 15, cook: 10 }[id] ?? 6) - (skillLevel(level) - 1) * 0.7) * rate;
 }

@@ -1332,6 +1332,30 @@ const ACCESSORIES = {
     g.add(new THREE.Mesh(merged(bells), gold));
     return g;
   },
+  // chapéu de cozinheira: faixa e copa fofa de gomos (cabeça: y 0 a 1.07 no osso)
+  chefHat({ color = 0xfffaf0, trim = 0xe8dcc4 } = {}) {
+    const g = new THREE.Group(), cloth = lambert(color);
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.5, 0.2, 12).translate(0, 0.98, 0), lambert(trim)));
+    const puffs = [piece(new THREE.SphereGeometry(0.3, 8, 6), [0, 1.3, 0], [0, 0, 0], [1, 0.85, 1])];
+    for (const a of [0, 2.1, 4.2]) puffs.push(piece(new THREE.SphereGeometry(0.2, 7, 5), [Math.sin(a) * 0.3, 1.2, Math.cos(a) * 0.3]));
+    g.add(new THREE.Mesh(merged(puffs), cloth));
+    g.rotation.z = 0.06;
+    return g;
+  },
+  // avental: peitilho e saia curta na frente do quadril, com faixa e bolso (osso do quadril)
+  apron({ color = 0xfff4e0, trim = 0xd9533f, y = 0.1 } = {}) {
+    const g = new THREE.Group(), span = Math.PI * 0.62, start = -span / 2;
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.44, 0.62, 14, 1, true, start, span).scale(1.32, 1, 1.06).translate(0, y - 0.28, 0), lambert(color, { side: THREE.DoubleSide })));
+    g.add(new THREE.Mesh(merged([piece(new THREE.BoxGeometry(0.34, 0.07, 0.04), [0, y - 0.04, 0.5]), piece(new THREE.BoxGeometry(0.2, 0.15, 0.03), [0, y - 0.3, 0.57])]), lambert(trim)));
+    return g;
+  },
+  // concha de sopa na mão: cabo comprido e bojo de metal (osso da mão)
+  ladle({ metal = 0xc9ced6, grip = 0x8a5a32 } = {}) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.62, 6).translate(0, 0.28, 0), lambert(grip)));
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55).rotateX(Math.PI).translate(0, 0.66, 0), lambert(metal, { side: THREE.DoubleSide })));
+    return g;
+  },
   // cristal de gelo flutuando na mão
   iceShard() {
     const g = new THREE.Group();
