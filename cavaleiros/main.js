@@ -136,6 +136,9 @@ const VARIANTS = [
     use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, model: 'Barbarian', hp: 185, dmg: 11, range: 5.5, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Throw'], classId: 4, pickGroup: 'cook' },
   { id: 'shaman', names: ['Xamã', 'Guardião dos Totens', 'Voz dos Ancestrais'], desc: 'Planta totens que curam e seguram a horda.', ability: 'Totem de cura', color: ['#8fe6b8', '#3f9a72'],
     model: 'Barbarian', use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 14, range: 6, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'shaman' },
+  // ladino frágil que protege pelas cópias: provoca com imagens ilusórias (class Illusion) e some do golpe com a Miragem
+  { id: 'illusionist', names: ['Ilusionista', 'Mestre dos Espelhos', 'Senhor das Miragens'], desc: 'Cópias ilusórias atraem os golpes.', ability: 'Cópia ilusória', color: ['#d8c4ff', '#8a5ad8'],
+    use: ['Knife'], stats: { Vida: 2, Força: 2, Rapidez: 4, Alcance: 1 }, model: 'Rogue_Hooded', hp: 190, dmg: 15, range: 1.4, speed: 3.6, cooldown: 0.75, classId: 3 },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   // quem herda o respiro padrão alterna entre os dois idles do pacote (Idle_A/Idle_B), para o grupo parado não respirar em coro
   ...(!v.idle && HEROES[v.classId].idle === 'Idle' && v.id.length % 2 && { idle: 'Idle_B' }),
@@ -147,7 +150,7 @@ const PICK_GROUPS = [
   { id: 'guerreiros', name: 'Guerreiros', icon: '♜', heroes: ['paladin', 'guardian', 'champion', 'king', 'brute', 'lancer'] },
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner', 'geomancer'] },
-  { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
+  { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer', 'illusionist'] },
   { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook', 'shaman'] },
 ];
 const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
@@ -1632,10 +1635,10 @@ function evolutionGain(hero, id) {
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
-    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall']);
+    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
     'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
-  const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer']);
+  const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
   const controlSkills = skills.filter((skill) => skill.control || controlEffects.has(skill.effect));
@@ -1890,6 +1893,7 @@ const SKILL_GLYPHS = {
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
   shaman: ['♣', '☘', '☥', '✺'],
+  illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
@@ -2666,6 +2670,11 @@ class Unit {
         this.dodgeTimer = (7 - skillLevel(this.level)) * this.skillRate;
         this.busy = this.once(HERO_DODGES[Math.floor(Math.random() * HERO_DODGES.length)], 1.5);   // esquerda, direita ou rolamento para trás
         this.pendingHit = null;
+        popText(this.pos, 'Esquiva!', 'dodge');
+        this.stats.esquivas++;
+        return;
+      }
+      if (!dot && this.cfg.id === 'illusionist' && Math.random() < 0.2) {   // passo de ilusionista: desvia de um golpe em cada cinco
         popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
         return;
@@ -4387,6 +4396,7 @@ const SKILL_ART = {
   cook: { color: 0xffb347, accent: 0xfff0d0, glyph: shellGeo, scale: 1.6 },
   shaman: { color: 0x6fe0a0, accent: 0xffe6a1, glyph: leafGeo, scale: 3 },
   geomancer: { color: 0xb8a888, accent: 0xe8dcc0, glyph: rockGeo, scale: 2.4 },
+  illusionist: { color: 0xa88af0, accent: 0xf0e0ff, glyph: thinRingGeo, scale: 0.45 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0, slowT = 0;
@@ -5911,6 +5921,9 @@ function element(h, skill, target, impactPoint = null) {
     for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xffd27a : 0xffffff, spot(0.6), V(rnd(0.8), 2 + Math.random() * 1.5, rnd(0.8)), 0.8, { size: 1.1, delay: Math.random() * 0.25 });
   } else if (id === 'alchemist') {   // bolhas de veneno (e rosadas na transmutação) subindo e estourando
     for (let i = 0; i < fewer(n / 2); i++) sprite('puff', ult ? 'tonic' : 'venom', spot(0.3), V(rnd(0.4), 1 + Math.random(), rnd(0.4)), 0.9, { size: 0.5, grow: 0.8, opacity: 0.9, delay: Math.random() * 0.3 });
+  } else if (id === 'illusionist') {   // fumaça violeta e fagulhas pálidas subindo, sem brilho grande
+    puffs(at.clone().setY(at.y + 0.4), ult ? 6 : 3, 'shadow', { spread: reach * 0.5, size: 0.9, rise: 0.8, life: 1, opacity: 0.6 });
+    for (let i = 0; i < fewer(n); i++) particle(sparkGeo, i % 2 ? 0xc8b8ff : 0xf0e8ff, spot(0.8), V(rnd(0.8), 1.2 + Math.random(), rnd(0.8)), 0.6, { size: 1, delay: Math.random() * 0.2 });
   } else if (id === 'chronist') {   // mostrador de relógio no chão, com os ponteiros voltando
     clockFace(at, reach + 0.6, ult ? 1.4 : 0.9);
   } else if (id === 'bard') {   // ondas sonoras em pé saindo do bardo e notinhas
@@ -6000,6 +6013,8 @@ const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: c
   whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
+// Ilusionista: fumaça violeta translúcida (sombra em shader, sem brilho aditivo)
+FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
 Object.assign(FX, { lanceThrust, lanceStance });   // Lanceiro
@@ -6169,6 +6184,19 @@ class Hero extends Unit {
           popText(companion.pos, 'De volta!', 'heal');
         } else companion = new BeastCompanion(this);
         FX.beastCall(this, companion);
+      };
+    } else if (id === 'illusionist') {
+      // cópia ilusória: surge na frente, atrai os golpes dos inimigos próximos (chefes resistem) e some ao levar um golpe
+      const near = attackables.filter((s) => !s.dead && !s.spawning && !s.totem && s.pos.distanceTo(this.pos) <= ILLUSION_REACH);
+      if (!near.length) return false;
+      const threat = near.some((s) => s.pendingHit?.target?.team === 'hero');
+      if (!force && (game.state !== 'fight' || (!threat && near.length < 2) || units.some((u) => u.illusion && u.owner === this && u.kind === 'copy' && !u.dead))) return false;
+      target = nearest(this.pos, near);
+      const aimAt = target.pos.clone();
+      effect = () => {
+        const image = new Illusion(this, illusionSpot(this, aimAt, 2.4), { kind: 'copy', life: scaleBranchEffect(this, 'control', 5) * power, hits: 1 });
+        illusionProvoke(near, image, scaleBranchEffect(this, 'control', 4) * power);
+        popText(image.pos, 'Cópia!', 'evolve');
       };
     } else if (id === 'summoner') {
       if (!force && (game.state !== 'fight' || !target)) return false;
@@ -6624,7 +6652,7 @@ class Hero extends Unit {
 
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -7915,6 +7943,78 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'mirror-swap': {
+        // Troca de Lugar: o aliado ameaçado vai para trás e o Ilusionista assume o lugar, com uma imagem ao lado; sem aliado em perigo, salta para trás
+        const hunted = (h) => attackables.some((s) => !s.dead && !s.spawning && (s.pendingHit?.target === h || (s.target === h && s.pos.distanceTo(h.pos) <= 3)));
+        const ally = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 9) && h.hp / h.maxHp <= 0.75 && hunted(h))
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null;
+        const threats = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= 2.8);
+        if (!force && !ally && !threats.length) return false;
+        let dest = null;
+        if (!ally) {
+          const away = new THREE.Vector3();
+          for (const s of threats) away.add(tmp.subVectors(this.pos, s.pos).setY(0).normalize());
+          if (away.lengthSq() < 0.01) away.copy(this.fwd).multiplyScalar(-1);
+          away.setY(0).normalize();
+          for (const step of [5, 3.5, 2.2]) {
+            const p = this.pos.clone().addScaledVector(away, step);
+            if (world.canStep(this.pos, p)) { dest = p; break; }
+          }
+          if (!dest && !force) return false;
+        }
+        target = ally;
+        effect = () => {
+          const here = this.pos.clone(), life = scaleBranchEffect(this, 'control', skill.duration + 1.5) * power;
+          let center = here, image;
+          if (ally && !ally.dead) {
+            const there = ally.pos.clone();
+            this.pos.copy(there).setY(world.groundHeight(there.x, there.z));
+            ally.pos.copy(here).setY(world.groundHeight(here.x, here.z));
+            this.vel.set(0, 0, 0); ally.vel.set(0, 0, 0);
+            center = there;
+            FX.shadowStep(here, there);
+          } else if (dest) {
+            this.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z));
+            this.vel.set(0, 0, 0);
+            FX.shadowStep(here, this.pos);
+          }
+          const caught = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(center) <= radius + 0.4 * (s.size - 1));
+          const foe = nearest(center, caught);
+          image = new Illusion(this, illusionSpot(ally ? this : { pos: center, fwd: this.fwd }, foe ? foe.pos : center.clone().add(this.fwd), ally ? 1.6 : 0.01), { kind: 'swap', life, hits: 1 });
+          illusionProvoke(caught, image, scaleBranchEffect(this, 'control', skill.duration) * power);
+          popText(image.pos, ally ? 'Troca!' : 'Imagem!', 'evolve');
+        };
+        break;
+      }
+      case 'mirror-hall': {
+        // Salão de Espelhos: três imagens (2 golpes cada) cercam o Ilusionista; cada inimigo próximo escolhe uma e, ao quebrá-la, perde o golpe
+        effect = () => {
+          const life = scaleBranchEffect(this, 'control', skill.duration + 1) * (0.9 + 0.1 * power), base = Math.random() * Math.PI * 2;
+          const images = [0, 1, 2].map((i) => {
+            const a = base + (i * Math.PI * 2) / 3;
+            return new Illusion(this, illusionSpot(this, new THREE.Vector3(this.pos.x + Math.cos(a), this.pos.y, this.pos.z + Math.sin(a)), 2.3), { kind: 'mirror', life, hits: 2 });
+          });
+          for (const enemy of enemies) illusionTaunt(enemy, images[Math.floor(Math.random() * images.length)], scaleBranchEffect(this, 'control', 3.5) * power, true);
+          wave(this.pos, color, 0.3, radius, 0.8, { opacity: 0.6 });
+          popText(this.pos, 'Espelhos!', 'evolve');
+        };
+        break;
+      }
+      case 'mirage': {
+        // Miragem: os aliados próximos desviam do próximo golpe por alguns segundos
+        const exposed = party.filter((h) => h.pos.distanceTo(this.pos) <= radius && !(h.mirageT > 0));
+        if (!force && (!exposed.length || enemies.length < 2)) return false;
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
+          for (const h of party) if (h.pos.distanceTo(this.pos) <= radius) {
+            h.mirageT = Math.max(h.mirageT, duration);
+            FX.illusionSmoke(h.pos, 2);
+          }
+          wave(this.pos, color, 0.2, radius, 0.7, { opacity: 0.5 });
+          popText(this.pos, 'Miragem!', 'evolve');
+        };
+        break;
+      }
       case 'omen': {
         // Presságio: cada aliado próximo esquiva o próximo dano nos próximos segundos
         const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
@@ -8120,6 +8220,7 @@ class Hero extends Unit {
     this.iceSkinT = 0;      // Pele de Gelo do Viking do Gelo
     this.riposteT = 0;      // Contra-ataque do Duelista
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
+    this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
     this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
@@ -8155,7 +8256,7 @@ class Hero extends Unit {
 
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
       const mate = this.bondWith;
@@ -8184,6 +8285,7 @@ class Hero extends Unit {
   // dano já reduzido chegando ao herói: segundas técnicas podem esquivar, aparar, refletir, dividir ou segurar a queda
   skillGuard(n, owner) {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
+    if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.wallT > 0) n *= 0.5;
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
     if (this.riposteT > 0) {
@@ -8466,6 +8568,7 @@ const SKILL_MOVES = {
   cook: ['Throw', 1.4, 0.45, 'ice'],
   shaman: ['1H_Melee_Attack_Stab', 1.4, 0.5, 'heal'],
   geomancer: ['Spellcast_Raise', 1.5, 0.42, 'slam'],
+  illusionist: ['Dodge_Left', 1.3, 0.5, 'summon'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate, segunda técnica]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -8677,6 +8780,12 @@ const SKILL_ANIMS = {
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.58, float: 0.12, lean: -0.1 },   // ergue a muralha
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.62, arc: 'ring', hop: 0.35, lean: 0.12 },   // pisa forte e o chão racha
     { clip: 'Spellcasting', hold: 'Spellcast_Raise', f: 0.5, lean: 0.2, kick: 0.2 },   // pilar sob o alvo
+  ],
+  illusionist: [
+    { clip: 'Dodge_Left', f: 0.5, lean: 0.1, kick: -0.5 },                                      // gira de lado e a cópia fica no lugar
+    { clip: 'Dodge_Backward', f: 0.5, hop: 0.25, spin: 0.5 },                                    // troca de lugar com um salto
+    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, spin: 1.5, float: 0.4 },          // os espelhos giram em volta
+    { clip: 'Interact', f: 0.4, hop: 0.12, lean: -0.1 },                                         // um aceno e a névoa cobre o grupo
   ],
 };
 
@@ -9130,6 +9239,130 @@ function callSummon(summoner, kind) {
   FX.pactCall(summoner, creature, SUMMON_RULES[kind].color);
   popText(creature.pos, { fairy: 'Fada!', golem: 'Golem!', dragon: 'Dragão!' }[kind], 'evolve');
   return creature;
+}
+
+// ---------- Ilusionista: imagens ilusórias ----------
+// Aliados temporários e procedurais: o corpo do próprio herói, translúcido e violeta, parado no lugar. Provocam os
+// inimigos próximos e se desfazem em fumaça ao levar `hits` golpes ou ao fim do tempo; quem quebra uma imagem perde o golpe.
+// São team 'ally' sem stats e sem `summoner` (não são heróis nem criaturas): não contam para o fim da partida
+// nem para o limite de invocações do Necromante e do Invocador.
+const ILLUSION_REACH = 6.5, ILLUSION_MAX = 4, ILLUSION_OPACITY = 0.5, ILLUSION_STUN = 0.5;
+const ILLUSION_TINT = new THREE.Color(0x9a86ff);
+
+// chefes só cedem pela resistência de controle de sempre (controlEnemy); totens nunca
+function illusionTaunt(enemy, image, seconds, cut = true) {
+  if (enemy.dead || enemy.spawning || enemy.totem || image.dead) return;
+  if (enemy.boss) { if (!controlEnemy(enemy, 'tauntT', seconds * 0.5)) return; }   // chefe: metade do tempo e a resistência de controle de sempre
+  else enemy.tauntT = Math.max(enemy.tauntT || 0, seconds);
+  enemy.taunt = image;
+  if (cut && !enemy.boss) enemy.pendingHit = null;
+}
+function illusionProvoke(enemies, image, seconds) {
+  for (const enemy of enemies) illusionTaunt(enemy, image, seconds, true);
+}
+// ponto a `dist` do herói na direção de `toward` (se o chão não deixar, mais perto; se ainda assim não, ao lado)
+function illusionSpot(hero, toward, dist) {
+  const dir = new THREE.Vector3().subVectors(toward, hero.pos).setY(0);
+  if (dir.lengthSq() < 0.01) dir.copy(hero.fwd);
+  dir.normalize();
+  for (const d of [dist, dist * 0.5]) {
+    const p = hero.pos.clone().addScaledVector(dir, d);
+    if (world.canStep(hero.pos, p)) return p;
+  }
+  return hero.pos.clone().add(new THREE.Vector3(dir.z, 0, -dir.x));
+}
+
+class Illusion extends Unit {
+  constructor(owner, at, { kind = 'copy', life = 5, hits = 1 } = {}) {
+    // no máximo ILLUSION_MAX imagens do mesmo herói: a mais antiga se desfaz
+    const mine = units.filter((u) => u.illusion && u.owner === owner && !u.dead);
+    while (mine.length >= ILLUSION_MAX) mine.shift().shatter();
+    super(owner.cfg.built, { hp: 1, dmg: 0, range: 0, speed: 0, cooldown: 99 }, 'ally');
+    this.owner = owner;
+    this.illusion = true;
+    this.kind = kind;
+    this.cfg = { id: 'illusion', idle: owner.cfg.idle };
+    this.level = owner.level;
+    this.life = life;
+    this.hits = hits;
+    this.age = 0;
+    this.fade = 0;
+    this.refreshT = 0.5;
+    this.phase = game.phase;
+    this.size = owner.size;
+    this.pos.copy(at).setY(world.groundHeight(at.x, at.z));
+    this.root.rotation.y = owner.root.rotation.y;
+    this.bar.remove();   // sem barra de vida: some ao primeiro golpe
+    this.popT = 0;
+    this.root.traverse((o) => {
+      if (owner.cfg.hide.includes(o.name)) o.visible = false;
+      if (o.isMesh) o.castShadow = false;
+    });
+    for (const m of this.mats) {
+      m.transparent = true;
+      m.depthWrite = false;
+      m.opacity = ILLUSION_OPACITY;
+      m.color?.lerp(ILLUSION_TINT, 0.55);
+      m.needsUpdate = true;
+    }
+    this.loop(this.cfg.idle);
+    FX.illusionSmoke(this.pos, 3);
+    wave(this.pos, 0xb8a8ff, 0.2, 1.3, 0.5, { opacity: 0.5 });
+  }
+
+  // quebra: uma nuvem de fumaça violeta e a imagem esmaece depressa (dead: quem a provocava larga o alvo)
+  shatter() {
+    if (this.dead) return;
+    this.dead = true;
+    this.pendingHit = null;
+    this.fade = 0.25;
+    FX.illusionSmoke(this.pos, 4);
+    burst(this.pos.clone().setY(this.pos.y + 1), [0xc8b8ff, 0xf0e8ff], 6, 3, { life: 0.5, size: 1 });
+  }
+
+  // qualquer golpe conta: o atacante erra o alvo e perde o tempo do golpe; veneno e afins não a quebram
+  takeDamage(n, from, owner = null, critical = false, dot = false) {
+    if (this.dead || game.over || dot) return;
+    popText(this.pos, 'Errou!', 'dodge');
+    if (owner?.team === 'skeleton' && !owner.dead) {
+      if (owner.boss) controlEnemy(owner, 'stunT', ILLUSION_STUN);
+      else owner.stunT = Math.max(owner.stunT || 0, ILLUSION_STUN);
+      owner.pendingHit = null;
+    }
+    this.squashT = 0.25;
+    if (--this.hits <= 0) this.shatter();
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    this.updateCommon(dt);
+    if (this.dead) {
+      this.fade -= dt;
+      for (const m of this.mats) m.opacity = ILLUSION_OPACITY * Math.max(0, this.fade / 0.25);
+      if (this.fade <= 0) this.remove();
+      return;
+    }
+    this.age += dt;
+    this.life -= dt;
+    const owner = this.owner;
+    if (this.life <= 0 || owner.dead || !units.includes(owner) || game.over || game.state === 'cleared' || game.phase !== this.phase) { this.shatter(); return; }
+    // pisca de leve e, no fim, depressa
+    const alpha = this.life < 1.2 ? (Math.sin(this.age * 26) > 0 ? ILLUSION_OPACITY : 0.2) : ILLUSION_OPACITY + Math.sin(this.age * 5) * 0.07;
+    for (const m of this.mats) m.opacity = alpha;
+    if (game.state !== 'fight') return;
+    const foes = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
+    // reforça a provocação em quem está solto (nunca por cima de outra provocação em curso); no salão, cada um escolhe uma imagem ao acaso
+    this.refreshT -= dt;
+    if (this.refreshT <= 0) {
+      this.refreshT = 0.5;
+      const pool = this.kind === 'mirror' ? units.filter((u) => u.illusion && u.owner === owner && u.kind === 'mirror' && !u.dead) : null;
+      for (const enemy of foes) if (!enemy.dead && !enemy.boss && enemy.tauntT <= 0.35 && enemy.pos.distanceTo(this.pos) <= ILLUSION_REACH) {
+        illusionTaunt(enemy, pool ? pool[Math.floor(Math.random() * pool.length)] : this, 0.9, false);
+      }
+    }
+    const foe = nearest(this.pos, foes);
+    if (foe) this.face(foe.pos, dt);
+  }
 }
 
 // Troca de fase do chefe: ao cair abaixo de metade da vida, ele se enfurece e recupera parte dela de uma vez.

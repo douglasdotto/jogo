@@ -286,6 +286,7 @@ const profiles = {
   cozinheira: ['cook', 'guardian', 'pyro', 'assassin'],
   xama: ['shaman', 'guardian', 'pyro', 'viking'],
   geomante: ['geomancer', 'paladin', 'guardian', 'cleric'],
+  ilusionista: ['illusionist', 'paladin', 'pyro', 'cleric'],
   fazendas: ['paladin', 'viking', 'guardian', 'cleric'],
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],

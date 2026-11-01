@@ -393,6 +393,19 @@ export const LOOKS = {
       { type: 'motes', bone: 'root', color: 0xb8a078, n: 4, size: 0.04, y: 0.5 },
     ],
   },
+  // ---------- Ladino (cont.) ----------
+  illusionist: {   // mestre dos espelhos: capuz e túnica violeta com gola clara, máscara branca, capelete e faca curta
+    shape: silhouette('Rogue', { torso: 0.9, arms: 0.93, legs: 1, height: 1.06, depth: 0.9 }),
+    paint: {
+      ...rogueOutfit({ cloth: '#7a4ad0', trim: '#f0e0ff', leather: '#2a1e4a', pants: '#3a2a78', boots: '#1a1230', gloves: '#e8e0f8', sleeves: '#a88af0' }),
+      ...face('Rogue', { skin: '#ecd0dc', hood: '#4a2a8a' }, 'Rogue_Head_Hooded'),
+      Rogue_Cape: { tint: '#5a38b0', amount: 0.85 }, Knife: { tint: '#d8d0f0', amount: 0.4 },
+    },
+    extras: [
+      { type: 'mask', bone: 'head', color: 0xf4eefc }, { type: 'capelet', bone: 'chest', color: 0xa88af0, trim: 0xf0e0ff },
+      { type: 'motes', bone: 'root', color: 0xc8b8ff, n: 4, size: 0.04, y: 1.2 },
+    ],
+  },
 };
 
 // para a vitrine: modelo e armas visíveis de cada variante, na ordem de VARIANTS em main.js (o jogo usa aquela lista);
@@ -432,6 +445,7 @@ export const LOOK_PREVIEW = [
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
   { id: 'cook', name: 'Cozinheira', model: 'Barbarian', use: [] },
   { id: 'shaman', name: 'Xamã dos totens', model: 'Barbarian', use: [] },
+  { id: 'illusionist', name: 'Ilusionista', model: 'Rogue_Hooded', use: ['Knife'] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],

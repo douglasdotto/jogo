@@ -123,7 +123,7 @@ context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
 vm.runInContext('globalThis.t={spiritTotems,removeSpiritTotem,Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
-vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
+vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;t.Illusion=Illusion;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
@@ -1346,6 +1346,46 @@ test('Vampira: garra cura o mais ferido, vínculo divide o dano, noite de sangue
   // beijo sombrio: o dano todo volta ao aliado mais ferido
   g1.hp=g1.maxHp*0.2;const h3=g1.hp,d3=e3.hp;e3.pos.set(0,0,2);cast(v3,3,e3);
   assert.ok(e3.hp<d3&&g1.hp-h3>=(d3-e3.hp)*0.95-0.01,'beijo devolve o dano como cura');
+});
+test('Ilusionista: cópia provoca e some ao primeiro golpe; espelhos confundem; chefe resiste; nada disso conta como herói ou invocação',()=>{
+  clear();
+  const h=new t.Hero(cfg('illusionist'));h.pos.set(0,0,0);
+  assert.equal(cfg('illusionist').classId,3);assert.equal(h.maxHp,190,'ladino frágil');assert.ok(t.PICK_GROUPS.find(g=>g.id==='ladinos').heroes.includes('illusionist'));
+  const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=0;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
+  const boss=new t.Skeleton('Minion',1,true);boss.spawning=false;boss.pos.set(0,0,4);boss.hp=boss.maxHp=100000;
+  const e1=foe(0,3),e2=foe(2,3);
+  const images=()=>t.units.filter(u=>u.illusion&&!u.dead);
+  const cast=(slot,target=e1)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,'slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
+  cast(0);
+  const [copy]=images();
+  assert.equal(images().length,1);assert.equal(copy.team,'ally');assert.equal(copy.summoner,undefined,'não é invocação: não ocupa o limite do Necromante/Invocador');
+  assert.equal(t.heroes().length,1,'a cópia não conta como herói');
+  assert.strictEqual(e1.taunt,copy);assert.strictEqual(e2.taunt,copy);assert.ok(e1.tauntT>3);
+  assert.ok(boss.tauntT<e1.tauntT,'chefe resiste à provocação');
+  // um golpe desfaz a cópia; quem golpeou perde o tempo
+  copy.takeDamage(10,null,e1);
+  assert.equal(copy.dead,true);assert.ok(e1.stunT>0);assert.equal(images().length,0);
+  copy.update(0.3);assert.ok(!t.units.includes(copy),'some em fumaça');
+  // salão: três imagens de dois golpes cada
+  cast(2);
+  const hall=images();assert.equal(hall.length,3);assert.ok(hall.every(i=>i.hits===2&&i.kind==='mirror'));
+  assert.ok(hall.includes(e1.taunt)&&hall.includes(e2.taunt),'cada inimigo escolhe uma imagem');
+  hall[0].takeDamage(5,null,e1);assert.equal(hall[0].dead,false);hall[0].takeDamage(5,null,e1);assert.equal(hall[0].dead,true);
+  hall[0].update(0.3);
+  for(let i=0;i<3;i++){h.busy=0;cast(2);}
+  assert.ok(images().length<=4,'no máximo 4 imagens por herói');
+  // fim do tempo
+  for(const i of images())i.life=0.01;for(const i of images())i.update(0.02);
+  for(const i of [...t.units].filter(u=>u.illusion))i.update(0.3);
+  assert.equal(t.units.filter(u=>u.illusion).length,0);
+  // troca de lugar com o aliado ameaçado
+  const ally=new t.Hero(cfg('guardian'));ally.pos.set(3,0,0);ally.hp=ally.maxHp*0.3;e1.pendingHit={target:ally,t:1};e1.pos.set(3,0,1.5);
+  cast(1,null);
+  assert.ok(Math.abs(h.pos.x-3)<0.01&&Math.abs(ally.pos.x)<0.01,'trocam de lugar');
+  assert.equal(images().length,1);assert.strictEqual(e1.taunt,images()[0]);
+  // miragem: o próximo golpe é desviado
+  cast(3,null);
+  const hp=ally.hp;assert.ok(ally.mirageT>0);ally.takeDamage(20,null,e1);assert.equal(ally.hp,hp,'Miragem desvia o próximo golpe');
   clear();
 });
 

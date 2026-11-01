@@ -62,7 +62,7 @@ for (const a of palettes) for (const b of palettes) {
 // Ladinos (9 heróis no mesmo boneco): a roupa principal sozinha precisa se afastar, e o conjunto
 // (túnica + gola + mangas + calça) também; antes todos ficavam no verde-escuro/preto do atlas
 const rogues = palettes.filter((h) => h.model === 'Rogue');
-assert.equal(rogues.length, 8, 'oito heróis no modelo do ladino (o Besteiro passou para o Ranger)');
+assert.equal(rogues.length, 9, 'nove heróis no modelo do ladino (o Besteiro passou para o Ranger)');
 const outfitOf = (h) => {
   const body = h.paint.Rogue_Body, arm = h.paint.Rogue_ArmLeft, leg = h.paint.Rogue_LegLeft;
   assert.ok(body.amount >= 0.85 && body.cells?.['1,1'], `${h.id}: roupa com tinta forte e gola/acabamento próprio`);
@@ -109,7 +109,7 @@ for (const id of ['archer', 'monk', 'alchemist', 'vampire', 'brute']) for (const
 
 assert.ok(has('summoner', 'bellStaff', 'handslotr') && !LOOKS.summoner.hide.includes('2H_Staff'), 'Invocador leva cajado com gema e sininhos');
 assert.deepEqual(Array.from(LOOK_PREVIEW.find((hero) => hero.id === 'summoner').use), ['2H_Staff'], 'Invocador mostra o cajado na vitrine');
-for (const id of ['archer', 'monk', 'alchemist', 'summoner', 'cook']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
+for (const id of ['archer', 'monk', 'alchemist', 'summoner', 'cook', 'illusionist']) for (const extra of LOOKS[id].extras) assert.ok(recipes.includes(`  ${extra.type}(`), `${id}: acessório ${extra.type} existe em characters.js`);
 assert.ok(has('cook', 'chefHat', 'head') && has('cook', 'apron', 'hips') && has('cook', 'ladle', 'handslotr'), 'Cozinheira com chapéu, avental e concha');
 
 // cada variante do jogo tem aparência própria (LOOKS ou receita de characters.js) e aparece na vitrine,
