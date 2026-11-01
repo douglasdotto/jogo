@@ -117,6 +117,9 @@ const VARIANTS = [
   { id: 'brute', names: ['Brutamontes', 'Rocha Viva', 'Colosso'], desc: 'Aguenta a horda na frente do grupo.', ability: 'Pancada', color: ['#c9bba2', '#7d7464'],
     use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.4, cooldown: 1.6, idle: 'Brute_Idle', walk: 'Brute_Walk', run: 'Brute_Run',   // guarda, passo e corrida de gigante (Rig_Large)
     attacks: ['Brute_Punch', 'Brute_Kick'], armor: 3, scale: 1.6, frontline: true, classId: 1 },
+  // curandeira agressiva: precisa bater para curar (o dano causado vira vida no aliado mais ferido)
+  { id: 'vampire', names: ['Vampira', 'Condessa do Vínculo', 'Rainha da Noite'], desc: 'Cura roubando a vida dos inimigos.', ability: 'Garra de sangue', color: ['#c8465e', '#5a1626'],
+    use: [], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 3 }, hp: 185, dmg: 15, range: 5, speed: 3.1, cooldown: 1.1, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'vampire' },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
@@ -131,7 +134,7 @@ const PICK_GROUPS = [
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner'] },
   { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
-  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist'] },
+  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire'] },
 ];
 const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
 const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id === groupId)?.heroes || [])
@@ -1450,9 +1453,9 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain']);
+    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist']);
-  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner']);
+  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire']);
   const skills = skillSetFor(hero.cfg);
   const controlSkills = skills.filter((skill) => skill.control || controlEffects.has(skill.effect));
   const supportSkills = skills.filter((skill) => supportEffects.has(skill.effect));
@@ -1693,6 +1696,7 @@ const SKILL_GLYPHS = {
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
   brute: ['⛰', '⤴', '⬢', '▥'],
   summoner: ['✿', '⬢', '♆', '⚘'],
+  vampire: ['☾', '⚭', '♥', '☽'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link']);
@@ -2777,12 +2781,27 @@ function heroHit(owner, target, dmg, center = owner.pos) {
   dmg = applySynergy(owner, target, dmg);
   const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
   const dealt = dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1);
+  const hpBefore = target.hp;
   target.takeDamage(dealt, center, owner.summoner || owner, critical);
+  if (owner.cfg?.id === 'vampire' && !owner.dead) vampireLeech(owner, hpBefore - Math.max(0, target.hp));
   if (owner.leechT > 0 && !owner.dead) {   // Sede de Sangue: o golpe devolve vida ao Berserker
     const heal = Math.min(owner.maxHp - owner.hp, dealt * owner.leech);
     if (heal > 0) { owner.hp += heal; owner.stats.cura += heal; }
   }
   return critical;
+}
+
+// Vampira: parte do dano causado vira vida no aliado mais ferido (ela mesma inclusive); as técnicas sobem a fração em vampFrac
+function vampireLeech(owner, dealt) {
+  if (!(dealt > 0)) return;
+  let ally = null;
+  for (const h of partyNow()) if (!h.dead && h.hp < h.maxHp && (!ally || h.hp / h.maxHp < ally.hp / ally.maxHp)) ally = h;
+  if (!ally) return;
+  const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(owner, 'support', dealt * (owner.vampFrac || 0.2)));
+  if (heal <= 0) return;
+  ally.hp += heal; owner.stats.cura += heal;
+  popText(ally.pos, '+' + Math.round(heal), 'heal');
+  if (ally !== owner) beam(owner.pos, ally.pos, 0x8a1a2e);   // fio escuro de um à outra
 }
 
 
@@ -3348,7 +3367,7 @@ const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THR
 const beamMaterials = materialPool(() => new THREE.MeshBasicMaterial({ transparent: true }), 32);
 const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false }), 128);
 const beamDirection = new THREE.Vector3(), beamUp = new THREE.Vector3(0, 1, 0), beamLift = new THREE.Vector3(0, 1.3, 0);
-const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, oracle: 0xc6b4ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
+const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, oracle: 0xc6b4ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, vampire: 0xb0243c, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
@@ -3806,6 +3825,7 @@ const BOLT_LOOKS = {
   alchemist: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.4], size: [1.3, 1.3], spin: true },
   oracle: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xc6b4ff, 0.52), 1.8]], orb: ['arcane', 0.34], size: [1.35, 2], spin: true },
   summoner: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xff8ad8, 0.45), 1.8]], orb: ['tonic', 0.36], size: [1.4, 1.4], spin: true },
+  vampire: { geo: boltGeo, core: basic(0xa81c34), shells: [[glowMaterial(0x5a0f20, 0.3), 1.4]], size: [1.1, 1.1], spin: true },
 };
 for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells || []).map((x) => x[0])]) if (m) m.userData.keep = true;
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
@@ -3843,6 +3863,7 @@ const SKILL_ART = {
   oracle: { color: 0xc6b4ff, accent: 0xffffff, glyph: crystalGeo, scale: 1.3 },
   brute: { color: 0xb8a88a, accent: 0xfff2d8, glyph: rockGeo, scale: 3.2 },
   summoner: { color: 0xff8ad8, accent: 0xfff0fb, glyph: leafGeo, scale: 3 },
+  vampire: { color: 0xa81c34, accent: 0xff9aaa, glyph: slashGeo, scale: 0.6 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0, slowT = 0;
@@ -5810,6 +5831,24 @@ class Hero extends Unit {
         }
         FX.leaves(this, radius);
       };
+    } else if (id === 'vampire') {
+      // garra de sangue: rasga o cone à frente; 60% do dano causado vira vida no aliado mais ferido
+      const reach = 4 * (0.9 + 0.1 * power);
+      const inClaw = (s) => !s.dead && !s.spawning && Math.abs(s.pos.y - this.pos.y) < 0.85 && s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1);
+      if (!manual) target = highestPriorityHeroTarget(this, attackables.filter(inClaw));
+      if (!target || !inClaw(target)) return false;
+      effect = () => {
+        this.vampFrac = 0.6;
+        let first = null;
+        for (const s of skeletonsAlive()) if (inClaw(s) && inMeleeArc(this, s, reach + 0.4 * (s.size - 1))) {
+          heroHit(this, s, this.dmg * 1.1 * power);
+          FX.bladeCut(s, this, first ? 1 : -1);
+          first ||= s;
+        }
+        this.vampFrac = 0;
+        if (!first && !target.dead) { this.vampFrac = 0.6; heroHit(this, target, this.dmg * 1.1 * power); this.vampFrac = 0; FX.bladeCut(target, this, 0); }
+        burst(this.pos, [0xa81c34, 0x3a0a14], 8, 2.5);
+      };
     } else return false;
     const [, pace, at, sound] = SKILL_MOVES[id];
     const run = effect;
@@ -5856,7 +5895,7 @@ class Hero extends Unit {
     const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -6326,6 +6365,55 @@ class Hero extends Unit {
             burst(unit.pos, [color, 0xffffff], 10, 2.5);
           }
           popText(this.pos, 'Fúria!', 'evolve');
+        };
+        break;
+      }
+      case 'blood-bond': {
+        // Vínculo de sangue: o aliado mais ferido e o mais próximo dele dividem o dano que receberem
+        const near = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 9));
+        const hurt = near.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        const mate = hurt && party.filter((h) => h !== hurt).reduce((best, h) => (!best || h.pos.distanceTo(hurt.pos) < best.pos.distanceTo(hurt.pos) ? h : best), null);
+        if (!hurt || (!mate && !force) || (!force && hurt.hp / hurt.maxHp > 0.75)) return false;
+        target = hurt;
+        effect = () => {
+          if (hurt.dead || !mate || mate.dead) return;
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+          for (const [a, b] of [[hurt, mate], [mate, hurt]]) { a.bondT = seconds; a.bondWith = b; a.bondShare = skill.share || 0.5; a.bondLead = a === hurt; a.bondDrawT = 0; }
+          popText(hurt.pos, 'Vínculo!', 'evolve');
+          beam(hurt.pos, mate.pos, color);
+          burst(hurt.pos, [color, 0x3a0a14], 8, 2.5);
+          burst(mate.pos, [color, 0x3a0a14], 8, 2.5);
+        };
+        break;
+      }
+      case 'blood-night': {
+        // Noite de sangue: todos os aliados curam parte do dano que causam (mesma regra da Sede de Sangue)
+        effect = () => {
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 7) * (0.9 + 0.1 * power);
+          for (const h of party) {
+            h.leechT = Math.max(h.leechT, seconds);
+            h.leech = Math.max(h.leech || 0, skill.leech || 0.25);
+            column(h.pos, color, 0.45, 2.2, 0.6, { follow: h });
+            burst(h.pos, [color, 0x3a0a14], 8, 2.5);
+          }
+          popText(this.pos, 'Noite de sangue!', 'crit');
+          wave(this.pos, color, 0.2, radius, 0.7);
+        };
+        break;
+      }
+      case 'blood-kiss': {
+        // Beijo sombrio: mordida forte no inimigo prioritário à frente; todo o dano volta como cura
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 6) && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        const prey = force && pool.includes(target) ? target : highestPriorityHeroTarget(this, pool);
+        if (!prey) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          this.vampFrac = 1;
+          damageOne(prey);
+          this.vampFrac = 0;
+          FX.bladeCut(prey, this, 0);
+          burst(prey.pos, [color, 0x3a0a14], 12, 3.5);
         };
         break;
       }
@@ -7057,6 +7145,8 @@ class Hero extends Unit {
   // estados das segundas técnicas (slot 3) que mudam como o herói recebe ou causa dano
   resetSkillStates() {
     this.oathT = 0; this.oathBy = null; this.oathShare = 0;   // Juramento do Paladino
+    this.bondT = 0; this.bondWith = null; this.bondShare = 0; this.bondLead = false; this.bondDrawT = 0;   // Vínculo de sangue da Vampira
+    this.vampFrac = 0;      // Vampira: fração do dano que vira cura durante uma técnica
     this.iceSkinT = 0;      // Pele de Gelo do Viking do Gelo
     this.riposteT = 0;      // Contra-ataque do Duelista
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
@@ -7067,6 +7157,18 @@ class Hero extends Unit {
 
   updateSkillStates(dt) {
     this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.leechT -= dt; this.wallT -= dt;
+    if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
+      this.bondT -= dt;
+      const mate = this.bondWith;
+      if (this.bondLead && mate && !mate.dead && !this.dead) {
+        this.bondDrawT -= dt;
+        if (this.bondDrawT <= 0) {
+          this.bondDrawT = 0.22;
+          beam(this.pos, mate.pos, 0x8a1a2e);
+          burst(tmp.copy(this.pos).add(mate.pos).multiplyScalar(0.5), [0x8a1a2e, 0x3a0a14], 2, 0.8);
+        }
+      }
+    }
     if (this.blessT > 0) {
       this.blessT -= dt;
       const heal = Math.min(this.maxHp - this.hp, this.blessHeal * dt);
@@ -7099,6 +7201,14 @@ class Hero extends Unit {
       n -= share;
       const taken = Math.min(share * 0.75, this.oathBy.hp - 1);   // o Paladino aguenta melhor e nunca cai pelo juramento
       if (taken > 0) { this.oathBy.hp -= taken; this.oathBy.stats.recebido += taken; popText(this.oathBy.pos, taken, 'hurt'); }
+    }
+    if (this.bondT > 0 && this.bondWith && this.bondWith !== this && !this.bondWith.dead) {
+      const share = n * this.bondShare;   // o par divide o golpe; ninguém cai pelo vínculo
+      const taken = Math.min(share, this.bondWith.hp - 1);
+      if (taken > 0) {
+        n -= taken;
+        this.bondWith.hp -= taken; this.bondWith.stats.recebido += taken; popText(this.bondWith.pos, taken, 'hurt');
+      }
     }
     if (this.blessT > 0 && n >= this.hp && this.hp > 1) {
       n = this.hp - 1;
@@ -7332,6 +7442,7 @@ const SKILL_MOVES = {
   oracle: ['1H_Ranged_Shoot', 1.3, 0.35, 'zap'],
   brute: ['Jump_Full_Short', 0.9, 0.7, 'slam'],
   summoner: ['2H_Melee_Attack_Stab', 1.5, 0.45, 'summon'],
+  vampire: ['2H_Melee_Attack_Slice', 1.3, 0.4, 'hit'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate, segunda técnica]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -7513,6 +7624,12 @@ const SKILL_ANIMS = {
     { clip: '1H_Melee_Attack_Stab', f: 0.55, arc: 'thrust', lean: 0.22, kick: 0.35 },          // bate no chão e o golem brota
     { clip: 'Spellcast_Summon', hold: 'Spellcast_Raise', f: 0.6, spin: 1.1, float: 0.5, lean: -0.14 },   // ergue o cajado e invoca o dragãozinho
     { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: -0.5, lean: -0.1, float: 0.12 },   // brada o pacto e atiça as criaturas
+  ],
+  vampire: [
+    { clip: '2H_Melee_Attack_Slice', f: 0.45, arc: 'slash', lean: 0.18, kick: 0.4 },   // garra em meia-lua
+    { clip: 'Spellcast_Long', hold: 'Spellcast_Raise', f: 0.5, lean: -0.1, float: 0.15 },   // estende a mão e liga os dois aliados
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.6, spin: 0.8, float: 0.45, kick: -0.3 },   // ergue os braços: noite de sangue
+    { clip: '1H_Melee_Attack_Stab', hold: 'Spellcasting', f: 0.5, arc: 'thrust', lean: 0.22, kick: 0.3 },   // avança e morde
   ],
 };
 

@@ -35,6 +35,7 @@ const VARIANT_INFO = {
   engineer: ['Construção e controle', 'Monta uma torre por alguns segundos. Ela escolhe ameaças próximas e dispara automaticamente; o pulso eletromagnético interrompe inimigos agrupados.', 'Posicione a torre perto da frente sem deixá-la exposta. A ultimate acelera e fortalece uma torre ativa; sem uma, ergue outra.'],
   beast_tamer: ['Invocação e proteção', 'Chama uma fera temporária que luta perto do grupo e prioriza inimigos que ameaçam os aliados.', 'O rugido da fera atrai a atenção dos inimigos; a ultimate a fortalece e ampara aliados ao redor. A fera não ocupa uma vaga de herói.'],
   summoner: ['Invocação e cura', 'Invoca uma fada que segue o aliado mais ferido e o cura em pulsos por alguns segundos.', 'O golem provoca e atordoa quem chega perto; o dragãozinho cospe fogo em cone. Uma criatura de cada tipo; chamar de novo renova.'],
+  vampire: ['Cura roubando vida', 'Rasga os inimigos à frente com uma garra; o dano causado vira cura no aliado mais ferido.', 'O vínculo divide o dano entre dois aliados. Na noite de sangue o grupo todo cura ao bater: comece a briga antes de ativar.'],
   oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Passo Previsto durante um aviso para garantir que os heróis tentem escapar. Destino Reescrito interrompe ameaças próximas.'],
   brute: ['Tanque pesado', 'Soca o chão: atordoa por instantes e provoca quem está em volta. Golpes fracos quase não o ferem (−3 por golpe).', 'Deixe-o na frente contra hordas. Mais lento e com menos dano que o Guardião, mas aguenta mais.'],
 };
@@ -51,6 +52,7 @@ const TEAM_ROLE_RULES = {
   engineer: ['À distância', 'Área', 'Controle'], beast_tamer: ['Defesa', 'Controle', 'Dano a chefe'], oracle: ['À distância', 'Controle', 'Dano a chefe'],
   brute: ['Defesa', 'Controle'],
   summoner: ['À distância', 'Cura', 'Controle'],
+  vampire: ['À distância', 'Cura'],
 };
 const TEAM_ROLE_ORDER = ['Defesa', 'Cura', 'Área', 'Controle', 'À distância', 'Dano a chefe'];
 const TEAM_CORE_ROLES = TEAM_ROLE_ORDER.filter((name) => name !== 'Dano a chefe');

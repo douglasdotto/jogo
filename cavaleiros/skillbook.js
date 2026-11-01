@@ -138,6 +138,11 @@ const EXTRA_SKILLS = {
     { name: 'Dragãozinho', description: 'Um dragãozinho voa até os inimigos e cospe fogo em cone, deixando-os queimando.', effect: 'little-dragon', cooldown: 68, radius: 4.5, duration: 18, control: 'burn', color: 0xff7a3a },
     { name: 'Fúria do Bestiário', description: 'As criaturas ativas atacam e usam seus poderes 50% mais rápido por 5 s; sem nenhuma, chama uma fada por 6 s.', effect: 'bestiary-fury', cooldown: 18, duration: 5, haste: 0.5, color: 0xff8ad8 },
   ],
+  vampire: [
+    { name: 'Vínculo de Sangue', description: 'Liga o aliado mais ferido ao mais próximo por alguns segundos: os dois dividem o dano que receberem.', effect: 'blood-bond', cooldown: 18, range: 9, duration: 6, share: 0.5, color: 0xa81c34 },
+    { name: 'Noite de Sangue', description: 'Por alguns segundos, todos os aliados curam parte do dano que causam.', effect: 'blood-night', cooldown: 70, radius: 14, duration: 7, leech: 0.25, color: 0x8a1a2e },
+    { name: 'Beijo Sombrio', description: 'Morde o inimigo mais perigoso à frente e devolve todo o dano como cura ao aliado mais ferido.', effect: 'blood-kiss', cooldown: 17, range: 6, power: 1.5, color: 0xc8465e },
+  ],
   oracle: [
     { name: 'Passo Previsto', description: 'Durante os avisos de chefes, garante que os aliados tentem escapar das áreas anunciadas.', effect: 'oracle-dodge', cooldown: 22, radius: 12, color: 0xc6b4ff },
     { name: 'Destino Reescrito', description: 'Cancela os golpes anunciados por chefes próximos e os atordoa por um breve instante.', effect: 'rewrite-fate', cooldown: 72, radius: 9, duration: 1.1, control: 'stun', color: 0xe3d7ff },

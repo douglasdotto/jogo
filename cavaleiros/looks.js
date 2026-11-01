@@ -308,6 +308,20 @@ export const LOOKS = {
       { type: 'beard', bone: 'head', color: 0x5a1e0e },
     ],
   },
+  // ---------- Vampira ----------
+  vampire: {   // condessa da noite: manto vinho com capa escarlate, cabelo prateado, pele pálida, olhos rubros e gola alta
+    shape: silhouette('Mage', { torso: 0.95, arms: 0.95, legs: 1, height: 1.04, depth: 0.95 }),
+    hide: ['Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff', 'Mage_Hat'],
+    paint: {
+      ...outfit('Mage', '#4a1020', '#1c1018', 0.85), ...face('Mage', { skin: '#ece0e0', hair: '#dcd6ea' }),
+      Mage_Cape: { tint: '#8a1428', amount: 0.85 },
+    },
+    extras: [
+      { type: 'highCollar', bone: 'chest', color: 0x5a0f20, trim: 0xc9c2d4 },
+      { type: 'robeSkirt', bone: 'hips', color: 0x2a0a14, trim: 0x8a1428, height: 0.5, flare: 0.4 },
+      { type: 'motes', bone: 'root', color: 0x8a1a2e, n: 4, size: 0.04, y: 1.1 },
+    ],
+  },
   // ---------- Invocador ----------
   summoner: {   // mestre dos pactos: manto ameixa com capa rosada, cabelo verde-água, cajado de gema e sininhos
     shape: silhouette('Mage', { torso: 0.97, arms: 0.97, legs: 0.98, height: 1.03, depth: 0.97 }),
@@ -356,6 +370,7 @@ export const LOOK_PREVIEW = [
   { id: 'beast_tamer', name: 'Domador', model: 'Barbarian', recipe: 'beast_tamer' },
   { id: 'oracle', name: 'Oráculo', model: 'Mage', recipe: 'oracle' },
   { id: 'brute', name: 'Brutamontes', model: 'Barbarian', use: [], scale: 1.6, clips: { Idle: 'Brute_Idle', Running_A: 'Brute_Run' } },   // luta de punhos; anda e respira como gigante (Rig_Large)
+  { id: 'vampire', name: 'Vampira', model: 'Mage', use: [] },
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
 ];
 export const WEAPONS = {
