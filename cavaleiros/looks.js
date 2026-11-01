@@ -355,6 +355,7 @@ export const LOOKS = {
       Mage_Cape: { tint: '#8a1428', amount: 0.85 },
     },
     extras: [
+      { type: 'fangs', bone: 'head' },
       { type: 'highCollar', bone: 'chest', color: 0x5a0f20, trim: 0xc9c2d4 },
       { type: 'robeSkirt', bone: 'hips', color: 0x2a0a14, trim: 0x8a1428, height: 0.5, flare: 0.4 },
       { type: 'motes', bone: 'root', color: 0x8a1a2e, n: 4, size: 0.04, y: 1.1 },
