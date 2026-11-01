@@ -617,7 +617,7 @@ function rememberCampaignSquad() {
 }
 
 // Equipe contínua da campanha: cada herói leva XP e evoluções de uma missão para a outra.
-// A composição grava ao começar a missão; XP e evoluções, só na vitória. Herói novo entra no nível 1.
+// A composição grava ao começar a missão; XP e evoluções, só na vitória. Herói novo entra no nível de quem saiu (as evoluções ele escolhe).
 const CAMPAIGN_TEAM_KEY = 'cavaleiros-time-campanha';
 let campaignTeamRun = false;   // ligado pelo mapa e pela "Próxima"; simulações e atalhos seguem o grupo de cada missão
 const campaignTeamMode = () => campaignTeamRun && !!game.mission && !game.test;
@@ -672,7 +672,7 @@ function showTeam() {
   const cfgs = team.map((entry) => VARIANTS.find((v) => v.id === entry.id));
   const covered = new Set(teamCoverage(cfgs).roles.filter((role) => role.count > 0).map((role) => role.name));
   const lacking = [...new Set([...missionRoleNeeds(m.goal), ...teamCoverage(cfgs).missing])].filter((role) => !covered.has(role));
-  setPickSub(`${duel ? 'Escolha quem entra no duelo' : 'Clique em quem sai da equipe; quem entra começa no nível 1'}${lacking.length ? ` · Falta: ${lacking.join(', ')}` : ''}`);
+  setPickSub(`${duel ? 'Escolha quem entra no duelo' : 'Clique em quem sai da equipe; quem entra herda o nível dele'}${lacking.length ? ` · Falta: ${lacking.join(', ')}` : ''}`);
   $('pickHint').textContent = '';
   const list = $('pickList');
   list.innerHTML = '';
@@ -731,6 +731,7 @@ function teamCardLabel(entry) {
 function startTeam(members = pick.options.filter((entry) => !pick.swap.has(entry.id))) {
   pick.open = false;
   $('pick').classList.add('hidden');
+  pick.leaving = missionPartySize(game.mission) === 1 ? [] : pick.options.filter((entry) => !members.includes(entry));   // quem sai: o nível dele passa a quem entra
   for (const entry of members) restoreCampaignHero(entry);
   game.picksLeft = missionPartySize(game.mission) - heroes().length;
   if (game.picksLeft > 0) return showPick(pickTitle(), pickSub());
@@ -1003,7 +1004,7 @@ function useMissionWorld(m, seed) {
   aimCamera(world.anchorS(m.from));
 }
 
-// "Repetir" da campanha: mesma missão, cenário, dificuldade e equipe, sem passar pelas escolhas
+// "Repetir" da campanha: mesma missão, cenário e dificuldade; na equipe contínua abre a tela da equipe (Seguir / trocar)
 function replayMission({ replay: m, team, seed }) {
   game.mission = m;
   if (typeof withBattleAssets === 'function') return withBattleAssets(() => replayTeam(m, team), () => useMissionWorld(m, seed));
@@ -1011,15 +1012,13 @@ function replayMission({ replay: m, team, seed }) {
   replayTeam(m, team);
 }
 function replayTeam(m, team) {
+  if (campaignTeamMode()) return beginRun();   // o estado salvo é o de antes da missão (derrota não gravou XP; vitória gravou)
   prepareRun();
   game.picksLeft = 0;
-  const saved = campaignTeamMode() ? loadCampaignTeam() : [];
   for (const cfg of team.slice(0, missionPartySize(m))) {
-    const entry = saved.find((e) => e.id === cfg.id);
-    if (entry) { restoreCampaignHero(entry); continue; }   // equipe contínua: volta como está salva
     const h = new Hero(cfg);
     arrangeParty();
-    h.gainXp(campaignTeamMode() ? 0 : XP_LEVELS[m.level - 1]);
+    h.gainXp(XP_LEVELS[m.level - 1]);
     autoUpgrade();   // a missão já começa no nível certo, como na escolha normal
   }
   startMission();
@@ -1088,11 +1087,13 @@ function prepareRun() {
   placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
   game.campaignSquadSuggestion = m && !game.test ? loadCampaignSquad() : [];
   game.picksLeft = m ? missionPartySize(m) : 0;
+  pick.leaving = [];
+  pick.evoThen = null;
   return m;
 }
 
 const pickTitle = () => missionPartySize(game.mission) > 1 ? `Escolha o herói ${heroes().length + 1} de ${missionPartySize(game.mission)}` : 'Escolha seu herói';
-const pickSub = () => `${game.mission.name}: ${campaignTeamMode() ? 'quem entra começa no nível 1' : `o grupo começa no nível ${game.mission.level}`}`;
+const pickSub = () => `${game.mission.name}: ${campaignTeamMode() ? 'quem entra herda o nível de quem sai' : `o grupo começa no nível ${game.mission.level}`}`;
 
 function bindCard(b, i, hoverSelects = true) {
   if (hoverSelects) b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
@@ -1255,17 +1256,24 @@ function confirmPick(i) {
     const party = heroes(), first = game.picksLeft > 0;   // first: grupo inicial da missão
     // quem sai e volta na mesma troca não perde o progresso
     const kept = first && campaignTeamMode() ? loadCampaignTeam().find((entry) => entry.id === cfg.id) : null;
-    // equipe contínua: herói novo no nível 1; só a primeira montagem (save antigo sem equipe) entra no nível da missão
-    const xp = first ? (campaignTeamMode() && loadCampaignTeam().length ? 0 : XP_LEVELS[game.mission.level - 1]) : party.length ? party.reduce((sum, h) => sum + h.xp, 0) / party.length / 2 : 0;
+    if (kept) pick.leaving = (pick.leaving || []).filter((entry) => entry.id !== kept.id);
+    // equipe contínua: quem entra herda o XP de quem saiu (vaga livre: nível 1); só a primeira montagem (sem equipe salva) entra no nível da missão
+    const teamFill = first && !kept && campaignTeamMode() && loadCampaignTeam().length > 0;
+    const xp = first ? (teamFill ? (pick.leaving?.shift()?.xp ?? 0) : XP_LEVELS[game.mission.level - 1]) : party.length ? party.reduce((sum, h) => sum + h.xp, 0) / party.length / 2 : 0;
     const h = kept ? restoreCampaignHero(kept) : new Hero(cfg);
     if (!kept) { arrangeParty(); h.gainXp(xp); }
     h.busy = h.once('Cheer') * 0.6;
     if (first) {
       rememberCampaignSquad();
+      const next = () => {
+        if (--game.picksLeft > 0) return showPick(pickTitle(), pickSub());
+        if (campaignTeamMode()) storeCampaignTeam(heroes());
+        startMission();
+      };
+      // troca na equipe contínua: o jogador distribui os pontos de quem entrou (a menos que a evolução seja automática)
+      if (teamFill && evolutions.length && !autoEvolve) { pick.evoThen = next; return showEvolution(); }
       autoUpgrade();   // a missão já começa no nível certo, sem telas de evolução
-      if (--game.picksLeft > 0) return showPick(pickTitle(), pickSub());
-      if (campaignTeamMode()) storeCampaignTeam(heroes());
-      return startMission();
+      return next();
     }
     const begin = () => {
       if (heroes().length > 1) showBanner(`+ ${cfg.name}`);
@@ -1515,7 +1523,7 @@ function confirmRelic(i) {
 }
 
 function showEvolution() {
-  if (!evolutions.length || pick.open || game.paused || game.over) return;
+  if (!evolutions.length || pick.open || (game.paused && !pick.evoThen) || game.over) return;   // evoThen: evolução antes da missão, com o jogo parado
   if (autoEvolve) {
     while (evolutions.length && !game.over) {
       const entry = evolutions.shift();
@@ -1677,8 +1685,10 @@ function confirmEvolution(i) {
   popText(h.pos, option.name + '!', 'evolve');
   pick.open = false;
   $('pick').classList.add('hidden');
-  game.paused = false;
+  const then = pick.evoThen;
+  if (!then) game.paused = false;
   pick.evoDone = evolutions.length ? [...(pick.evoDone || []), entry] : [];   // quem já evoluiu nesta fila ("1/2")
+  if (then && !evolutions.length) { pick.evoThen = null; return then(); }   // antes da missão: terminou a fila, segue a montagem
   showEvolution();
 }
 
@@ -1721,6 +1731,7 @@ function arrangeParty() {
 addEventListener('keydown', (e) => {
   if (!pick.open) return;
   if (e.key === 'Escape' && (pick.mode === 'difficulty' || pick.mode === 'team')) { e.stopImmediatePropagation(); return game.mission ? showCampaign() : showMenu(); }
+  if (e.key === 'Escape' && pick.mode === 'evolution' && pick.evoThen) { e.stopImmediatePropagation(); return startGame('map'); }   // desiste da montagem: limpa fila e grupo
   if (e.target.closest?.('.team-go') && (e.key === 'Enter' || e.key === ' ')) return;   // Enter no botão segue com a equipe
   if (pick.mode === 'team' && missionPartySize(game.mission) > 1 && e.key === 'Enter') return startTeam();   // Enter segue; Espaço e 1–4 marcam quem sai
   const grid = pick.mode === 'hero';
@@ -9798,6 +9809,8 @@ function startGame(view = 'menu') {
   pick.open = false;
   evolutions.length = 0;
   pick.evoDone = [];
+  pick.evoThen = null;
+  pick.leaving = [];
   pick.upgrades = [];
   while (enemyBolts.length) scene.remove(enemyBolts.pop().mesh);
   for (const list of [bolts, blasts, flames]) while (list.length) {
