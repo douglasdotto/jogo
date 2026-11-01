@@ -10885,6 +10885,7 @@ function rescueRunnerFor(captive, party = heroes()) {
 }
 // aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
 const VILLAGER_GAP = 2.3;   // do posto de trás do grupo até o aldeão
+const VILLAGER_FLEE = 7, RESCUE_EXIT_TIME = 4;   // o resgatado recua de inimigos a menos de 7 m e sai de cena 4 s após a libertação
 class Villager extends Unit {
   constructor(captive = false) {
     super(assets.Barbarian, { hp: Math.round(240 / difficulty.dmg), dmg: 0, range: 0, speed: 3, cooldown: 1 }, 'villager');
@@ -10927,6 +10928,26 @@ class Villager extends Unit {
     if (this.dead || game.over || this.busy > 0) return;
     if (this.captive && !this.rescued) { this.vel.set(0, 0, 0); this.loop('Idle'); return; }
     const fwd = this.follow();
+    if (this.captive) {   // resgatado: foge de inimigos próximos (para trás do grupo) e, passados alguns segundos, sai de cena
+      if (this.exitT > 0 && (this.exitT -= dt) <= 0) {
+        popText(this.pos, 'Obrigado!', 'heal');
+        this.left = this.untargetable = true;
+        this.root.visible = false;
+        this.bar.style.display = 'none';
+        return;
+      }
+      const threat = nearest(this.pos, skeletonsAlive().filter((s) => !s.dead && !s.spawning));
+      if (threat && tacticalDistance(threat.pos, this.pos) < VILLAGER_FLEE) {
+        tmp.copy(this.pos).sub(threat.pos).setY(0);
+        if (tmp.dot(fwd) > 0) tmp.addScaledVector(fwd, -tmp.dot(fwd));   // nunca para a frente: só de lado
+        if (tmp.lengthSq() < 0.04) {   // inimigo colado por trás: vai para o herói mais perto
+          const guard = nearest(this.pos, heroes().filter((h) => !h.dead));
+          tmp.copy(guard ? guard.pos : this.pos).sub(this.pos).setY(0);
+        }
+        const spot = tmp.normalize().multiplyScalar(3).add(this.pos);
+        if (world.canStep(this.pos, spot)) { this.moveTo(spot, dt); this.locomote('Running_A', 'Walking_A', 'Idle'); return; }
+      }
+    }
     if (this.pos.distanceTo(this.post) > 0.3) this.moveTo(this.post, dt);
     else this.face(tmp.copy(this.post).addScaledVector(fwd, 10), dt);
     this.locomote('Running_A', 'Walking_A', 'Idle');
@@ -11041,7 +11062,7 @@ const militiaAlive = () => units.reduce((n, u) => n + (u.militia && !u.dead ? 1 
 // quem a guarda protege: o aldeão da escolta ou o santuário
 function guardedObjective() {
   const v = game.villager;
-  if (v && !v.dead && !v.captive) return v;
+  if (v && !v.dead && !v.captive && !v.left) return v;
   return game.shrine && !game.shrine.dead ? game.shrine : null;
 }
 
@@ -11494,6 +11515,8 @@ function campaignTick(dt, skeletons, party = heroes()) {
   }
   if (captive && game.rescueT >= RESCUE_TIME) {
     game.villager.rescued = true;
+    game.villager.exitT = RESCUE_EXIT_TIME;
+    game.missionVillagerRatio = Math.max(0, Math.min(1, game.villager.hp / Math.max(1, game.villager.maxHp)));   // estrelas: a vida na libertação
     game.rescueComplete = true;
     game.villager.nameTag.textContent = 'Resgatado';
     popText(game.villager.pos, 'Resgatado!', 'heal');
@@ -11836,7 +11859,7 @@ function updateGame(dt) {
         for (const h of party) { hp += Math.max(0, h.hp); maxHp += h.maxHp; }
         game.missionHpRatio = hp / Math.max(1, maxHp);
         const villager = game.villager;
-        game.missionVillagerRatio = villager && villager.maxHp > 0
+        if (!game.rescueComplete) game.missionVillagerRatio = villager && villager.maxHp > 0
           ? Math.max(0, Math.min(1, villager.hp / villager.maxHp))
           : null;
       }
