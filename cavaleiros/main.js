@@ -67,7 +67,7 @@ const VARIANTS = [
   { id: 'champion', names: ['Campeão', 'Campeão Real', 'Lâmina Solar'], desc: 'Gira e empurra os inimigos.', ability: 'Turbilhão', color: ['#ffe59b', '#c99a3e'],
     use: ['2H_Sword'], stats: { Vida: 4, Força: 5, Rapidez: 3, Alcance: 2 }, dmg: 32, cooldown: 1.05, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice', '2H_Melee_Attack_Chop'], classId: 0 },
   { id: 'berserker', names: ['Berserker', 'Fera Rubra', 'Fúria Titã'], desc: 'Pouca vida, golpes mais rápidos.', ability: 'Fúria', color: ['#ffb2b2', '#ce5f63'],
-    use: ['1H_Axe', '1H_Axe_Offhand'], stats: { Vida: 4, Força: 4, Rapidez: 4, Alcance: 1 }, hp: 220, dmg: 30, cooldown: 0.95, cleave: 0, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 1 },
+    use: ['1H_Axe', '1H_Axe_Offhand'], stats: { Vida: 4, Força: 4, Rapidez: 4, Alcance: 1 }, hp: 245, dmg: 30, cooldown: 0.95, cleave: 0, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 1 },
   { id: 'crusher', names: ['Esmagador', 'Quebra-rochas', 'Abala-terra'], desc: 'Pancada que deixa todos zonzos.', ability: 'Terremoto', color: ['#ffbf8a', '#d88950'],
     use: ['2H_Axe'], stats: { Vida: 5, Força: 5, Rapidez: 2, Alcance: 2 }, dmg: 31, attacks: ['2H_Melee_Attack_Chop', '1H_Melee_Attack_Jump_Chop'], classId: 1 },
   { id: 'viking', names: ['Viking', 'Jarl Valente', 'Rei do Norte'], desc: 'Arremessa um machado à distância.', ability: 'Machado voador', color: ['#b8dfe5', '#5b9dab'],
@@ -83,9 +83,9 @@ const VARIANTS = [
   { id: 'crossbow', names: ['Besteiro', 'Mira de Águia', 'Flecha Real'], desc: 'Virotes atravessam a fila.', ability: 'Tiro perfurante', color: ['#c9eaa4', '#84ac50'],
     use: ['2H_Crossbow'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 }, ranged: true, range: 7, cooldown: 1.05, model: 'Ranger', run: 'Running_HoldingRifle', attacks: ['2H_Ranged_Shoot', '2H_Ranged_Shooting'], classId: 3 },
   { id: 'ninja', names: ['Ninja', 'Vento Noturno', 'Lua Silenciosa'], desc: 'Lança três adagas em leque.', ability: 'Leque de adagas', color: ['#b6c5f4', '#768ac6'],
-    use: ['Knife', 'Throwable'], stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 4 }, model: 'Rogue_Hooded', classId: 3 },
+    use: ['Knife', 'Throwable'], stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 4 }, hp: 200, model: 'Rogue_Hooded', classId: 3 },
   { id: 'duelist', names: ['Duelista', 'Lâmina Dupla', 'Mestre das Lâminas'], desc: 'Duas espadas curtas em cortes velozes.', ability: 'Rajada de lâminas', color: ['#dfe6ee', '#8394aa'],
-    use: ['1H_Sword', '1H_Sword_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, dmg: 18, cooldown: 0.5, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 3 },
+    use: ['1H_Sword', '1H_Sword_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, hp: 200, dmg: 18, cooldown: 0.5, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 3 },
   { id: 'king', names: ['Rei Dourado', 'Rei Radiante', 'Imperador Solar'], desc: 'Seu brado fortalece todo o grupo.', ability: 'Brado real', color: CHARACTERS[2].color,
     recipe: CHARACTERS[2], classId: 0, dmg: 28, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice', '2H_Melee_Attack_Stab'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 } },
   { id: 'iceviking', names: ['Viking do Gelo', 'Jarl Glacial', 'Rei das Geleiras'], desc: 'Seu machado congela uma área.', ability: 'Machado glacial', color: CHARACTERS[3].color,
@@ -117,10 +117,10 @@ const VARIANTS = [
     stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 5 }, hp: 175, dmg: 22, range: 8, speed: 2.8, cooldown: 1.2, ranged: true, splash: 0, attacks: ['Spellcast_Shoot'], classId: 2, pickGroup: 'oracle', recipe: CHARACTERS[10] },
   // tanque de punhos: mais vida e menos dano que o Guardião, lento; armor tira um pouco de cada golpe (takeDamage)
   { id: 'brute', names: ['Brutamontes', 'Rocha Viva', 'Colosso'], desc: 'Aguenta a horda na frente do grupo.', ability: 'Pancada', color: ['#c9bba2', '#7d7464'],
-    use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.4, cooldown: 1.6, idle: 'Brute_Idle', walk: 'Brute_Walk', run: 'Brute_Run',   // guarda, passo e corrida de gigante (Rig_Large)
+    use: [], stats: { Vida: 5, Força: 2, Rapidez: 1, Alcance: 1 }, hp: 340, dmg: 24, range: 1.6, speed: 2.65, cooldown: 1.35, idle: 'Brute_Idle', walk: 'Brute_Walk', run: 'Brute_Run',   // guarda, passo e corrida de gigante (Rig_Large)
     attacks: ['Brute_Punch', 'Brute_Kick'], armor: 3, scale: 1.6, frontline: true, classId: 1 },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
-    use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
+    use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 175, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   // quem herda o respiro padrão alterna entre os dois idles do pacote (Idle_A/Idle_B), para o grupo parado não respirar em coro
   ...(!v.idle && HEROES[v.classId].idle === 'Idle' && v.id.length % 2 && { idle: 'Idle_B' }),
@@ -4873,6 +4873,29 @@ function summon(h, minions) {
   for (const u of minions) column(u.pos, 0x6dff8a, 0.5, 3, 0.8);
 }
 
+// Exército dos Mortos: terra rachando, esqueletos emergindo, anel de ossos que expande até o raio real e some
+function legion(h, army, radius) {
+  const p = h.pos;
+  const dirt = 0x6b5a45, bone = 0xd9d2b8, green = 0x5cc46e;
+  shaderDisc('rune', 'necro', p, radius, 1.6, { y: 0.08, opacity: 0.8 });
+  wave(p, green, 0.5, radius, 0.5, { opacity: 0.7 });
+  wave(p, bone, 0.3, radius * 0.8, 0.65, { opacity: 0.5, delay: 0.12 });
+  puffs(p.clone().setY(p.y + 0.3), 4, 'gloom', { spread: radius * 0.4, rise: 0.5, size: 0.9, life: 1.1, opacity: 0.6 });
+  burst(p.clone().setY(p.y + 0.4), [bone, green], fewer(10), 4, { up: 0.6, life: 0.5, size: 0.9 });
+  for (const u of army) {
+    const at = u.pos.clone(), delay = Math.max(0, (u.riseT || 0) - LEGION_RISE);
+    ring(at, 0.55, dirt, 0.7);   // terra rachando sob cada um
+    for (let i = 0; i < fewer(6); i++) {   // torrões saltando
+      const a = (i / 6) * TAU;
+      particle(puffGeo, dirt, V(at.x + Math.cos(a) * 0.3, at.y + 0.15, at.z + Math.sin(a) * 0.3),
+        V(Math.cos(a) * 1.6, 2.2 + Math.random(), Math.sin(a) * 1.6), 0.6, { solid: true, size: 0.35, gravity: 9, delay: delay + 0.1 });
+    }
+    for (let i = 0; i < fewer(4); i++) {   // fagulhas verdes pequenas subindo
+      particle(sparkGeo, green, V(at.x + rnd(0.3), at.y + 0.1, at.z + rnd(0.3)), V(rnd(0.2), 1.2 + Math.random(), rnd(0.2)), 0.9, { size: 0.7, delay: delay + 0.2 + Math.random() * 0.4, opacity: 0.8 });
+    }
+  }
+}
+
 function beastCall(h, beast) {
   const at = beast.pos.clone();
   wave(at, 0xcbb36f, 0.25, 2.1, 0.6);
@@ -5594,7 +5617,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
@@ -7158,9 +7181,27 @@ class Hero extends Unit {
       }
       case 'summon':
         effect = () => {
+          // Exército dos Mortos: seis esqueletos brotam da terra em círculo; a onda de ossos empurra e atordoa de leve quem está perto
           for (const unit of units.filter((unit) => unit.summoner === this)) { poof(unit.pos); unit.remove(); }
-          FX.summon(this, [-1.5, -0.5, 0.5, 1.5].map((side) => Object.assign(new Minion(this, side), { ultimate: true })));
-          burst(this.pos, color, 20, 3);
+          const army = [];
+          for (let i = 0; i < LEGION_SIZE; i++) {
+            const a = (i / LEGION_SIZE) * Math.PI * 2 + 0.35;
+            let r = radius * 0.7;
+            const at = new THREE.Vector3();
+            for (; r > 0.8; r -= 0.5) {   // sem obstáculo no caminho; se não couber, fecha o círculo
+              at.set(this.pos.x + Math.cos(a) * r, this.pos.y, this.pos.z + Math.sin(a) * r);
+              if (world.canStep(this.pos, at)) break;
+            }
+            if (r <= 0.8) at.set(this.pos.x + Math.cos(a) * 0.9, this.pos.y, this.pos.z + Math.sin(a) * 0.9);
+            army.push(new Minion(this, 0, { ultimate: true, at, riseDelay: 0.08 * i }));
+          }
+          for (const enemy of skeletonsAlive()) {
+            if (enemy.spawning || enemy.pos.distanceTo(this.pos) > radius + 0.4 * (enemy.size - 1)) continue;
+            heroHit(this, enemy, this.dmg * power * (skill.power || 1));
+            controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 0.7));
+            enemy.vel.add(tmp.subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(enemy.boss ? 1.5 : 5));
+          }
+          FX.legion(this, army, radius);
         };
         break;
       default: return false;
@@ -7798,25 +7839,44 @@ const SKILL_ANIMS = {
   ],
 };
 
+const LEGION_SIZE = 6;   // esqueletos da ultimate do Necromante
+const LEGION_RISE = 0.8;   // tempo que cada um leva para sair da terra
+
 class Minion extends Unit {
-  constructor(summoner, side) {
-    super(skeletonModel('Minion'), { hp: 55 * summoner.skillPower, dmg: 9, range: 1.3, speed: 3.4, cooldown: 1.3 }, 'ally');
+  constructor(summoner, side, o = {}) {
+    super(skeletonModel('Minion'), { hp: (o.ultimate ? 42 : 55) * summoner.skillPower, dmg: 9, range: 1.3, speed: 3.4, cooldown: 1.3 }, 'ally');
     this.summoner = summoner;
     this.cfg = { id: 'minion' };
     this.level = summoner.level;
     this.life = scaleBranchEffect(summoner, 'support', 8) * summoner.skillPower;
-    this.pos.copy(summoner.pos).add(new THREE.Vector3(side * 0.9, 0, 0));
+    if (o.at) this.pos.copy(o.at); else this.pos.copy(summoner.pos).add(new THREE.Vector3(side * 0.9, 0, 0));
     this.size = 0.7;
     this.popT = 0;
+    if (o.ultimate) {
+      this.ultimate = true;
+      this.life += 3;   // a legião dura um pouco mais que os esqueletinhos comuns
+      this.riseT = LEGION_RISE + (o.riseDelay || 0);   // começa sob a terra e se levanta
+      this.lift = -1.5;
+      this.root.visible = false;
+    }
     this.bar.classList.add('ally');
     for (const m of this.mats) m.color?.set(0xb5ffbc);
     Skeleton.prototype.attach.call(this, 'Skeleton_Blade', 'handslotr');
     this.loop('Idle_Combat');
-    poof(this.pos, 0.7);
+    if (!o.ultimate) poof(this.pos, 0.7);
   }
 
   update(dt) {
     if (dt <= 0) return;
+    if (this.riseT > 0) {   // levantando da terra: sobe do chão, sem agir ainda
+      this.riseT -= dt;
+      const k = Math.min(1, Math.max(0, this.riseT) / LEGION_RISE);   // 1 = sob a terra, 0 = de pé
+      if (!this.root.visible && k < 1) this.root.visible = true;
+      this.lift = -1.5 * k * k;
+      this.updateCommon(dt);
+      if (this.riseT <= 0) this.lift = 0;
+      return;
+    }
     this.updateCommon(dt);
     if (game.over) return;
     this.life -= dt;

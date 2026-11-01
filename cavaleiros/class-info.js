@@ -102,5 +102,5 @@ export const SKILL_LEVEL_CAP = 3;
 export const skillLevel = (level) => Math.min(level, SKILL_LEVEL_CAP);
 
 export function skillCooldown(id, level = 1, rate = 1) {
-  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 9, bard: 10, angel: 10, chronist: 8, brute: 8, summoner: 14 }[id] ?? 6) - (skillLevel(level) - 1) * 0.7) * rate;
+  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 10, bard: 10, angel: 10, chronist: 8, brute: 8, summoner: 15 }[id] ?? 6) - (skillLevel(level) - 1) * 0.7) * rate;
 }

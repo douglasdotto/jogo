@@ -4,7 +4,7 @@ import { heroInfo, skillCooldown, skillLevel } from './class-info.js';
 // Os efeitos compartilham regras de combate, mas mantêm nomes e identidade próprios.
 const EXTRA_SKILLS = {
   paladin: [
-    { name: 'Escudo da Luz', description: 'Protege os heróis próximos por alguns segundos.', effect: 'ward', cooldown: 18, duration: 4.5 },
+    { name: 'Escudo da Luz', description: 'Protege os heróis próximos por alguns segundos.', effect: 'ward', cooldown: 20, duration: 4.5 },
     { name: 'Renovação', description: 'Cura o grupo e explode em luz contra os inimigos ao redor.', effect: 'holy-nova', cooldown: 64, radius: 6.5, power: 2.2 },
     { name: 'Juramento', description: 'Jura proteger o aliado mais ferido: assume parte do dano que ele recebe e o cura um pouco.', effect: 'oath-link', cooldown: 18, range: 9, duration: 6, share: 0.4, color: 0xfff0a8 },
   ],
@@ -80,7 +80,7 @@ const EXTRA_SKILLS = {
   ],
   necro: [
     { name: 'Escudo Ósseo', description: 'Reveste o grupo com uma barreira de ossos.', effect: 'ward', cooldown: 24, duration: 6, color: 0x73d97e },
-    { name: 'Exército dos Mortos', description: 'Invoca quatro esqueletos para lutar ao lado do grupo.', effect: 'summon', cooldown: 70, count: 4, color: 0x73d97e },
+    { name: 'Exército dos Mortos', description: 'Seis esqueletos brotam da terra em círculo; a onda de ossos empurra e atordoa de leve quem está perto.', effect: 'summon', cooldown: 70, count: 6, radius: 3.6, power: 0.5, color: 0x73d97e },
     { name: 'Drenar Vida', description: 'Suga a vida de até três inimigos e a transfere aos aliados mais feridos.', effect: 'life-drain', cooldown: 18, radius: 7, power: 0.9, leech: 0.6, color: 0x73d97e },
   ],
   druid: [

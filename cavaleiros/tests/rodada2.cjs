@@ -3217,8 +3217,8 @@ test('primário do Necromante não desfaz o Exército dos Mortos',()=>{
   clear();const necro=hero('necro',0,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
   const cast=slot=>{assert.equal(necro.useSkill(e,false,true,slot),true);necro.pendingHit.effect();necro.pendingHit=null};
   const mine=()=>t.units.filter(u=>u.summoner===necro);
-  cast(2);assert.equal(mine().length,4);cast(0);assert.equal(mine().length,6);
-  cast(0);assert.equal(mine().length,6);assert.equal(mine().filter(u=>u.ultimate).length,4);clear();
+  cast(2);assert.equal(mine().length,6);cast(0);assert.equal(mine().length,8);
+  cast(0);assert.equal(mine().length,8);assert.equal(mine().filter(u=>u.ultimate).length,6);clear();
 });
 test('brado do Rei não reduz o Hino do Bardo e o bônus zera ao expirar',()=>{
   clear();const king=hero('king',0,0),bard=hero('bard',1,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
