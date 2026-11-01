@@ -79,7 +79,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   renderer:{render:noop,domElement:{addEventListener(type,handler){const listeners=rendererListeners.get(type)||[];listeners.push(handler);rendererListeners.set(type,listeners);},style:{}}}, camera:{position:new Vector3()}, sun:{position:new Vector3(),target:{position:new Vector3()},color:{lerpColors:noop},shadow:{camera:{left:-24,right:24},mapSize:{x:1024}}},
   follow:new Vector3(),cam:{zoom:1,userDist:0,wheel:false},controls:{target:new Vector3(),update:noop}, world:{obstacles:[],pointAt:s=>new Vector3(0,0,-s),
     tangentAt:()=>new Vector3(0,0,-1),sideOf:()=>new Vector3(1,0,0),anchorS:p=>p*10,along:(s,x)=>new Vector3(x,0,-s),update:noop,canStep:()=>true,isInsideGround:()=>true,groundHeight:()=>0,isShallow:()=>false,nextWaypoint:(a,b)=>b,zoneOf:()=>null,gloomAt:()=>0},
-  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],sentries:[],fx:[],updateFx:noop,
+  poof:noop,ring:noop,beam:noop,popText:noop,popTextPool:{clear:noop,update:noop}, colors:{arcane:0}, bolts:[],blasts:[],flames:[],sentries:[],fewer:n=>n,lowQuality:false,fx:[],updateFx:noop,
   wave:noop,burst:noop,column:noop,
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
@@ -121,7 +121,7 @@ context.addEventListener=(type,handler,options)=>{
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
+vm.runInContext('globalThis.t={spiritTotems,removeSpiritTotem,Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
@@ -184,7 +184,7 @@ for(const n of ['Skeleton_Blade','Skeleton_Axe','Skeleton_Shield_Small_A','Skele
 const results=[];
 const failures=[];
 function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.stack||e.message)}}
-function clear(){for(const u of [...t.units])u.remove();while(t.sentries?.length)t.removeSentry(t.sentries[0]);t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,rescueRunner:null,test:false,twinFocus:null});}
+function clear(){for(const u of [...t.units])u.remove();while(t.sentries?.length)t.removeSentry(t.sentries[0]);while(t.spiritTotems?.length)t.removeSpiritTotem(t.spiritTotems[0]);t.evolutions.length=0;t.pick.open=false;Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,rescueRunner:null,test:false,twinFocus:null});}
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.barHeight=0;hero.pos.set(0,0,-4);t.updateBars();
   const transform=hero.bar.style.transform,width=hero.bar.firstChild.style.width;
@@ -619,7 +619,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute','lancer']);
   assert.deepEqual(Array.from(rowFor('Bárbaros').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','monk','beast_tamer']);
-  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist','vampire','cook']);
+  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist','vampire','cook','shaman']);
   for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=8,'cada aba tem de 5 a 8 heróis');
   assert.equal(t.pick.classRows.reduce((sum,row)=>sum+row.children.length,0),t.VARIANTS.length,'todo herói está em exatamente uma aba');
   const filterFor=name=>t.pick.classFilters[t.PICK_GROUPS.findIndex(group=>group.name===name)];
@@ -1567,6 +1567,36 @@ test('Monge: cem punhos terminam em chute que atordoa, Palma do vento empurra em
   for(let i=0;i<50;i++)m.update(.1);
   assert.ok(m.meditateT<=0&&m.immuneT<=0,'a meditação termina');
   const after=m.hp;m.takeDamage(20,null,null);assert.ok(m.hp<after,'volta a levar dano');
+  clear();
+});
+test('Xamã: totem de cura pulsa vida, no máximo 2 totens, raízes deixam lentos e a ultimate revive ou cura e protege',()=>{
+  clear();t.game.state='fight';
+  assert.equal(cfg('shaman').classId,4);assert.equal(t.variantOpen('shaman'),true);
+  const sh=new t.Hero(cfg('shaman'));sh.pos.set(0,0,0);
+  const ally=new t.Hero(cfg('guardian'));ally.pos.set(1,0,0);ally.hp=ally.maxHp*0.4;
+  // auto: precisa de ferido (ou horda) e finca o totem no meio do ferido
+  assert.equal(sh.useSkill(null,false,false,0),true);sh.pendingHit.effect();
+  assert.equal(t.spiritTotems.length,1);assert.equal(t.spiritTotems[0].kind,'heal');
+  const before=ally.hp;for(let i=0;i<30;i++)t.updateBolts(.1);
+  assert.ok(ally.hp>before+10,'o totem cura quem está perto');
+  // máximo de 2 totens: o mais antigo some
+  const first=t.spiritTotems[0];
+  sh.skillTimers[1]=0;const foe=newFoe(0,-3);newFoe(0.5,-3.4);
+  assert.equal(sh.useSkill(null,false,false,1),true);sh.pendingHit.effect();
+  sh.skillTimers[0]=0;ally.hp=ally.maxHp*0.3;ally.pos.set(-3,0,0);assert.equal(sh.useSkill(null,false,true,0),true);sh.pendingHit.effect();
+  assert.equal(t.spiritTotems.length,2,'no máximo 2 totens');assert.ok(!t.spiritTotems.includes(first),'o mais antigo some');
+  const root=t.spiritTotems.find(x=>x.kind==='root');assert.ok(root);
+  foe.slowT=0;for(let i=0;i<4;i++)t.updateBolts(.1);assert.ok(foe.slowT>0,'o totem de raízes deixa o inimigo lento');
+  // chamado: pulsa e prolonga
+  const life=root.life;sh.skillTimers[3]=0;assert.equal(sh.useSkill(null,false,true,3),true);sh.pendingHit.effect();assert.ok(root.life>life+2);
+  // ultimate com herói caído: ele volta
+  const fallen=new t.Hero(cfg('berserker'));fallen.pos.set(2,0,2);fallen.die();assert.equal(fallen.dead,true);
+  sh.skillTimers[2]=0;assert.equal(sh.useSkill(null,false,false,2),true,'a IA usa a ultimate com herói caído');sh.pendingHit.effect();
+  assert.equal(fallen.dead,false);assert.ok(fallen.hp>=fallen.maxHp*0.6-1);
+  // sem caídos: cura e escudo
+  ally.hp=ally.maxHp*0.2;ally.guardT=0;sh.skillTimers[2]=0;assert.equal(sh.useSkill(null,false,true,2),true);sh.pendingHit.effect();
+  assert.ok(ally.hp>ally.maxHp*0.5);assert.ok(ally.guardT>0);
+  while(t.spiritTotems.length)t.removeSpiritTotem(t.spiritTotems[0]);
   clear();
 });
 test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo, frasco volátil explode e a transmutação vira ovelhas até acabar',()=>{

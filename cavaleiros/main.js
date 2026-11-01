@@ -132,6 +132,8 @@ const VARIANTS = [
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 175, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
   { id: 'cook', names: ['Cozinheira', 'Chef de Campanha', 'Mestra do Banquete'], desc: 'Tortas e marmitas que curam e dão ânimo.', ability: 'Torta quente', color: ['#ffd9a0', '#d9803a'],
     use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, model: 'Barbarian', hp: 185, dmg: 11, range: 5.5, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Throw'], classId: 4, pickGroup: 'cook' },
+  { id: 'shaman', names: ['Xamã', 'Guardião dos Totens', 'Voz dos Ancestrais'], desc: 'Planta totens que curam e seguram a horda.', ability: 'Totem de cura', color: ['#8fe6b8', '#3f9a72'],
+    model: 'Barbarian', use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 14, range: 6, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'shaman' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   // quem herda o respiro padrão alterna entre os dois idles do pacote (Idle_A/Idle_B), para o grupo parado não respirar em coro
   ...(!v.idle && HEROES[v.classId].idle === 'Idle' && v.id.length % 2 && { idle: 'Idle_B' }),
@@ -144,7 +146,7 @@ const PICK_GROUPS = [
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner'] },
   { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
-  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook'] },
+  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook', 'shaman'] },
 ];
 const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
 const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id === groupId)?.heroes || [])
@@ -1628,11 +1630,11 @@ function evolutionGain(hero, id) {
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
-    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen']);
+    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast']);
+    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist']);
-  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook']);
+  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
   const controlSkills = skills.filter((skill) => skill.control || controlEffects.has(skill.effect));
   const supportSkills = skills.filter((skill) => supportEffects.has(skill.effect));
@@ -1884,9 +1886,10 @@ const SKILL_GLYPHS = {
   summoner: ['✿', '⬢', '♆', '⚘'],
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
+  shaman: ['♣', '☘', '☥', '✺'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
-const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast']);
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -3807,6 +3810,7 @@ function updateBolts(dt) {
     if (bl.t <= 0) { scene.remove(bl.mesh); releaseFxMaterial(bl.mesh.material); blasts.splice(i, 1); }
   }
   updateSentries(dt);
+  updateSpiritTotems(dt);
 }
 
 function removeSentry(sentry) {
@@ -3885,6 +3889,93 @@ function updateSentries(dt) {
     heroHit(owner, target, owner.dmg * 0.46 * sentry.power * (boosted ? 1.45 : 1));
     FX.zigzag(sentryShotFrom.copy(sentry.root.position).setY(sentry.root.position.y + 1.08), sentryShotTo.copy(target.pos).setY(target.pos.y + 0.95));   // zigzag e particle copiam os pontos
     if (typeof particle === 'function') particle(sparkGeo, boosted ? 0xe6fffb : 0x6df4df, sentryShotTo.copy(target.pos).setY(target.pos.y + 0.9), V(rnd(0.35), 0.5, rnd(0.35)), 0.25, { size: 1.2 });
+  }
+}
+
+// ---------- Totens do Xamã: aliados fixos no chão (no máximo 2 por Xamã; o mais antigo some) ----------
+const spiritTotems = [], SPIRIT_TOTEM_MAX = 2;
+const TOTEM_LOOKS = {   // madeira, faixa, cor da marca no chão, intervalo do pulso (s)
+  heal: { wood: 0x8a5a34, band: 0x3fe0b0, mark: 0x7ad8a0, every: 1 },
+  root: { wood: 0x6a4a2a, band: 0xc8a050, mark: 0x8a6a34, every: 0.5 },
+  ancestral: { wood: 0xb08a4a, band: 0xffd866, mark: 0xffd866, every: 1 },
+};
+let spiritParts = null;
+function spiritTotemModel(kind) {
+  const look = TOTEM_LOOKS[kind];
+  spiritParts ||= { base: new THREE.CylinderGeometry(0.34, 0.44, 0.16, 7), low: new THREE.BoxGeometry(0.46, 0.5, 0.46), high: new THREE.BoxGeometry(0.4, 0.42, 0.4),
+    band: new THREE.TorusGeometry(0.27, 0.04, 5, 12), eye: new THREE.BoxGeometry(0.08, 0.06, 0.04), beak: new THREE.ConeGeometry(0.07, 0.16, 4),
+    crest: new THREE.ConeGeometry(0.1, 0.4, 4), stone: new THREE.MeshLambertMaterial({ color: 0x8a8678 }), dark: new THREE.MeshLambertMaterial({ color: 0x2a1a10 }) };
+  const P = spiritParts, mats = look.mats ||= { wood: new THREE.MeshLambertMaterial({ color: look.wood }), band: new THREE.MeshLambertMaterial({ color: look.band }) };
+  const g = new THREE.Group(), part = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  part(P.base, P.stone, 0, 0.08, 0);
+  part(P.low, mats.wood, 0, 0.41, 0);
+  part(P.high, mats.wood, 0, 0.87, 0);
+  const band = part(P.band, mats.band, 0, 0.66, 0);
+  band.rotation.x = Math.PI / 2;
+  for (const side of [-0.1, 0.1]) part(P.eye, P.dark, side, 0.92, 0.21);
+  part(P.beak, P.dark, 0, 0.84, 0.24).rotation.x = Math.PI / 2;
+  part(P.crest, mats.band, 0, 1.28, 0);
+  g.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+  return g;
+}
+
+function removeSpiritTotem(t) {
+  scene.remove(t.root);
+  scene.remove(t.mark);
+  releaseFxMaterial(t.mark.material);
+  const index = spiritTotems.indexOf(t);
+  if (index >= 0) spiritTotems.splice(index, 1);
+}
+
+function plantSpiritTotem(owner, at, kind, duration, radius) {
+  if (kind !== 'ancestral') {
+    const own = spiritTotems.filter((t) => t.owner === owner && t.kind !== 'ancestral');
+    if (own.length >= SPIRIT_TOTEM_MAX) removeSpiritTotem(own[0]);
+  }
+  const look = TOTEM_LOOKS[kind], root = spiritTotemModel(kind), pos = at.clone().setY(world.groundHeight(at.x, at.z));
+  root.position.copy(pos);
+  root.scale.setScalar(0.01);
+  scene.add(root);
+  const big = kind === 'ancestral' ? 1.5 : 1;
+  const t = { owner, kind, root, mark: groundMark(pos, radius, look.mark, 0.22), radius, life: duration, age: 0, tickT: 0.3, every: look.every, pulses: 0, big };
+  spiritTotems.push(t);
+  wave(pos, look.band, 0.3, radius, 0.5, { opacity: 0.5 });
+  burst(pos.clone().setY(pos.y + 0.4), [look.band, 0xffffff], fewer(10), 3);
+  return t;
+}
+
+// um pulso: o totem de cura e o ancestral curam os heróis da área; o de raízes deixa os inimigos lentos
+function spiritTotemPulse(t) {
+  const at = t.root.position, owner = t.owner, look = TOTEM_LOOKS[t.kind];
+  t.pulses++;
+  if (t.kind === 'root') {
+    const context = activeTargetContext || frameTargetContext;
+    for (const s of context.skeletons?.length ? context.skeletons : skeletonsAlive()) if (!s.dead && !s.spawning && s.pos.distanceTo(at) <= t.radius + 0.4 * (s.size - 1))
+      controlEnemy(s, 'slowT', 0.9 * owner.skillPower);
+  } else {
+    const amount = scaleBranchEffect(owner, 'support', (5 + owner.level * 2) * (t.kind === 'ancestral' ? 1.6 : 1)) * owner.skillPower;
+    for (const h of heroes()) if (!h.dead && h.pos.distanceTo(at) <= t.radius + 0.3) {
+      const heal = Math.min(h.maxHp - h.hp, amount);
+      if (heal < 1) continue;
+      h.hp += heal;
+      owner.stats.cura += heal;
+      popText(h.pos, '+' + Math.round(heal), 'heal');
+      burst(h.pos.clone().setY(h.pos.y + 0.6), 0xbfffa8, fewer(3), 2, { gravity: -1 });
+    }
+  }
+  if (!lowQuality || t.pulses % 2) wave(at, look.band, 0.4, t.radius, t.kind === 'root' ? 0.5 : 0.7, { opacity: 0.3 });
+}
+
+function updateSpiritTotems(dt) {
+  for (let i = spiritTotems.length - 1; i >= 0; i--) {
+    const t = spiritTotems[i];
+    t.life -= dt;
+    t.age += dt;
+    if (t.life <= 0) { removeSpiritTotem(t); continue; }
+    const grow = 1 - (1 - Math.min(1, t.age / 0.3)) ** 3, fade = Math.min(1, t.life / 0.4);
+    t.root.scale.setScalar(Math.max(0.01, t.big * Math.min(grow, fade)));
+    t.tickT -= dt;
+    if (t.tickT <= 0) { t.tickT += t.every; spiritTotemPulse(t); }
   }
 }
 
@@ -4157,12 +4248,13 @@ const BOLT_LOOKS = {
   summoner: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xff8ad8, 0.45), 1.8]], orb: ['tonic', 0.36], size: [1.4, 1.4], spin: true },
   vampire: { geo: boltGeo, core: basic(0xa81c34), shells: [[glowMaterial(0x5a0f20, 0.3), 1.4]], size: [1.1, 1.1], spin: true },
   cook: { geo: foodGeo, core: basic(0xe0603a), shells: [], size: [1.2, 1.5], spin: true },   // comida de verdade voando, sem brilho
+  shaman: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.34], size: [1.3, 1.3], spin: true },
 };
 for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells || []).map((x) => x[0])]) if (m) m.userData.keep = true;
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
 const starGlowMat = glowMaterial(0x6f8cff, 0.55);
 for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat, flaskGlassMat, woolMat, sheepFaceMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
-const TRAIL = { cook: [0xffd27a, 0xe0603a], arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb] };
+const TRAIL = { cook: [0xffd27a, 0xe0603a], arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb], shaman: [0x6fe0a0, 0xe8ffd0] };
 // Símbolo e paleta próprios aparecem enquanto cada habilidade é preparada.
 const SKILL_ART = {
   paladin:   { color: 0xffe27a, accent: 0x8af5a8, glyph: crystalGeo, scale: 1.2 },
@@ -4197,6 +4289,7 @@ const SKILL_ART = {
   summoner: { color: 0xff8ad8, accent: 0xfff0fb, glyph: leafGeo, scale: 3 },
   vampire: { color: 0xa81c34, accent: 0xff9aaa, glyph: slashGeo, scale: 0.6 },
   cook: { color: 0xffb347, accent: 0xfff0d0, glyph: shellGeo, scale: 1.6 },
+  shaman: { color: 0x6fe0a0, accent: 0xffe6a1, glyph: leafGeo, scale: 3 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0, slowT = 0;
@@ -5707,7 +5800,7 @@ function element(h, skill, target, impactPoint = null) {
     for (let i = 0; i < (ult ? 5 : 3); i++) rays(spot(0), 'holy', 0.3, 6, 0.7, { delay: i * 0.06 });   // raios de luz em shader
     if (ult) shaderDisc('rune', 'holy', at, reach + 0.4, 1.1, { seed: 3 });
     for (let i = 0; i < n; i++) particle(sparkGeo, i % 3 ? 0xffe27a : 0xffffff, spot(), V(rnd(0.3), 3 + Math.random() * 2, rnd(0.3)), 1, { size: 1.2, delay: Math.random() * 0.3 });
-  } else if (id === 'druid') {   // folhas rodando
+  } else if (id === 'druid' || id === 'shaman') {   // folhas rodando
     for (let i = 0; i < fewer(n); i++) sprite('leaf', 'nature', spot(), V(rnd(1.5), 1.5 + Math.random() * 1.5, rnd(1.5)), 1.2, { size: 0.4, gravity: 0.6, delay: Math.random() * 0.3, dissolve: 0 });
   } else if (id === 'necro' || id === 'assassin' || id === 'ninja') {   // sombra: fumaça em shader (verde no necro, roxa no assassino, cinza no ninja) e fagulhas frias
     const tint = id === 'necro' ? 0x6dff8a : 0xb48cff;
@@ -5983,6 +6076,29 @@ class Hero extends Unit {
     } else if (id === 'summoner') {
       if (!force && (game.state !== 'fight' || !target)) return false;
       effect = () => callSummon(this, 'fairy');
+    } else if (id === 'shaman') {
+      // totem de cura: no meio do grupo ferido (ou onde o jogador mirou)
+      if (!force && game.state !== 'fight') return false;
+      const reach = this.range, party = partyNow().filter((h) => !h.dead);
+      let placement;
+      if (manual && target?.groundTarget) placement = target.pos.clone();
+      else {
+        const hurt = party.filter((h) => h.hp / h.maxHp <= 0.85 && h.pos.distanceTo(this.pos) <= reach + 2);
+        const crowd = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= 9).length >= 3;
+        if (!force && !hurt.length && !crowd) return false;
+        const group = hurt.length ? hurt : party.filter((h) => h.pos.distanceTo(this.pos) <= 6);
+        placement = new THREE.Vector3();
+        for (const h of group) placement.add(h.pos);
+        placement.divideScalar(Math.max(1, group.length));
+        const offset = placement.clone().sub(this.pos).setY(0);
+        if (offset.length() > reach) placement.copy(this.pos).add(offset.setLength(reach));
+        if (!force && spiritTotems.some((t) => t.owner === this && t.kind === 'heal' && t.life > 3 && t.root.position.distanceTo(placement) < 2.2)) return false;
+      }
+      const duration = (7 + level) * power, area = 3.2 * power;
+      effect = () => {
+        plantSpiritTotem(this, placement, 'heal', duration, area);
+        popText(placement, 'Totem!', 'evolve');
+      };
     } else if (id === 'oracle') {
       const candidates = attackables.filter((enemy) => !enemy.dead && !enemy.spawning && enemy.pos.distanceTo(this.pos) <= this.range);
       if (!manual) target = candidates.find((enemy) => enemy.telegraph?.interruptible && enemy.telegraph.t > 0)
@@ -6395,9 +6511,10 @@ class Hero extends Unit {
     if (skill.effect === 'meteor' && !target) target = highestPriorityHeroTarget(this, targetPool);
     const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
+    const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast'].includes(skill.effect);
-    if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem'].includes(skill.effect);
+    if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
     if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
@@ -6407,7 +6524,7 @@ class Hero extends Unit {
     if (needsTarget && !target) return false;
     const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
     const canRestoreAllies = SKILLS_USEFUL_WITHOUT_ENEMIES.has(skill.effect)
-      && (missingHp > 0 || this.hp < this.maxHp);
+      && (missingHp > 0 || this.hp < this.maxHp || fallenAlly);
     if (!force && !enemies.length && !canRestoreAllies) return false;
     if (areaEffects.includes(skill.effect) && !enemies.length && !(supportSkill && (criticalAlly || missingHp > this.maxHp * 0.35))) return false;
 
@@ -6516,6 +6633,62 @@ class Hero extends Unit {
           FX.beastCall(this, companion);
           wave(center, color, 0.25, radius, 0.8);
           burst(center.clone().setY(center.y + 0.8), [color, 0xffe6a1, 0xffffff], 30, 5);
+        };
+        break;
+      }
+      case 'root-totem': {
+        // Totem de raízes: no maior grupo de inimigos (ou onde o jogador mirou); prende os comuns ao fincar
+        const ground = force && target?.groundTarget ? target : null;
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
+        let best = null, most = 0;
+        if (!ground) for (const s of pool) {
+          const n = pool.filter((o) => o.pos.distanceTo(s.pos) <= radius).length + (s.boss ? 2 : 0);
+          if (n > most) { most = n; best = s; }
+        }
+        if (!ground && (!best || (!force && most < 2))) return false;
+        const at = (ground ? ground.pos : best.pos).clone();
+        if (!force && spiritTotems.some((t) => t.owner === this && t.kind === 'root' && t.life > 2 && t.root.position.distanceTo(at) < 2.5)) return false;
+        target = ground || best;
+        effect = () => {
+          plantSpiritTotem(this, at, 'root', scaleBranchEffect(this, 'control', skill.duration || 7) * power, radius);
+          let held = 0;
+          for (const s of skeletonsAlive()) if (!s.dead && !s.spawning && !s.boss && held < 6 && s.pos.distanceTo(at) <= radius + 0.4 * (s.size - 1)) {
+            held++;
+            if (controlEnemy(s, 'rootT', scaleBranchEffect(this, 'control', 0.9) * power)) { s.pendingHit = null; FX.roots(s); }
+          }
+          popText(at, 'Raízes!', 'evolve');
+        };
+        break;
+      }
+      case 'ancestral-totem': {
+        // Totem ancestral: traz de volta um herói caído; sem caídos, cura bastante o grupo e dá escudo
+        effect = () => {
+          const at = this.pos.clone().add(this.fwd.clone().setY(0).multiplyScalar(1.6));
+          const lost = partyNow().find((h) => h.dead && h !== this);
+          plantSpiritTotem(this, at, 'ancestral', skill.duration * power, 4.5);
+          if (lost) {
+            lost.revive();
+            lost.hp = Math.max(lost.hp, lost.maxHp * 0.6);
+            lost.pos.copy(at).add(tmp.set(1.4, 0, 0.5)).setY(world.groundHeight(at.x + 1.4, at.z + 0.5));
+            popText(lost.pos, 'De volta!', 'heal');
+          } else {
+            for (const h of partyNow()) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
+              const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', h.maxHp * 0.4) * power);
+              if (heal > 0) { h.hp += heal; this.stats.cura += heal; popText(h.pos, '+' + Math.round(heal), 'heal'); }
+              h.guardT = Math.max(h.guardT, 6 * power);
+            }
+          }
+        };
+        break;
+      }
+      case 'totem-surge': {
+        // Chamado dos totens: todos os totens ativos pulsam agora e duram mais
+        const mine = spiritTotems.filter((t) => t.owner === this);
+        if (!mine.length && !force) return false;
+        effect = () => {
+          if (!mine.length) plantSpiritTotem(this, this.pos, 'heal', 6 * power, 3.2 * power);   // sem totens: finca um de cura aos pés
+          for (const t of mine) if (spiritTotems.includes(t)) { t.life += skill.duration || 3; spiritTotemPulse(t); }
+          popText(this.pos, 'Totens!', 'evolve');
         };
         break;
       }
@@ -6849,7 +7022,7 @@ class Hero extends Unit {
       case 'bestiary-fury': {
         // Fúria do Bestiário: atiça as criaturas ativas; sem nenhuma, a fada atende por pouco tempo
         const creatures = units.filter((unit) => unit.summonKind && unit.summoner === this && !unit.dead);
-        if (!force && !creatures.length && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
+        if (!force && !creatures.length && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
         if (!force && creatures.length && !enemies.length) return false;
         effect = () => {
           const alive = creatures.filter((unit) => !unit.dead && units.includes(unit));
@@ -8123,6 +8296,7 @@ const SKILL_MOVES = {
   summoner: ['2H_Melee_Attack_Stab', 1.5, 0.45, 'summon'],
   vampire: ['2H_Melee_Attack_Slice', 1.3, 0.4, 'hit'],
   cook: ['Throw', 1.4, 0.45, 'ice'],
+  shaman: ['1H_Melee_Attack_Stab', 1.4, 0.5, 'heal'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate, segunda técnica]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -8322,6 +8496,12 @@ const SKILL_ANIMS = {
     { clip: 'Interact', f: 0.5, lean: 0.25, kick: 0.2 },                   // entrega a marmita
     { clip: 'Cheer', hold: 'Use_Item', f: 0.5, hop: 0.3, lean: -0.12 },    // grita "à mesa!"
     { clip: 'Use_Item', f: 0.5, lean: 0.12, kick: 0.15 },                  // polvilha o tempero
+  ],
+  shaman: [
+    { clip: '1H_Melee_Attack_Chop', f: 0.55, lean: 0.3, kick: 0.3 },   // finca o totem de cura no chão
+    { clip: 'PickUp', f: 0.55, lean: 0.2, hop: 0.1 },   // abaixa e planta o totem de raízes
+    { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: 0.6, float: 0.3, lean: -0.12 },   // ergue os braços e chama os ancestrais
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.1, float: 0.12 },
   ],
 };
 
@@ -9959,6 +10139,7 @@ function startGame(view = 'menu') {
     if (list !== bolts) releaseFxMaterial(effect.mesh.material);
   }
   while (sentries.length) removeSentry(sentries[0]);
+  while (spiritTotems.length) removeSpiritTotem(spiritTotems[0]);
   clearFx();
   FX.clear();
   audio.stopMusic();

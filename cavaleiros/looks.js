@@ -347,6 +347,22 @@ export const LOOKS = {
       { type: 'motes', bone: 'root', color: 0x8a1a2e, n: 4, size: 0.04, y: 1.1 },
     ],
   },
+  // ---------- Xamã ----------
+  shaman: {   // xamã dos totens: túnica verde-musgo, braços à mostra, faixa, penas, contas e saia de folhas; sem armas
+    shape: silhouette('Barbarian', { torso: 0.96, arms: 0.98, legs: 0.98, height: 1.0, depth: 0.96 }),
+    hide: ['Barbarian_Hat', 'Barbarian_Cape', '1H_Axe', '1H_Axe_Offhand', '2H_Axe', 'Mug', 'Barbarian_Round_Shield'],
+    paint: {
+      ...outfit('Barbarian', '#2f8a78', '#6a4a2a', 0.8), ...face('Barbarian', { skin: '#a8683c', hair: '#e4dccb' }),
+      Barbarian_ArmLeft: { tint: '#a8683c', amount: 0.35 }, Barbarian_ArmRight: { tint: '#a8683c', amount: 0.35 },
+    },
+    extras: [
+      { type: 'headband', bone: 'head', color: 0x2f9a86, y: 0.6, radius: 0.55 },
+      { type: 'feather', bone: 'head', color: 0xff8a3d, y: 0.9 },
+      { type: 'beads', bone: 'chest', color: 0x8a5a2a, gem: 0x3fe0b0 },
+      { type: 'leafSkirt', bone: 'hips' },
+      { type: 'armWraps', bone: 'lowerarm.l', color: 0xf0e2c0, radius: 0.13, n: 3 }, { type: 'armWraps', bone: 'lowerarm.r', color: 0xf0e2c0, radius: 0.13, n: 3 },
+    ],
+  },
   // ---------- Invocador ----------
   summoner: {   // mestre dos pactos: manto ameixa com capa rosada, cabelo verde-água, cajado de gema e sininhos
     shape: silhouette('Mage', { torso: 0.97, arms: 0.97, legs: 0.98, height: 1.03, depth: 0.97 }),
@@ -399,6 +415,7 @@ export const LOOK_PREVIEW = [
   { id: 'lancer', name: 'Lanceiro', model: 'Knight', use: [] },
   { id: 'summoner', name: 'Invocador', model: 'Mage', use: ['2H_Staff'] },
   { id: 'cook', name: 'Cozinheira', model: 'Barbarian', use: [] },
+  { id: 'shaman', name: 'Xamã dos totens', model: 'Barbarian', use: [] },
 ];
 export const WEAPONS = {
   Knight: ['1H_Sword_Offhand', 'Badge_Shield', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '1H_Sword', '2H_Sword'],
