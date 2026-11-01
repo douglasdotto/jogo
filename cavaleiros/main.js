@@ -3156,11 +3156,12 @@ function kiteFrom(h, dt) {
   return h.kiteTo;
 }
 
-function kiteSkeletonFrom(shooter, target) {
+const SHOOTER_RETREAT_BUDGET = 4.5, SHOOTER_STAND = 6;
+function kiteSkeletonFrom(shooter, target, dt) {
   if (!target || target.ranged || target.structure || target.team === 'villager') return null;
   let dx = shooter.pos.x - target.pos.x, dz = shooter.pos.z - target.pos.z;
   let distance = Math.hypot(dx, dz);
-  if (distance >= KITE_TRIGGER) return null;
+  if (distance >= KITE_TRIGGER || !shooter.mayRetreat(dt)) return null;
   if (distance < 0.001) { dx = Math.sin(shooter.root.rotation.y); dz = Math.cos(shooter.root.rotation.y); distance = 1; }
   shooter.kiteTarget ||= new THREE.Vector3();
   return shooter.kiteTarget.set(
@@ -3485,12 +3486,29 @@ function prepareCastleBossUrgentPlan(context) {
   context.castleUrgentHero = hero;
 }
 
+// Herói ocioso há FREE_HERO_HUNT_WAIT s com inimigo vivo fora do alcance tático (atirador móvel fora da arena, sobrevivente
+// atrás do grupo…) passa a caçá-lo por FREE_HERO_HUNT_HOLD s, em qualquer distância; o grupo não espera para sempre.
+// Desiste de quem foge sem ser alcançado por HERO_CHASE_GIVEUP s (HERO_CHASE_SKIP s sem escolhê-lo): outro alvo ou volta à formação.
+const FREE_HERO_HUNT_WAIT = 2.5, FREE_HERO_HUNT_HOLD = 4, HERO_CHASE_GIVEUP = 7, HERO_CHASE_SKIP = 6;
+function heroFreeHunt(hero, target, context) {
+  if (!(hero.freeHuntT > 0) || game.state !== 'fight' || hero === context.escortGuard || target.team !== 'skeleton' || target.totem) return false;
+  if (context.goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
+  return !target.untargetable;
+}
+const heroCanTarget = (hero, target, context) => canHeroReachTarget(hero, target, context) || stillEngaged(hero, target, context);
+
 function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   hero.targetFocusT = Math.max(0, (hero.targetFocusT || 0) - dt);
+  hero.freeHuntT = Math.max(0, (hero.freeHuntT || 0) - dt);
+  hero.chaseSkipT = Math.max(0, (hero.chaseSkipT || 0) - dt);
   let best = null, bestScore = Infinity, focused = null, focusedScore = Infinity;
   let urgentBossTarget = null, urgentBossScore = Infinity;
+  let anyEnemy = false;
   for (const target of candidates) {
-    if (target.dead || target.spawning || !(canHeroReachTarget(hero, target, context) || stillEngaged(hero, target, context))) continue;
+    if (target.dead || target.spawning) continue;
+    if (!target.totem) anyEnemy = true;
+    if (target === hero.chaseSkip && hero.chaseSkipT > 0) continue;
+    if (!(heroCanTarget(hero, target, context) || heroFreeHunt(hero, target, context))) continue;
     const score = heroTargetScore(hero, target, hero.pos, context);
     if (target === hero.targetFocus) { focused = target; focusedScore = score; }
     if (score < bestScore) { best = target; bestScore = score; }
@@ -3543,8 +3561,14 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
     hero.targetFocus = null;
     hero.targetFocusT = 0;
     hero.targetEligible = null;
+    if (anyEnemy && game.state === 'fight' && hero.busy <= 0 && (hero.idleHuntT = (hero.idleHuntT || 0) + dt) >= FREE_HERO_HUNT_WAIT) {
+      hero.idleHuntT = 0;
+      hero.freeHuntT = FREE_HERO_HUNT_HOLD;
+    }
     return null;
   }
+  hero.idleHuntT = 0;
+  if (hero.freeHuntT > 0 && !heroCanTarget(hero, best, context)) hero.freeHuntT = FREE_HERO_HUNT_HOLD;   // segue caçando enquanto só assim alcança o alvo
 
   // Mantém o foco por um instante, exceto quando surge uma ameaça claramente mais urgente.
   const urgentEscortTarget = villager
@@ -7603,9 +7627,14 @@ class Hero extends Unit {
     } else if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
       if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) {
-        if (this.ranged) this.moveTo(target.pos, dt);   // atirador anda só até o alcance e atira dali
+        // perseguição sem alcançar: depois de HERO_CHASE_GIVEUP s larga o fugitivo (outro alvo ou volta à formação)
+        if (this.chaseFor !== target || d < this.chaseBest - 1) { this.chaseFor = target; this.chaseBest = d; this.chaseT = 0; }   // só conta quem não se aproxima
+        if ((this.chaseT += dt) > HERO_CHASE_GIVEUP && !target.hunted && !target.phaseBoss && target.team === 'skeleton') {
+          this.chaseT = 0; this.chaseSkip = target; this.chaseSkipT = HERO_CHASE_SKIP; this.engagedWith = null;
+        } else if (this.ranged) this.moveTo(target.pos, dt);   // atirador anda só até o alcance e atira dali
         else this.approach(target, dt);                 // corpo a corpo vai para uma vaga livre em volta do alvo
       } else {
+        this.chaseFor = null;
         this.stopApproach(target);
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
         const attacks = this.cfg.attacks;
@@ -8396,9 +8425,21 @@ class Skeleton extends Unit {
     if (this.busy <= 0 && !this.pendingHit) this.busy = this.once('Taunt', 1.1);   // urra antes de voltar à luta
   }
 
+  // Orçamento do recuo de atiradores: depois de SHOOTER_RETREAT_BUDGET s recuando, para e atira por SHOOTER_STAND s
+  // (senão um corpo a corpo o persegue sem fim). Chamado uma vez por quadro em que o atirador quer recuar.
+  mayRetreat(dt) {
+    if (this.standT > 0) return false;
+    if ((this.retreatT = (this.retreatT || 0) + dt) > SHOOTER_RETREAT_BUDGET) { this.retreatT = 0; this.standT = SHOOTER_STAND; return false; }
+    this.retreatIdle = 0;
+    return true;
+  }
+
   update(dt) {
     if (dt <= 0) return;
     this.rootT = Math.max(0, this.rootT - dt);
+    if (this.standT > 0) this.standT -= dt;
+    // sem recuar por um tempo, o orçamento volta aos poucos
+    if (this.retreatT > 0 && (this.retreatIdle = (this.retreatIdle || 0) + dt) > 1.5) this.retreatT = Math.max(0, this.retreatT - dt);
     if (this.rootT > 0) this.vel.set(0, 0, 0);
     this.stunT = Math.max(0, this.stunT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
@@ -8463,7 +8504,7 @@ class Skeleton extends Unit {
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
       return;
     }
-    const kite = this.ranged && !this.phasing && this.rootT <= 0 ? kiteSkeletonFrom(this, target) : null;
+    const kite = this.ranged && !this.phasing && this.rootT <= 0 ? kiteSkeletonFrom(this, target, dt) : null;
     if (kite) {
       this.moveTo(kite, dt, Math.max(this.speed, 2.4));
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
@@ -9604,6 +9645,8 @@ function startPhase() {
 
 // ---------- campanha: aldeão, totens e objetivos ----------
 const RESCUE_RADIUS = 2.4, RESCUE_TIME = 2.5, RESCUE_CLEAR_RADIUS = 8;   // um herói liberta após limpar a área próxima
+// a separação segura heróis grandes (brutamontes, 1,86) a 0,86 × soma dos tamanhos: sem isto o raio fixo nunca fecha e o resgate trava
+const rescueReach = (hero, captive) => Math.max(RESCUE_RADIUS, UNIT_SEPARATION_FACTOR * (hero.size + (captive.size || 1)) + 0.15);
 const captivePrisoner = () => game.mission?.goal.type === 'rescue' && game.villager && !game.villager.dead && !game.villager.rescued ? game.villager : null;
 const rescueAreaThreatened = (captive, enemies) => !!captive
   && enemies.some((enemy) => !enemy.dead && tacticalDistance(enemy.pos, captive.pos) <= RESCUE_CLEAR_RADIUS);
@@ -10222,7 +10265,7 @@ function campaignTick(dt, skeletons, party = heroes()) {
   if (captive && game.state === 'fight') {   // libertar leva tempo; longe dele o progresso cai devagar
     const rescueThreatened = rescueAreaThreatened(captive, skeletons);
     let near = false;
-    if (!rescueThreatened && game.rescueGuardsPending <= 0) for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= RESCUE_RADIUS) { near = true; break; }
+    if (!rescueThreatened && game.rescueGuardsPending <= 0) for (const hero of party) if (!hero.dead && tacticalDistance(hero.pos, captive.pos) <= rescueReach(hero, captive)) { near = true; break; }
     game.rescueT = near ? game.rescueT + dt : Math.max(0, game.rescueT - dt * 0.5);
     captive.nameTag.textContent = game.rescueGuardsPending > 0 ? 'Guardas se aproximando' : rescueThreatened ? 'Limpe a área'
       : game.rescueT > 0 ? `Libertando ${Math.floor(Math.min(1, game.rescueT / RESCUE_TIME) * 100)}%` : 'Prisioneiro';

@@ -1647,6 +1647,38 @@ test('alvos táticos priorizam o sacerdote e o inimigo que ameaça o aldeão',()
   const attacker=new t.Skeleton('Bomber',1);attacker.spawning=false;attacker.pos.set(0,0,8);attacker.pendingHit={target:villager};
   assert.equal(t.highestPriorityHeroTarget(h,[minion,attacker]),attacker);
 });
+test('herói ocioso com inimigo vivo fora do alcance tático passa a caçá-lo (sem ficar parado para sempre)',()=>{
+  clear();const h=new t.Hero(cfg('paladin'));h.pos.set(0,0,0);h.post.copy(h.pos);
+  const mage=new t.Skeleton('Mage',1);mage.spawning=false;mage.pos.set(0,0,-70);
+  const before=t.game.state;t.game.state='fight';t.game.mission=null;
+  try{
+    assert.equal(t.chooseHeroTarget(h,[mage],.1,t.makeTargetContext()),null,'fora da arena e do leash: sem alvo de início');
+    let chosen=null;
+    for(let i=0;i<40&&!chosen;i++)chosen=t.chooseHeroTarget(h,[mage],.1,t.makeTargetContext());
+    assert.equal(chosen,mage,'depois de ~2,5 s ocioso o herói vai atrás do inimigo restante');
+    assert.equal(h.freeHuntT>0,true);
+    // já engajado, segue nele enquanto estiver longe, e larga o fugitivo ao desistir da perseguição
+    h.engagedWith=mage;
+    assert.equal(t.chooseHeroTarget(h,[mage],.1,t.makeTargetContext()),mage);
+    h.chaseSkip=mage;h.chaseSkipT=5;
+    assert.equal(t.chooseHeroTarget(h,[mage],.1,t.makeTargetContext()),null,'alvo descartado pela desistência não é escolhido de novo logo em seguida');
+  }finally{t.game.state=before;}
+});
+test('resgate fecha com herói grande: o raio acompanha a distância mínima da separação',()=>{
+  const reach=(size)=>vm.runInContext('rescueReach',context)({size},{size:1});
+  assert.equal(reach(1),2.4,'herói comum usa o raio fixo');
+  const separation=vm.runInContext('UNIT_SEPARATION_FACTOR',context)*(1.856+1);
+  assert.equal(reach(1.856)>separation,true,'brutamontes parado pela separação ainda alcança o prisioneiro');
+});
+test('atirador esqueleto recua só por um orçamento e depois para e atira',()=>{
+  clear();const mage=new t.Skeleton('Mage',1);
+  let allowed=0;
+  for(let i=0;i<600&&mage.mayRetreat(1/30);i++)allowed++;
+  assert.equal(allowed>100&&allowed<200,true,'recua ~4,5 s: '+allowed);
+  assert.equal(mage.mayRetreat(1/30),false,'depois do orçamento não recua');
+  mage.update(10);   // o tempo de parada passa e o orçamento volta
+  assert.equal(mage.standT<=0,true);
+});
 test('heróis distribuem ataques contra alvos quase derrotados sem perder prioridades',()=>{
   clear();const focused=new t.Hero(cfg('berserker')),teammate=new t.Hero(cfg('paladin'));
   focused.pos.set(0,0,0);teammate.pos.set(0,0,0);focused.post.copy(focused.pos);teammate.post.copy(teammate.pos);

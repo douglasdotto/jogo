@@ -374,7 +374,7 @@ function giveWard(shaman, o) {
 function keepRange(s, dt, target) {
   const d = flat(s.pos, target.pos);
   if (d > 7) s.moveTo(target.pos, dt);
-  else if (d < 4.5) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+  else if (d < 4.5 && (s.mayRetreat?.(dt) ?? true)) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
   else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
   return true;
 }
@@ -701,7 +701,7 @@ export const MONSTER_TYPES = {
       }
       const d = flat(s.pos, target.pos);
       if (d > 7) s.moveTo(target.pos, dt);
-      else if (d < 4.5) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+      else if (d < 4.5 && (s.mayRetreat?.(dt) ?? true)) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
       else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
       return true;
     } },
@@ -835,7 +835,7 @@ export const MONSTER_TYPES = {
       }
       const d = flat(s.pos, target.pos);
       if (d > 7) s.moveTo(target.pos, dt);
-      else if (d < 4.5) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+      else if (d < 4.5 && (s.mayRetreat?.(dt) ?? true)) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
       else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
       return true;
     } },
