@@ -194,7 +194,7 @@ export const LOOKS = {
     shape: silhouette('Ranger', { torso: 1.03, arms: 1.02, legs: 1, height: 1.04, depth: 1.03 }),
     add: [
       { from: 'Rogue', part: '2H_Crossbow' },
-      { from: 'Mage', part: 'Mage_Hat', scale: 1.12, pos: [0, 0.03, 0] },   // largo o bastante para envolver o cabelo do Ranger (a cabeça dele é uma peça só)
+      { from: 'Mage', part: 'Mage_Hat', scale: 1.12, pos: [0, 0.1, 0] },   // largo o bastante para envolver o cabelo do Ranger (a cabeça dele é uma peça só)
     ],
     paint: {
       ...rangerOutfit({ cloth: '#9a6434', trim: '#7cc860', leather: '#5a3418', cape: '#4f9a44', sleeves: '#5aa84a', pants: '#6a4a2a' }),
