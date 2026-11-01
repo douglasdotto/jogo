@@ -834,10 +834,12 @@ function saveAuto(id, on, slot = null) {
 const MODES = [
   { name: 'Campanha', icon: '⚑', desc: `${MISSIONS.length} missões com objetivos e estrelas.`, color: ['#ffe27a', '#c98a12'] },
   { name: 'Acampamento', icon: '⚒', desc: 'Oficina, maestria dos heróis e conquistas.', color: ['#ffd29e', '#b8662a'] },
+  { name: 'Teste', icon: '⚗', desc: 'Arena sem fim para testar equipes. Não salva nada.', color: ['#b6f0d4', '#2f9f78'] },
 ];
 // Menu inicial estilo Clash: barra de perfil em cima, logo, a equipe em 3D no meio do cenário (menuStage)
-// e uma doca embaixo: o botão grande de batalha (Campanha) no centro e o Acampamento ao lado. Pouco texto: os detalhes ficam na dica e no aria-label.
-// A ordem de pick.cards segue MODES (atalhos 1–2 e setas ← →).
+// e uma doca embaixo: o botão grande de batalha (Campanha) no centro, o Teste à esquerda e o Acampamento à direita. Pouco texto: os detalhes ficam na dica e no aria-label.
+// A ordem de pick.cards segue MODES (atalhos 1–3); as setas ← → seguem a ordem da doca (MENU_DOCK_ORDER).
+const MENU_DOCK_ORDER = [2, 0, 1];
 const SEEN_ACHIEVEMENTS_KEY = 'cavaleiros-conquistas-vistas';
 const seenAchievements = () => { try { return +localStorage.getItem(SEEN_ACHIEVEMENTS_KEY) || 0; } catch { return 0; } };
 // missão sugerida: a primeira ainda sem estrelas; com todas jogadas, a primeira que ainda rende estrela
@@ -901,16 +903,18 @@ function showMenu() {
   bar.querySelector('.menu-gfx').onclick = () => { $('quality').onclick?.(); paintMenuBar(bar); };
   paintMenuBar(bar);
 
-  // doca embaixo: Batalhar no centro · Acampamento ao lado (a equipe 3D no meio também leva ao Acampamento)
+  // doca embaixo: Teste · Batalhar no centro · Acampamento (a equipe 3D no meio também leva ao Acampamento)
   const dock = document.createElement('div');
   dock.className = 'menu-dock';
-  const label = ['Batalhar', 'Acampamento'];
+  const label = ['Batalhar', 'Acampamento', 'Teste'];
   const extra = [
     '',
     `${shopReady || newAchievements ? '<span class="menu-new" aria-hidden="true">!</span>' : ''}`,
+    '',
   ];
   const spoken = [`${stars} de ${maxStars} estrelas${next ? `. Próxima: ${next.name}` : ''}`,
-    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`];
+    `${progress.gold} de ouro, ${achieved} de ${achievements.length} conquistas${shopReady ? '. Há melhoria para comprar' : ''}${newAchievements ? '. Conquista nova' : ''}`,
+    'Sem estrelas, recordes nem ouro'];
   pick.cards = MODES.map((m, i) => {
     const b = document.createElement('div');
     b.className = `menu-btn ${i === 0 ? 'menu-battle' : 'menu-side'}`;
@@ -918,7 +922,7 @@ function showMenu() {
     b.setAttribute('role', 'button');
     b.setAttribute('aria-keyshortcuts', String(i + 1));
     b.setAttribute('aria-label', `${m.name}: ${m.desc} ${spoken[i]}.`);
-    b.setAttribute('data-tip', i === 0 ? (next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : m.desc) : `${m.desc} · ✦ ${achieved}/${achievements.length} · ✪ ${mastery}`);
+    b.setAttribute('data-tip', i === 0 ? (next ? `⚑ ${MISSIONS.indexOf(next) + 1}. ${next.name}` : m.desc) : i === 2 ? m.desc : `${m.desc} · ✦ ${achieved}/${achievements.length} · ✪ ${mastery}`);
     b.style.setProperty('--c', m.color[0]);
     b.style.setProperty('--cd', m.color[1]);
     b.style.setProperty('--d', `${i === 0 ? 220 : 300 + i * 70}ms`);
@@ -928,11 +932,7 @@ function showMenu() {
     b.onmouseenter = () => selectCard(i);
     return b;
   });
-  // espaçador invisível do tamanho do Acampamento: mantém Batalhar no centro da tela
-  const spacer = document.createElement('span');
-  spacer.className = 'menu-dock-spacer';
-  spacer.setAttribute('aria-hidden', 'true');
-  dock.append(spacer, pick.cards[0], pick.cards[1]);
+  dock.append(pick.cards[2], pick.cards[0], pick.cards[1]);   // Teste e Acampamento têm o mesmo tamanho: Batalhar fica no centro da tela
   home.append(bar, dock);
   list.appendChild(home);
   selectCard(0);
@@ -945,7 +945,233 @@ function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
   // primeira vez na campanha: direto para a missão 1
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign(!totalStars() && !loadCampaignTeam().length && !allOpen() ? MISSIONS[0] : null) : showCamp()), 450);
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign(!totalStars() && !loadCampaignTeam().length && !allOpen() ? MISSIONS[0] : null) : i === 1 ? showCamp() : startArenaSetup()), 450);
+}
+
+// ---------- modo Teste: arena fixa com ondas infinitas, para testar composições de equipe ----------
+// Sem missão, estrelas, recordes, ouro nem maestria (game.test). A luta acontece no início da estrada (fase 1:
+// sem rio, lago nem ponte) e o grupo nunca avança. A cada ARENA_WAVE s a onda sobe de nível; quem cai volta
+// após ARENA_REVIVE s (a luta continua enquanto restar alguém de pé); se todos caem, aparece o resumo por herói.
+const ARENA_PHASE = 1, ARENA_WAVE = 30, ARENA_REVIVE = 12, ARENA_MAX_TIER = 20, ARENA_BOSS_TIERS = [6, 9, 12];
+const arenaTier = (seconds) => Math.min(ARENA_MAX_TIER, 3 + Math.floor(seconds / ARENA_WAVE));
+
+function arenaBuildWorld() {
+  world.dispose?.();
+  world = createWorld(scene, ROAD, PHASES);
+  aimCamera(world.anchorS(ARENA_PHASE));
+}
+// carrega cenário e modelos com a tela de carregamento e então chama ready
+function arenaWithAssets(ready) {
+  $('pick').classList.add('hidden');
+  if (typeof withBattleAssets === 'function') return withBattleAssets(ready, arenaBuildWorld);
+  arenaBuildWorld();
+  ready();
+}
+// grupo vazio na arena; a equipe e o nível entram depois
+function arenaPrepare(level) {
+  game.mission = null;
+  placeParty(ARENA_PHASE);
+  Object.assign(game, { test: true, rerolls: 0, last: PHASES,
+    arena: { level, t: 0, tier: arenaTier(0), wave: 1, leaderTier: ARENA_BOSS_TIERS[0], bossQueued: 0, bossOn: false, bossCalls: 0, summary: false } });
+  $('goal').classList.add('hidden');
+}
+function startArenaSetup(level = 3) {   // botão Teste do menu: equipe -> dificuldade -> luta
+  arenaWithAssets(() => { arenaPrepare(level); showArenaPick(); });
+}
+function startArenaRun({ team, level }) {   // ↻ Reiniciar: mesma equipe e dificuldade, sem escolhas
+  arenaWithAssets(() => {
+    arenaPrepare(level);
+    for (const cfg of team.slice(0, MAX_PARTY)) { new Hero(cfg); arrangeParty(); }
+    arenaBegin();
+  });
+}
+
+function showArenaPick() {
+  showPick('Equipe de teste', 'Monte até 4 heróis de qualquer classe e escolha o nível');
+  arenaPickBar();
+}
+function arenaPickBar() {
+  document.querySelector('.arena-pickbar')?.remove();
+  const a = game.arena, n = heroes().length;
+  const bar = document.createElement('div');
+  bar.className = 'arena-pickbar';
+  const button = (cls, text, tip, onclick, disabled = false) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.textContent = text;
+    b.setAttribute('data-tip', tip);
+    b.setAttribute('aria-label', tip);
+    b.disabled = disabled;
+    b.onclick = onclick;
+    return b;
+  };
+  bar.append(
+    button('arena-btn', '⌂', 'Voltar ao menu', () => startGame()),
+    ...[1, 2, 3].map((lv) => {
+      const b = button(`arena-btn${lv === a.level ? ' on' : ''}`, `Nv${lv}`, `Todos os heróis no nível ${lv}`, () => { a.level = lv; arenaPickBar(); });
+      b.setAttribute('aria-pressed', String(lv === a.level));
+      return b;
+    }),
+    button('arena-btn', '✕', 'Limpar a equipe', () => { for (const h of [...heroes()]) h.remove(); game.roster.length = 0; arrangeParty(); showArenaPick(); }, !n),
+    button('arena-btn go', `▶ ${n}/${MAX_PARTY}`, 'Lutar com esta equipe', () => arenaChooseDifficulty(), !n),
+  );
+  $('pick').appendChild(bar);
+}
+function arenaHeroPicked(cfg) {
+  const h = new Hero(cfg);
+  arrangeParty();
+  h.busy = h.once('Cheer') * 0.6;
+  if (heroes().length >= MAX_PARTY) return arenaChooseDifficulty();
+  showArenaPick();
+}
+function arenaChooseDifficulty() {
+  document.querySelector('.arena-pickbar')?.remove();
+  showDifficulty();
+  $('pickTitle').textContent = 'Arena de teste';
+}
+
+// equipe e dificuldade prontas: aplica o nível, abre o HUD da arena e solta a primeira onda
+function arenaBegin() {
+  const a = game.arena;
+  if (!a) return;
+  document.querySelector('.arena-pickbar')?.remove();
+  $('pick').classList.add('hidden');
+  for (const h of heroes()) {
+    h.gainXp(XP_LEVELS[a.level - 1]);
+    autoUpgrade();   // já começa evoluído, sem telas de escolha
+    h.pos.copy(h.post);
+    h.vel.set(0, 0, 0);
+  }
+  arenaHud();
+  document.body.classList.remove('no-battle');
+  game.paused = false;
+  audio.startMusic();
+}
+
+// botões extras no HUD da batalha: horda, chefe, resumo, reiniciar e sair
+function arenaHud() {
+  arenaCleanup(false);
+  const right = document.querySelector('.hud-right');
+  const make = (cls, text, tip, onclick) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `hud-icon arena-hud ${cls}`;
+    b.textContent = text;
+    b.setAttribute('data-tip', tip);
+    b.setAttribute('aria-label', tip);
+    b.onclick = onclick;
+    return b;
+  };
+  const buttons = [
+    make('horde', '✹', 'Chamar horda extra', () => { game.toSpawn = Math.min(game.toSpawn + 10, 40); }),
+    make('boss', '♛', 'Chamar chefe', () => { game.arena.bossQueued++; }),
+    make('summary', '▤', 'Resumo por herói', () => arenaSummary(false)),
+    make('again', '↻', 'Reiniciar com a mesma equipe', () => arenaRestart()),
+    make('exit', '⌂', 'Sair para o menu', () => startGame()),
+  ];
+  right?.prepend(...buttons);
+  $('goal').setAttribute('data-icon', '⚔');
+  $('goal').classList.remove('hidden', 'warn', 'done');
+}
+// tira botões e barras do modo Teste (startGame chama sem argumento; arenaHud mantém o restante)
+function arenaCleanup(full = true) {
+  document.querySelectorAll?.('.arena-hud').forEach((b) => b.remove());
+  if (full) document.querySelector?.('.arena-pickbar')?.remove();
+}
+function arenaRestart() {
+  const a = game.arena;
+  if (!a) return;
+  startGame({ arena: { team: game.roster.map((h) => h.cfg), level: a.level } });
+}
+
+// a cada quadro: sobe a onda, revive caídos, repõe inimigos e atende horda e chefe chamados
+function arenaTick(dt, skeletons, party) {
+  const a = game.arena;
+  if (game.state !== 'fight') return;
+  a.t += dt;
+  a.tier = arenaTier(a.t);
+  const wave = 1 + Math.floor(a.t / ARENA_WAVE);
+  if (wave > a.wave) { a.wave = wave; showBanner(`Onda ${wave}`, 2); }
+  for (const h of party) {
+    if (!h.dead) { h.arenaDown = 0; continue; }
+    h.arenaDown = (h.arenaDown || 0) + dt;
+    if (h.arenaDown >= ARENA_REVIVE) {
+      h.arenaDown = 0;
+      h.revive();
+      h.hp = h.maxHp * 0.5;
+      popText(h.pos, '♥', 'heal');
+    }
+  }
+  if (a.bossOn && game.toSpawn === 0) { a.bossOn = false; game.bossPending = false; game.refilling = true; }   // o chefe já entrou
+  else if (a.bossQueued > 0 && game.toSpawn === 0) {
+    a.bossQueued--;
+    a.leaderTier = ARENA_BOSS_TIERS[a.bossCalls++ % ARENA_BOSS_TIERS.length];
+    a.bossOn = true;
+    game.bossPending = true;
+    game.refilling = false;
+    game.toSpawn = 1;   // com toSpawn 1 e sem "refilling", spawnSkeleton solta o líder
+  }
+  const cap = Math.min(24, 6 + (wave - 1) * 2);
+  if (game.toSpawn === 0 && skeletons.length < cap) game.toSpawn = Math.min(cap - skeletons.length, 2 + wave);
+  setGoalUI(`${clockText(a.t)} · onda ${a.wave} · ${game.kills} abates`, (a.t % ARENA_WAVE) / ARENA_WAVE);
+}
+
+// resumo por herói (dano, cura, recebido, abates e quedas): ao fim da luta ou pelo botão ▤ (pausa a luta)
+function arenaSummary(final) {
+  const a = game.arena;
+  if (!a) return;
+  if (final) {
+    setDirectControlMode(false, null, false);
+    game.over = true;
+    syncDirectControlUI();
+    audio.stopMusic();
+    audio.play('defeat');
+  } else {
+    if (a.summary || game.over || pick.open) return;
+    a.summary = true;
+    a.wasPaused = game.paused;
+    game.paused = true;
+  }
+  closeHeroPanel();
+  const party = game.roster;
+  const report = buildBattleReport({
+    won: false,
+    heroes: party.map((h) => ({ id: h.cfg.id, name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
+    falls: game.fallLog,
+    damageSources: Object.values(game.damageSources),
+    militia: null,
+    mission: null,
+  });
+  const info = `Onda ${a.wave} · ${clockText(a.t)} · ${game.kills} abates`;
+  $('overlayTitle').textContent = final ? 'A equipe caiu' : 'Resumo';
+  $('overlayTitle').setAttribute('data-tip', info);
+  $('overlayText').textContent = info;
+  $('overlayStars').innerHTML = '';
+  $('overlayStats').innerHTML = summaryHTML(party, report, { won: false, kills: game.kills, falls: game.fallLog?.length || 0 })
+    .replace('<details class="end-details">', '<details class="end-details" open>');
+  const next = $('overlayNext');
+  next.innerHTML = '<button class="mission-next-btn" type="button" data-act="replay" data-tip="Mesma equipe e dificuldade">↻ Reiniciar</button>'
+    + '<button class="mission-replay-btn" type="button" data-act="menu" aria-label="Sair para o menu" data-tip="Sair para o menu">⌂</button>';
+  next.querySelector('[data-act="replay"]').onclick = arenaRestart;
+  next.querySelector('[data-act="menu"]').onclick = () => startGame();
+  const resume = $('overlayBtn');
+  resume.hidden = final;
+  resume.textContent = 'Continuar';
+  resume.setAttribute('aria-label', 'Continuar a luta');
+  resume.onclick = () => {
+    a.summary = false;
+    game.paused = a.wasPaused || false;
+    $('overlay').classList.add('hidden');
+    next.innerHTML = '';
+    resume.hidden = true;
+    resume.onclick = () => startGame(game.mission ? 'map' : 'menu');
+  };
+  const overlay = $('overlay');
+  overlay.classList.add('results', 'test-run');
+  overlay.classList.toggle('lost', final);
+  overlay.classList.remove('won');
+  overlay.classList.remove('hidden');
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
@@ -1084,6 +1310,7 @@ function confirmDifficulty(i) {
 }
 
 function beginRun() {
+  if (game.arena) { pick.timer = setTimeout(arenaBegin, 450); return; }   // modo Teste: equipe e dificuldade prontas
   const m = prepareRun();
   pick.timer = setTimeout(() => (m ? (campaignTeamMode() ? showTeam() : showPick(pickTitle(), pickSub()))
     : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
@@ -1264,6 +1491,7 @@ function confirmPick(i) {
   }
   pick.timer = setTimeout(() => {
     $('pick').classList.add('hidden');
+    if (game.arena) return arenaHeroPicked(cfg);   // modo Teste: monta a equipe sem missão
     const party = heroes(), first = game.picksLeft > 0;   // first: grupo inicial da missão
     // quem sai e volta na mesma troca não perde o progresso
     const kept = first && campaignTeamMode() ? loadCampaignTeam().find((entry) => entry.id === cfg.id) : null;
@@ -1741,7 +1969,7 @@ function arrangeParty() {
 
 addEventListener('keydown', (e) => {
   if (!pick.open) return;
-  if (e.key === 'Escape' && (pick.mode === 'difficulty' || pick.mode === 'team')) { e.stopImmediatePropagation(); return game.mission ? showCampaign() : showMenu(); }
+  if (e.key === 'Escape' && (pick.mode === 'difficulty' || pick.mode === 'team')) { e.stopImmediatePropagation(); return game.arena ? startGame() : game.mission ? showCampaign() : showMenu(); }
   if (e.key === 'Escape' && pick.mode === 'evolution' && pick.evoThen) { e.stopImmediatePropagation(); return startGame('map'); }   // desiste da montagem: limpa fila e grupo
   if (e.target.closest?.('.team-go') && (e.key === 'Enter' || e.key === ' ')) return;   // Enter no botão segue com a equipe
   if (pick.mode === 'team' && missionPartySize(game.mission) > 1 && e.key === 'Enter') return startTeam();   // Enter segue; Espaço e 1–4 marcam quem sai
@@ -1759,8 +1987,9 @@ addEventListener('keydown', (e) => {
   }
   if (grid && e.target.closest?.('.hero-select-btn') && (e.key === 'Enter' || e.key === ' ')) return;
   if (e.target.closest?.('.relic-reroll') && (e.key === 'Enter' || e.key === ' ')) return;   // Enter no ↻ troca as relíquias
-  if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : selectCard(pick.sel - 1);
-  else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : selectCard(pick.sel + 1);
+  const dockStep = (d) => { const at = MENU_DOCK_ORDER.indexOf(pick.sel); selectCard(MENU_DOCK_ORDER[(at + d + MENU_DOCK_ORDER.length) % MENU_DOCK_ORDER.length]); };
+  if (e.key === 'ArrowLeft') grid ? moveGrid(-1, 0) : pick.mode === 'mode' ? dockStep(-1) : selectCard(pick.sel - 1);
+  else if (e.key === 'ArrowRight') grid ? moveGrid(1, 0) : pick.mode === 'mode' ? dockStep(1) : selectCard(pick.sel + 1);
   else if (e.key === 'ArrowUp' && grid) moveGrid(0, -1);
   else if (e.key === 'ArrowDown' && grid) moveGrid(0, 1);
   else if (e.key === 'Enter' || e.key === ' ') confirmPick(pick.sel);
@@ -10740,6 +10969,7 @@ function startGame(view = 'menu') {
   game.mission = null;
   campaignTeamRun = !!view?.teamRun;   // "Repetir" mantém a equipe contínua
   clearMonsterFx();   // avisos, covas e barra do chefe
+  if (game.arena) arenaCleanup();   // botões e barras do modo Teste
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   placeParty(THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES));
   $('overlay').classList.remove('results', 'lost', 'won', 'test-run');
@@ -10747,6 +10977,7 @@ function startGame(view = 'menu') {
   if (view === 'map') showCampaign();
   else if (view?.replay) replayMission(view);   // "Repetir": mesma missão, dificuldade e equipe
   else if (view?.goal) showCampaign(view, true);   // "Próxima missão": mesma dificuldade, direto para a equipe
+  else if (view?.arena) startArenaRun(view.arena);   // modo Teste: reinicia com a mesma equipe
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
   syncDirectControlUI();
 }
@@ -10759,7 +10990,7 @@ function placeParty(first) {
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, rescueRunner: null, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
     shrine: null, huntMark: null, huntSpawnTimer: 0, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
     rescueGuardsPending: 0, rescueGuardRetries: 0, rescueSpawnTimer: 0,
-    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null, partyScale: null, startLevels: null, resultExtras: '' });
+    test: search.has('fase') || search.get('tudo') === '1', arena: null, missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null, partyScale: null, startLevels: null, resultExtras: '' });
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
@@ -10824,6 +11055,14 @@ function startPhase() {
   if (game.mission) game.partyScale = partyScale(game.mission, heroes(), game.phase);
   game.state = 'fight';
   syncDirectControlUI();
+  if (game.arena) {   // modo Teste: primeira onda; as seguintes vêm de arenaTick
+    for (const h of heroes()) h.kiteT = 0;
+    game.toSpawn = Math.round(4 * difficulty.count);
+    game.bossPending = false;
+    game.refilling = true;   // sem líder de onda (golem/chefe): o chefe só entra quando chamado
+    game.spawnTimer = 0.5;
+    return showBanner('Arena!', 2);
+  }
   tutorial.on('battleStart');
   for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count * partyCount());
@@ -11717,22 +11956,23 @@ function reapStuckEnemies(dt, skeletons, party) {
 
 function spawnSkeleton() {
   const p = game.phase;
+  const tier = game.arena?.tier ?? p;   // na arena de teste a força sobe com o tempo; a posição segue a fase fixa
   const zone = world.zoneOf(p);
   let type = 'Minion', boss = false;
-  const lead = game.toSpawn === 1 && !game.refilling ? waveLeader(p, game.bossPending, game.mission?.boss) : null;   // Rei (6), Lich (12), golem ou o chefe da missão
+  const lead = game.toSpawn === 1 && !game.refilling ? waveLeader(game.arena?.leaderTier ?? p, game.bossPending, game.mission?.boss) : null;   // Rei (6), Lich (12), golem ou o chefe da missão
   if (lead) { type = lead; boss = game.bossPending; }
   else {
     const r = Math.random();
-    const rogue = Math.min(0.3, 0.04 * p), warrior = Math.min(0.4, 0.06 * p);
+    const rogue = Math.min(0.3, 0.04 * tier), warrior = Math.min(0.4, 0.06 * tier);
     type = r < rogue ? 'Rogue' : r < rogue + warrior ? 'Warrior' : 'Minion';
-    type = pickMonster(p, type);   // tipos novos entram aos poucos
-    if (p >= 2 && ['Minion', 'Warrior', 'Rogue'].includes(type) && Math.random() < difficulty.shooters)
+    type = pickMonster(tier, type);   // tipos novos entram aos poucos
+    if (tier >= 2 && ['Minion', 'Warrior', 'Rogue'].includes(type) && Math.random() < difficulty.shooters)
       type = Math.random() < 0.5 ? 'Crossbow' : 'Mage';
   }
   // fases 3, 7 e 10 fecham a onda com uma dupla de atiradores no chão, atrás do grupo
   if ((p === 3 || p === 7 || p === 10) && game.toSpawn <= 2 && !lead && difficulty.shooters > 0) type = game.toSpawn === 2 ? 'Crossbow' : 'Mage';
   const s0 = world.anchorS(p);
-  const behind = p >= difficulty.behindFrom && !lead && game.mission?.goal.type !== 'breach' && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
+  const behind = tier >= difficulty.behindFrom && !lead && game.mission?.goal.type !== 'breach' && Math.random() < difficulty.behind;   // nas fases mais altas, alguns vêm por trás
   const preferredSign = behind ? -1 : 1;
   const twinMission = game.mission?.goal.type === 'twin' && lead && boss;
   const castleBossMission = game.mission?.goal.type === 'bosses' && lead && boss;
@@ -11761,7 +12001,7 @@ function spawnSkeleton() {
       break;
     }
   }
-  const s = new Skeleton(type, p, boss);
+  const s = new Skeleton(type, tier, boss);
   s.pos.copy(formation[0]);
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
@@ -11820,6 +12060,7 @@ function updateGame(dt) {
   // Mesmo quando cair depois de uma marca conta como vitória, essas quedas
   // ainda bloqueiam conquistas que exigem concluir uma missão sem baixas.
   if (!alive.length && game.mission) trackMissionFalls(party);
+  if (!alive.length && game.arena) return arenaSummary(true);   // modo Teste: a equipe toda caiu
   if (!alive.length && game.mission?.goal.type === 'endless') {   // na horda, cair faz parte: vale o tempo aguentado
     const held = game.endlessT >= game.mission.goal.marks[0];
     return endGame(`${held ? 'A horda foi contida' : 'A horda venceu'} por ${clockText(game.endlessT)}.`, held);
@@ -11836,6 +12077,7 @@ function updateGame(dt) {
     if (game.huntSpawnTimer <= 0) spawnHuntMark();
   }
   if (game.mission && campaignTick(dt, skeletons, party)) return;
+  if (game.arena) arenaTick(dt, skeletons, party);
 
   if (game.state === 'fight') {
     if (tutorial.wants('enemyNear')) {
@@ -11905,8 +12147,8 @@ function updateGame(dt) {
   }
 
   const missionNumber = game.mission ? MISSIONS.indexOf(game.mission) + 1 : 0;
-  setText('wave', game.mission ? `M${missionNumber} · ${game.phase}/${game.last}` : `${game.phase}/${game.last}`);
-  setTip('wave', `${game.mission ? `Missão ${missionNumber} · ` : ''}Fase ${game.phase} de ${game.last}`);
+  setText('wave', game.arena ? `Onda ${game.arena.wave}` : game.mission ? `M${missionNumber} · ${game.phase}/${game.last}` : `${game.phase}/${game.last}`);
+  setTip('wave', game.arena ? `Onda ${game.arena.wave} · inimigos nível ${game.arena.tier}` : `${game.mission ? `Missão ${missionNumber} · ` : ''}Fase ${game.phase} de ${game.last}`);
   // totens, torre e prisioneiro seguram a fase: sem esqueletos comuns, o HUD diz o que falta
   const objective = game.state === 'fight' && !game.toSpawn && skeletons.every((s) => s.totem) ? objectiveHint(skeletons) : null;
   let foes = game.state === 'fight' ? game.toSpawn : 0;
@@ -11914,6 +12156,7 @@ function updateGame(dt) {
   setText('left', objective || String(foes));
   $('left').classList.toggle('objective', !!objective);
   setTip('left', objective ? `Objetivo: ${objective}` : `${foes} inimigos restantes · ${game.kills} abates`);
+  if (game.arena) { setText('left', String(game.kills)); setTip('left', `${game.kills} abates · ${foes} inimigos em campo`); }
   if (objective && game.objectiveCall !== game.phase) { game.objectiveCall = game.phase; showBanner(`${objective}!`, 2.5); }
   const militia = militiaAlive();
   if ($('militia').hidden !== !militia) $('militia').hidden = !militia;   // contador discreto: some sem milícia de pé

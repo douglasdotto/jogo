@@ -1578,3 +1578,11 @@
   background: linear-gradient(180deg, #4dbb70, #2e8b4c); box-shadow: 0 5px 0 #1d5a31, inset 0 1px 0 rgba(255,255,255,.18); font: 600 19px/1 'Fredoka', sans-serif; }
 #pickList .team-go:hover { filter: brightness(1.08); }
 #pickList .team-go:active { filter: brightness(.95); }
+/* Modo Teste: barra da escolha da equipe (nível, limpar, lutar) e botões extras do HUD da arena */
+.arena-pickbar { position: absolute; z-index: 3; left: 50%; bottom: 12px; translate: -50% 0; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  background: rgba(10, 17, 33, .86); border: 2px solid rgba(184, 212, 255, .3); border-radius: 16px; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
+.arena-pickbar .arena-btn { min-width: 44px; padding: 6px 12px 8px; font-size: 18px; border-radius: 12px; }
+.arena-pickbar .arena-btn.on { box-shadow: 0 0 0 3px #fff, 0 0 14px 2px var(--gold, #ffd23f); }
+.arena-pickbar .arena-btn.go { padding: 6px 20px 8px; font-size: 22px; background: linear-gradient(#fff2a6, #ffd23f 42%, #f0a018); }
+.arena-pickbar .arena-btn:disabled { opacity: .45; cursor: default; filter: grayscale(.6); }
+#hud .arena-hud { font-size: 17px; }

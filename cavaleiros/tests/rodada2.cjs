@@ -1,4 +1,4 @@
-// node cavaleiros/tests/rodada2.cjs — lógica real, sem rede e sem dependências.
+﻿// node cavaleiros/tests/rodada2.cjs — lógica real, sem rede e sem dependências.
 // Cena e DOM são duplos; peças e animações são conferidas nos GLB reais.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -881,7 +881,7 @@ test('contexto tático reutiliza seus arrays sem carregar alvos removidos',()=>{
 test('reinício limpa invocados, fila, efeitos e volta ao menu (Batalhar e Acampamento); partida interna leva à dificuldade',()=>{
   clear();const h=new t.Hero(cfg('necro'));new t.Minion(h,1);h.gainXp(90);t.showEvolution();t.startGame();
   assert.equal(t.units.length,0);assert.equal(t.evolutions.length,0);assert.equal(t.pick.mode,'mode');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);
-  assert.equal(t.pick.cards.length,2);assert.ok(t.pick.cards.every(c=>!/Reino|Jornada/.test(c.innerHTML)),'menu sem Reino nem Jornada');
+  assert.equal(t.pick.cards.length,3);assert.ok(t.pick.cards.every(c=>!/Reino|Jornada/.test(c.innerHTML)),'menu sem Reino nem Jornada');
   let next;context.setTimeout=(fn,ms)=>{if(ms===550||ms===450)next=fn};
   t.showDifficulty();assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.cards.length,4);assert.equal(t.game.mission,null);
   t.confirmPick(2);assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('level').textContent,'♜','HUD mostra o ícone da dificuldade; o nome fica na dica');
@@ -3581,7 +3581,7 @@ test('progressão: oficina libera 4ª opção de relíquia e troca, só fora do 
   t.pick.open=false;
 }));
 test('progressão: menu leva ao acampamento e Esc volta',()=>{
-  clear();t.showMenu();assert.equal(t.pick.cards.length,2,'Batalhar e Acampamento');
+  clear();t.showMenu();assert.equal(t.pick.cards.length,3,'Batalhar, Acampamento e Teste');
   assert.match(t.pick.cards[1].innerHTML,/Acampamento/);assert.doesNotMatch(t.pick.cards[1].innerHTML,/◆ \d+/,'o ouro aparece uma vez só, na barra de perfil');
   // ouro e estrelas ficam só na barra de perfil (ícone + número); conquistas e maestria vão para a dica do Acampamento
   const home=elements.get('pickList').children.at(-1),bar=home.children[0];
@@ -4368,5 +4368,79 @@ test('Lanceiro: estocada em linha com empurrão, postura de lança que alonga e 
   clear();
 });
 
+// ---------- modo Teste: arena com ondas infinitas ----------
+vm.runInContext('t.startArenaSetup=startArenaSetup;t.startArenaRun=startArenaRun;t.arenaBegin=arenaBegin;t.arenaSummary=arenaSummary;t.arenaTick=arenaTick;t.arenaChooseDifficulty=arenaChooseDifficulty;',context);
+function arenaFlow(ids,level=3){
+  // Teste -> equipe (cartão a cartão) -> dificuldade Normal -> luta
+  context.location={search:''};clear();context.createWorld=()=>t.world;context.document.querySelector=()=>null;context.document.querySelectorAll=()=>[];
+  t.startGame();context.localStorage.data={};
+  const timers=[];context.setTimeout=(fn)=>{timers.push(fn)};
+  t.confirmPick(2);timers.shift()();   // botão Teste
+  assert.ok(t.game.arena,'a arena está montada');assert.equal(t.pick.mode,'hero','vai direto à escolha de heróis');
+  t.game.arena.level=level;
+  for(const id of ids){t.confirmPick(idx(id));timers.shift()();}
+  if(ids.length<4)t.arenaChooseDifficulty();
+  assert.equal(t.pick.mode,'difficulty');
+  t.confirmPick(1);while(timers.length)timers.shift()();
+  context.setTimeout=noop;
+}
+test('menu: botão Teste ao lado de Batalhar, só ícone e nome, com dica curta',()=>{
+  clear();t.showMenu();
+  assert.equal(t.pick.cards.length,3);const card=t.pick.cards[2];
+  assert.match(card.innerHTML,/Teste/);assert.match(card.className,/menu-side/,'mesmo visual dos modos secundários');
+  assert.match(card.attributes['data-tip'],/Arena sem fim/);assert.ok(!card.innerHTML.includes('<p>'));
+  const dock=elements.get('pickList').children.at(-1).children[1];
+  assert.deepEqual(dock.children.map(c=>c.className.includes('menu-battle')?'batalha':c.innerHTML.includes('Teste')?'teste':'acampamento'),['teste','batalha','acampamento'],'Teste à esquerda e Batalhar no centro');
+  t.pick.open=false;
+});
+test('modo Teste: equipe montada, nível aplicado, nada de progresso e ondas surgem',()=>{
+  const before=JSON.stringify({gold:t.progress.gold,stars:t.totalStars()});
+  const originalRecord=t.progress.recordMatch;let recorded=0;t.progress.recordMatch=function(...a){recorded++;return originalRecord.apply(this,a)};
+  try{
+    arenaFlow(['paladin','pyro','cleric','archer'],3);
+    assert.equal(t.game.test,true,'não grava estrelas, recordes nem XP de equipe');assert.equal(t.game.mission,null);
+    assert.deepEqual(Array.from(t.heroes().map(h=>h.cfg.id)),['paladin','pyro','cleric','archer']);
+    assert.ok(t.heroes().every(h=>h.level===3),'todos no nível escolhido');
+    assert.equal(t.game.paused,false);assert.equal(t.game.state,'advance');
+    t.updateGame(.01);assert.equal(t.game.state,'fight');
+    for(let i=0;i<30;i++){t.updateGame(.5);for(const h of t.heroes())h.hp=h.maxHp;}   // 15 s: a primeira onda entra
+    assert.ok(t.skeletonsAlive().length>0,'inimigos chegam');assert.equal(t.game.arena.wave,1);
+    for(const s of t.skeletonsAlive())s.die();t.updateGame(.1);
+    assert.equal(t.game.state,'fight','a arena nunca encerra por onda limpa');assert.ok(t.game.toSpawn>0,'a onda se repõe');
+    const tier0=t.game.arena.tier;
+    for(let i=0;i<70;i++){t.updateGame(.5);for(const h of t.heroes())h.hp=h.maxHp;for(const s of t.skeletonsAlive())s.hp=s.maxHp*10;}   // passa de 30 s
+    assert.ok(t.game.arena.wave>=2,'a onda sobe a cada ~30 s');assert.ok(t.game.arena.tier>tier0,'inimigos mais fortes');
+    assert.equal(t.game.over,false);
+    // chamar chefe
+    t.game.arena.bossQueued=1;for(const s of t.skeletonsAlive())s.die();Object.assign(t.game,{toSpawn:0});
+    for(let i=0;i<60&&!t.units.some(u=>u.phaseBoss);i++){t.updateGame(.5);for(const h of t.heroes())h.hp=h.maxHp;}
+    assert.ok(t.units.some(u=>u.phaseBoss),'o chefe chamado entra na arena');
+    assert.match(elements.get('wave').textContent,/^Onda \d+$/);
+    // caído volta após alguns segundos enquanto houver alguém de pé
+    const [a,b]=t.heroes();b.takeDamage(99999);assert.equal(b.dead,true);
+    for(let i=0;i<30;i++){t.updateGame(.5);a.hp=a.maxHp;}
+    assert.equal(b.dead,false,'herói caído revive sozinho');
+    // todos caem: resumo por herói, sem gravar
+    for(const h of t.heroes())h.takeDamage(99999);t.updateGame(.1);
+    assert.equal(t.game.over,true);assert.equal(elements.get('overlayTitle').textContent,'A equipe caiu');
+    assert.match(elements.get('overlayNext').innerHTML,/Reiniciar/);assert.equal(recorded,0,'nenhuma partida registrada (ouro e maestria intactos)');
+    assert.equal(JSON.stringify({gold:t.progress.gold,stars:t.totalStars()}),before);
+    // reiniciar: mesma equipe, arena zerada
+    const ids=Array.from(t.heroes().map(h=>h.cfg.id));
+    t.startGame({arena:{team:t.game.roster.map(h=>h.cfg),level:3}});
+    assert.deepEqual(Array.from(t.heroes().map(h=>h.cfg.id)),ids);assert.equal(t.game.arena.t,0);assert.equal(t.game.over,false);assert.equal(t.game.paused,false);
+    // sair para o menu zera o modo
+    t.startGame();assert.equal(t.game.arena,null);assert.equal(t.units.length,0);assert.equal(t.pick.mode,'mode');
+  }finally{t.progress.recordMatch=originalRecord;context.setTimeout=noop;clear();t.game.arena=null;}
+});
+test('modo Teste: nível 1 e equipe parcial; resumo pelo botão pausa e continua',()=>{
+  try{
+    arenaFlow(['paladin','guardian'],1);
+    assert.equal(t.heroes().length,2);assert.ok(t.heroes().every(h=>h.level===1));
+    t.updateGame(.01);
+    t.arenaSummary(false);assert.equal(t.game.paused,true);assert.equal(elements.get('overlayTitle').textContent,'Resumo');assert.equal(elements.get('overlayBtn').hidden,false);
+    elements.get('overlayBtn').onclick();assert.equal(t.game.paused,false);assert.equal(t.game.over,false);
+  }finally{context.setTimeout=noop;t.startGame();clear();t.game.arena=null;}
+});
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}
