@@ -123,7 +123,7 @@ context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
 vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
-vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
+vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;t.Illusion=Illusion;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
 vm.runInContext('t.setUserPause=setUserPause;t.confirmRestart=confirmRestart;',context);
 vm.runInContext(part(source,'function goalShort(text, percent)','let goalUiRoot'),context);
@@ -431,8 +431,8 @@ const readGltf=f=>{if(f.endsWith('.gltf'))return JSON.parse(fs.readFileSync(f,'u
 const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS),...Object.keys(heroAnims.LARGE_CLIPS)];
 const modelGltf=n=>{const f=path.join(dir,'assets',heroAnims.HERO_MODEL_FILES[n]||n+'.glb');return readGltf(fs.existsSync(f)?f:path.join(dir,'assets',n+'.gltf'))};
 const clipsOf=n=>heroAnims.HERO_MODELS.includes(n)?heroClipNames:modelGltf(n).animations.map(a=>a.name);
-test('29 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,29);
+test('30 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,30);
   const glb=modelGltf;
   for(const v of t.VARIANTS){
     const clips=clipsOf(v.recipe?.base||v.model);
@@ -440,7 +440,7 @@ test('29 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('120 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
     const anims=t.SKILL_ANIMS[v.id],clips=clipsOf(v.recipe?.base||v.model);
@@ -457,15 +457,15 @@ test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes n
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,4,v.id+': as quatro habilidades devem ter corpos diferentes');
     assert.equal(new Set(anims.map(a=>a.clip)).size,4,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,116);
-  assert.equal(new Set(allNames).size,116,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,120);
+  assert.equal(new Set(allNames).size,120,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
   assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,116,
-    `cada uma das 116 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,120,
+    `cada uma das 120 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -637,7 +637,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
 });
 test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,29);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,30);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -1150,7 +1150,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas, segundas técnicas e ultimates das 29 variantes executam seus efeitos sem erro',()=>{
+test('técnicas, segundas técnicas e ultimates das 30 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2,3]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -1294,6 +1294,48 @@ test('Brutamontes avança durante a Pancada e o Auto aguarda um alvo para invoca
     assert.ok(hero.skillTimers[0]>0,id+' inicia a recarga durante o combate');
     hero.remove();enemy.remove();
   }
+  clear();
+});
+
+test('Ilusionista: cópia provoca e some ao primeiro golpe; espelhos confundem; chefe resiste; nada disso conta como herói ou invocação',()=>{
+  clear();
+  const h=new t.Hero(cfg('illusionist'));h.pos.set(0,0,0);
+  assert.equal(cfg('illusionist').classId,3);assert.equal(h.maxHp,190,'ladino frágil');assert.ok(t.PICK_GROUPS.find(g=>g.id==='ladinos').heroes.includes('illusionist'));
+  const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=0;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
+  const boss=new t.Skeleton('Minion',1,true);boss.spawning=false;boss.pos.set(0,0,4);boss.hp=boss.maxHp=100000;
+  const e1=foe(0,3),e2=foe(2,3);
+  const images=()=>t.units.filter(u=>u.illusion&&!u.dead);
+  const cast=(slot,target=e1)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,'slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
+  cast(0);
+  const [copy]=images();
+  assert.equal(images().length,1);assert.equal(copy.team,'ally');assert.equal(copy.summoner,undefined,'não é invocação: não ocupa o limite do Necromante/Invocador');
+  assert.equal(t.heroes().length,1,'a cópia não conta como herói');
+  assert.strictEqual(e1.taunt,copy);assert.strictEqual(e2.taunt,copy);assert.ok(e1.tauntT>3);
+  assert.ok(boss.tauntT<e1.tauntT,'chefe resiste à provocação');
+  // um golpe desfaz a cópia; quem golpeou perde o tempo
+  copy.takeDamage(10,null,e1);
+  assert.equal(copy.dead,true);assert.ok(e1.stunT>0);assert.equal(images().length,0);
+  copy.update(0.3);assert.ok(!t.units.includes(copy),'some em fumaça');
+  // salão: três imagens de dois golpes cada
+  cast(2);
+  const hall=images();assert.equal(hall.length,3);assert.ok(hall.every(i=>i.hits===2&&i.kind==='mirror'));
+  assert.ok(hall.includes(e1.taunt)&&hall.includes(e2.taunt),'cada inimigo escolhe uma imagem');
+  hall[0].takeDamage(5,null,e1);assert.equal(hall[0].dead,false);hall[0].takeDamage(5,null,e1);assert.equal(hall[0].dead,true);
+  hall[0].update(0.3);
+  for(let i=0;i<3;i++){h.busy=0;cast(2);}
+  assert.ok(images().length<=4,'no máximo 4 imagens por herói');
+  // fim do tempo
+  for(const i of images())i.life=0.01;for(const i of images())i.update(0.02);
+  for(const i of [...t.units].filter(u=>u.illusion))i.update(0.3);
+  assert.equal(t.units.filter(u=>u.illusion).length,0);
+  // troca de lugar com o aliado ameaçado
+  const ally=new t.Hero(cfg('guardian'));ally.pos.set(3,0,0);ally.hp=ally.maxHp*0.3;e1.pendingHit={target:ally,t:1};e1.pos.set(3,0,1.5);
+  cast(1,null);
+  assert.ok(Math.abs(h.pos.x-3)<0.01&&Math.abs(ally.pos.x)<0.01,'trocam de lugar');
+  assert.equal(images().length,1);assert.strictEqual(e1.taunt,images()[0]);
+  // miragem: o próximo golpe é desviado
+  cast(3,null);
+  const hp=ally.hp;assert.ok(ally.mirageT>0);ally.takeDamage(20,null,e1);assert.equal(ally.hp,hp,'Miragem desvia o próximo golpe');
   clear();
 });
 
@@ -2330,7 +2372,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
 test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,29);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,30);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

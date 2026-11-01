@@ -273,6 +273,7 @@ const profiles = {
   laminas: ['champion', 'berserker', 'assassin', 'duelist'],
   novos: ['archer', 'monk', 'alchemist', 'paladin'],
   invocador: ['summoner', 'guardian', 'pyro', 'cleric'],
+  ilusionista: ['illusionist', 'paladin', 'pyro', 'cleric'],
   fazendas: ['paladin', 'viking', 'guardian', 'cleric'],
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],
