@@ -11936,19 +11936,21 @@ function missionEnd(won) {
   return stars;
 }
 
-// Inimigo comum trancado (preso no terreno ou do outro lado do rio): parado, sem apanhar e longe de qualquer herói
+// Inimigo comum trancado ou fugindo sem fim (preso no terreno, do outro lado do rio ou correndo em círculos): sem apanhar, sem se aproximar e longe de qualquer herói
 // por STUCK_ENEMY_TIME s some e volta pela fila de spawn, para a fase não ficar presa nele.
-const STUCK_ENEMY_TIME = 15, STUCK_ENEMY_MOVE = 2.5, STUCK_ENEMY_HERO_GAP = 7;
+const STUCK_ENEMY_TIME = 15, STUCK_ENEMY_PROGRESS = 3, STUCK_ENEMY_HERO_GAP = 7;
 const ADVANCE_WAIT = 4;   // espera máxima pela formação ao chegar numa fase
 function reapStuckEnemies(dt, skeletons, party) {
   for (const s of skeletons) {
     // nascendo há mais de 8 s (ponto de spawn inválido, fora do mapa) também conta como trancado
     const stuckSpawn = s.spawning && (s.spawnAge = (s.spawnAge || 0) + dt) > 8;
     if (s.dead || (s.spawning && !stuckSpawn) || s.boss || s.totem || s === game.huntMark || !party.length) { s.stuckT = 0; continue; }
-    if (!s.stuckAt) { s.stuckAt = s.pos.clone(); s.stuckHp = s.hp; s.stuckT = 0; continue; }
-    const moved = s.pos.distanceTo(s.stuckAt) > STUCK_ENEMY_MOVE, hurt = s.hp < s.stuckHp;
+    // sem progresso: não perdeu vida e não chegou mais perto de nenhum herói (parado, preso ou fugindo sem fim)
+    const gap = party.reduce((min, h) => Math.min(min, h.pos.distanceTo(s.pos)), Infinity);
+    if (s.stuckRef === undefined) { s.stuckRef = gap; s.stuckHp = s.hp; s.stuckT = 0; continue; }
+    const hurt = s.hp < s.stuckHp, closing = gap < s.stuckRef - STUCK_ENEMY_PROGRESS;
     s.stuckHp = s.hp;
-    if (moved || hurt || party.some((h) => h.pos.distanceTo(s.pos) < STUCK_ENEMY_HERO_GAP)) { s.stuckAt.copy(s.pos); s.stuckT = 0; continue; }
+    if (hurt || closing || gap < STUCK_ENEMY_HERO_GAP) { s.stuckRef = gap; s.stuckT = 0; continue; }
     if ((s.stuckT += dt) < STUCK_ENEMY_TIME) continue;
     s.dead = true;   // sai sem contar abate nem dar XP
     s.hp = 0;

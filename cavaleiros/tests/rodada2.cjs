@@ -121,7 +121,7 @@ context.addEventListener=(type,handler,options)=>{
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={spiritTotems,removeSpiritTotem,Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
+vm.runInContext('globalThis.t={reapStuckEnemies,spiritTotems,removeSpiritTotem,Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;t.Illusion=Illusion;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
@@ -4444,3 +4444,19 @@ test('modo Teste: nível 1 e equipe parcial; resumo pelo botão pausa e continua
 });
 console.log(results.length+' verificações passaram.');
 if(failures.length){console.log(failures.length+' falharam.');process.exitCode=1;}
+test('inimigo que foge sem se aproximar some e volta pela fila; quem apanha ou chega perto fica',()=>{
+  clear();const h=hero('paladin',0,0),party=[h];t.game.toSpawn=0;
+  const runner=foe('Minion',30,0);runner.spawning=false;
+  for(let i=0;i<20;i++){runner.pos.set(30+(i%2?4:-4),0,(i%3)*3);t.reapStuckEnemies(1,[runner],party);}   // corre de um lado a outro, sempre longe
+  assert.ok(runner.dead,'fugitivo sem progresso some');assert.equal(t.game.toSpawn,1,'volta pela fila de spawn');
+  const hurt=foe('Minion',30,0);hurt.spawning=false;
+  for(let i=0;i<40;i++){hurt.hp-=0.01;t.reapStuckEnemies(1,[hurt],party);}   // apanhando de vez em quando: fica
+  assert.ok(!hurt.dead,'quem perde vida não é removido');
+  const near=foe('Minion',5,0);near.spawning=false;
+  for(let i=0;i<40;i++)t.reapStuckEnemies(1,[near],party);   // colado no herói: fica
+  assert.ok(!near.dead,'quem está perto de um herói não é removido');
+  const closing=foe('Minion',60,0);closing.spawning=false;
+  for(let i=0;i<40;i++){closing.pos.x=60-i*1.2;t.reapStuckEnemies(1,[closing],party);}   // vem em direção ao herói: fica
+  assert.ok(!closing.dead,'quem se aproxima não é removido');
+  clear();
+});
