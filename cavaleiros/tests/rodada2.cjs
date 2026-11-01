@@ -3033,7 +3033,7 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
     begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
     assert.ok(elements.get('overlayNext').innerHTML.includes('↻ Repetir'));
     assert.ok(!elements.get('overlayStats').innerHTML.includes('Recompensa'));
-    // "Repetir" volta direto à luta: mesma missão, dificuldade, cenário e equipe, sem mapa nem escolhas
+    // "Repetir" (partida sem equipe contínua) volta direto à luta: mesma missão, dificuldade, cenário e equipe, sem mapa nem escolhas
     const team=t.heroes().map(h=>h.cfg),seed=t.world.seed,played=t.getDifficulty().id;
     t.startGame({replay:mission('ponte'),team,seed});
     assert.equal(t.game.mission.id,'ponte');assert.equal(t.getDifficulty().id,played);
@@ -3042,7 +3042,7 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
     assert.equal(t.game.phase,mission('ponte').from);assert.ok(t.game.villager,'a escolta recomeça com o aldeão');
   }finally{t.setDifficulty(1);}
 });
-test('campanha contínua: a equipe de 4 leva XP e evoluções, troca parcial entra no nível 1 e o Duelo escolhe um',()=>{
+test('campanha contínua: a equipe de 4 leva XP e evoluções, quem entra herda o nível de quem sai (pontos manuais) e o Duelo escolhe um',()=>{
   context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:1,ponte:1,santuario:1,chamas:1,fazendas:1,lago:1})};
   let after;context.setTimeout=(fn,ms)=>{if(ms===550)after=fn};
   const saved=()=>JSON.parse(context.localStorage.getItem('cavaleiros-time-campanha'));
@@ -3051,17 +3051,22 @@ test('campanha contínua: a equipe de 4 leva XP e evoluções, troca parcial ent
     for(const id of ['paladin','pyro','berserker','assassin']){t.confirmPick(idx(id));after();}
     assert.equal(t.heroes().length,4,'a equipe inteira entra desde o início');assert.ok(t.heroes().every(h=>h.level===1),'herói novo começa no nível 1');
     assert.deepEqual(saved().map(e=>e.id),['paladin','pyro','berserker','assassin']);
-    t.heroes()[0].gainXp(100);t.autoUpgrade();const branch=Object.keys(t.heroes()[0].evolutionBranches)[0];
+    t.heroes()[0].gainXp(100);t.heroes()[1].gainXp(100);t.autoUpgrade();const branch=Object.keys(t.heroes()[0].evolutionBranches)[0];
     Object.assign(t.game,{phase:mission('ponte').to,state:'cleared',timer:0});t.updateGame(.1);
     assert.equal(saved()[0].xp,100);assert.deepEqual(saved()[0].branches,[branch]);
-    // próxima missão: equipe salva, troca só o segundo herói
+    // próxima missão: equipe salva, troca só o segundo herói; quem entra herda o nível 2 e o jogador escolhe a evolução antes de a missão começar
     t.startGame(mission('santuario'));after();
     assert.equal(t.pick.mode,'team');assert.equal(t.pick.cards.length,4);
     t.confirmPick(1);assert.equal(t.pick.teamGo.textContent,'Trocar 1 ▸');t.pick.teamGo.onclick();
     assert.equal(t.pick.mode,'hero');t.confirmPick(idx('cleric'));after();
+    assert.equal(t.pick.mode,'evolution');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true,'jogo parado enquanto escolhe');
+    assert.equal(t.evolutions.length,1);assert.equal(t.heroes().length,4);
+    t.confirmPick(0);
+    assert.equal(t.evolutions.length,0);assert.equal(t.pick.open,false);assert.equal(t.game.paused,false,'a missão começa depois da escolha');
     const party=t.heroes();assert.equal(party.length,4);
     const paladin=party.find(h=>h.cfg.id==='paladin');assert.equal(paladin.level,2);assert.ok(paladin.evolutionBranches[branch]);
-    assert.equal(party.find(h=>h.cfg.id==='cleric').level,1);assert.ok(!party.some(h=>h.cfg.id==='pyro'));
+    const cleric=party.find(h=>h.cfg.id==='cleric');assert.equal(cleric.level,2,'herda o nível de quem saiu');assert.equal(cleric.xp,100);
+    assert.equal(Object.keys(cleric.evolutionBranches||{}).length,1,'uma evolução escolhida pelo jogador');assert.ok(!party.some(h=>h.cfg.id==='pyro'));
     assert.deepEqual(saved().map(e=>e.id).sort(),['assassin','berserker','cleric','paladin']);
     // derrota não grava o XP ganho
     party.forEach(h=>h.gainXp(50));t.autoUpgrade();t.endGame('Derrota');
@@ -3091,12 +3096,27 @@ test('campanha contínua: Repetir volta com XP e evoluções salvos, menu da pri
     Object.assign(t.game,{phase:mission('ponte').to,state:'cleared',timer:0});t.updateGame(.1);
     assert.equal(saved()[0].xp,100);
     const team=t.heroes().map(h=>h.cfg),seed=t.world.seed;
-    t.startGame({replay:mission('ponte'),team,seed,teamRun:true});
-    assert.equal(t.pick.open,false,'não reabre equipe nem dificuldade');assert.equal(t.game.paused,false);assert.equal(t.evolutions.length,0,'sem telas de evolução');
+    // "Repetir" na equipe contínua abre a tela da equipe (mesma missão, dificuldade e cenário); Seguir volta com o XP e as evoluções salvos
+    t.startGame({replay:mission('ponte'),team,seed,teamRun:true});after();
+    assert.equal(t.game.mission.id,'ponte');assert.equal(t.world.seed,seed);
+    assert.equal(t.pick.mode,'team');assert.equal(t.pick.open,true);assert.equal(t.game.paused,true);assert.equal(t.heroes().length,0);
+    t.pick.teamGo.onclick();
+    assert.equal(t.pick.open,false);assert.equal(t.game.paused,false);assert.equal(t.evolutions.length,0,'sem telas de evolução');
     assert.equal(t.heroes().map(h=>h.cfg.id).join(),'paladin,pyro,berserker,assassin');
     const paladin=t.heroes().find(h=>h.cfg.id==='paladin');
     assert.equal(paladin.xp,100);assert.equal(paladin.level,2);assert.ok(paladin.evolutionBranches[branch],'mesma evolução de antes');
     assert.ok(t.heroes().filter(h=>h!==paladin).every(h=>h.level===1),'quem não ganhou XP segue no nível 1');
+    // troca com pontos: Esc na tela de evolução (antes da missão) volta ao mapa e limpa fila e grupo; evolução automática pula a tela
+    t.startGame(mission('santuario'));after();t.confirmPick(0);t.pick.teamGo.onclick();t.confirmPick(idx('cleric'));after();
+    assert.equal(t.pick.mode,'evolution');assert.equal(t.evolutions.length,1);assert.equal(t.game.paused,true);
+    let esc=false;pickKey({key:'Escape',target:el(),stopImmediatePropagation(){esc=true},preventDefault:noop});
+    assert.equal(esc,true);assert.equal(t.evolutions.length,0);assert.equal(t.units.length,0);assert.equal(t.pick.evoThen,null);assert.equal(t.game.mission,null);
+    assert.equal(saved()[0].id,'paladin','abandonar a troca não grava a equipe');
+    context.setAutoEvolve(true);
+    t.startGame(mission('santuario'));after();t.confirmPick(0);t.pick.teamGo.onclick();t.confirmPick(idx('cleric'));after();
+    assert.equal(t.pick.open,false);assert.equal(t.game.paused,false,'automática: sem tela, a missão começa');
+    assert.equal(t.heroes().find(h=>h.cfg.id==='cleric').level,2);assert.equal(t.evolutions.length,0);
+    context.setAutoEvolve(false);
     // 3. Esc na tela da equipe volta ao mapa
     t.startGame(mission('santuario'));after();assert.equal(t.pick.mode,'team');assert.equal(t.pick.open,true);
     let stopped=false;pickKey({key:'Escape',target:el(),stopImmediatePropagation(){stopped=true},preventDefault:noop});
