@@ -37,6 +37,7 @@ const VARIANT_INFO = {
   summoner: ['Invocação e cura', 'Invoca uma fada que segue o aliado mais ferido e o cura em pulsos por alguns segundos.', 'O golem provoca e atordoa quem chega perto; o dragãozinho cospe fogo em cone. Uma criatura de cada tipo; chamar de novo renova.'],
   vampire: ['Cura roubando vida', 'Rasga os inimigos à frente com uma garra; o dano causado vira cura no aliado mais ferido.', 'O vínculo divide o dano entre dois aliados. Na noite de sangue o grupo todo cura ao bater: comece a briga antes de ativar.'],
   oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Passo Previsto durante um aviso para garantir que os heróis tentem escapar. Destino Reescrito interrompe ameaças próximas.'],
+  lancer: ['Lança e controle de linha', 'Estoca em linha reta: fere todos os inimigos à frente e empurra os da frente.', 'Mire na fila mais cheia. A postura segura o avanço e a carga atropela hordas comuns.'],
   brute: ['Tanque pesado', 'Soca o chão: atordoa por instantes e provoca quem está em volta. Golpes fracos quase não o ferem (−3 por golpe).', 'Deixe-o na frente contra hordas. Mais lento e com menos dano que o Guardião, mas aguenta mais.'],
 };
 
@@ -51,6 +52,7 @@ const TEAM_ROLE_RULES = {
   archer: ['À distância', 'Área', 'Dano a chefe'], monk: ['Defesa', 'Controle', 'Cura'], alchemist: ['À distância', 'Cura', 'Controle'],
   engineer: ['À distância', 'Área', 'Controle'], beast_tamer: ['Defesa', 'Controle', 'Dano a chefe'], oracle: ['À distância', 'Controle', 'Dano a chefe'],
   brute: ['Defesa', 'Controle'],
+  lancer: ['Defesa', 'Controle', 'Área'],
   summoner: ['À distância', 'Cura', 'Controle'],
   vampire: ['À distância', 'Cura'],
 };
@@ -104,5 +106,5 @@ export const SKILL_LEVEL_CAP = 3;
 export const skillLevel = (level) => Math.min(level, SKILL_LEVEL_CAP);
 
 export function skillCooldown(id, level = 1, rate = 1) {
-  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 10, bard: 10, angel: 10, chronist: 8, brute: 8, summoner: 15 }[id] ?? 6) - (skillLevel(level) - 1) * 0.7) * rate;
+  return (({ necro: 12, beast_tamer: 12, engineer: 10, oracle: 8, king: 10, berserker: 10, guardian: 9, paladin: 8, assassin: 7, cleric: 10, bard: 10, angel: 10, chronist: 8, brute: 8, lancer: 9, summoner: 15 }[id] ?? 6) - (skillLevel(level) - 1) * 0.7) * rate;
 }

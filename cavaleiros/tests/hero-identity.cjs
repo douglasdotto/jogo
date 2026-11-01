@@ -37,7 +37,7 @@ const heroes = [
   ...LOOK_PREVIEW.filter((v) => !v.recipe).map((v) => ({ id: v.id, model: v.model === 'Rogue_Hooded' ? 'Rogue' : v.model, paint: LOOKS[v.id].paint })),
   ...context.result.map((c) => ({ id: c.id, model: c.base, paint: c.paint })),
 ];
-assert.equal(heroes.length, 30, '30 variantes com aparência própria');
+assert.equal(heroes.length, 31, '31 variantes com aparência própria');
 const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
 const dist = (a, b) => Math.hypot(...hex(a).map((v, i) => v - hex(b)[i]));
 const palette = (h) => {
@@ -51,7 +51,7 @@ const palette = (h) => {
 };
 const palettes = heroes.map((h) => ({ ...h, pal: palette(h) }));
 const signatures = new Set(palettes.map((h) => JSON.stringify(h.pal)));
-assert.equal(signatures.size, 30, 'as 30 variantes têm paletas distintas');
+assert.equal(signatures.size, 31, 'as 31 variantes têm paletas distintas');
 // mesmo modelo base: roupa + cabelo + pele precisam se afastar bastante (não só um tom vizinho)
 for (const a of palettes) for (const b of palettes) {
   if (a.id >= b.id || a.model !== b.model) continue;
@@ -134,4 +134,4 @@ for (const v of variants) {
   }
 }
 
-console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador, Oráculo, Brutamontes e Invocador com identidades próprias; 29 paletas distintas');
+console.log('OK: Assassino sem máscara e de silhueta robusta; Ninja encapuzado, mascarado e com shurikens; Arqueira, Monge, Alquimista, Engenheira, Domador, Oráculo, Brutamontes e Invocador com identidades próprias; 30 paletas distintas');

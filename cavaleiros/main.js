@@ -124,6 +124,10 @@ const VARIANTS = [
   // curandeira agressiva: precisa bater para curar (o dano causado vira vida no aliado mais ferido)
   { id: 'vampire', names: ['Vampira', 'Condessa do Vínculo', 'Rainha da Noite'], desc: 'Cura roubando a vida dos inimigos.', ability: 'Garra de sangue', color: ['#c8465e', '#5a1626'],
     use: [], stats: { Vida: 3, Força: 3, Rapidez: 4, Alcance: 3 }, hp: 185, dmg: 15, range: 5, speed: 3.1, cooldown: 1.1, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'vampire' },
+  // lança longa: alcance médio e controle de linha; a postura estende o alcance e a carga atropela comuns
+  { id: 'lancer', names: ['Lanceiro', 'Lanceiro Real', 'Cavalaria Dourada'], desc: 'Fere a fila inteira com a lança.', ability: 'Estocada', color: ['#8fb0ff', '#3a5aa8'],
+    use: [], stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 3 }, hp: 290, dmg: 27, range: 2.4, speed: 3.1, cooldown: 1, idle: '2H_Melee_Idle',
+    attacks: ['2H_Melee_Attack_Stab', '2H_Melee_Attack_Slice'], classId: 0 },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 175, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
@@ -134,7 +138,7 @@ const VARIANTS = [
 const variantsOf = (classId) => VARIANTS.filter((v) => v.classId === classId);
 // abas temáticas do seletor (o classId de combate não muda); a ordem dos ids é a ordem dos cartões
 const PICK_GROUPS = [
-  { id: 'guerreiros', name: 'Guerreiros', icon: '♜', heroes: ['paladin', 'guardian', 'champion', 'king', 'brute'] },
+  { id: 'guerreiros', name: 'Guerreiros', icon: '♜', heroes: ['paladin', 'guardian', 'champion', 'king', 'brute', 'lancer'] },
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner'] },
   { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
@@ -1874,6 +1878,7 @@ const SKILL_GLYPHS = {
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
   brute: ['⛰', '⤴', '⬢', '▥'],
+  lancer: ['↟', '⇈', '♞', '⇥'],
   summoner: ['✿', '⬢', '♆', '⚘'],
   vampire: ['☾', '⚭', '♥', '☽'],
 };
@@ -3001,6 +3006,7 @@ function densest(candidates, radius, prefer = null) {
 }
 const BLADE_DANCE_TICK = 0.3;   // intervalo entre as voltas da Dança de lâminas
 const MEDITATE_TICK = 0.5;      // intervalo entre as curas da Meditação
+const SPEAR_REACH = 1.4;   // Postura de lança do Lanceiro: multiplica o alcance do herói
 const STONE_SKIN = { taken: 0.4, reflect: 0.3, grow: 1.22 };   // Pele de pedra do Brutamontes: dano recebido, reflexo e escala
 
 function damageCleave(owner, primary) {
@@ -4158,6 +4164,7 @@ const SKILL_ART = {
   beast_tamer: { color: 0xcbb36f, accent: 0xffe6a1, glyph: crystalGeo, scale: 1.15 },
   oracle: { color: 0xc6b4ff, accent: 0xffffff, glyph: crystalGeo, scale: 1.3 },
   brute: { color: 0xb8a88a, accent: 0xfff2d8, glyph: rockGeo, scale: 3.2 },
+  lancer: { color: 0x7fa0ff, accent: 0xffe27a, glyph: shardGeo, scale: 1.8 },
   summoner: { color: 0xff8ad8, accent: 0xfff0fb, glyph: leafGeo, scale: 3 },
   vampire: { color: 0xa81c34, accent: 0xff9aaa, glyph: slashGeo, scale: 0.6 },
 };
@@ -5271,6 +5278,31 @@ function windPalm(h, dir, reach) {
   shake(0.18);
 }
 
+// Lanceiro: ponta de lança de luz que corre em linha reta até o fim do alcance real (reach) e some
+function lanceThrust(h, dir, reach, color = 0xbcd0ff) {
+  const m = new THREE.Mesh(thrustGeo, glow(color, 0.7));
+  m.rotation.y = Math.atan2(dir.x, dir.z);
+  addFx(m, 0.3, (e, dt, k) => {
+    m.position.copy(h.pos).setY(h.pos.y + 0.95);
+    m.scale.set(1 - k * 0.6, 1 - k * 0.6, reach / 2.7);
+    m.material.opacity = e.base * (1 - k);
+  });
+  for (let i = 1; i <= fewer(4); i++) particle(sparkGeo, i % 2 ? 0xffffff : 0xffe27a, h.pos.clone().addScaledVector(dir, reach * i / 4).setY(h.pos.y + 0.95), V(rnd(0.5), 0.4, rnd(0.5)), 0.4, { size: 1.1, delay: i * 0.02 });
+  shake(0.1);
+}
+// Lanceiro: anel no chão com o raio real da postura, acompanhando o herói enquanto durar
+function lanceStance(h, reach) {
+  wave(h.pos, 0xbcd0ff, reach * 0.5, reach, 0.5);
+  const m = new THREE.Mesh(thinRingGeo, glow(0xbcd0ff, 0.3));
+  m.rotation.x = -Math.PI / 2;
+  addFx(m, h.spearT + 0.2, (e, dt, k) => {
+    m.position.copy(h.pos).setY(h.pos.y + 0.08);
+    m.scale.setScalar(reach);
+    m.material.opacity = e.base * Math.min(1, h.spearT / 0.4);
+    if (h.dead || h.spearT <= 0 || !units.includes(h)) e.done = true;
+  });
+}
+
 // Monge (Meditação): círculo dourado sob o corpo, raios suaves e brilho que sobe enquanto medita
 function meditate(h, radius) {
   const active = () => h.meditateT > 0 && !h.dead && units.includes(h);
@@ -5680,6 +5712,7 @@ Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
+Object.assign(FX, { lanceThrust, lanceStance });   // Lanceiro
 
 class Hero extends Unit {
   constructor(cfg) {
@@ -5963,6 +5996,37 @@ class Hero extends Unit {
         }
         FX.quake(this, reach * 0.8);
         wave(this.pos, 0xc9bba2, 0.3, reach, 0.5);
+      };
+    } else if (id === 'lancer') {
+      // Estocada: golpe reto à frente; fere toda a fila e empurra os dois da frente (chefe quase não sai do lugar)
+      const reach = (4.2 + (level - 1) * 0.3) * (0.9 + 0.1 * power);
+      const flat = (s) => !s.dead && !s.spawning && Math.abs(s.pos.y - this.pos.y) < 0.85;
+      const pool = attackables.filter((s) => flat(s) && s.pos.distanceTo(this.pos) <= reach);
+      let line = [];
+      if (manual && target && pool.includes(target)) line = lineTargets(this.pos, target.pos, pool, reach, 0.8);
+      else {
+        let most = 0;
+        target = null;
+        for (const s of pool) {
+          const hits = lineTargets(this.pos, s.pos, pool, reach, 0.8), score = hits.length + (s.boss ? 0.5 : 0);
+          if (score > most) { most = score; line = hits; target = s; }
+        }
+      }
+      const urgent = line.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
+        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      if (!target || (!force && line.length < 2 && !urgent)) return false;
+      effect = () => {
+        const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(target.pos, from).setY(0);
+        if (dir.lengthSq() < 0.01) dir.copy(this.fwd);
+        dir.normalize();
+        const end = from.clone().addScaledVector(dir, reach);
+        const hits = lineTargets(from, end, skeletonsAlive().filter((s) => flat(s)), reach, 0.8)
+          .sort((a, b) => a.pos.distanceToSquared(from) - b.pos.distanceToSquared(from));
+        hits.forEach((s, i) => {
+          heroHit(this, s, this.dmg * 1.15 * power);
+          if (i < 2) s.vel.addScaledVector(dir, s.boss ? 1.5 : 7);
+        });
+        FX.lanceThrust(this, dir, reach);
       };
     } else if (id === 'guardian') {
       if (!nearby.length) return false;
@@ -6792,6 +6856,79 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'spear-stance': {
+        // Postura de lança: alcance maior e, a cada pulso, quem chega perto leva dano e fica lento (ticks em updateSkillStates)
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= this.cfg.range * SPEAR_REACH + 1.5);
+        if (!force && close.length < 2 && !urgentEnemy) return false;
+        effect = () => {
+          this.spearT = scaleBranchEffect(this, 'control', skill.duration || 5) * (0.9 + 0.1 * power);
+          this.spearTick = 0;
+          this.spearInfo = { dmg: this.dmg * power * (skill.power || 0.3), slow: 1.2 * power };
+          popText(this.pos, 'Postura!', 'evolve');
+          FX.lanceStance(this, this.cfg.range * SPEAR_REACH + 0.5);
+        };
+        break;
+      }
+      case 'cavalry-charge': {
+        // Carga da cavalaria: atropela a linha com mais inimigos (comuns levam dano e ficam atordoados; chefe só leva dano) e volta ao posto
+        const reach = skill.range || 9;
+        const flat = (s) => !s.dead && !s.spawning && Math.abs(s.pos.y - this.pos.y) < 0.85;
+        const pool = attackables.filter((s) => flat(s) && s.pos.distanceTo(this.pos) <= reach);
+        let aim = force && pool.includes(target) ? target : null, line = aim ? lineTargets(this.pos, aim.pos, pool, reach, 1.2) : [];
+        if (!aim) for (const s of pool) {
+          const hits = lineTargets(this.pos, s.pos, pool, reach, 1.2);
+          if (hits.length > line.length) { line = hits; aim = s; }
+        }
+        if (!aim || (!force && line.length < 2 && !urgentEnemy)) return false;
+        target = aim;
+        effect = () => {
+          const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, from).setY(0);
+          if (dir.lengthSq() < 0.01) dir.copy(this.fwd);
+          dir.normalize();
+          let length = Math.min(reach, Math.max(aim.pos.distanceTo(from) + 2, 5)), end = from.clone().addScaledVector(dir, length);
+          while (length > 1.5 && !world.canStep(from, end)) { length -= 1; end = from.clone().addScaledVector(dir, length); }   // o chão não deixa: para antes do obstáculo
+          const hit = lineTargets(from, from.clone().addScaledVector(dir, length), attackables.filter(flat), length, 1.2);
+          if (length > 1.5) {
+            this.pos.copy(end).setY(world.groundHeight(end.x, end.z));
+            this.vel.set(0, 0, 0);
+            this.chargeBack = { t: 0.7, to: from };
+            this.busy = Math.max(this.busy, 0.7);
+          }
+          this.face(end.clone().add(dir), 1);
+          for (const enemy of hit) {
+            heroHit(this, enemy, this.dmg * power * (skill.power || 1.4) * (enemy.boss || enemy.totem ? 0.6 : 1));
+            if (!enemy.boss && !enemy.totem && controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 0.8 + (level - 1) * 0.1) * power)) enemy.pendingHit = null;
+            enemy.vel.addScaledVector(dir, enemy.boss ? 0.5 : 3);
+            burst(enemy.pos, [color, 0xffffff], 8, 3);
+          }
+          FX.steelDash(from, this.pos);
+          wave(this.pos, color, 0.3, 2.2, 0.4);
+          popText(this.pos, 'Carga!', 'evolve');
+        };
+        break;
+      }
+      case 'pin-spear': {
+        // Lança cravada: fere um alvo e o prende no chão (chefe só fica lento)
+        const reach = skill.range || 7;
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= reach && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        const aim = force && pool.includes(target) ? target : highestPriorityHeroTarget(this, pool);
+        if (!aim) return false;
+        target = aim;
+        effect = () => {
+          if (aim.dead) return;
+          const dir = new THREE.Vector3().subVectors(aim.pos, this.pos).setY(0);
+          const distance = dir.length();
+          dir.normalize();
+          damageOne(aim);
+          if (aim.boss || aim.totem) controlEnemy(aim, 'slowT', scaleBranchEffect(this, 'control', 3) * power);
+          else if (controlEnemy(aim, 'rootT', scaleBranchEffect(this, 'control', skill.duration || 2.5) * power)) aim.pendingHit = null;
+          aim.vel.set(0, 0, 0);
+          popText(aim.pos, 'Cravado!', 'crit');
+          FX.lanceThrust(this, dir, distance, color);
+          FX.roots(aim);
+        };
+        break;
+      }
       case 'duel-challenge': {
         // Desafio do Campeão: o inimigo mais forte por perto só ataca o Campeão, que bate mais e aguenta mais
         const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
@@ -7499,9 +7636,38 @@ class Hero extends Unit {
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
     this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
+    if (this.spearOn) this.range /= SPEAR_REACH;
+    this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
+  }
+
+  // Lanceiro: a postura estende o alcance e, a cada pulso, fere e freia quem está ao alcance da lança
+  updateSpear(dt) {
+    this.spearT -= dt;
+    if (this.spearT > 0 && !this.dead && !game.over) {
+      if (!this.spearOn) { this.range *= SPEAR_REACH; this.spearOn = true; }
+      this.spearTick -= dt;
+      if (this.spearTick <= 0) {
+        this.spearTick += 0.4;
+        const reach = this.range + 0.5;
+        for (const s of skeletonsAlive()) if (!s.spawning && Math.abs(s.pos.y - this.pos.y) < 0.85 && s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1)) {
+          heroHit(this, s, this.spearInfo.dmg);
+          controlEnemy(s, 'slowT', this.spearInfo.slow * (s.boss ? 0.5 : 1));
+        }
+      }
+    } else if (this.spearOn) { this.range /= SPEAR_REACH; this.spearOn = false; this.spearT = 0; }
+    if (this.chargeBack) {   // depois da carga o Lanceiro volta ao ponto de partida (se o chão deixar)
+      this.chargeBack.t -= dt;
+      if (this.dead || game.over) this.chargeBack = null;
+      else if (this.chargeBack.t <= 0) {
+        const { to } = this.chargeBack, at = this.pos.clone();
+        this.chargeBack = null;
+        if (world.canStep(at, to)) { this.pos.copy(to).setY(world.groundHeight(to.x, to.z)); this.vel.set(0, 0, 0); FX.steelDash(at, this.pos); }
+      }
+    }
   }
 
   updateSkillStates(dt) {
+    if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.leechT -= dt; this.wallT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
@@ -7807,6 +7973,7 @@ const SKILL_MOVES = {
   beast_tamer: ['Unarmed_Melee_Attack_Kick', 1.45, 0.34, 'hit'],
   oracle: ['1H_Ranged_Shoot', 1.3, 0.35, 'zap'],
   brute: ['Jump_Full_Short', 0.9, 0.7, 'slam'],
+  lancer: ['1H_Melee_Attack_Stab', 1.3, 0.45, 'sword'],
   summoner: ['2H_Melee_Attack_Stab', 1.5, 0.45, 'summon'],
   vampire: ['2H_Melee_Attack_Slice', 1.3, 0.4, 'hit'],
 };
@@ -7984,6 +8151,12 @@ const SKILL_ANIMS = {
     { clip: 'Throw', hold: 'Brute_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
     { clip: 'Cheer', hold: 'Block', f: 0.4, lean: -0.2, hop: 0.25 },
     { clip: 'Block', hold: 'Blocking', f: 0.42, hop: 0.35, lean: 0.12, kick: -0.25 },   // salta e crava os pés: vira muralha
+  ],
+  lancer: [
+    { clip: '1H_Melee_Attack_Stab', hold: '2H_Melee_Idle', f: 0.45, arc: 'thrust', lean: 0.15, kick: 1 },   // estocada reta
+    { clip: 'Block', hold: '2H_Melee_Idle', f: 0.4, lean: 0.2, kick: -0.3 },                                 // firma a lança em postura
+    { clip: 'Dodge_Forward', hold: '2H_Melee_Idle', f: 0.5, arc: 'thrust', lean: 0.25, kick: 0.6 },          // arranca para a carga
+    { clip: '2H_Melee_Attack_Stab', hold: '2H_Melee_Idle', f: 0.5, arc: 'thrust', lean: 0.3, kick: 0.5 },    // crava a lança no alvo
   ],
   summoner: [
     { clip: '2H_Melee_Attack_Stab', hold: 'Spellcasting', f: 0.5, lean: 0.12, float: 0.18 },   // finca o cajado e a fada sai da gema
@@ -9110,7 +9283,7 @@ const directControl = {
 const DIRECT_SKILL_SLOTS = { q: 0, w: 1, e: 2, r: 3 };
 const DIRECT_BLOCKED_LEGACY_KEYS = new Set('1234qwerasdfzxvb'.split(''));
 const DIRECT_MOVE_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
-const DIRECT_AIM_EFFECTS = new Set(['charge', 'volley', 'execute', 'shadow', 'chain', 'cross-dash', 'arrow-storm', 'volatile', 'hunter-mark', 'wind-palm', 'emp-pulse']);
+const DIRECT_AIM_EFFECTS = new Set(['charge', 'volley', 'execute', 'shadow', 'chain', 'cross-dash', 'arrow-storm', 'volatile', 'hunter-mark', 'wind-palm', 'emp-pulse', 'cavalry-charge', 'pin-spear']);
 const DIRECT_GROUND_AIM_EFFECTS = new Set(['arrow-storm', 'volatile']);
 const directAimScreen = new THREE.Vector3(), directMoveForward = new THREE.Vector3(), directMoveRight = new THREE.Vector3();
 const directMoveVector = new THREE.Vector3(), directMoveDestination = new THREE.Vector3();
