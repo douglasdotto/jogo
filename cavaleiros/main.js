@@ -10338,6 +10338,26 @@ function missionEnd(won) {
   return stars;
 }
 
+// Inimigo comum trancado (preso no terreno ou do outro lado do rio): parado, sem apanhar e longe de qualquer herói
+// por STUCK_ENEMY_TIME s some e volta pela fila de spawn, para a fase não ficar presa nele.
+const STUCK_ENEMY_TIME = 15, STUCK_ENEMY_MOVE = 2.5, STUCK_ENEMY_HERO_GAP = 7;
+const ADVANCE_WAIT = 4;   // espera máxima pela formação ao chegar numa fase
+function reapStuckEnemies(dt, skeletons, party) {
+  for (const s of skeletons) {
+    if (s.dead || s.spawning || s.boss || s.totem || s === game.huntMark || !party.length) { s.stuckT = 0; continue; }
+    if (!s.stuckAt) { s.stuckAt = s.pos.clone(); s.stuckHp = s.hp; s.stuckT = 0; continue; }
+    const moved = s.pos.distanceTo(s.stuckAt) > STUCK_ENEMY_MOVE, hurt = s.hp < s.stuckHp;
+    s.stuckHp = s.hp;
+    if (moved || hurt || party.some((h) => h.pos.distanceTo(s.pos) < STUCK_ENEMY_HERO_GAP)) { s.stuckAt.copy(s.pos); s.stuckT = 0; continue; }
+    if ((s.stuckT += dt) < STUCK_ENEMY_TIME) continue;
+    s.dead = true;   // sai sem contar abate nem dar XP
+    s.hp = 0;
+    poof(s.pos, 1.2);
+    s.remove();
+    game.toSpawn++;
+  }
+}
+
 function spawnSkeleton() {
   const p = game.phase;
   const zone = world.zoneOf(p);
@@ -10466,6 +10486,7 @@ function updateGame(dt) {
       if (foe) tutorial.on('enemyNear', { enemy: foe, camera, fighting: () => game.state === 'fight' });
     }
     pressForward(dt, skeletons, party);
+    reapStuckEnemies(dt, skeletons, alive);
     if (game.toSpawn > 0) {
       game.spawnTimer -= dt;
       const bossWaits = game.bossPending && game.toSpawn === 1 && skeletons.length > 4;   // o chefe só entra quando a onda diminui, sem chegar junto com ela
@@ -10521,7 +10542,9 @@ function updateGame(dt) {
     game.guideS = Math.min(goal, game.guideS + MARCH * dt);
     for (const h of party) h.setAnchor(game.guideS);
     const formationReady = alive.every((h) => h.pos.distanceTo(h.post) < 0.6);
-    if (game.guideS >= goal && (formationReady || game.mission?.goal.type === 'bosses')) startPhase();
+    // posto atrás de obstáculo ou espremido pelos vizinhos: depois de ADVANCE_WAIT s a fase começa mesmo assim
+    game.advanceWaitT = game.guideS >= goal ? (game.advanceWaitT || 0) + dt : 0;
+    if (game.guideS >= goal && (formationReady || game.mission?.goal.type === 'bosses' || game.advanceWaitT > ADVANCE_WAIT)) { game.advanceWaitT = 0; startPhase(); }
   }
 
   const missionNumber = game.mission ? MISSIONS.indexOf(game.mission) + 1 : 0;

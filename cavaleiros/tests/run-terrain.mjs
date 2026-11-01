@@ -369,7 +369,7 @@ if(!spawned.at(-1).boss||spawned.at(-1).type!=='Warrior')throw Error('Chefe alte
 const h={dead:false,hp:60,maxHp:100,gainXp:()=>{},once:()=>1};
 const phaseGame={state:'fight',phase:3,toSpawn:0,over:false,paused:false};let living=[{pos:pointAt(anchorS(3))}];
 const tick=runInNewContext(main.slice(main.indexOf('function updateGame('),main.indexOf('function endGame('))+';updateGame',{
-  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},clearDirectControlOrders:()=>{},syncDirectControlUI:()=>{},tutorial:{on(){},wants:()=>false},showBanner:()=>{},popText:()=>{},setText:()=>{},setTip:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
+  game:phaseGame,difficulty,heroes:()=>[h],skeletonsAlive:()=>living,captivePrisoner:()=>null,pressForward:()=>{},reapStuckEnemies:()=>{},clearDirectControlOrders:()=>{},syncDirectControlUI:()=>{},tutorial:{on(){},wants:()=>false},showBanner:()=>{},popText:()=>{},setText:()=>{},setTip:()=>{},HEROES:[{}],MAX_PARTY:4,PHASES:12,
   units:[],militiaAlive:()=>0,$:()=>({hidden:true,classList:{toggle(){}}})
 });
 tick(0.1);if(phaseGame.state!=='fight')throw Error('Terminou fase com atirador vivo');
