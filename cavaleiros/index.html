@@ -651,7 +651,7 @@
       }
     }
   </style>
-  <link rel="stylesheet" href="campaign.css?v=20261030-campaign-map-big">
+  <link rel="stylesheet" href="campaign.css?v=20261101-equipe-continua">
   <link rel="stylesheet" href="battle-hud.css">
   <link rel="stylesheet" href="tutorial.css">
   <link rel="stylesheet" href="loading.css">
@@ -688,6 +688,16 @@
     </div>
   </div>
   <div id="soundHint" role="status" hidden>Som desligado · ligue no alto-falante ↗</div>
+  <aside id="fpsHint" class="fps-hint" role="status" aria-live="polite" hidden>
+    <div class="fps-hint-copy">
+      <strong>FPS baixo detectado</strong>
+      <p>No Chrome, abra <code>chrome://settings/system</code>, ative “Usar aceleração gráfica quando disponível” e reinicie o navegador.</p>
+    </div>
+    <div class="fps-hint-actions">
+      <button id="fpsHintLow" type="button">Gráficos baixos</button>
+      <button id="fpsHintClose" type="button">Agora não</button>
+    </div>
+  </aside>
   <div id="skills" role="group" aria-label="Habilidades dos heróis"></div>
   <div id="directControlHint" class="is-hidden" role="status" aria-label="Controle direto" tabindex="0"
     data-tip="C devolve à IA · setas ou botão direito movem · botão esquerdo ataca · Q/W/E/R habilidades (Auto desligado) · mouse mira">

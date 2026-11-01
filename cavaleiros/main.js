@@ -7,11 +7,11 @@ import { createWorld, biomeForSeed, preloadSceneryAssets } from './world.js';
 import { CHARACTERS, CHARACTER_ASSETS, buildCharacter, applyLook, buildBeast, animateBeast } from './characters.js';
 import { LOOKS } from './looks.js';
 import { HERO_ANIM_FILES, HERO_PROP_FILES, heroModelFile, attachHeroAnimations, HERO_HITS, HERO_DEATHS, HERO_DODGES } from './hero-anims.js';
-import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds } from './class-info.js';
+import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds, skillLevel, SKILL_LEVEL_CAP } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
 import { activeSynergies, damageSynergies, synergyDamageMultiplier, synergyDamageTakenMultiplier, synergyHealMultiplier, synergySummonHaste } from './synergies.js';
-import { EVOLUTION_BRANCHES, applyEvolutionBranch, scaleBranchEffect } from './upgrade-branches.js';
+import { EVOLUTION_BRANCHES, applyEvolutionBranch, branchRankLimit, scaleBranchEffect } from './upgrade-branches.js';
 import { buildBattleReport } from './battle-report.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
@@ -25,9 +25,10 @@ import { createPopTextPool } from './pop-text-pool.js';
 import { createCampaignAura } from './campaign-aura.js';
 import { mountCampaignMap3D } from './campaign-map3d.js';
 import { disposeSkeletons, gridCellKey } from './scene-perf.js';
-import { createProgression, renderCamp, rewardHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
+import { createProgression, renderCamp, rewardHTML, achievementChipsHTML, toastAchievements, GOLD, MASTERY_PERKS, UPGRADES } from './progression.js';
 import { vfxMesh, spriteGeometry, radialSpriteGeometry, SPRITE, tickVfx, setVfxQuality, VFX_KINDS } from './vfx-shaders.js';
 import { createLoadingScreen } from './loading.js';
+import { createLowFpsMonitor } from './performance-warning.js';
 import { MONSTER_TYPES, MONSTER_MATERIALS, linkMonsters, monsterDied, updateMonsterFx, clearMonsterFx, dangerAt, pickMonster, waveLeader, campaignThreats, missionBossPhase, nextBossPhase, applyBossMod, absorbWard, cleanseAround, pendingMonsterSummons } from './monsters.js';
 
 const ROAD = 5;             // metade da largura da estrada
@@ -35,6 +36,7 @@ const PHASES = 12;          // a última fase fica no topo, no castelo
 const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
 const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
+const HERO_HUNT_RADIUS = 18; // arena visível em volta do ponto do grupo: herói ocioso caça qualquer inimigo dentro dela
 const RANGED_INTERCEPT = 20; // cobre o surgimento à frente e a largura da formação, sem perseguição pelo mapa
 const RANGED_INTERCEPTORS = 2;
 const TWIN_BOSS_INTERCEPT = 16; // dois heróis podem pressionar o chefe móvel sem arrastar a equipe
@@ -141,7 +143,22 @@ const POSTS = [[0, -1.2], [-1.7, 0], [1.7, 0], [0, 1.7]];
 // Na câmara final, postos compactos se sobrepõem à separação física dos heróis;
 // a equipe ficava presa em `advance` antes do primeiro spawn.
 const CASTLE_POSTS = [[-4, -3], [4, -3], [-4, 3], [4, 3]];
-const XP_LEVELS = [0, 90, 350];   // XP acumulado para Nv2 e Nv3
+// XP acumulado para Nv2…Nv5; os degraus crescem (90, 260, 450, 600) porque a equipe da campanha leva o XP entre missões
+// Menor distância entre dois POSTS (frente ↔ lado). Com corpos grandes (Brutamontes, nível 3) os postos abrem
+// para que vizinhos parados não fiquem dentro da separação e se empurrem sem parar.
+const POST_GAP = Math.hypot(1.7, 1.2);
+function formationSpread() {
+  let a = 1, b = 1;   // os dois maiores corpos vivos do grupo
+  for (const h of heroes()) if (!h.dead) { const s = h.size || 1; if (s > a) { b = a; a = s; } else if (s > b) b = s; }
+  return Math.max(1, (UNIT_SEPARATION_FACTOR * (a + b) + 0.15) / POST_GAP);
+}
+const XP_LEVELS = [0, 90, 350, 800, 1400];
+const MAX_HERO_LEVEL = XP_LEVELS.length;
+// só há 3 retratos/nomes por herói: Nv4 e Nv5 usam os do Nv3 com selo próprio (prata no 4, ouro no 5)
+const artLevel = (level) => Math.min(level, 3);
+const heroLevelName = (cfg, level) => cfg.names?.[artLevel(level) - 1] || cfg.name;
+const heroLevelPortrait = (cfg, level) => cfg.portraits?.[artLevel(level) - 1] || cfg.portrait || '';
+const levelTierClass = (level) => level > 3 ? `tier-${Math.min(level, MAX_HERO_LEVEL)}` : '';
 
 const SKELETONS = {
   Crossbow: { model: 'Rogue', hp: 34, dmg: 7, range: 10, speed: 0, cooldown: 2.3, weapon: 'Skeleton_Crossbow', ranged: true, attack: '2H_Ranged_Shoot' },
@@ -297,6 +314,21 @@ document.getElementById('quality').onclick = () => {
   applyQuality();
 };
 applyQuality();
+
+const lowFpsMonitor = createLowFpsMonitor();
+const fpsHint = document.getElementById('fpsHint');
+let fpsHintDismissed = false;
+try { fpsHintDismissed = sessionStorage.getItem('cavaleiros-fps-hint-dismissed') === '1'; } catch {}
+function dismissFpsHint() {
+  fpsHint.hidden = true;
+  fpsHintDismissed = true;
+  try { sessionStorage.setItem('cavaleiros-fps-hint-dismissed', '1'); } catch {}
+}
+document.getElementById('fpsHintClose').onclick = dismissFpsHint;
+document.getElementById('fpsHintLow').onclick = () => {
+  if (!lowQuality) document.getElementById('quality').click();
+  dismissFpsHint();
+};
 
 let world = createWorld(scene, ROAD, PHASES);
 
@@ -575,6 +607,129 @@ function rememberCampaignSquad() {
   try { localStorage.setItem(CAMPAIGN_SQUAD_KEY, JSON.stringify(saved.slice(0, MAX_PARTY))); } catch {}
 }
 
+// Equipe contínua da campanha: cada herói leva XP e evoluções de uma missão para a outra.
+// A composição grava ao começar a missão; XP e evoluções, só na vitória. Herói novo entra no nível 1.
+const CAMPAIGN_TEAM_KEY = 'cavaleiros-time-campanha';
+let campaignTeamRun = false;   // ligado pelo mapa e pela "Próxima"; simulações e atalhos seguem o grupo de cada missão
+const campaignTeamMode = () => campaignTeamRun && !!game.mission && !game.test;
+const missionPartySize = (m) => campaignTeamMode() ? (m.goal.type === 'duel' ? 1 : MAX_PARTY) : m.heroes;   // Duelo segue com um herói
+function loadCampaignTeam() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CAMPAIGN_TEAM_KEY));
+    if (!Array.isArray(saved)) return [];
+    const seen = new Set();
+    return saved.filter((entry) => VARIANTS.some((cfg) => cfg.id === entry?.id) && !seen.has(entry.id) && seen.add(entry.id))
+      .slice(0, MAX_PARTY)
+      .map((entry) => ({ id: entry.id, xp: Math.max(0, Number(entry.xp) || 0), branches: Array.isArray(entry.branches) ? entry.branches.filter((id) => typeof id === 'string') : [] }));
+  } catch { return []; }
+}
+// grava quem jogou (com XP e evoluções atuais) e mantém quem ficou de fora, como no Duelo
+function storeCampaignTeam(party) {
+  // rotas na ordem de reaplicar: primeiro cada uma, depois os 2º graus (o grau 2 só abre da 3ª evolução)
+  const branchOrder = (ranks = {}) => [...Object.keys(ranks), ...Object.keys(ranks).filter((id) => ranks[id] > 1)];
+  const played = party.map((h) => ({ id: h.cfg.id, xp: h.xp, branches: branchOrder(h.evolutionBranches) }));
+  const saved = loadCampaignTeam();
+  const team = played.length < MAX_PARTY && played.every((p) => saved.some((entry) => entry.id === p.id))
+    ? saved.map((entry) => played.find((p) => p.id === entry.id) || entry)   // Duelo: só o campeão muda e a ordem fica
+    : [...played, ...saved.filter((entry) => !played.some((p) => p.id === entry.id))].slice(0, MAX_PARTY);
+  try { localStorage.setItem(CAMPAIGN_TEAM_KEY, JSON.stringify(team)); } catch {}
+}
+// herói da equipe volta com o XP e as mesmas evoluções escolhidas antes
+function restoreCampaignHero(entry) {
+  const h = new Hero(VARIANTS.find((cfg) => cfg.id === entry.id));
+  arrangeParty();
+  h.gainXp(entry.xp);
+  const branches = [...entry.branches];
+  while (evolutions.length) {
+    const hero = evolutions.shift().hero;
+    const id = branches.shift();   // ramo que não existe mais cai na escolha automática
+    const option = EVOLUTION_BRANCHES.some((branch) => branch.id === id) ? { id } : chooseAutoEvolution(hero);
+    if (option) applyUpgrade(hero, option);
+  }
+  return h;
+}
+const teamLevel = (xp) => XP_LEVELS.filter((need) => xp >= need).length;
+
+// antes da missão: a equipe salva entra direto; clicar marca quem sai (no Duelo, escolhe quem luta)
+function showTeam() {
+  const m = game.mission, team = loadCampaignTeam(), duel = missionPartySize(m) === 1;
+  if (!team.length) return showPick(pickTitle(), pickSub());   // primeira vez: monta a equipe
+  pick.mode = 'team';
+  pick.options = team;
+  pick.swap = new Set();
+  $('banner').style.opacity = 0;
+  $('pickTitle').textContent = `${MISSIONS.indexOf(m) + 1}. ${m.name}`;
+  // papéis que a missão pede e a equipe não cobre: aviso curto na dica do título
+  const cfgs = team.map((entry) => VARIANTS.find((v) => v.id === entry.id));
+  const covered = new Set(teamCoverage(cfgs).roles.filter((role) => role.count > 0).map((role) => role.name));
+  const lacking = [...new Set([...missionRoleNeeds(m.goal), ...teamCoverage(cfgs).missing])].filter((role) => !covered.has(role));
+  setPickSub(`${duel ? 'Escolha quem entra no duelo' : 'Clique em quem sai da equipe; quem entra começa no nível 1'}${lacking.length ? ` · Falta: ${lacking.join(', ')}` : ''}`);
+  $('pickHint').textContent = '';
+  const list = $('pickList');
+  list.innerHTML = '';
+  list.classList.remove('grid');
+  pick.cards = team.map((entry, i) => {
+    const cfg = VARIANTS.find((v) => v.id === entry.id), level = teamLevel(entry.xp);
+    const name = cfg.names?.[level - 1] || cfg.name;
+    const b = document.createElement('div');
+    b.className = 'card team-card';
+    b.tabIndex = 0;
+    b.setAttribute('role', 'button');
+    b.setAttribute('aria-label', teamCardLabel(entry));
+    b.setAttribute('data-tip', duel ? 'Entra no duelo' : 'Trocar este herói');
+    b.style.setProperty('--c', cfg.color[0]);
+    b.style.setProperty('--cd', cfg.color[1]);
+    b.style.setProperty('--d', `${i * 90}ms`);
+    b.innerHTML = `<div class="portrait"><img src="${cfg.portraits?.[level - 1] || cfg.portrait}" alt=""></div><div class="ribbon">${name}</div><small class="pick-card-role">${heroInfo(cfg).role}</small><span class="team-level" aria-hidden="true">Nv${level}</span><span class="seal team-out" aria-hidden="true">Sai</span>`;
+    b.onclick = () => confirmPick(i);
+    b.onfocus = () => selectCard(i);
+    bindCard(b, i);
+    list.appendChild(b);
+    return b;
+  });
+  if (!duel) {
+    pick.teamGo = document.createElement('button');
+    pick.teamGo.type = 'button';
+    pick.teamGo.className = 'team-go';
+    pick.teamGo.onclick = () => pick.open && startTeam();
+    list.appendChild(pick.teamGo);
+    paintTeamGo();
+  }
+  selectCard(0);
+  pick.open = true;
+  game.paused = true;
+  $('pick').classList.remove('hidden');
+}
+function paintTeamGo() {
+  const out = pick.swap.size;
+  pick.teamGo.textContent = out ? `Trocar ${out} ▸` : 'Seguir ▸';
+  pick.teamGo.setAttribute('aria-label', out ? `Trocar ${out} herói${out > 1 ? 's' : ''}` : 'Seguir com a equipe');
+}
+function confirmTeam(i) {
+  const entry = pick.options[i];
+  if (!entry) return;
+  if (missionPartySize(game.mission) === 1) return startTeam([entry]);
+  if (pick.swap.has(entry.id)) pick.swap.delete(entry.id);
+  else pick.swap.add(entry.id);
+  pick.cards[i].classList.toggle('out', pick.swap.has(entry.id));
+  pick.cards[i].setAttribute('aria-label', teamCardLabel(entry));
+  paintTeamGo();
+}
+function teamCardLabel(entry) {
+  const cfg = VARIANTS.find((v) => v.id === entry.id), level = teamLevel(entry.xp);
+  return `${cfg.names?.[level - 1] || cfg.name}, nível ${level}${pick.swap?.has(entry.id) ? ', sai da equipe' : ''}`;
+}
+function startTeam(members = pick.options.filter((entry) => !pick.swap.has(entry.id))) {
+  pick.open = false;
+  $('pick').classList.add('hidden');
+  for (const entry of members) restoreCampaignHero(entry);
+  game.picksLeft = missionPartySize(game.mission) - heroes().length;
+  if (game.picksLeft > 0) return showPick(pickTitle(), pickSub());
+  storeCampaignTeam(heroes());
+  rememberCampaignSquad();
+  startMission();
+}
+
 function setPickClass(groupIndex) {
   pick.activeClass = groupIndex;
   pick.classRows.forEach((row, i) => { row.hidden = i !== groupIndex; });
@@ -768,7 +923,8 @@ function showMenu() {
 function confirmMode(i) {
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  pick.timer = setTimeout(() => (i === 0 ? showCampaign() : showCamp()), 450);
+  // primeira vez na campanha: direto para a missão 1
+  pick.timer = setTimeout(() => (i === 0 ? showCampaign(!totalStars() && !loadCampaignTeam().length && !allOpen() ? MISSIONS[0] : null) : showCamp()), 450);
 }
 
 // acampamento: gasta o ouro na oficina e mostra maestria e conquistas
@@ -799,9 +955,11 @@ function showCamp() {
 }
 
 // mapa da campanha; escolher uma missão leva à dificuldade
-function showCampaign(autoPlay = null) {
+// keepDifficulty: "Próxima missão" segue na dificuldade da última, sem perguntar de novo
+function showCampaign(autoPlay = null, keepDifficulty = false) {
   tutorial.on('leave');
   game.mission = null;
+  campaignTeamRun = false;
   pick.open = false;
   game.paused = true;   // sem grupo ainda: a partida não pode correr por trás do mapa
   $('pick').classList.add('hidden');
@@ -809,11 +967,13 @@ function showCampaign(autoPlay = null) {
   const mapSeeds = campaignMapSession.get();
   const play = (m) => {
     game.mission = m;
+    campaignTeamRun = true;
     root.classList.add('hidden');
     const build = () => useMissionWorld(m, mapSeeds.get(m.id));
-    if (typeof withBattleAssets === 'function') return withBattleAssets(showDifficulty, build);   // cenário, modelos e shaders com a tela de carregamento
+    const next = keepDifficulty ? beginRun : showDifficulty;
+    if (typeof withBattleAssets === 'function') return withBattleAssets(next, build);   // cenário, modelos e shaders com a tela de carregamento
     build();
-    showDifficulty();
+    next();
   };
   renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : m.biome || biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal, m), progressStorageWarning(), (m) =>
     difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m), mountCampaignMap3D);
@@ -844,10 +1004,13 @@ function replayMission({ replay: m, team, seed }) {
 function replayTeam(m, team) {
   prepareRun();
   game.picksLeft = 0;
-  for (const cfg of team.slice(0, m.heroes)) {
+  const saved = campaignTeamMode() ? loadCampaignTeam() : [];
+  for (const cfg of team.slice(0, missionPartySize(m))) {
+    const entry = saved.find((e) => e.id === cfg.id);
+    if (entry) { restoreCampaignHero(entry); continue; }   // equipe contínua: volta como está salva
     const h = new Hero(cfg);
     arrangeParty();
-    h.gainXp(XP_LEVELS[m.level - 1]);
+    h.gainXp(campaignTeamMode() ? 0 : XP_LEVELS[m.level - 1]);
     autoUpgrade();   // a missão já começa no nível certo, como na escolha normal
   }
   startMission();
@@ -898,12 +1061,13 @@ function confirmDifficulty(i) {
   paintDifficulty();
   pick.open = false;
   pick.cards.forEach((c, k) => c.classList.add(k === i ? 'chosen' : 'gone'));
-  const next = () => {
-    const m = prepareRun();
-    pick.timer = setTimeout(() => (m ? showPick(pickTitle(), pickSub())
-      : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
-  };
-  next();
+  beginRun();
+}
+
+function beginRun() {
+  const m = prepareRun();
+  pick.timer = setTimeout(() => (m ? (campaignTeamMode() ? showTeam() : showPick(pickTitle(), pickSub()))
+    : showPick('Escolha seu herói', 'Ele vai liderar o grupo contra os esqueletos')), 550);
 }
 
 // dificuldade já escolhida: prepara o cenário e o grupo vazio da missão
@@ -914,12 +1078,12 @@ function prepareRun() {
   const asked = +new URLSearchParams(location.search).get('fase');
   placeParty(m ? THREE.MathUtils.clamp(asked || m.from, m.from, m.to) : THREE.MathUtils.clamp(asked || 1, 1, PHASES));
   game.campaignSquadSuggestion = m && !game.test ? loadCampaignSquad() : [];
-  game.picksLeft = m ? m.heroes : 0;
+  game.picksLeft = m ? missionPartySize(m) : 0;
   return m;
 }
 
-const pickTitle = () => game.mission.heroes > 1 ? `Escolha o herói ${heroes().length + 1} de ${game.mission.heroes}` : 'Escolha seu herói';
-const pickSub = () => `${game.mission.name}: o grupo começa no nível ${game.mission.level}`;
+const pickTitle = () => missionPartySize(game.mission) > 1 ? `Escolha o herói ${heroes().length + 1} de ${missionPartySize(game.mission)}` : 'Escolha seu herói';
+const pickSub = () => `${game.mission.name}: ${campaignTeamMode() ? 'quem entra começa no nível 1' : `o grupo começa no nível ${game.mission.level}`}`;
 
 function bindCard(b, i, hoverSelects = true) {
   if (hoverSelects) b.onmouseenter = () => { if (!b.classList.contains('owned')) selectCard(i); };
@@ -939,7 +1103,7 @@ function renderInfo(cfg) {
   const skills = skillSetFor(cfg);
   const currentTeam = heroes().map((hero) => hero.cfg);
   const alreadySelected = currentTeam.some((member) => member.id === cfg.id);
-  const teamLimit = game.mission && game.picksLeft > 0 ? Math.min(MAX_PARTY, game.mission.heroes) : MAX_PARTY;
+  const teamLimit = game.mission && game.picksLeft > 0 ? Math.min(MAX_PARTY, missionPartySize(game.mission)) : MAX_PARTY;
   const canAddCandidate = !alreadySelected && currentTeam.length < teamLimit && variantOpen(cfg.id);
   const projectedTeam = canAddCandidate ? [...currentTeam, cfg] : currentTeam;
   const team = teamCoverage(projectedTeam);
@@ -1063,6 +1227,7 @@ function confirmPick(i) {
   if (pick.mode === 'relic') return confirmRelic(i);
   if (pick.mode === 'difficulty') return confirmDifficulty(i);
   if (pick.mode === 'mode') return confirmMode(i);
+  if (pick.mode === 'team') return confirmTeam(i);
   const cfg = pick.options[i];
   if (!isFree(cfg) || heroes().length >= MAX_PARTY) return;
   pick.open = false;
@@ -1079,15 +1244,18 @@ function confirmPick(i) {
   pick.timer = setTimeout(() => {
     $('pick').classList.add('hidden');
     const party = heroes(), first = game.picksLeft > 0;   // first: grupo inicial da missão
-    const xp = first ? XP_LEVELS[game.mission.level - 1] : party.length ? party.reduce((sum, h) => sum + h.xp, 0) / party.length / 2 : 0;
-    const h = new Hero(cfg);
-    arrangeParty();
-    h.gainXp(xp);
+    // quem sai e volta na mesma troca não perde o progresso
+    const kept = first && campaignTeamMode() ? loadCampaignTeam().find((entry) => entry.id === cfg.id) : null;
+    // equipe contínua: herói novo no nível 1; só a primeira montagem (save antigo sem equipe) entra no nível da missão
+    const xp = first ? (campaignTeamMode() && loadCampaignTeam().length ? 0 : XP_LEVELS[game.mission.level - 1]) : party.length ? party.reduce((sum, h) => sum + h.xp, 0) / party.length / 2 : 0;
+    const h = kept ? restoreCampaignHero(kept) : new Hero(cfg);
+    if (!kept) { arrangeParty(); h.gainXp(xp); }
     h.busy = h.once('Cheer') * 0.6;
     if (first) {
       rememberCampaignSquad();
       autoUpgrade();   // a missão já começa no nível certo, sem telas de evolução
       if (--game.picksLeft > 0) return showPick(pickTitle(), pickSub());
+      if (campaignTeamMode()) storeCampaignTeam(heroes());
       return startMission();
     }
     const begin = () => {
@@ -1333,7 +1501,7 @@ function confirmRelic(i) {
   pick.open = false;
   $('pick').classList.add('hidden');
   game.paused = false;
-  if (heroes().length < 4) return showPick('Novo aliado!', 'Escolha quem entra no grupo');
+  if (heroes().length < 4 && !campaignTeamMode()) return showPick('Novo aliado!', 'Escolha quem entra no grupo');
   audio.startMusic();
 }
 
@@ -1374,16 +1542,16 @@ function showEvolution() {
   $('pickList').appendChild(card);
   pick.cards = pick.upgrades.map((option, i) => {
     const gain = evolutionGain(h, option.id);
-    const rec = option.id === recommended;
-    const tip = `${option.name}: ${option.desc}${gain.weak ? ' Pouco efeito neste herói.' : ''}${rec ? ' ★ Sugerida para este herói e esta equipe.' : ''}`;
+    const rec = option.id === recommended, name = option.name + (h.evolutionBranches?.[option.id] ? ' II' : '');   // 2º grau da rota (Nv4+)
+    const tip = `${name}:${option.desc}${gain.weak ? ' Pouco efeito neste herói.' : ''}${rec ? ' ★ Sugerida para este herói e esta equipe.' : ''}`;
     const b = document.createElement('div');
     b.className = `evo-route${gain.weak ? ' weak' : ''}${rec ? ' recommended' : ''}`;
     b.setAttribute('role', 'button');
     b.setAttribute('tabindex', '0');
-    b.setAttribute('aria-label', `${option.name}: ${gain.label} ${gain.from ? `${gain.from} para ${gain.to}` : gain.to}. ${tip}`);
+    b.setAttribute('aria-label', `${name}: ${gain.label} ${gain.from ? `${gain.from} para ${gain.to}` : gain.to}. ${tip}`);
     b.setAttribute('data-tip', tip);
     b.innerHTML = `<kbd aria-hidden="true">${i + 1}</kbd><span class="evo-route-icon" aria-hidden="true">${option.icon}</span>`
-      + `<span class="evo-route-name" aria-hidden="true">${option.name}<small>${gain.label}</small></span>`
+      + `<span class="evo-route-name" aria-hidden="true">${name}<small>${gain.label}</small></span>`
       + `<span class="evo-gain" aria-hidden="true">${gain.from ? `<s>${gain.from}</s><em>→</em>` : ''}<b>${gain.to}</b></span>`
       + (rec ? '<span class="evo-rec" aria-hidden="true">★</span>' : '');
     b.onclick = () => confirmPick(i);
@@ -1399,10 +1567,10 @@ function showEvolution() {
 function evolutionHeroHTML(entry) {
   const h = entry.hero, cfg = h.cfg, level = entry.level;
   const hp = entry.hp || [Math.round(h.maxHp / 1.1), h.maxHp], dmg = entry.dmg || [h.dmg / 1.1, h.dmg];
-  const img = cfg.portraits?.[level - 1] || cfg.portrait || '';
-  const oldName = cfg.names?.[level - 2] || cfg.name, newName = cfg.names?.[level - 1] || cfg.name;
+  const img = heroLevelPortrait(cfg, level);
+  const oldName = heroLevelName(cfg, level - 1), newName = heroLevelName(cfg, level);
   const stat = (glyph, tip, [a, b]) => `<span class="evo-stat" data-tip="${tip} +10%"><i aria-hidden="true">${glyph}</i>${Math.round(a)}<em>→</em><b>${Math.round(b)}</b></span>`;
-  return `<span class="evo-hero" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" aria-label="${attrText(`${oldName} evolui para ${newName}, nível ${level}`)}">
+  return `<span class="evo-hero ${levelTierClass(level)}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" aria-label="${attrText(`${oldName} evolui para ${newName}, nível ${level}`)}">
     <span class="evo-portrait"><span class="evo-rays" aria-hidden="true"></span><img src="${img}" alt=""><span class="evo-class" aria-hidden="true">${PICK_CLASS_GLYPHS[cfg.classId] || '♜'}</span></span>
     <span class="evo-info">
       <span class="evo-names">${oldName === newName ? '' : `<s>${attrText(oldName)}</s><em>→</em>`}<b>${attrText(newName)}</b></span>
@@ -1415,7 +1583,8 @@ function evolutionHeroHTML(entry) {
 function evolutionQueueHTML(position, total) {
   const faces = [...(pick.evoDone || []), ...evolutions].map((entry, k) => {
     const cfg = entry.hero.cfg, state = k < position - 1 ? ' done' : k === position - 1 ? ' now' : '';
-    return `<span class="evo-face${state}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="${attrText(`${cfg.names?.[entry.level - 1] || cfg.name} · Nv${entry.level}`)}"><img src="${cfg.portraits?.[entry.level - 1] || cfg.portrait || ''}" alt=""></span>`;
+    const tier = levelTierClass(entry.level);
+    return `<span class="evo-face${state}${tier ? ` ${tier}` : ''}" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="${attrText(`${heroLevelName(cfg, entry.level)} · Nv${entry.level}`)}"><img src="${heroLevelPortrait(cfg, entry.level)}" alt=""></span>`;
   }).join('');
   return `<span class="evo-queue"><b>${position}/${total}</b>${faces}</span>`;
 }
@@ -1431,7 +1600,7 @@ function evolutionGain(hero, id) {
   }
   const k = 1 + (bonus[id] || 0), percent = `+${Math.round((k - 1) * 100)}%`;
   if (id === 'support' && SIGNATURE_HEAL[hero.cfg.id]) {
-    const heal = scaleBranchEffect(hero, 'support', SIGNATURE_HEAL[hero.cfg.id](hero.level)) * power;
+    const heal = scaleBranchEffect(hero, 'support', SIGNATURE_HEAL[hero.cfg.id](skillLevel(hero.level))) * power;
     return { label: 'Cura', from: Math.round(heal), to: Math.round(heal * k) };
   }
   const skills = id === 'control' ? controlSkills : supportSkills;
@@ -1487,12 +1656,13 @@ function chooseAutoEvolution(hero) {
 }
 
 function availableEvolutionBranches(hero) {
-  return EVOLUTION_BRANCHES.filter((branch) => !(hero.evolutionBranches?.[branch.id] > 0));
+  const limit = branchRankLimit(hero);
+  return EVOLUTION_BRANCHES.filter((branch) => (hero.evolutionBranches?.[branch.id] || 0) < limit);
 }
 
 function confirmEvolution(i) {
   const entry = evolutions[0], option = pick.upgrades[i];
-  if (!entry || !option || (EVOLUTION_BRANCHES.some((branch) => branch.id === option.id) && entry.hero.evolutionBranches?.[option.id])) return;
+  if (!entry || !option || (EVOLUTION_BRANCHES.some((branch) => branch.id === option.id) && !availableEvolutionBranches(entry.hero).some((branch) => branch.id === option.id))) return;
   const h = evolutions.shift().hero;
   applyUpgrade(h, option);
   popText(h.pos, option.name + '!', 'evolve');
@@ -1526,8 +1696,13 @@ function arrangeParty() {
   // A ordem de entrada resolve os empates; os arqueiros preferem o fundo.
   // quem tem frontline (Brutamontes) pega o primeiro posto, o da frente
   const melee = party.filter((h) => !h.ranged);
+  // escolta/resgate: o guarda do protegido fica no posto de trás, colado no aldeão
+  const goal = game.mission?.goal.type;
+  const guard = goal === 'escort' || goal === 'rescue' ? escortGuardOf(party) : null;
   const order = [...party.filter((h) => h.ranged), ...melee.filter((h) => h.cfg.frontline), ...melee.filter((h) => !h.cfg.frontline)];
+  if (guard) { guard.formation = POSTS[3]; guard.setAnchor(game.guideS); slots.pop(); }
   for (const h of order) {
+    if (h === guard) continue;
     const slot = h.ranged ? slots.pop() : slots.shift();
     h.formation = POSTS[slot];
     h.setAnchor(game.guideS);
@@ -1536,7 +1711,9 @@ function arrangeParty() {
 
 addEventListener('keydown', (e) => {
   if (!pick.open) return;
-  if (e.key === 'Escape' && pick.mode === 'difficulty') { e.stopImmediatePropagation(); return game.mission ? showCampaign() : showMenu(); }
+  if (e.key === 'Escape' && (pick.mode === 'difficulty' || pick.mode === 'team')) { e.stopImmediatePropagation(); return game.mission ? showCampaign() : showMenu(); }
+  if (e.target.closest?.('.team-go') && (e.key === 'Enter' || e.key === ' ')) return;   // Enter no botão segue com a equipe
+  if (pick.mode === 'team' && missionPartySize(game.mission) > 1 && e.key === 'Enter') return startTeam();   // Enter segue; Espaço e 1–4 marcam quem sai
   const grid = pick.mode === 'hero';
   const classFilter = grid ? e.target.closest?.('.pick-filter') : null;
   if (classFilter) {
@@ -1711,7 +1888,7 @@ function buildSkillBar(party) {
     group.setAttribute('aria-label', h.cfg.name);
     // retrato com anel de vida, ícone da classe e nível; o nome fica só na dica
     group.innerHTML = `<div class="skillHero" data-tip="${h.cfg.name}"><span class="skillHeroRing"><span><img alt=""></span></span><span class="skillHeroClass" aria-hidden="true">${PICK_CLASS_GLYPHS[h.cfg.classId] || '♜'}</span><b class="skillHeroLevel"></b></div><div class="skillSlots"></div>`;
-    skillHeroes.push({ h, ring: group.querySelector('.skillHeroRing'), img: group.querySelector('.skillHeroRing img'), lvl: group.querySelector('.skillHeroLevel'), hp: '', level: 0 });
+    skillHeroes.push({ h, box: group.querySelector('.skillHero'), ring: group.querySelector('.skillHeroRing'), img: group.querySelector('.skillHeroRing img'), lvl: group.querySelector('.skillHeroLevel'), hp: '', level: 0 });
     const slots = group.querySelector('.skillSlots');
     for (const skill of skillSetFor(h.cfg)) {
       const slot = skill.slot, key = SKILL_KEYS[slot]?.[heroIndex] || '';   // slot sem tecla definida fica só no clique
@@ -1782,13 +1959,16 @@ function updateSkillBar() {
   const now = performance.now();
   for (const sh of skillHeroes) {
     const { h } = sh;
-    if (sh.level !== h.level) { sh.level = h.level; sh.img.src = h.cfg.portraits?.[h.level - 1] || h.cfg.portrait; sh.lvl.textContent = String(h.level); }
+    if (sh.level !== h.level) {
+      sh.level = h.level; sh.img.src = heroLevelPortrait(h.cfg, h.level); sh.lvl.textContent = String(h.level);
+      sh.box.className = `skillHero ${levelTierClass(h.level)}`.trim();   // Nv4 prata, Nv5 ouro: moldura e selo
+    }
     const hp = (h.dead ? 0 : THREE.MathUtils.clamp(h.hp / h.maxHp, 0, 1)).toFixed(2);
     if (hp !== sh.hp) { sh.hp = hp; sh.ring.style.setProperty('--hp', hp); }
   }
   for (const it of skillItems) {
     const { h, slot } = it;
-    if (it.level !== h.level) { it.level = h.level; it.img.src = h.cfg.portraits?.[h.level - 1] || h.cfg.portrait; }
+    if (it.level !== h.level) { it.level = h.level; it.img.src = heroLevelPortrait(h.cfg, h.level); }
     const timer = h.skillTimers[slot], max = h.skillMaxes[slot];
     const ready = !h.dead && timer <= 0;
     if (ready && !h.autoSkills[slot] && !game.paused && !game.over && game.state === 'fight') tutorial.on('skillReady', { target: it.b, auto: false });
@@ -1817,7 +1997,7 @@ function skillTooltip(el) {
   const skill = cfg && skillSetFor(cfg).find((item) => item.slot === slot);
   if (!skill) return '';
   const hero = heroes().find((h) => h.cfg.id === cfg.id);
-  const level = hero?.level || 1, maxLevel = cfg.names?.length || 3, rate = hero?.skillRate || 1;
+  const level = hero?.level || 1, maxLevel = MAX_HERO_LEVEL, rate = hero?.skillRate || 1;
   const [kindId, kindName] = SKILL_KIND[skill.ultimate ? 2 : slot > 0 ? 1 : 0];
   const glyph = SKILL_GLYPHS[cfg.id]?.[slot] || ['✦', '⚔', '☼', '✧'][slot];
   const facts = [['Recarga', `${num(cooldownForSkill(cfg, slot, level, rate))} s`]];
@@ -1837,10 +2017,13 @@ function skillTooltip(el) {
   if (skill.control) facts.push(['Efeito', CONTROL_TEXT[skill.control] || skill.control]);
   const key = el.getAttribute('data-key');
   if (key) facts.push(['Tecla', key]);
-  const next = level < maxLevel
+  const next = level < SKILL_LEVEL_CAP
     ? `<p class="tt-next"><b>Nv ${level + 1}</b> recarga ${num(cooldownForSkill(cfg, slot, level + 1, rate))} s${slot === 0 ? ' · mais forte' : ''}</p>`
-    : '<p class="tt-next"><b>Nível máximo</b></p>';
-  const routes = Object.keys(hero?.evolutionBranches || {}).map((id) => EVOLUTION_BRANCHES.find((b) => b.id === id)).filter(Boolean);
+    : `<p class="tt-next"><b>${level < maxLevel ? 'Habilidade no máximo' : 'Nível máximo'}</b></p>`;
+  const routes = Object.entries(hero?.evolutionBranches || {}).map(([id, rank]) => {
+    const branch = EVOLUTION_BRANCHES.find((b) => b.id === id);
+    return branch && { ...branch, name: branch.name + (rank > 1 ? ' II' : '') };
+  }).filter(Boolean);
   return `<div class="tt-skill tt-${kindId}">
     <header><span class="tt-icon" aria-hidden="true">${glyph}</span><div><b>${skill.name}</b><span class="tt-kind">${kindName} · Nv ${level}</span></div></header>
     <p class="tt-desc">${skill.description}</p>
@@ -2058,6 +2241,30 @@ const units = [];
 const tmp = new THREE.Vector3();
 const moveDir = new THREE.Vector3(), stepNext = new THREE.Vector3();   // reaproveitados a cada quadro
 
+// Animação só de quem pode aparecer: fora da câmera e da área da sombra o mixer guarda o tempo e aplica
+// tudo de uma vez quando a unidade volta a ser vista ou troca de animação (a pose final é a mesma).
+let animationCulling = false;
+const animationFrustum = new THREE.Frustum(), animationView = new THREE.Matrix4(), animationSphere = new THREE.Sphere();
+const ANIMATION_CULL_MARGIN = 2.5;   // folga: a câmera ainda anda um pouco depois das unidades no quadro
+function prepareAnimationCulling() {
+  animationCulling = !!camera.isCamera;   // dublês de teste sem câmera real animam todo mundo
+  if (!animationCulling) return;
+  camera.updateMatrixWorld();
+  animationView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  animationFrustum.setFromProjectionMatrix(animationView);
+}
+function unitMayBeSeen(unit) {
+  const pos = unit.pos, size = unit.size || 1, radius = 2.5 * size + ANIMATION_CULL_MARGIN;
+  animationSphere.center.set(pos.x, pos.y + size, pos.z);
+  animationSphere.radius = radius;
+  if (animationFrustum.intersectsSphere(animationSphere)) return true;
+  if (!sun.castShadow) return false;
+  // a sombra dela pode cair na tela: confere a caixa da câmera de sombra, no plano da luz
+  const dx = pos.x - sunAt.x, dy = pos.y - sunAt.y, dz = pos.z - sunAt.z, box = sun.shadow.camera;
+  const x = dx * sunRight.x + dy * sunRight.y + dz * sunRight.z, y = dx * sunUp.x + dy * sunUp.y + dz * sunUp.z;
+  return x >= box.left - radius && x <= box.right + radius && y >= box.bottom - radius && y <= box.top + radius;
+}
+
 // culling das malhas com esqueleto: a esfera de repouso de cada peça não acompanha a animação (a cabeça
 // cai longe na morte), então todas usam uma esfera única da unidade, com folga para golpes e quedas
 const cullBox = new THREE.Box3(), cullPart = new THREE.Box3(), cullSphere = new THREE.Sphere(), cullInverse = new THREE.Matrix4();
@@ -2191,6 +2398,7 @@ class Unit {
     this.moving = false;
     this.flash = 0;
     this.mixer = new THREE.AnimationMixer(this.root);
+    this.animLag = 0;   // tempo de animação guardado enquanto a unidade não pode ser vista
     this.clips = gltf.animations;
     this.actions = {};
     this.current = null;
@@ -2221,9 +2429,15 @@ class Unit {
     return this.actions[name];
   }
 
+  // aplica o tempo guardado antes de trocar de animação, para a troca partir da pose certa
+  flushAnimation() {
+    if (this.animLag > 0) { this.mixer.update(this.animLag); this.animLag = 0; }
+  }
+
   loop(name) {
     const a = this.action(name);
     if (this.current === a) return;
+    this.flushAnimation();
     a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
     if (this.current) a.crossFadeFrom(this.current, 0.2, false);
     this.current = a;
@@ -2231,6 +2445,7 @@ class Unit {
 
   once(name, timeScale = 1, fade = 0.1) {
     const a = this.action(name);
+    this.flushAnimation();
     a.reset().setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
     a.timeScale = timeScale;
@@ -2264,6 +2479,18 @@ class Unit {
     if (distance < 0.001) return;
     const nx = dx / distance, nz = dz / distance, closing = this.vel.x * nx + this.vel.z * nz;
     if (closing > 0) { this.vel.x -= nx * closing; this.vel.z -= nz * closing; }
+  }
+
+  // corpo a corpo: vai para a vaga reservada em volta do alvo (claimEngageSlot); na vaga de espera, para e encara
+  approach(target, dt) {
+    const slot = this.ranged || this.phasing || Math.abs(target.pos.y - this.pos.y) >= 0.85 ? null : claimEngageSlot(this, target);
+    if (!slot) return this.moveTo(target.pos, dt);
+    if (this.engage.waiting && Math.hypot(slot.x - this.pos.x, slot.z - this.pos.z) < 0.35) {
+      this.vel.multiplyScalar(Math.max(0, 1 - dt * 10));   // freia sem tranco
+      this.face(target.pos, dt);
+      return;
+    }
+    this.moveTo(slot, dt);
   }
 
   // anda até o alvo desviando dos obstáculos que estão na frente
@@ -2327,7 +2554,11 @@ class Unit {
     const preferredLength = Math.hypot(dir.x, dir.z) || 1;
     const preferredX = dir.x / preferredLength, preferredZ = dir.z / preferredLength;
     // Contorna quem está parado e aliados em rota de colisão antes que a separação os empurre.
-    if (!this.phasing) for (const u of units) {
+    // A partir de 24 unidades, só olha as da grade do último separate() em volta (antes era O(n²) por quadro).
+    const nearby = !this.phasing && units.length >= 24 ? gatherUnitGrid(this.pos.x, this.pos.z, MOVE_AVOID_RADIUS, moveAvoidNear) : null;
+    const avoidCount = this.phasing ? 0 : nearby ? nearby.length : units.length;
+    for (let n = 0; n < avoidCount; n++) {
+      const u = nearby ? separationAlive[nearby[n]] : units[n];
       if (u === this || u.dead || u.phasing || u.pos === goal) continue;
       const sameFaction = (u.team === 'skeleton') === (this.team === 'skeleton');
       const clear = UNIT_SEPARATION_FACTOR * (this.size + u.size);
@@ -2412,7 +2643,7 @@ class Unit {
       if (this.oathUntil > game.runTime) return;   // Juramento final: invulnerável por instantes
       if (this.immuneT > 0) return;   // Meditação do Monge: imune enquanto medita
       if (!dot && this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
-        this.dodgeTimer = (7 - this.level) * this.skillRate;
+        this.dodgeTimer = (7 - skillLevel(this.level)) * this.skillRate;
         this.busy = this.once(HERO_DODGES[Math.floor(Math.random() * HERO_DODGES.length)], 1.5);   // esquerda, direita ou rolamento para trás
         this.pendingHit = null;
         popText(this.pos, 'Esquiva!', 'dodge');
@@ -2484,7 +2715,7 @@ class Unit {
     this.bar.style.display = 'none';
     if (this.team === 'hero') {
       this.diedIn = game.phase;   // no Pesadelo, decide quando volta
-      game.fallLog.push({ name: this.cfg.names?.[this.level - 1] || this.cfg.name, phase: game.phase, time: game.runTime });
+      game.fallLog.push({ name: heroLevelName(this.cfg, this.level), phase: game.phase, time: game.runTime });
       FX.heroFall(this);
       if (directControl?.hero === this) {
         clearDirectControlOrders();
@@ -2518,7 +2749,8 @@ class Unit {
 
   updateCommon(dt) {
     this.synergyNoticeT = Math.max(0, this.synergyNoticeT - dt);
-    this.mixer.update(dt);
+    this.animLag += dt;
+    if (!animationCulling || unitMayBeSeen(this)) { this.mixer.update(this.animLag); this.animLag = 0; }
     this.attackTimer -= dt * (this.summoner ? synergySummonHaste(this.summoner) : 1);   // canção do Bardo acelera as invocações
     this.busy -= dt;
     // inércia: quem não está andando vai freando; a velocidade (e o recuo) move a unidade
@@ -2663,6 +2895,10 @@ function makeTargetContext(reuse = null) {
   context.villager = villager;
   context.defenseAnchor = goal?.type === 'defend' || goal?.type === 'breach'
     ? party.find((hero) => !hero.dead) || null : null;
+  // escolta/resgate: um herói fica de guarda junto ao protegido; os demais caçam livremente
+  context.escortGuard = villager?.team === 'villager' && !villager.structure && (goal?.type === 'escort' || goal?.type === 'rescue')
+    ? escortGuardOf(party) : null;
+  context.arenaCenter = world.pointAt(game.guideS);
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
   const destructionGoal = goal?.type === 'totems' || goal?.type === 'tower';
@@ -2683,6 +2919,25 @@ function makeTargetContext(reuse = null) {
 }
 
 const targetContext = () => activeTargetContext || makeTargetContext();
+
+// guarda do protegido: o curandeiro do grupo, senão o mais resistente (empate: ordem de entrada); só com 2+ heróis vivos
+const isSupportHero = (hero) => pickGroupId(hero.cfg) === 'suporte';
+function escortGuardOf(party) {
+  let best = null, alive = 0;
+  for (const hero of party) {
+    if (hero.dead) continue;
+    alive++;
+    if (!best || (isSupportHero(hero) !== isSupportHero(best) ? isSupportHero(hero) : hero.maxHp > best.maxHp)) best = hero;
+  }
+  return alive >= 2 ? best : null;
+}
+
+// regra 1: herói que não é guarda caça quem está na arena visível em volta do grupo, longe ou perto do posto
+function inHuntArena(hero, target, context, slack = 0) {
+  if (game.state !== 'fight' || hero === context.escortGuard || !context.arenaCenter) return false;
+  if (fixedDefenseGoal(context.goal) && hero === defenseAnchor(context)) return false;
+  return tacticalDistance(context.arenaCenter, target.pos) <= HERO_HUNT_RADIUS + slack;
+}
 const partyNow = () => activeTargetContext?.party || heroes();   // grupo do quadro, sem refiltrar as unidades a cada golpe
 
 // sinergia vale pelo estado do alvo (lento, preso, marcado…), não por quem está no grupo
@@ -2775,7 +3030,7 @@ function damageArea(center, radius, dmg, owner = null) {
 
 function heroHit(owner, target, dmg, center = owner.pos) {
   dmg = applySynergy(owner, target, dmg);
-  const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (owner.level - 1) * 0.05) * owner.skillPower);
+  const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (skillLevel(owner.level) - 1) * 0.05) * owner.skillPower);
   const dealt = dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1);
   target.takeDamage(dealt, center, owner.summoner || owner, critical);
   if (owner.leechT > 0 && !owner.dead) {   // Sede de Sangue: o golpe devolve vida ao Berserker
@@ -2869,7 +3124,7 @@ function stillEngaged(hero, target, context = targetContext()) {
       && context.party.every((ally) => ally === hero || ally.dead);
     return canCoverFromPost || !!objectiveAttack || lastDefenderKeepsThreat;
   }
-  return fromPost <= LEASH + hero.range + ENGAGE_SLACK;
+  return fromPost <= LEASH + hero.range + ENGAGE_SLACK || inHuntArena(hero, target, context, ENGAGE_SLACK);
 }
 
 // Heróis à distância recuam alguns passos quando um inimigo corpo a corpo encosta, puxando para o
@@ -2894,7 +3149,8 @@ function kiteFrom(h, dt) {
   if (Math.hypot(kiteHome.x, kiteHome.z) > 0.1) kiteAway.add(kiteHome.normalize().multiplyScalar(0.6)).normalize();
   h.kiteTo ||= new THREE.Vector3();
   h.kiteTo.copy(h.pos).addScaledVector(kiteAway, KITE_STEP);
-  if (tacticalDistance(h.kiteTo, h.post) > LEASH) h.kiteTo.copy(h.post);   // nunca sai da corda tática
+  // perto do posto, o recuo não tira o atirador da formação; caçando longe dele, só se afasta do inimigo
+  if (tacticalDistance(h.pos, h.post) <= LEASH && tacticalDistance(h.kiteTo, h.post) > LEASH) h.kiteTo.copy(h.post);
   h.kiteT = KITE_TIME;
   h.kiteCd = KITE_COOLDOWN;
   return h.kiteTo;
@@ -2965,7 +3221,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (fromPost > TWIN_BOSS_INTERCEPT) return false;
     return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
   }
-  if (postReach || nearTarget) return true;
+  if (postReach || nearTarget || inHuntArena(hero, target, context)) return true;
 
   // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
   // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.
@@ -3089,8 +3345,8 @@ function skillTargetScore(hero, target, candidates, context = targetContext()) {
 
   if (['pyro', 'cryo', 'iceviking'].includes(id)) {
     const radius = id === 'pyro'
-      ? (1.1 + (hero.level - 1) * 0.2) * hero.skillPower
-      : (1.3 + (hero.level - 1) * 0.25) * hero.skillPower;
+      ? (1.1 + (skillLevel(hero.level) - 1) * 0.2) * hero.skillPower
+      : (1.3 + (skillLevel(hero.level) - 1) * 0.25) * hero.skillPower;
     let group = 0;
     for (const other of candidates) {
       if (other !== target && tacticalDistance(other.pos, target.pos) <= radius + 0.4 * (other.size - 1)) group++;
@@ -3385,7 +3641,7 @@ function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
   mesh.quaternion.setFromUnitVectors(fireBoltAxis, dir);
   scene.add(mesh);
   const piercing = kind === 'crossbow' || kind === 'ninja' || kind === 'archer';
-  const bolt = { mesh, target, owner: from, kind, dir: piercing ? dir.clone() : null, hit: piercing ? new Set() : null, life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: from.level, power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
+  const bolt = { mesh, target, owner: from, kind, dir: piercing ? dir.clone() : null, hit: piercing ? new Set() : null, life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: skillLevel(from.level), power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
   FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
   if (skill && (kind === 'pyro' || kind === 'flask' || kind === 'tonic')) {   // a bola grande e os frascos fazem um arco no ar até o alvo
     bolt.base = mesh.position.clone();
@@ -3595,11 +3851,11 @@ function poolTick(f) {
 
 // Alquimista: o frasco quebra e deixa uma poça; veneno fere quem pisa, tônico cura os heróis
 function alchemyPool(owner, at, tonic, scale = 1) {
-  const radius = (1.6 + (owner.level - 1) * 0.2) * owner.skillPower * scale;
+  const radius = (1.6 + (skillLevel(owner.level) - 1) * 0.2) * owner.skillPower * scale;
   const mesh = groundMark(at, radius, tonic ? 0x7a2a5a : 0x1f3a0e);
-  flames.push({ mesh, radius, owner, t: (3.5 + owner.level * 0.5) * owner.skillPower, tick: 0, every: 0.5,
+  flames.push({ mesh, radius, owner, t: (3.5 + skillLevel(owner.level) * 0.5) * owner.skillPower, tick: 0, every: 0.5,
     dmg: tonic ? 0 : owner.dmg * 0.14,
-    heal: tonic ? scaleBranchEffect(owner, 'support', 5 + owner.level * 2) * owner.skillPower : 0 });
+    heal: tonic ? scaleBranchEffect(owner, 'support', 5 + skillLevel(owner.level) * 2) * owner.skillPower : 0 });
   FX.pool(mesh, radius, tonic);
 }
 
@@ -3644,9 +3900,12 @@ function wallBlocking(b, walls) {
   return null;
 }
 const enemyBoltGoal = new THREE.Vector3(), enemyBoltDir = new THREE.Vector3(), enemyBoltUp = new THREE.Vector3(0, 1, 0);
+const enemyBoltWalls = [];   // reaproveitada a cada quadro: sem array novo enquanto há flechas no ar
 function updateEnemyBolts(dt) {
   if (dt <= 0) return;
-  const walls = enemyBolts.length ? units.filter((u) => u.wallT > 0 && u.team === 'hero') : [];
+  const walls = enemyBoltWalls;
+  walls.length = 0;
+  if (enemyBolts.length) for (const u of units) if (u.wallT > 0 && u.team === 'hero') walls.push(u);
   for (let i = enemyBolts.length - 1; i >= 0; i--) {
     const b = enemyBolts[i], goal = enemyBoltGoal.copy(b.target.pos);
     goal.y += 1.1;
@@ -5438,14 +5697,15 @@ class Hero extends Unit {
     this.root.add(this.masteryAura);
   }
 
-  // escala do corpo: nível, porte da variante (cfg.scale) e a Pele de pedra
+  // escala do corpo: nível (+8% até o Nv3, depois só +3% por nível: Nv5 ≈ 1,22), porte da variante (cfg.scale) e a Pele de pedra
   heroSize() {
-    return (this.cfg.scale || 1) * (1 + (this.level - 1) * 0.08) * (this.stoneT > 0 ? STONE_SKIN.grow : 1);
+    const level = 1 + Math.min(this.level - 1, 2) * 0.08 + Math.max(0, this.level - 3) * 0.03;
+    return (this.cfg.scale || 1) * level * (this.stoneT > 0 ? STONE_SKIN.grow : 1);
   }
 
   gainXp(n) {
     this.xp += n;
-    while (this.level < 3 && this.xp >= XP_LEVELS[this.level]) {
+    while (this.level < MAX_HERO_LEVEL && this.xp >= XP_LEVELS[this.level]) {
       const oldHp = this.maxHp, oldDmg = this.dmg;
       this.level++;
       this.maxHp = Math.round(this.maxHp * 1.1);
@@ -5454,23 +5714,25 @@ class Hero extends Unit {
       evolutions.push({ hero: this, level: this.level, hp: [oldHp, this.maxHp], dmg: [oldDmg, this.dmg] });   // antes → depois, para a tela de evolução
       this.size = this.heroSize();
       this.levelLabel.textContent = 'Nv' + this.level;
-      this.levelLabel.title = this.cfg.names[this.level - 1];
+      this.levelLabel.title = heroLevelName(this.cfg, this.level);
+      this.levelLabel.className = levelTierClass(this.level);
       this.aura.visible = !this.dead;
-      this.halo.visible = !this.dead && this.level === 3;
+      this.halo.visible = !this.dead && this.level >= 3;
       for (let slot = 0; slot < this.skillTimers.length; slot++) this.skillTimers[slot] = Math.min(this.skillTimers[slot], 1);
       this.popT = 0;
       audio.play('levelup');
       poof(this.pos, 1.5);
       ring(this.pos, 2, this.cfg.color[0], 1);
-      popText(this.pos, this.cfg.names[this.level - 1] + '!', 'evolve');
-      showBanner(`⬆\uFE0E ${this.cfg.names[this.level - 1]}`, 2.5);
+      const name = heroLevelName(this.cfg, this.level), tierText = this.level > 3 ? ` · Nv${this.level}` : '';
+      popText(this.pos, this.level > 3 ? `Nv${this.level}!` : name + '!', 'evolve');
+      showBanner(`⬆\uFE0E ${name}${tierText}`, 2.5);
     }
   }
 
   useSkill(target, manual = false, force = false, slot = 0) {
     if (slot > 0) return this.useExtraSkill(slot, target, force);
     if (manual && !(slot === 0 && validAim(this, target) || validDirectControlTarget(this, target, slot))) return false;
-    const id = this.cfg.id, level = this.level;
+    const id = this.cfg.id, level = skillLevel(this.level);
     const power = this.skillPower;
     const radius = (3 + (level - 1) * 0.5) * power;
     const attackables = activeTargetContext?.skeletons ?? skeletonsAlive();
@@ -5828,7 +6090,7 @@ class Hero extends Unit {
   useExtraSkill(slot, target, force = false) {
     const skill = skillSetFor(this.cfg)[slot];
     if (!skill || slot < 1) return false;
-    const level = this.level, power = this.skillPower;
+    const level = skillLevel(this.level), power = this.skillPower;
     const color = skill.color || this.cfg.color[0];
     const radius = (skill.radius || (slot === 2 ? 6 : 4.5)) * (0.9 + 0.1 * power);
     const attackables = activeTargetContext?.skeletons ?? skeletonsAlive();
@@ -6923,6 +7185,7 @@ class Hero extends Unit {
     const lead = e.hold ? Math.min(0.3, hit * 0.5) : hit;   // com pose segurada, o golpe só começa perto do impacto
     if (e.hold) {
       const a = this.action(e.hold);
+      this.flushAnimation();
       a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
       a.timeScale = 1;
       if (this.current && this.current !== a) a.crossFadeFrom(this.current, 0.15, false);
@@ -7125,21 +7388,29 @@ class Hero extends Unit {
     popText(this.pos, 'Sem alvo', 'block');
   }
 
+  // ocioso na luta: quem não é guarda nem âncora da defesa fica parado onde está (não cruza o mapa até o posto).
+  // Longe demais da arena do grupo, volta ao posto.
+  holdsGround(context) {
+    if (!context || game.state !== 'fight' || this === context.escortGuard) return false;
+    if (fixedDefenseGoal(context.goal) && this === defenseAnchor(context)) return false;
+    return !context.arenaCenter || tacticalDistance(context.arenaCenter, this.pos) <= HERO_HUNT_RADIUS;
+  }
+
   // posição na formação em volta do ponto "s" da estrada
   setAnchor(s) {
     this.fwd.copy(world.tangentAt(s));
     const side = world.sideOf(this.fwd);
     const slot = POSTS.indexOf(this.formation);
     const formation = game.mission?.goal.type === 'bosses' ? CASTLE_POSTS[slot] || this.formation : this.formation;
-    const [px, pz] = formation;
-    this.post.copy(world.pointAt(s)).addScaledVector(side, px).addScaledVector(this.fwd, -pz);
+    const [px, pz] = formation, spread = formationSpread();
+    this.post.copy(world.pointAt(s)).addScaledVector(side, px * spread).addScaledVector(this.fwd, -pz * spread);
   }
 
   revive() {
     this.dead = false;
     this.fell = false;   // uma próxima queda após o revival deve entrar na contagem da missão
     this.aura.visible = this.level > 1;
-    this.halo.visible = this.level === 3;
+    this.halo.visible = this.level >= 3;
     this.guardT = this.stanceT = 0;
     this.royalT = 0;
     this.songT = 0;
@@ -7285,13 +7556,19 @@ class Hero extends Unit {
       else this.face(captive.pos, dt);
     } else if (engage) {
       const d = target.pos.distanceTo(this.pos) - 0.4 * (target.size - 1);
-      if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) this.moveTo(target.pos, dt);
-      else {
+      if (!this.inReach(target, d) || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) {
+        if (this.ranged) this.moveTo(target.pos, dt);   // atirador anda só até o alcance e atira dali
+        else this.approach(target, dt);                 // corpo a corpo vai para uma vaga livre em volta do alvo
+      } else {
         this.stopApproach(target);
         const turn = this.face(target.pos, dt);   // só ataca depois de virar para o alvo
         const attacks = this.cfg.attacks;
         if (this.attackTimer <= 0 && turn < 0.5) this.attack(target, attacks[Math.floor(Math.random() * attacks.length)]);
       }
+    } else if (this.holdsGround(targeting)) {
+      // regra 4: sem inimigo ao alcance na luta, fica onde lutou; a formação só volta quando o grupo avança de fase
+      this.vel.multiplyScalar(Math.max(0, 1 - dt * 10));
+      this.face(target ? target.pos : tmp.copy(this.pos).addScaledVector(this.fwd, 10), dt);
     } else if (this.pos.distanceTo(this.post) > 0.25) {
       this.moveTo(this.post, dt);
     } else {
@@ -7556,7 +7833,7 @@ class BeastCompanion extends Unit {
     this.summoner = summoner;
     this.cfg = { id: 'beast_companion' };
     this.level = summoner.level;
-    this.life = scaleBranchEffect(summoner, 'support', 13 + summoner.level) * summoner.skillPower;
+    this.life = scaleBranchEffect(summoner, 'support', 13 + skillLevel(summoner.level)) * summoner.skillPower;
     this.empowerT = 0;
     this.beastCompanion = true;
     this.threatScratch = [];
@@ -7655,7 +7932,7 @@ const summonAt = new THREE.Vector3();
 
 class SummonedCreature extends Unit {
   constructor(summoner, kind) {
-    const rule = SUMMON_RULES[kind], grow = summoner.skillPower * (1 + (summoner.level - 1) * 0.1);
+    const rule = SUMMON_RULES[kind], grow = summoner.skillPower * (1 + (skillLevel(summoner.level) - 1) * 0.1);
     super(EMPTY_GLTF, { hp: Math.round(rule.hp * grow), dmg: rule.dmg * grow, range: rule.range, speed: rule.speed, cooldown: rule.cooldown }, 'ally');
     this.summoner = summoner;
     this.summonKind = kind;
@@ -7859,7 +8136,7 @@ class SummonedCreature extends Unit {
     else this.face(follow.pos, dt);
     if (this.abilityT > 0 || !ward || ward.pos.distanceTo(this.pos) > this.range) return;
     this.abilityT = this.rule.every;
-    const summoner = this.summoner, amount = scaleBranchEffect(summoner, 'support', 9 + summoner.level * 4) * summoner.skillPower;
+    const summoner = this.summoner, amount = scaleBranchEffect(summoner, 'support', 9 + skillLevel(summoner.level) * 4) * summoner.skillPower;
     for (const hero of partyNow()) {
       if (hero.dead || (hero !== ward && hero.pos.distanceTo(ward.pos) > 2.5)) continue;
       const heal = Math.min(hero.maxHp - hero.hp, hero === ward ? amount : amount * 0.4);
@@ -7953,7 +8230,7 @@ class Skeleton extends Unit {
   constructor(type, phase, boss = false) {
     const base = SKELETONS[type];
     const D = difficulty;
-    const hpScale = (1 + (phase - 1) * 0.19) * D.hp * (boss ? 9 * D.boss : 1);
+    const hpScale = (1 + (phase - 1) * 0.19) * D.hp * (boss ? 9 * D.boss : 1) * (game.partyScale?.hp || 1);   // equipe maior que a da missão: inimigos mais resistentes
     const dmgScale = (1 + (phase - 1) * 0.14) * D.dmg * (boss ? 2.5 * D.boss : 1);
     super(skeletonModel(base.model || type), { ...base, hp: Math.round(base.hp * hpScale), dmg: Math.round(base.dmg * dmgScale), speed: base.speed * (boss ? 0.8 : 1) }, 'skeleton');
     this.boss = boss || !!base.heavy;   // o golem é pesado como um chefe, mas sem a vida de chefe
@@ -8092,10 +8369,28 @@ class Skeleton extends Unit {
     if (this.phaseBoss) this.rally();   // depois do tick: o chefe entra na fase 2 e então se recupera
     if (this.stunT > 0 || this.busy > 0) return;
     this.spawning = false;
-    const target = this.tauntT > 0 && this.taunt && !this.taunt.dead ? this.taunt
+    const taunted = this.tauntT > 0 && this.taunt && !this.taunt.dead;
+    let target = taunted ? this.taunt
       : this.raider && game.shrine && !game.shrine.dead ? game.shrine
         : this.raider && game.gate ? game.gate
         : nearest(this.pos, activeTargetContext?.alliedUnits ?? enemyTargetAllies());
+    // na fila de espera em volta de um alvo cheio: troca por outro alvo próximo que ainda tenha vaga no contato
+    if (!taunted && !this.raider && !this.ranged && target && this.engage?.waiting && this.engage.target === target) {
+      const limit = target.pos.distanceTo(this.pos) + 4;
+      let best = null, bestDistance = Infinity;
+      for (const u of activeTargetContext?.alliedUnits ?? enemyTargetAllies()) {
+        if (u === target || u.dead || u.engageFull === engageGeneration - 1) continue;
+        const d = u.pos.distanceTo(this.pos);
+        if (d < limit && d < bestDistance) { best = u; bestDistance = d; }
+      }
+      if (best) { target = best; this.engageSwitched = best; }
+    } else if (this.engageSwitched && !taunted && !this.raider && target) {
+      // quem trocou para um alvo com vaga não volta para a fila do mais próximo enquanto ele seguir cheio e perto
+      const held = this.engageSwitched;
+      if (held !== target && !held.dead && !held.untargetable && target.engageFull === engageGeneration - 1
+        && held.pos.distanceTo(this.pos) < target.pos.distanceTo(this.pos) + 4) target = held;
+      else this.engageSwitched = null;
+    }
     this.target = target;
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)
       if (this.busy <= 0) this.locomote(this.move, this.walk, this.idle);
@@ -8114,7 +8409,7 @@ class Skeleton extends Unit {
         if (!this.mobile && !inAttackRange && this.rootT <= 0) this.moveTo(target.pos, dt);
         else this.vel.set(0, 0, 0);
       }
-      if (!inAttackRange || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.moveTo(target.pos, dt); }
+      if (!inAttackRange || (!this.ranged && Math.abs(target.pos.y - this.pos.y) >= 0.85)) { if (!this.ranged && this.rootT <= 0) this.approach(target, dt); }
       else {
         this.stopApproach(target);
         if (this.face(target.pos, dt) < 0.5 && this.attackTimer <= 0) {
@@ -8229,10 +8524,48 @@ function separatePair(a, b, ia, ib) {
 }
 
 const SEPARATION_CELL_SIZE = 3;
+const MOVE_AVOID_RADIUS = 5;      // cobre a frente (2,6 m + folga) e quem vem de lado em rota de colisão
+const moveAvoidNear = [];
 const OBSTACLE_GRID_QUERY_THRESHOLD = 512;
 const OBSTACLE_QUERY_CACHE_LIMIT = 1024;
 const separationAlive = [], separationCandidates = [], separationCellX = [], separationCellZ = [];
-const separationGrid = new Map(), separationGridPool = [];
+// grade de unidades densa e reaproveitada: tabela fixa de baldes (hash da célula) preenchida por contagem,
+// sem Map nem arrays por célula. Itens de um balde ficam em ordem de índice; quem lê confere a célula exata.
+const UNIT_GRID_BUCKETS = 4096;
+const unitGridStart = new Int32Array(UNIT_GRID_BUCKETS + 1), unitGridCursor = new Int32Array(UNIT_GRID_BUCKETS);
+let unitGridItems = new Int32Array(256), unitGridBucketOf = new Int32Array(256), unitGridSize = 0;
+const compareIndexes = (a, b) => a - b;
+function buildUnitGrid() {
+  const n = separationAlive.length;
+  if (unitGridItems.length < n) { unitGridItems = new Int32Array(n * 2); unitGridBucketOf = new Int32Array(n * 2); }
+  unitGridStart.fill(0);
+  for (let i = 0; i < n; i++) {
+    const unit = separationAlive[i];
+    const x = separationCellX[i] = Math.floor(unit.pos.x / SEPARATION_CELL_SIZE);
+    const z = separationCellZ[i] = Math.floor(unit.pos.z / SEPARATION_CELL_SIZE);
+    const b = unitGridBucketOf[i] = (Math.imul(x, 73856093) ^ Math.imul(z, 19349663)) & (UNIT_GRID_BUCKETS - 1);
+    unitGridStart[b + 1]++;
+  }
+  for (let b = 0; b < UNIT_GRID_BUCKETS; b++) { unitGridStart[b + 1] += unitGridStart[b]; unitGridCursor[b] = unitGridStart[b]; }
+  for (let i = 0; i < n; i++) unitGridItems[unitGridCursor[unitGridBucketOf[i]]++] = i;
+  unitGridSize = n;
+}
+// índices (em separationAlive) das unidades nas células em volta de (x, z), do último separate()
+const unitGridNear = [];
+function gatherUnitGrid(x, z, radius, out = unitGridNear) {
+  out.length = 0;
+  if (!unitGridSize) return out;
+  const minX = Math.floor((x - radius) / SEPARATION_CELL_SIZE), maxX = Math.floor((x + radius) / SEPARATION_CELL_SIZE);
+  const minZ = Math.floor((z - radius) / SEPARATION_CELL_SIZE), maxZ = Math.floor((z + radius) / SEPARATION_CELL_SIZE);
+  for (let cx = minX; cx <= maxX; cx++) for (let cz = minZ; cz <= maxZ; cz++) {
+    const b = (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663)) & (UNIT_GRID_BUCKETS - 1);
+    for (let k = unitGridStart[b], end = unitGridStart[b + 1]; k < end; k++) {
+      const j = unitGridItems[k];
+      if (separationCellX[j] === cx && separationCellZ[j] === cz) out.push(j);
+    }
+  }
+  return out;
+}
 const obstacleGrid = new Map(), obstacleGridPool = [];
 const obstacleQueryIndexes = [], obstacleQuerySeen = new Set();
 const obstacleQueryCache = new Map();
@@ -8307,6 +8640,7 @@ function queryObstacleCandidates(minX, maxX, minZ, maxZ, margin = 0) {
 
 function separate() {
   separationAlive.length = 0;
+  unitGridSize = 0;
   let obstacleMargin = 0, pairCellRange = 1;
   for (const unit of units) if (!unit.dead && !unit.phasing) {
     separationAlive.push(unit);   // fantasmas passam pelo grupo
@@ -8320,21 +8654,18 @@ function separate() {
   // every pass because the previous pass may have moved units into new cells.
   for (let pass = 0; pass < 4; pass++) {
     let needsAnotherPass = false;
-    recycleGrid(separationGrid, separationGridPool);
-    for (let i = 0; i < separationAlive.length; i++) {
-      const unit = separationAlive[i];
-      const x = separationCellX[i] = Math.floor(unit.pos.x / SEPARATION_CELL_SIZE);
-      const z = separationCellZ[i] = Math.floor(unit.pos.z / SEPARATION_CELL_SIZE);
-      addToGrid(separationGrid, separationGridPool, x, z, i);
-    }
+    buildUnitGrid();
     for (let i = 0; i < separationAlive.length; i++) {
       separationCandidates.length = 0;
       const x = separationCellX[i], z = separationCellZ[i];
       for (let dx = -pairCellRange; dx <= pairCellRange; dx++) for (let dz = -pairCellRange; dz <= pairCellRange; dz++) {
-        const bucket = separationGrid.get(gridCellKey(x + dx, z + dz));
-        if (bucket) for (const j of bucket) if (j > i) separationCandidates.push(j);
+        const cx = x + dx, cz = z + dz, b = (Math.imul(cx, 73856093) ^ Math.imul(cz, 19349663)) & (UNIT_GRID_BUCKETS - 1);
+        for (let k = unitGridStart[b], end = unitGridStart[b + 1]; k < end; k++) {
+          const j = unitGridItems[k];
+          if (j > i && separationCellX[j] === cx && separationCellZ[j] === cz) separationCandidates.push(j);
+        }
       }
-      separationCandidates.sort((a, b) => a - b);
+      if (separationCandidates.length > 1) separationCandidates.sort(compareIndexes);
       for (const j of separationCandidates) {
         if (separatePair(separationAlive[i], separationAlive[j], i + 1, j + 1)) needsAnotherPass = true;
       }
@@ -8369,6 +8700,167 @@ function separate() {
     }
     if (!needsAnotherPass) break;
   }
+  resolveEngageSlots();
+}
+
+// ---------- vagas em volta do alvo ----------
+// Quem luta corpo a corpo reserva uma vaga livre no anel em volta do alvo, em vez de todos andarem para o mesmo
+// ponto e a separação ficar empurrando (tremedeira, deslizes). Quem não cabe no anel de contato espera num anel
+// de fora e o esqueleto pode trocar por outro alvo com vaga. Os pedidos de um quadro são resolvidos no fim do
+// separate() (a grade de unidades já está pronta) e valem no quadro seguinte. Ordem fixa: determinístico.
+const ENGAGE_GAP = 0.05;            // anel de contato: dentro do inReach (MELEE_CONTACT_SLACK)
+const ENGAGE_WAIT_GAP = 0.3;        // folga do anel de espera para quem já está no contato
+const ENGAGE_CLAIM_RANGE = 12;      // mais longe que isso, só anda na direção do alvo
+const ENGAGE_MAX_PER_TARGET = 32;   // os demais vão direto (cobre hordas sem custo crescente)
+const ENGAGE_WAIT_RINGS = 2;   // anéis de espera atrás do contato
+const engageClaims = [], engageAssigned = [], engageBlocks = [], engageReserved = [], engageReservedBy = [];
+const compareEngageSort = (a, b) => a.engageSort - b.engageSort;
+const engageByTarget = new Map(), engageListPool = [];
+let engageGeneration = 0;
+
+// devolve o ponto da vaga (segue o alvo) ou null para ir direto ao alvo
+function claimEngageSlot(unit, target) {
+  if (unit.engageClaimed !== engageGeneration) {
+    unit.engageClaimed = engageGeneration;
+    unit.engageClaimTarget = target;
+    engageClaims.push(unit);
+  }
+  const slot = unit.engage;
+  if (!slot || slot.target !== target || unit.engageClaimTarget !== target) return null;
+  return slot.point.set(target.pos.x + Math.cos(slot.angle) * slot.radius, unit.pos.y,
+    target.pos.z + Math.sin(slot.angle) * slot.radius);
+}
+
+const angleGap = (a, b) => { const d = a - b, turn = Math.PI * 2; return Math.abs(d - turn * Math.round(d / turn)); };   // sem TAU: trecho também é carregado sozinho pelos testes
+
+// ângulo livre mais perto do desejado num anel de raio r; NaN se o anel está cheio
+const engageBand = [];   // blocos que encostam no anel testado: [x, z, folga, raio, ângulo]
+function ringPointFree(tx, tz, r, a) {
+  const x = tx + Math.cos(a) * r, z = tz + Math.sin(a) * r;
+  for (let k = 0; k < engageBand.length; k += 5) {
+    const dx = x - engageBand[k], dz = z - engageBand[k + 1], c = engageBand[k + 2];
+    if (dx * dx + dz * dz < c * c) return false;
+  }
+  return true;
+}
+
+// ângulo livre mais perto do desejado num anel de raio r; NaN se o anel está cheio
+function freeRingAngle(unit, tx, tz, r, desired) {
+  engageBand.length = 0;
+  for (let k = 0; k < engageBlocks.length; k += 4) {
+    const c = engageBlocks[k + 3] < 0 ? -engageBlocks[k + 3] + 0.53 * unit.size   // rocha
+      : engageBlocks[k + 3] * (unit.size + engageBlocks[k + 2]);
+    const bx = engageBlocks[k] - tx, bz = engageBlocks[k + 1] - tz, rj = Math.hypot(bx, bz);
+    if (Math.abs(rj - r) >= c) continue;   // não encosta neste anel
+    engageBand.push(engageBlocks[k], engageBlocks[k + 1], c, rj, Math.atan2(bz, bx));
+  }
+  if (ringPointFree(tx, tz, r, desired)) return desired;
+  let best = NaN, bestGap = Infinity;
+  for (let k = 0; k < engageBand.length; k += 5) {
+    const c = engageBand[k + 2], rj = engageBand[k + 3];
+    let spread = Math.PI;
+    if (rj > 0.001) {
+      const cosD = (r * r + rj * rj - c * c) / (2 * r * rj);
+      if (cosD > -1) spread = Math.acos(Math.min(1, cosD));
+    }
+    spread += 0.02;
+    for (let side = -1; side <= 1; side += 2) {
+      const a = engageBand[k + 4] + side * spread, gap = angleGap(a, desired);
+      if (gap < bestGap && ringPointFree(tx, tz, r, a)) { best = a; bestGap = gap; }
+    }
+  }
+  return best;
+}
+
+function keptSlotFree(unit, tx, tz, r, angle) {
+  const x = tx + Math.cos(angle) * r, z = tz + Math.sin(angle) * r;
+  for (let k = 0; k < engageBlocks.length; k += 4) {
+    const c = engageBlocks[k + 3] < 0 ? -engageBlocks[k + 3] + 0.53 * unit.size : engageBlocks[k + 3] * (unit.size + engageBlocks[k + 2]);
+    const dx = x - engageBlocks[k], dz = z - engageBlocks[k + 1];
+    if (dx * dx + dz * dz < c * c) return false;
+  }
+  return true;
+}
+
+function pushEngageBlock(x, z, size, factor) { engageBlocks.push(x, z, size, factor); }
+
+function assignEngageRing(target, list) {
+  const tx = target.pos.x, tz = target.pos.z, targetSize = target.size || 1;
+  const enemyTeam = target.team === 'skeleton';
+  // quem já tinha vaga neste alvo fica com ela; depois, o mais perto escolhe primeiro
+  for (const u of list) u.engageSort = (u.engage?.target === target && !u.engage.waiting ? 0 : 1e6)
+    + Math.hypot(u.pos.x - tx, u.pos.z - tz);
+  list.sort(compareEngageSort);
+  engageBlocks.length = 0;
+  // vagas já reservadas em volta de outros alvos (anéis vizinhos não se sobrepõem)
+  for (let k = 0; k < engageReserved.length; k += 4) {
+    if (engageReservedBy[k >> 2] === target) continue;   // onde o próprio alvo vai ficar (duelo: um vai até o outro)
+    if (Math.hypot(engageReserved[k] - tx, engageReserved[k + 1] - tz) > 12) continue;
+    pushEngageBlock(engageReserved[k], engageReserved[k + 1], engageReserved[k + 2],
+      (engageReserved[k + 3] === 1) === enemyTeam ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR);
+  }
+  // vizinhos que não pedem vaga neste alvo (quem já está golpeando, aliados do alvo, outros) ocupam onde estão
+  const reach = 2 * UNIT_COMBAT_SEPARATION_FACTOR * (targetSize + 2) + 4;
+  for (const j of gatherUnitGrid(tx, tz, reach)) {
+    {
+      const b = separationAlive[j];
+      if (b === target || b.engageClaimTarget === target && b.engageClaimed === engageGeneration) continue;
+      if (Math.abs(b.pos.y - target.pos.y) >= 0.85 || Math.hypot(b.pos.x - tx, b.pos.z - tz) > reach) continue;
+      pushEngageBlock(b.pos.x, b.pos.z, b.size, (b.team === 'skeleton') === enemyTeam ? UNIT_COMBAT_SEPARATION_FACTOR : UNIT_SEPARATION_FACTOR);
+    }
+  }
+  for (const o of queryObstacleCandidates(tx - reach, tx + reach, tz - reach, tz + reach, 1)) {
+    if (Math.hypot(o.x - tx, o.z - tz) <= reach + o.r) pushEngageBlock(o.x, o.z, 0, -o.r);
+  }
+  for (let i = 0; i < list.length; i++) {
+    const u = list[i];
+    const slot = u.engage || (u.engage = { target: null, angle: 0, radius: 0, waiting: false, point: new THREE.Vector3() });
+    const contact = UNIT_COMBAT_SEPARATION_FACTOR * (targetSize + u.size) + ENGAGE_GAP;
+    const inner = Math.max(contact, Math.min(contact + 1, (u.range || 0) - 0.25));
+    const here = Math.atan2(u.pos.z - tz, u.pos.x - tx);
+    // sempre o ângulo de onde a unidade está: ângulo guardado no mundo faz dois que se enfrentam orbitarem um ao outro
+    const desired = here;
+    // quem já tem vaga de contato perto de onde está fica com ela enquanto estiver livre (sem nova busca)
+    const keep = slot.target === target && !slot.waiting && slot.radius === inner && angleGap(slot.angle, here) < 0.5
+      && keptSlotFree(u, tx, tz, inner, slot.angle);
+    let radius = inner, angle = keep ? slot.angle : i < ENGAGE_MAX_PER_TARGET ? freeRingAngle(u, tx, tz, inner, desired) : NaN, waiting = false;
+    // anéis de espera, um atrás do outro: ficam parados ali até abrir vaga no contato
+    for (let ring = 1; Number.isNaN(angle) && u.team === 'skeleton' && ring <= ENGAGE_WAIT_RINGS && i < ENGAGE_MAX_PER_TARGET; ring++) {
+      radius = inner + ring * (UNIT_SEPARATION_FACTOR * 2 * u.size + ENGAGE_WAIT_GAP);
+      angle = freeRingAngle(u, tx, tz, radius, here);
+      waiting = true;
+      target.engageFull = engageGeneration;
+    }
+    if (Number.isNaN(angle)) { u.engage = null; continue; }
+    Object.assign(slot, { target, angle, radius, waiting });
+    engageAssigned.push(u);
+    engageReserved.push(tx + Math.cos(angle) * radius, tz + Math.sin(angle) * radius, u.size, u.team === 'skeleton' ? 1 : 0);
+    engageReservedBy.push(u);
+    // a vaga reservada passa a ocupar o anel para os próximos (com a folga entre aliados)
+    pushEngageBlock(tx + Math.cos(angle) * radius, tz + Math.sin(angle) * radius, u.size,
+      (u.team === 'skeleton') === enemyTeam ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR);
+  }
+}
+
+function resolveEngageSlots() {
+  // quem não pediu vaga neste quadro (golpeando, parado, morto) solta a que tinha
+  for (const u of engageAssigned) if (u.engageClaimed !== engageGeneration || u.dead) u.engage = null;
+  engageAssigned.length = 0;
+  engageReserved.length = 0;
+  engageReservedBy.length = 0;
+  for (const list of engageByTarget.values()) { list.length = 0; engageListPool.push(list); }
+  engageByTarget.clear();
+  for (const u of engageClaims) {
+    const target = u.engageClaimTarget;
+    if (u.dead || !target || target.dead || u.phasing) { u.engage = null; continue; }
+    if (Math.hypot(target.pos.x - u.pos.x, target.pos.z - u.pos.z) > ENGAGE_CLAIM_RANGE) { u.engage = null; continue; }
+    let list = engageByTarget.get(target);
+    if (!list) { list = engageListPool.pop() || []; engageByTarget.set(target, list); }
+    list.push(u);
+  }
+  for (const [target, list] of engageByTarget) assignEngageRing(target, list);
+  engageClaims.length = 0;
+  engageGeneration++;
 }
 
 // Controle direto opcional no estilo MOBA: o herói escolhido responde ao mouse; a IA cuida do resto do grupo.
@@ -8916,6 +9408,7 @@ function startGame(view = 'menu') {
   $('overlayBtn').onclick = () => startGame(game.mission ? 'map' : 'menu');
   while (units.length) units[0].remove();
   game.mission = null;
+  campaignTeamRun = !!view?.teamRun;   // "Repetir" mantém a equipe contínua
   clearMonsterFx();   // avisos, covas e barra do chefe
   // ?fase=N na URL começa direto na fase N (atalho para testar o cenário)
   placeParty(THREE.MathUtils.clamp(+new URLSearchParams(location.search).get('fase') || 1, 1, PHASES));
@@ -8923,7 +9416,7 @@ function startGame(view = 'menu') {
   $('overlay').classList.add('hidden');
   if (view === 'map') showCampaign();
   else if (view?.replay) replayMission(view);   // "Repetir": mesma missão, dificuldade e equipe
-  else if (view?.goal) showCampaign(view);   // "Próxima missão" vai direto à dificuldade
+  else if (view?.goal) showCampaign(view, true);   // "Próxima missão": mesma dificuldade, direto para a equipe
   else showMenu();   // modo -> (mapa) -> dificuldade -> escolha do herói
   syncDirectControlUI();
 }
@@ -8936,7 +9429,7 @@ function placeParty(first) {
     guideS: world.anchorS(first), over: false, picksLeft: 0, falls: 0, fallLog: [], roster: [], damageSources: {}, relics: [], runTime: 0, missionT: 0, surviveT: m?.goal.time || 0, totemsPlaced: 0, totemsDown: 0, towersDown: 0, rescueComplete: false, rescueT: 0, rescueRunner: null, objectiveCall: 0, bossSeen: false, bossDown: false, villager: null, militia: null,
     shrine: null, huntMark: null, huntSpawnTimer: 0, huntDown: false, huntEscaped: false, endlessT: 0, endlessStars: 0, gate: null, leaks: 0, eliteWave: 0, eliteSize: 0, refilling: false,
     rescueGuardsPending: 0, rescueGuardRetries: 0, rescueSpawnTimer: 0,
-    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null });
+    test: search.has('fase') || search.get('tudo') === '1', missionHpRatio: null, missionVillagerRatio: null, ultimates: 0, twinFocus: null, partyScale: null, startLevels: null, resultExtras: '' });
   game.rerolls = game.test ? 0 : progress.rerolls();
   if (game.test) setTimeout(() => showBanner('Modo de teste · não salva', 3), 600);   // ?fase= ou ?tudo=1 na URL
   renderRelicTray();
@@ -8968,6 +9461,7 @@ function startMission() {
     if (m.goal.type === 'breach') game.gate = new Gate(world.along(world.anchorS(m.from) - GATE_BACK, 0));
     if (m.goal.type === 'duel') for (const h of heroes()) h.maxHp = h.hp = Math.round(h.maxHp * m.goal.heroHp);   // o campeão do duelo aguenta por dois
     for (const h of heroes()) { h.pos.copy(h.post); h.vel.set(0, 0, 0); }   // a seleção rearranja os postos; começa já alinhado para não travar na montagem da formação
+    game.startLevels = Object.fromEntries(heroes().map((h) => [h.cfg.id, { level: h.level, xp: h.xp }]));   // a tela de resultado compara para animar quem subiu de nível
     musterMilitia();
     document.body.classList.remove('no-battle');   // o HUD da batalha só aparece agora
     game.paused = false;
@@ -8976,16 +9470,37 @@ function startMission() {
   begin();
 }
 
+// Equipe contínua: cada missão foi calibrada para m.heroes heróis no nível m.level, com um aliado
+// a mais a cada fase vencida (até 4). Um grupo maior que esse, ou mais evoluído que m.level,
+// engrossa a onda e a vida dos inimigos daquela fase, de forma suave e com teto.
+const PARTY_SCALE = { count: 0.6, countMax: 1.6, hp: 0.45, hpMax: 1.6, level: 0.2, levelMax: 1.4, cap: 1.4 };
+function partyScale(m, party, phase) {
+  // o Duelo é sempre um herói só; na ponte em chamas grupo maior não deixa a defesa mais fácil (mais corpos não interceptam melhor)
+  if (!m || m.goal.type === 'duel' || m.goal.type === 'breach' || !party.length) return { count: 1, hp: 1 };
+  const planned = Math.min(MAX_PARTY, m.heroes + Math.max(0, phase - m.from));
+  const extra = Math.max(0, party.length - planned) / planned;
+  const level = party.reduce((sum, h) => sum + h.level, 0) / party.length - m.level;
+  const P = PARTY_SCALE;
+  return {
+    count: Math.min(P.countMax, 1 + P.count * extra),
+    hp: Math.min(P.hpMax, 1 + P.hp * extra) * THREE.MathUtils.clamp(1 + P.level * level, 1, P.levelMax),
+  };
+}
+const partyCount = () => game.partyScale?.count || 1;
+// teto de inimigos ativos das ondas contínuas (santuário, sobrevivência), um pouco mais alto para grupos maiores
+const partyCap = (cap) => Math.round(cap * Math.min(PARTY_SCALE.cap, partyCount()));
+
 function startPhase() {
+  if (game.mission) game.partyScale = partyScale(game.mission, heroes(), game.phase);
   game.state = 'fight';
   syncDirectControlUI();
   tutorial.on('battleStart');
   for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
-  game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count);
+  game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count * partyCount());
   game.bossPending = missionBossPhase(game.phase, game.mission?.boss);   // Rei (6), Carrasco (9) e Lich (12); a missão pode trocar (mission.boss)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
-  const waveScale = goal?.type === 'duel' || goal?.type === 'rescue' || goal?.type === 'totems'
+  const waveScale = ['duel', 'rescue', 'totems', 'tower', 'boss'].includes(goal?.type)
     ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // a escala reduz apenas a onda comum; chefes e guardas permanecem garantidos
   if (goal?.type === 'bosses') game.toSpawn = 1;   // na câmara final, a primeira e única entrada já é o trio de chefes
   else if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
@@ -9037,6 +9552,7 @@ function rescueRunnerFor(captive, party = heroes()) {
   return runner;
 }
 // aldeão da escolta: o bárbaro sem armas (só a caneca), recolorido; segue atrás do grupo e os esqueletos o atacam
+const VILLAGER_GAP = 2.3;   // do posto de trás do grupo até o aldeão
 class Villager extends Unit {
   constructor(captive = false) {
     super(assets.Barbarian, { hp: Math.round(240 / difficulty.dmg), dmg: 0, range: 0, speed: 3, cooldown: 1 }, 'villager');
@@ -9068,7 +9584,8 @@ class Villager extends Unit {
 
   follow() {
     const fwd = world.tangentAt(game.guideS);
-    this.post.copy(world.pointAt(game.guideS)).addScaledVector(fwd, -3.2);
+    // atrás do posto de trás do grupo, com folga para o herói de lá e para o anel da milícia em volta
+    this.post.copy(world.pointAt(game.guideS)).addScaledVector(fwd, -(POSTS[3][1] * formationSpread() + VILLAGER_GAP));
     return fwd;
   }
 
@@ -9096,7 +9613,8 @@ class Villager extends Unit {
 // (o aldeão da escolta, o santuário). Ficam num anel em volta do protegido e só brigam com quem chega perto dele.
 // Fracos de propósito, sem XP nem evolução; quem cai não volta na partida e não conta como queda de herói.
 const MILITIA_REACH = 4;        // quão perto do protegido o inimigo precisa estar para a guarda atacar
-const MILITIA_RING = 1.9;       // raio do anel de guarda
+const MILITIA_RING = 2.3;       // raio do anel de guarda (fora da separação do protegido e dos vizinhos)
+const MILITIA_ARC = Math.PI * 1.5;   // o anel cobre as costas e os lados; a frente fica para os heróis
 const MILITIA_WEAPONS = ['forcado', 'tocha', 'machadinha', 'clava'];
 const MILITIA_TINTS = [0x7fb6e8, 0x6aa3d8, 0x8cc4f0, 0x5e93c8];   // azuis claros: ajudantes, não heróis
 let militiaParts = null;
@@ -9145,12 +9663,17 @@ class Militia extends Unit {
     this.loop('Idle');
   }
 
-  // posto no anel em volta do protegido; sem protegido, fica onde está
+  // posto no anel em volta do protegido, no sentido da estrada: vagas espalhadas pelas costas e lados, longe
+  // do posto de trás dos heróis (que fica à frente do protegido). Sem protegido, fica onde está.
   follow() {
     const ward = guardedObjective();
     if (!ward) return this.post.copy(this.pos);
-    const a = (this.slot / Math.max(1, game.militia?.size || 1)) * Math.PI * 2;
-    return this.post.set(ward.pos.x + Math.cos(a) * MILITIA_RING, ward.pos.y, ward.pos.z + Math.sin(a) * MILITIA_RING);
+    const n = Math.max(1, game.militia?.size || 1);
+    const a = -MILITIA_ARC / 2 + MILITIA_ARC * (this.slot % n + 0.5) / n;   // 0 = bem atrás do protegido
+    const r = Math.max(MILITIA_RING, UNIT_SEPARATION_FACTOR * ((ward.size || 1) + this.size) + 0.45);
+    const fwd = world.tangentAt(game.guideS), side = world.sideOf(fwd);
+    const back = -Math.cos(a) * r, lateral = Math.sin(a) * r;
+    return this.post.set(ward.pos.x + fwd.x * back + side.x * lateral, ward.pos.y, ward.pos.z + fwd.z * back + side.z * lateral);
   }
 
   update(dt) {
@@ -9569,7 +10092,7 @@ function newGoalTick(goal, dt, skeletons) {
     if (game.shrine?.dead) return 'O santuário caiu! Ele não pode ser destruído.';
     if (game.state === 'fight') {   // ondas sem parar até o tempo acabar
       game.surviveT = Math.max(0, game.surviveT - dt);
-      if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 7) game.toSpawn = Math.min(4, 7 - skeletons.length);
+      if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < partyCap(7)) game.toSpawn = Math.min(4, partyCap(7) - skeletons.length);
     }
   } else if (goal.type === 'hunt' && game.state === 'fight' && !game.huntDown) {
     const mark = game.huntMark;
@@ -9664,7 +10187,7 @@ function campaignTick(dt, skeletons, party = heroes()) {
   }
   if (goal.type === 'survive' && game.phase === goal.phase && game.state === 'fight') {   // ondas sem parar até o tempo acabar
     game.surviveT = Math.max(0, game.surviveT - dt);
-    if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < 6) game.toSpawn = Math.min(4, 6 - skeletons.length);
+    if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < partyCap(6)) game.toSpawn = Math.min(4, partyCap(6) - skeletons.length);
   }
   const lost = newGoalTick(goal, dt, skeletons);
   if (lost) return fail(lost);
@@ -9799,15 +10322,19 @@ function missionEnd(won) {
   const criterion = (c) => c ? `${c.achieved ? '✓' : '○'} ${c.label}` : '';
   const row = `<span class="stars big" role="img" aria-label="${stars} de 3 estrelas. ${escAttr(conditions.map(criterion).join('; '))}">${[1, 2, 3].map((k) =>
     `<i class="${k <= stars ? 'on' : ''}" data-tip="${escAttr(criterion(conditions[k - 1]))}">★</i>`).join('')}</span>`;
+  // à vista só o que é prêmio novo (cosmético, variante); recordes, medalha e desafio vão para "Detalhes" (game.resultExtras)
   const chips = [
-    best && stars ? endChip('★', 'Melhor', 'Novo melhor resultado nesta missão!', 'star') : '',
-    bestTime ? endChip('⏱', formatMissionRecordTime(game.missionT), `Novo recorde · ${difficulty.name} · ${formatMissionRecordTime(game.missionT)}`) : '',
     ...cosmeticUnlocks.map((cosmetic) => endChip('✦', 'Cosmético novo', `${cosmetic.name} desbloqueado em ${cosmetic.chapter}. Equipe no Acampamento.`, 'cosmetic')),
     ...fresh.map((cfg) => `<span class="end-chip unlock" tabindex="0" style="--c:${cfg.color[0]};--cd:${cfg.color[1]}" data-tip="Nova variante liberada: ${escAttr(cfg.name)}" aria-label="Nova variante liberada: ${escAttr(cfg.name)}"><img src="${cfg.portrait}" alt="">Nova!</span>`),
   ].join('');
-  $('overlayStars').innerHTML = row + (chips ? `<div class="end-chips">${chips}</div>` : '')
-    + (game.test ? '<div class="star-best">Modo de teste: estrelas e recordes não contam</div>' : '')
+  const extras = [
+    best && stars ? endChip('★', 'Melhor', 'Novo melhor resultado nesta missão!', 'star') : '',
+    bestTime ? endChip('⏱', formatMissionRecordTime(game.missionT), `Novo recorde · ${difficulty.name} · ${formatMissionRecordTime(game.missionT)}`) : '',
+  ].join('');
+  game.resultExtras = (extras ? `<div class="end-chips">${extras}</div>` : '')
     + (won && medal ? missionRewardHTML(stars, totalStars() - before, medal) : '');
+  $('overlayStars').innerHTML = row + (chips ? `<div class="end-chips">${chips}</div>` : '')
+    + (game.test ? '<div class="star-best">Modo de teste: estrelas e recordes não contam</div>' : '');
   return stars;
 }
 
@@ -10019,6 +10546,22 @@ function objectiveHint(skeletons) {
   return captivePrisoner() ? 'Liberte o prisioneiro' : null;
 }
 
+// nível e barra de XP de cada herói no fim (na equipe contínua, é o XP que segue para a próxima missão);
+// `from`/`fromPct` vêm do começo da missão (game.startLevels) para a tela animar quem subiu de nível
+function endTeamLevels(party, start = game.startLevels) {
+  const pctOf = (level, xp) => {
+    const from = XP_LEVELS[level - 1] ?? 0, to = XP_LEVELS[level];
+    return to == null ? 100 : Math.max(0, Math.min(100, Math.round((xp - from) / Math.max(1, to - from) * 100)));
+  };
+  const levels = {};
+  for (const h of party || []) {
+    const before = start?.[h.cfg.id];
+    levels[h.cfg.id] = { level: h.level, pct: pctOf(h.level, h.xp), name: heroLevelName(h.cfg, h.level),
+      from: before ? before.level : h.level, fromPct: before ? pctOf(before.level, before.xp) : pctOf(h.level, h.xp) };
+  }
+  return levels;
+}
+
 // resumo da partida para a progressão entre partidas
 function matchSummary(won, stars) {
   return {
@@ -10042,17 +10585,20 @@ function endGame(text, won = false) {
   $('overlayTitle').setAttribute('data-tip', text);
   $('overlayText').textContent = text;
   $('overlayNext').innerHTML = '';
+  game.resultExtras = '';
   const missionIndex = MISSIONS.indexOf(game.mission);
   const followingWasOpen = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1);
   const missionStars = game.mission ? missionEnd(won) : null;
+  if (won && campaignTeamMode()) storeCampaignTeam(game.roster || heroes());   // a equipe leva o XP e as evoluções da vitória
   const following = missionIndex >= 0 && missionIndex + 1 < MISSIONS.length && unlocked(missionIndex + 1) ? MISSIONS[missionIndex + 1] : null;
   const nextUnstarredAfter = game.mission && won && !game.test
     ? MISSIONS.find((mission, index) => index > missionIndex && unlocked(index) && starsOf(mission.id) === 0) || null
     : null;
-  const next = !won ? null : nextUnstarredAfter;
-  const nextMission = next?.name || null;
+  // "Próxima": a primeira ainda sem estrelas; se todas à frente já têm, a seguinte (rejogar não tira o botão)
+  const next = !won || game.test ? null : nextUnstarredAfter || following;
+  const nextMission = won && nextUnstarredAfter?.name || null;   // o relatório fala do avanço, não de rejogar
   if (game.mission) {   // próximo passo: a missão recém-liberada (ou a seguinte) ou repetir a atual
-    const replay = { replay: game.mission, team: (game.roster || []).map((h) => h.cfg), seed: world.seed };
+    const replay = { replay: game.mission, team: (game.roster || []).map((h) => h.cfg), seed: world.seed, teamRun: campaignTeamMode() };
     $('overlayNext').innerHTML = missionNextHTML(won, next, next === following && following && !followingWasOpen);
     const nextBtn = $('overlayNext').querySelector('[data-act="next"]');
     if (nextBtn) nextBtn.onclick = () => startGame(next);
@@ -10062,7 +10608,7 @@ function endGame(text, won = false) {
   const party = game.roster;
   const report = buildBattleReport({
     won,
-    heroes: party.map((h) => ({ id: h.cfg.id, name: h.cfg.names?.[h.level - 1] || h.cfg.name, damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
+    heroes: party.map((h) => ({ id: h.cfg.id, name: heroLevelName(h.cfg, h.level), damage: h.stats.dano, received: h.stats.recebido, kills: h.stats.abates })),
     falls: game.fallLog,
     damageSources: Object.values(game.damageSources),
     militia: game.militia?.size ? { size: game.militia.size, damage: game.militia.damage, kills: game.militia.kills, fallen: game.militia.fallen } : null,
@@ -10091,11 +10637,17 @@ function endGame(text, won = false) {
       bossesLeft: units.filter((u) => u.phaseBoss && !u.dead).length,
     } : null,
   });
-  $('overlayStats').innerHTML = summaryHTML(party, report, { won, kills: game.kills, falls: game.fallLog?.length || 0 });
-  if (!game.test) {   // ouro, maestria e conquistas (atalhos de teste não contam)
-    const reward = progress.recordMatch(matchSummary(won, missionStars));
+  // ouro, maestria e conquistas (atalhos de teste não contam)
+  const reward = game.test ? null : progress.recordMatch(matchSummary(won, missionStars));
+  // à vista: estrelas, ouro, equipe e botões; motivo, recordes, medalha, conquistas e números ficam em "Detalhes"
+  const achievements = reward ? achievementChipsHTML(reward.unlocked) : '';
+  const detailsBody = `<p class="end-reason">${escAttr(text)}</p>`
+    + (game.resultExtras || '') + (achievements ? `<div class="end-chips">${achievements}</div>` : '')
+    + summaryHTML(party, report, { won, kills: game.kills, falls: game.fallLog?.length || 0 });
+  $('overlayStats').innerHTML = `<details class="end-details"><summary>Detalhes</summary><div class="end-details-body">${detailsBody}</div></details>`;
+  if (reward) {
     const mvp = party.length ? party.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a)) : null;
-    $('overlayStars').innerHTML += rewardHTML(reward, VARIANTS, mvp?.cfg.id);
+    $('overlayStars').innerHTML += rewardHTML(reward, VARIANTS, mvp?.cfg.id, endTeamLevels(party));
     toastAchievements(reward.unlocked);
   }
   const storageWarning = !game.test ? progressStorageWarning() : '';
@@ -10164,12 +10716,19 @@ function placeSun(at) {
 }
 function frame() {
   requestAnimationFrame(frame);   // agenda antes: um erro no quadro não congela o jogo
-  const real = Math.min(clock.getDelta(), 0.05);
+  const frameMs = clock.getDelta() * 1000;
+  const real = Math.min(frameMs / 1000, 0.05);
+  if (typeof lowFpsMonitor !== 'undefined' && typeof fpsHintDismissed !== 'undefined' && !fpsHintDismissed) {
+    const performanceActive = document.visibilityState === 'visible' && !game.paused && !game.over
+      && !lowQuality && !loading.visible && !battleLoadingVisible;
+    if (lowFpsMonitor.sample(frameMs, performanceActive)) fpsHint.hidden = false;
+  }
   const dt = game.paused ? 0 : real * speed * FX.timeScale(real);   // hit-stop curtinho das ultimates
   if (dt > 0 && !game.over) game.runTime += dt;
   const updateCount = units.length;
   frameUnits.length = updateCount;
   for (let i = 0; i < updateCount; i++) frameUnits[i] = units[i];
+  prepareAnimationCulling();
   if (game.state === 'fight' && !game.paused && !game.over) activeTargetContext = makeTargetContext(frameTargetContext);
   else {
     activeTargetContext = null;
@@ -10182,6 +10741,7 @@ function frame() {
     frameTargetContext.livingAllies.length = 0;
   }
   for (let i = 0; i < updateCount; i++) frameUnits[i].update(dt);
+  animationCulling = false;   // fora do laço das unidades (testes, menu) o mixer volta a andar sempre
   frameUnits.length = 0;
   activeTargetContext = null;
   if (dt > 0 && !game.over) separate();

@@ -1566,3 +1566,15 @@
 
 /* barras de rolagem no visual do jogo (finas e douradas), no lugar das do navegador */
 * { scrollbar-width: thin; scrollbar-color: rgba(255, 212, 74, .55) rgba(8, 18, 34, .35); }
+
+/* equipe contínua da campanha: cartões da equipe salva, marca de quem sai e botão de seguir */
+#pickList .team-card { cursor: pointer; }
+#pickList .team-card .team-level { position: absolute; z-index: 3; top: 6px; right: 6px; padding: 2px 7px; font: 700 13px 'Fredoka', sans-serif; color: #3b2600;
+  background: linear-gradient(#fff1a8, #ffd44a); border-radius: 999px; box-shadow: 0 2px 0 #442b21; }
+#pickList .team-card .team-out { display: none; }
+#pickList .team-card.out .team-out { display: grid; }
+#pickList .team-card.out .portrait, #pickList .team-card.out .ribbon { filter: grayscale(1); opacity: .5; }
+#pickList .team-go { align-self: center; min-height: 52px; padding: 12px 24px; border: 0; border-radius: 14px; color: #f2fff1; cursor: pointer;
+  background: linear-gradient(180deg, #4dbb70, #2e8b4c); box-shadow: 0 5px 0 #1d5a31, inset 0 1px 0 rgba(255,255,255,.18); font: 600 19px/1 'Fredoka', sans-serif; }
+#pickList .team-go:hover { filter: brightness(1.08); }
+#pickList .team-go:active { filter: brightness(.95); }

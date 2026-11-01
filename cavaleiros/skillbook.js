@@ -1,4 +1,4 @@
-import { heroInfo, skillCooldown } from './class-info.js';
+import { heroInfo, skillCooldown, skillLevel } from './class-info.js';
 
 // Técnica (slot 1), ultimate (slot 2) e uma segunda técnica (slot 3) complementam a assinatura de cada variante.
 // Os efeitos compartilham regras de combate, mas mantêm nomes e identidade próprios.
@@ -156,7 +156,7 @@ export function cooldownForSkill(cfg, slot = 0, level = 1, rate = 1) {
   if (!skill) return skillCooldown(cfg.id, level, rate);
   const ultimate = slot === 2;
   const reduction = ultimate ? 2 : 0.8;
-  return Math.max(ultimate ? 35 : 9, skill.cooldown - (level - 1) * reduction) * rate;
+  return Math.max(ultimate ? 35 : 9, skill.cooldown - (skillLevel(level) - 1) * reduction) * rate;
 }
 
 // a lista é a mesma durante todo o jogo: monta uma vez por herói (é lida a cada quadro)

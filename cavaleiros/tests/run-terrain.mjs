@@ -306,11 +306,11 @@ console.log('Navegação: 8 trajetos fase a fase e 1 alvo longo em estradas sinu
 // Exercita o dano e o disparo diferido reais, com apenas renderização/DOM substituídos.
 let enemyShots=0,heroShots=0;
 const Unit=runInNewContext(main.slice(main.indexOf('class Unit {'),main.indexOf('const skeletonsAlive ='))+';Unit',{
-  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),queryObstacleCandidates,game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
+  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),stepNext:new Vector3(),queryObstacleCandidates,animationCulling:false,game:{kills:0},popText:()=>{},audio:{play:()=>{}},fireEnemyBolt:()=>enemyShots++,fireBolt:()=>heroShots++
 });
 function unit(team='hero') {
   const u=Object.create(Unit.prototype);
-  Object.assign(u,{root:{position:new Vector3(),rotation:{y:0},scale:{set:()=>{}}},team,cfg:{id:'paladin'},hp:100,maxHp:100,size:1,vel:new Vector3(),mats:[],mixer:{update:()=>{}},once:()=>1,attackTimer:0,busy:0,flash:0,moving:false});
+  Object.assign(u,{root:{position:new Vector3(),rotation:{y:0},scale:{set:()=>{}}},team,cfg:{id:'paladin'},hp:100,maxHp:100,size:1,vel:new Vector3(),mats:[],mixer:{update:()=>{}},animLag:0,once:()=>1,attackTimer:0,busy:0,flash:0,moving:false});
   return u;
 }
 const victim=unit('skeleton'),melee=unit();victim.pos.y=3;

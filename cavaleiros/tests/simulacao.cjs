@@ -89,7 +89,7 @@ vm.runInContext(campaign.replaceAll('export ', ''), context);
 vm.runInContext(classInfo.replaceAll('export ', ''), context);
 vm.runInContext(skillbook.replace(/^import .*$/gm, '').replaceAll('export ', ''), context);
 vm.runInContext(fs.readFileSync(path.join(dir, 'hero-anims.js'), 'utf8').replace(/^export /gm, ''), context);   // HERO_IDLES, HERO_HITS...
-vm.runInContext(skillTargeting.replaceAll('export ', ''), context);
+vm.runInContext(skillTargeting.replace(/^import .*$/gm, '').replaceAll('export ', ''), context);
 vm.runInContext(synergies.replaceAll('export ', ''), context);
 vm.runInContext(upgradeBranches.replaceAll('export ', ''), context);
 vm.runInContext(battleReport.replaceAll('export ', ''), context);
@@ -106,7 +106,7 @@ vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), cont
 vm.runInContext(part(source, 'function releaseFxMaterial(material) {', 'function clearFx()'), context);
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
-const t = vm.runInContext(`({ units, heroes, game, pick, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts, chooseHeroTarget,
+const t = vm.runInContext(`({ units, heroes, game, pick, XP_LEVELS, autoUpgrade, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts, chooseHeroTarget,
   DIFFICULTIES, MISSIONS, VARIANTS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
   setWorld: (next) => { world = next; },
   setDifficulty: (d) => { difficulty = d; },
@@ -163,6 +163,9 @@ for (const v of vm.runInContext('VARIANTS', context)) v.built = asset(), v.portr
 
 let currentMapSeed = 11;
 const straightMode = process.argv.includes('reta');
+// SIM_EQUIPE=4 começa a missão com esse número de heróis (como a equipe contínua); SIM_NIVEL=3 sobe o grupo inicial a esse nível
+const forcedParty = +process.env.SIM_EQUIPE || 0;
+const forcedLevel = +process.env.SIM_NIVEL || 0;
 function play(diff, profile, mission = null) {
   t.setDifficulty(diff);
   let nextProfileHero = 0;
@@ -170,7 +173,7 @@ function play(diff, profile, mission = null) {
   let initialParty = null;
   if (mission && !straightMode) {
     const castleInterior = mission.id === 'coracao-do-castelo';
-    const phases = castleInterior ? 13 : 12;
+    const phases = castleInterior ? 13 : Math.max(12, mission.to);   // como useMissionWorld: o mundo vai até a última fase da missão
     const mapWorld = createNavigationWorld({ THREE, Vector3, seed: currentMapSeed, phases, castleInterior });
     seedRoadObstacles(mapWorld, currentMapSeed, phases);
     t.setWorld(mapWorld);
@@ -182,6 +185,7 @@ function play(diff, profile, mission = null) {
     t.setMission(mission);
     t.showDifficulty();
     t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
+    if (forcedParty && mission.goal.type !== 'duel') t.game.picksLeft = forcedParty;   // equipe contínua: grupo inicial cheio
     vm.runInContext('globalThis.__campaignOutcome = null', context);
   } else {
     t.showDifficulty();   // partida interna sem missão (fases 1–12), sem passar pelo menu
@@ -204,6 +208,10 @@ function play(diff, profile, mission = null) {
         if (mission && initialHeroes == null && t.game.picksLeft === 0 && !t.pick.open) {
           initialParty = t.heroes().map((h) => h.cfg.id);
           initialHeroes = initialParty.length;
+          if (forcedLevel && mission.goal.type !== 'duel') {   // equipe contínua: heróis que já evoluíram em missões anteriores
+            for (const h of t.heroes()) h.gainXp(Math.max(0, t.XP_LEVELS[forcedLevel - 1] - h.xp));
+            t.autoUpgrade();
+          }
         }
       } else t.confirmPick(Math.floor(Math.random() * t.pick.cards.length));
       continue;
@@ -337,7 +345,7 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
     const withVillager = res.filter((r) => Number.isFinite(r.villagerRatio));
     const villager = withVillager.length ? `${Math.round(withVillager.reduce((sum, r) => sum + r.villagerRatio, 0) / withVillager.length * 100)}%` : '—';
     const incomplete = res.filter((r) => r.timedOut).length;
-    console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
+    console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · vida ${Math.round(avg((r) => r.hpRatio ?? 0) * 100)}% · tempo ${avg((r) => r.time)} s · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
     if (details) for (const [i, r] of res.entries()) {
       console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · santuário ${Number.isFinite(r.shrineRatio) ? `${Math.round(r.shrineRatio * 100)}%` : '—'} · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}`);
       if (!r.won && r.diagnostic) console.log(`    diagnóstico: ${JSON.stringify(r.diagnostic)}`);

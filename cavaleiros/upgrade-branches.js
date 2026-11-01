@@ -1,5 +1,5 @@
 // Rotas de evolução para escolhas com estilos de jogo diferentes.
-// Cada herói pode escolher cada rota uma única vez.
+// Nv2 e Nv3 abrem rotas diferentes; do Nv4 em diante (3ª evolução) uma rota já escolhida pode ganhar o 2º grau.
 export const EVOLUTION_BRANCHES = [
   {
     id: 'damage',
@@ -29,13 +29,20 @@ export const EVOLUTION_BRANCHES = [
 
 const branchById = new Map(EVOLUTION_BRANCHES.map((branch) => [branch.id, branch]));
 
-/** Registra uma rota na unidade e devolve os bônus desta escolha. */
+/** Grau máximo de cada rota agora: 1 nas duas primeiras evoluções, 2 a partir da terceira (Nv4). */
+export function branchRankLimit(hero) {
+  const taken = Object.values(hero?.evolutionBranches || {}).reduce((sum, rank) => sum + rank, 0);
+  return taken >= 2 ? 2 : 1;
+}
+
+/** Registra uma rota (ou o 2º grau dela) na unidade e devolve os bônus desta escolha. */
 export function applyEvolutionBranch(hero, id) {
   const branch = branchById.get(id);
-  if (!branch || hero.evolutionBranches?.[id] > 0) return null;
+  const rank = hero.evolutionBranches?.[id] || 0;
+  if (!branch || rank >= branchRankLimit(hero)) return null;
 
   hero.evolutionBranches ||= {};
-  hero.evolutionBranches[id] = 1;
+  hero.evolutionBranches[id] = rank + 1;
   hero.evolutionPath = id;
   return branch.bonus;
 }

@@ -1,16 +1,18 @@
 // Regras da mira manual. Habilidades centradas no herói continuam instantâneas.
+import { skillLevel } from './class-info.js';
+
 export function aimSpec(h) {
-  const id = h.cfg.id, power = h.skillPower;
+  const id = h.cfg.id, power = h.skillPower, level = skillLevel(h.level);
   if (['assassin', 'arcane', 'viking', 'iceviking', 'oracle'].includes(id)) return {
     mode: 'enemy', range: id === 'arcane' || id === 'oracle' ? h.range : id === 'assassin' ? 7 : 9,
     min: id.includes('viking') ? 2 : 0,
-    radius: id === 'iceviking' ? (1.3 + (h.level - 1) * 0.25) * power : 0.65,
+    radius: id === 'iceviking' ? (1.3 + (level - 1) * 0.25) * power : 0.65,
   };
   if (['pyro', 'cryo', 'crossbow', 'ninja', 'crusher', 'angel', 'archer', 'alchemist', 'engineer'].includes(id)) return {
     mode: 'ground', range: id === 'crusher' ? 2.2 * power : id === 'ninja' ? 7 : id === 'archer' ? 11 : id === 'alchemist' ? h.range + 1 : id === 'engineer' ? 8 : h.range,
-    radius: id === 'pyro' ? (1.1 + (h.level - 1) * 0.2) * power
-      : id === 'cryo' ? (1.3 + (h.level - 1) * 0.25) * power : id === 'angel' ? (3 + (h.level - 1) * 0.5) * power
-      : id === 'alchemist' ? (1.6 + (h.level - 1) * 0.2) * power : 0,
+    radius: id === 'pyro' ? (1.1 + (level - 1) * 0.2) * power
+      : id === 'cryo' ? (1.3 + (level - 1) * 0.25) * power : id === 'angel' ? (3 + (level - 1) * 0.5) * power
+      : id === 'alchemist' ? (1.6 + (level - 1) * 0.2) * power : 0,
   };
   return null;
 }

@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 const dir = path.join(__dirname, '..');
 const main = fs.readFileSync(path.join(dir, 'main.js'), 'utf8').replace(/\r\n/g, '\n');
-const targeting = fs.readFileSync(path.join(dir, 'skill-targeting.js'), 'utf8').replace(/^export /gm, '');
+const targeting = ['class-info.js', 'skill-targeting.js'].map((file) => fs.readFileSync(path.join(dir, file), 'utf8').replace(/^import .*$/gm, '').replace(/^export /gm, '')).join('\n');
 const start = main.indexOf('// Mira manual:');
 const end = main.indexOf("\nrenderer.domElement.addEventListener('pointermove'", start);
 assert.ok(start >= 0 && end > start, 'seção da mira manual precisa existir');

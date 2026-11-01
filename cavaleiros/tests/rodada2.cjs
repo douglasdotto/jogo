@@ -92,7 +92,7 @@ vm.runInContext(campaign.replaceAll('export ',''),context);
 vm.runInContext(classInfo.replaceAll('export ',''),context);
 vm.runInContext(skillbook.replace(/^import .*$/gm,'').replaceAll('export ',''),context);
 vm.runInContext(fs.readFileSync(path.join(dir, 'hero-anims.js'), 'utf8').replace(/^export /gm, ''), context);   // HERO_IDLES, HERO_HITS...
-vm.runInContext(skillTargeting.replaceAll('export ',''),context);
+vm.runInContext(skillTargeting.replace(/^import .*$/gm,'').replaceAll('export ',''),context);
 vm.runInContext(synergies.replaceAll('export ',''),context);
 vm.runInContext(upgradeBranches.replaceAll('export ',''),context);
 vm.runInContext(battleReport.replaceAll('export ',''),context);
@@ -121,7 +121,7 @@ context.addEventListener=(type,handler,options)=>{
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
+vm.runInContext('globalThis.t={Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
@@ -767,6 +767,28 @@ test('missão que começa em nível alto aplica as rotas de evolução, sem sort
   assert.equal(evolve('guardian').includes('control'),true);assert.equal(evolve('cleric').includes('support'),true);
   clear();
 });
+test('Nv4 e Nv5: quatro evoluções, arte do Nv3 e selo prata/ouro',()=>{
+  const levels=vm.runInContext('XP_LEVELS',context);assert.equal(levels.length,5);assert.ok(levels.every((xp,i)=>!i||xp-levels[i-1]>(levels[i-1]-(levels[i-2]||0))),'degraus crescentes');
+  clear();const h=new t.Hero(cfg('pyro')),hp=h.maxHp,dmg=h.dmg,size=h.heroSize();
+  h.gainXp(levels[4]+5000);assert.equal(h.level,5,'teto no Nv5');assert.equal(t.evolutions.length,4,'quatro evoluções');
+  assert.equal(h.maxHp,Math.round(Math.round(Math.round(Math.round(hp*1.1)*1.1)*1.1)*1.1));assert.ok(Math.abs(h.dmg-dmg*1.1**4)<1e-9);
+  assert.ok(h.heroSize()<=size*1.23&&h.heroSize()>size*1.16,'cresce pouco depois do Nv3');
+  assert.equal(h.levelLabel.textContent,'Nv5');assert.equal(h.levelLabel.className,'tier-5');assert.equal(h.levelLabel.title,h.cfg.names[2]);assert.equal(h.halo.visible,true);
+  t.showEvolution();const card=()=>elements.get('pickList').children.at(-1).innerHTML;
+  assert.ok(!/tier-/.test(card().match(/evo-hero[^"]*"/)[0]),'Nv2 sem selo');
+  for(let k=0;k<3;k++)t.confirmEvolution(0);
+  const last=card();assert.match(last,/evo-hero tier-5/);assert.match(last,/Nv4<\/s>.*Nv5/);assert.ok(last.includes(`src="${h.cfg.portraits[2]}"`),'retrato do Nv3');
+  assert.ok(last.includes(h.cfg.names[2])&&!last.includes('undefined'),'nome do Nv3');
+  assert.ok(t.pick.cards.some(c=>/ II</.test(c.innerHTML)),'rota já escolhida aparece como 2º grau');
+  t.confirmEvolution(0);assert.equal(t.evolutions.length,0);
+  assert.equal(Object.values(h.evolutionBranches).reduce((a,b)=>a+b,0),4,'quatro graus de rota');assert.ok(Object.values(h.evolutionBranches).every(r=>r<=2));
+  const auto=()=>{clear();const a=new t.Hero(cfg('guardian'));a.gainXp(levels[4]);t.autoUpgrade();return JSON.stringify(a.evolutionBranches)};
+  assert.equal(auto(),auto(),'autoevolução determinística');assert.equal(Object.values(JSON.parse(auto())).reduce((a,b)=>a+b,0),4);
+  clear();const n=new t.Hero(cfg('paladin'));n.gainXp(levels[2]);assert.equal(n.levelLabel.className,'','Nv3 sem selo');n.gainXp(levels[3]-levels[2]);assert.equal(n.levelLabel.className,'tier-4');
+  assert.match(source,/sh\.box\.className = `skillHero \$\{levelTierClass\(h\.level\)\}`/,'HUD aplica o selo no retrato');
+  assert.match(source,/sh\.img\.src = heroLevelPortrait\(h\.cfg, h\.level\)/);
+  clear();
+});
 test('provocação do guardião e cura do paladino ferem de leve quem está colado',()=>{
   clear();const g=new t.Hero(cfg('guardian')),p=new t.Hero(cfg('paladin'));
   const enemy=new t.Skeleton('Warrior',1);enemy.spawning=false;enemy.pos.set(0,0,1.5);
@@ -937,7 +959,8 @@ test('controle direto move só o herói escolhido com clique direito e devolve o
     const up=dispatchDirectPointer('pointerup',500,500,2);
     assert.equal(up.defaultPrevented,true,'comando de movimento é consumido');
     assert.ok(t.directControl.moveTarget,'clique direito no chão registra o destino');
-    controlled.update(.2);controlled.update(.2);ally.update(.2);ally.update(.2);
+    // ocioso na luta o aliado fica onde está (regra nova); com o grupo em marcha ele volta à formação pela IA
+    controlled.update(.2);controlled.update(.2);t.game.state='advance';ally.update(.2);ally.update(.2);t.game.state='fight';
     assert.ok(controlled.pos.distanceTo(start)>.01,'o herói controlado caminha até o ponto clicado');
     assert.ok(ally.pos.distanceTo(allyStart)>.01,'os aliados seguem atualizando pela IA');
     assert.equal(t.directControl.hero,controlled,'o modo aponta para o herói escolhido');
@@ -2327,8 +2350,8 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
   captive.rescued=true;party[1].update(.1);assert.equal(t.game.rescueRunner,null,'a função termina após a libertação');
   clear();
 });
-test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
-  assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
+test('24 missões com objetivo e todo o elenco liberado desde o início',()=>{
+  assert.equal(t.MISSIONS.length,24);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
   assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,29);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
@@ -2566,12 +2589,12 @@ test('campanha concluída destaca o castelo e oferece replay pelas estrelas rest
   let view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha concluída/);
-  assert.match(view.info.innerHTML,/42 estrelas restantes/);
+  assert.match(view.info.innerHTML,/48 estrelas restantes/);
   context.localStorage.data={'cavaleiros-campanha':JSON.stringify(Object.fromEntries(t.MISSIONS.map(m=>[m.id,3])))};
   view=render();
   assert.ok(view.map.children.at(-1).classList.contains('sel'));
   assert.match(view.info.innerHTML,/Campanha perfeita/);
-  assert.match(view.info.innerHTML,/Todas as 63 estrelas foram conquistadas/);
+  assert.match(view.info.innerHTML,/Todas as 72 estrelas foram conquistadas/);
   view=render('O save da campanha estava corrompido; uma cópia foi preservada.');
   assert.match(view.info.innerHTML,/Campanha perfeita/);
   assert.equal(view.map.children.length,t.MISSIONS.length);
@@ -2693,7 +2716,7 @@ test('estrelas no fim: gravam o melhor e não contam com ?fase',()=>{
   assert.equal(t.starsOf('vila'),3);const stars=elements.get('overlayStars').innerHTML;
   assert.equal((stars.match(/class="on"/g)||[]).length,3);assert.ok(!stars.includes('Nova variante liberada!'));
   assert.ok(stars.includes('Concluir a missão')&&stars.includes('Terminar sem quedas (0 quedas)')&&stars.includes('atual 100%'));
-  assert.ok(stars.includes('Novo recorde · Normal · 1:23.0'));
+  assert.ok(elements.get('overlayStats').innerHTML.includes('Novo recorde · Normal · 1:23.0'),'o recorde fica em "Detalhes"');assert.ok(!stars.includes('Novo recorde'));
   assert.deepEqual(Array.from(t.missionRecords('vila'),r=>r.difficultyId),['normal']);
   assert.ok(t.variantOpen('viking'));assert.equal(elements.get('overlayBtn').textContent,'Mapa');
   t.game.paused=false;t.startGame('map');assert.equal(t.game.paused,true);t.updateGame(.1);assert.equal(t.game.over,false);   // o mapa segura a partida
@@ -2736,11 +2759,11 @@ test('escolta usa snapshot pré-cura para estrelas e relatório',()=>{
     assert.ok(intact.includes('Aldeão com 75%+ de vida e sem quedas (0 quedas; atual 100%)'));
   }finally{t.setDifficulty(t.DIFFICULTIES.indexOf(previousDifficulty));}
 });
-test('trechos da campanha variam, crescem e o capítulo do dragão continua da fase 14 à 16',()=>{
+test('trechos da campanha variam, crescem e os capítulos do dragão e da brasa continuam da fase 14 à 19',()=>{
   const ranges=new Set(),icons=new Set();let from=1;
-  const epilogue=m=>/Capítulo VII\b/.test(m.chapter);   // o capítulo VII continua depois do Coração do Castelo
+  const epilogue=m=>/Capítulo VIII?\b/.test(m.chapter);   // os capítulos VII e VIII continuam depois do Coração do Castelo
   for(const m of t.MISSIONS){
-    assert.ok(m.from>=1&&m.to<=16&&m.from<=m.to,m.id);
+    assert.ok(m.from>=1&&m.to<=19&&m.from<=m.to,m.id);
     if(epilogue(m))assert.ok(m.from>=14,`${m.id}: o epílogo começa depois da fase 13`);
     else{assert.ok(m.from>=from,`${m.id} não pode recuar o início`);from=m.from;}
     const range=(epilogue(m)?'VII:':'')+m.from+'-'+m.to;
@@ -2754,7 +2777,7 @@ test('trechos da campanha variam, crescem e o capítulo do dragão continua da f
     assert.ok(m.chapter&&m.story,m.id);
   }
   assert.equal(t.MISSIONS.find(m=>m.id==='coracao-do-castelo').to,13);
-  assert.deepEqual([...t.MISSIONS.slice(-3).map(m=>[m.from,m.to])],[[14,14],[15,15],[16,16]]);
+  assert.deepEqual([...t.MISSIONS.slice(-6).map(m=>[m.from,m.to])],[[14,14],[15,15],[16,16],[17,17],[18,18],[19,19]]);
 });
 test('medalha guarda a melhor dificuldade vencida e desafios de 3★ nas dificuldades altas',()=>{
   context.localStorage.data={};
@@ -2781,18 +2804,24 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
   try{
     context.saveStars('chamas',1); // avanço já salvo no capítulo; a vitória de Vila cruza 4★
     begin('vila',['paladin']);t.setDifficulty(2);Object.assign(t.game,{phase:2,state:'cleared',timer:0,missionT:70});t.updateGame(.1);
-    const html=elements.get('overlayStars').innerHTML;
-    assert.ok(html.includes('Recompensa')&&html.includes('+3 ★ na campanha · 6/63'));
+    const html=elements.get('overlayStars').innerHTML,details=elements.get('overlayStats').innerHTML;
+    // à vista ficam estrelas, ouro, equipe e o prêmio novo; campanha, medalha e desafio vão para "Detalhes"
+    assert.ok(details.includes('Recompensa')&&details.includes('+3 ★ na campanha · 6/72'));assert.ok(!html.includes('Recompensa'));
     assert.ok(html.includes('Cosmético novo')&&html.includes('Estandarte da Vila desbloqueado'),'avisa ao cruzar o marco de estrelas do capítulo');
-    assert.ok(html.includes('Medalha Difícil conquistada!')&&html.includes('Desafio cumprido: 3★ no Difícil!'));
+    assert.ok(details.includes('Medalha Difícil conquistada!')&&details.includes('Desafio cumprido: 3★ no Difícil!'));
+    assert.match(details,/<details class="end-details"><summary>Detalhes<\/summary>/);assert.match(html,/class="prog-heroes"/);
     // o próximo passo virou só o botão "Próxima ▸" ao lado de "Mapa"; o nome da missão fica na dica e no aria-label
     const next=elements.get('overlayNext').innerHTML;
     assert.ok(next.includes('Próxima missão: Fazendas')&&next.includes('Próxima ▸'),next);
     context.createWorld=()=>t.world;   // a próxima missão recria o cenário; aqui o duplo basta
-    t.startGame(mission('ponte'));assert.equal(t.game.mission.id,'ponte');assert.equal(t.pick.mode,'difficulty');
+    // "Próxima" mantém a dificuldade e vai para a equipe; sem equipe salva, monta os 4 heróis
+    let after;context.setTimeout=(fn,ms)=>{if(ms===550)after=fn};
+    t.startGame(mission('ponte'));assert.equal(t.game.mission.id,'ponte');after();
+    assert.equal(t.pick.mode,'hero');assert.equal(t.getDifficulty().id,'dificil');assert.equal(elements.get('pickTitle').textContent,'Escolha o herói 1 de 4');
+    context.setTimeout=noop;t.startGame();
     begin('ponte',['paladin','pyro']);t.game.villager.takeDamage(9999);t.updateGame(.1);
     assert.ok(elements.get('overlayNext').innerHTML.includes('↻ Repetir'));
-    assert.ok(!elements.get('overlayStars').innerHTML.includes('Recompensa'));
+    assert.ok(!elements.get('overlayStats').innerHTML.includes('Recompensa'));
     // "Repetir" volta direto à luta: mesma missão, dificuldade, cenário e equipe, sem mapa nem escolhas
     const team=t.heroes().map(h=>h.cfg),seed=t.world.seed,played=t.getDifficulty().id;
     t.startGame({replay:mission('ponte'),team,seed});
@@ -2801,6 +2830,78 @@ test('fim da missão mostra recompensa, medalha e o botão da próxima missão',
     assert.equal(t.pick.open,false,'não reabre dificuldade nem heróis');assert.equal(t.game.paused,false);
     assert.equal(t.game.phase,mission('ponte').from);assert.ok(t.game.villager,'a escolta recomeça com o aldeão');
   }finally{t.setDifficulty(1);}
+});
+test('campanha contínua: a equipe de 4 leva XP e evoluções, troca parcial entra no nível 1 e o Duelo escolhe um',()=>{
+  context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:1,ponte:1,santuario:1,chamas:1,fazendas:1,lago:1})};
+  let after;context.setTimeout=(fn,ms)=>{if(ms===550)after=fn};
+  const saved=()=>JSON.parse(context.localStorage.getItem('cavaleiros-time-campanha'));
+  try{
+    t.startGame(mission('ponte'));after();
+    for(const id of ['paladin','pyro','berserker','assassin']){t.confirmPick(idx(id));after();}
+    assert.equal(t.heroes().length,4,'a equipe inteira entra desde o início');assert.ok(t.heroes().every(h=>h.level===1),'herói novo começa no nível 1');
+    assert.deepEqual(saved().map(e=>e.id),['paladin','pyro','berserker','assassin']);
+    t.heroes()[0].gainXp(100);t.autoUpgrade();const branch=Object.keys(t.heroes()[0].evolutionBranches)[0];
+    Object.assign(t.game,{phase:mission('ponte').to,state:'cleared',timer:0});t.updateGame(.1);
+    assert.equal(saved()[0].xp,100);assert.deepEqual(saved()[0].branches,[branch]);
+    // próxima missão: equipe salva, troca só o segundo herói
+    t.startGame(mission('santuario'));after();
+    assert.equal(t.pick.mode,'team');assert.equal(t.pick.cards.length,4);
+    t.confirmPick(1);assert.equal(t.pick.teamGo.textContent,'Trocar 1 ▸');t.pick.teamGo.onclick();
+    assert.equal(t.pick.mode,'hero');t.confirmPick(idx('cleric'));after();
+    const party=t.heroes();assert.equal(party.length,4);
+    const paladin=party.find(h=>h.cfg.id==='paladin');assert.equal(paladin.level,2);assert.ok(paladin.evolutionBranches[branch]);
+    assert.equal(party.find(h=>h.cfg.id==='cleric').level,1);assert.ok(!party.some(h=>h.cfg.id==='pyro'));
+    assert.deepEqual(saved().map(e=>e.id).sort(),['assassin','berserker','cleric','paladin']);
+    // derrota não grava o XP ganho
+    party.forEach(h=>h.gainXp(50));t.autoUpgrade();t.endGame('Derrota');
+    assert.equal(saved().find(e=>e.id==='paladin').xp,100);
+    // Duelo: escolhe um da equipe; quem ficou de fora segue salvo e a ordem não muda
+    const order=saved().map(e=>e.id);
+    t.startGame(mission('duelo'));after();assert.equal(t.pick.mode,'team');
+    t.confirmPick(order.indexOf('berserker'));
+    assert.equal(t.heroes().map(h=>h.cfg.id).join(),'berserker');assert.deepEqual(saved().map(e=>e.id),order);
+  }finally{context.setTimeout=noop;t.startGame();t.setDifficulty(1);context.localStorage.data={};}
+});
+test('campanha contínua: Repetir volta com XP e evoluções salvos, menu da primeira vez abre a Vila e Esc na equipe volta ao mapa',()=>{
+  context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:1})};
+  let after,modeTimer;context.setTimeout=(fn,ms)=>{if(ms===550)after=fn;if(ms===450)modeTimer=fn};
+  const saved=()=>JSON.parse(context.localStorage.getItem('cavaleiros-time-campanha'));
+  // o atalho de teclado da escolha é registrado na carga com addEventListener=noop; recarrega só ele capturando o handler
+  let pickKey;const previousAdd=context.addEventListener;
+  context.addEventListener=(type,fn)=>{if(type==='keydown')pickKey=fn};
+  const keyStart=source.lastIndexOf("addEventListener('keydown'",source.indexOf("pick.mode === 'team')) { e.stopImmediatePropagation()"));
+  vm.runInContext(source.slice(keyStart,source.indexOf('// retrato de cada',keyStart)),context);
+  context.addEventListener=previousAdd;
+  try{
+    // 1. vitória com a equipe contínua e "Repetir": volta com o XP e as evoluções salvos, sem telas
+    t.startGame(mission('ponte'));after();
+    for(const id of ['paladin','pyro','berserker','assassin']){t.confirmPick(idx(id));after();}
+    t.heroes()[0].gainXp(100);t.autoUpgrade();const branch=Object.keys(t.heroes()[0].evolutionBranches)[0];
+    Object.assign(t.game,{phase:mission('ponte').to,state:'cleared',timer:0});t.updateGame(.1);
+    assert.equal(saved()[0].xp,100);
+    const team=t.heroes().map(h=>h.cfg),seed=t.world.seed;
+    t.startGame({replay:mission('ponte'),team,seed,teamRun:true});
+    assert.equal(t.pick.open,false,'não reabre equipe nem dificuldade');assert.equal(t.game.paused,false);assert.equal(t.evolutions.length,0,'sem telas de evolução');
+    assert.equal(t.heroes().map(h=>h.cfg.id).join(),'paladin,pyro,berserker,assassin');
+    const paladin=t.heroes().find(h=>h.cfg.id==='paladin');
+    assert.equal(paladin.xp,100);assert.equal(paladin.level,2);assert.ok(paladin.evolutionBranches[branch],'mesma evolução de antes');
+    assert.ok(t.heroes().filter(h=>h!==paladin).every(h=>h.level===1),'quem não ganhou XP segue no nível 1');
+    // 3. Esc na tela da equipe volta ao mapa
+    t.startGame(mission('santuario'));after();assert.equal(t.pick.mode,'team');assert.equal(t.pick.open,true);
+    let stopped=false;pickKey({key:'Escape',target:el(),stopImmediatePropagation(){stopped=true},preventDefault:noop});
+    assert.equal(stopped,true);assert.equal(t.pick.open,false);assert.equal(t.game.mission,null);
+    assert.equal(elements.get('campaign').classList.contains('hidden'),false,'mapa à vista');
+    // 2. primeira vez no menu: sem estrelas nem equipe, Batalhar abre a missão 1 direto; com estrelas, abre o mapa
+    t.startGame();context.localStorage.data={};
+    t.showMenu();t.confirmMode(0);modeTimer();
+    assert.equal(t.game.mission?.id,'vila');assert.equal(t.pick.mode,'difficulty');assert.equal(t.pick.open,true);
+    // a Vila (heroes:1) vinda do mapa monta a equipe de 4; só o Duelo fica com um herói
+    t.confirmPick(1);after();
+    assert.equal(t.pick.mode,'hero');assert.equal(elements.get('pickTitle').textContent,'Escolha o herói 1 de 4');
+    t.startGame();context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:1})};
+    t.showMenu();t.confirmMode(0);modeTimer();
+    assert.equal(t.game.mission,null);assert.equal(t.pick.open,false);assert.equal(elements.get('campaign').classList.contains('hidden'),false);
+  }finally{context.setTimeout=noop;t.startGame();t.setDifficulty(1);context.localStorage.data={};}
 });
 test('primeira fase da missão abre com faixa curta, sem a história',()=>{
   context.location={search:''};
@@ -3177,6 +3278,20 @@ test('progressão: fim de partida credita ouro, maestria e contadores e mostra a
   assert.ok(after.heroes.ninja.xp>(before.heroes.ninja?.xp||0));
   assert.match(elements.get('overlayStars').innerHTML,/progress-reward/);assert.match(elements.get('overlayStars').innerHTML,/Ouro/);
   assert.equal(JSON.parse(context.localStorage.data['cavaleiros-progresso']).version,2,'save versionado no localStorage');
+}));
+test('resultado: equipe grande no centro; quem subiu de nível mostra Nv antes → depois e o motivo vai para Detalhes',()=>withLiveGame(()=>{
+  const h=new t.Hero(cfg('ninja'));h.level=4;h.xp=900;const g=new t.Hero(cfg('paladin'));g.level=2;g.xp=100;
+  Object.assign(t.game,{test:false,roster:[h,g],mission:null,start:1,phase:12,last:12,kills:10,relics:[],ultimates:0,
+    startLevels:{ninja:{level:2,xp:120},paladin:{level:2,xp:95}}});
+  elements.get('overlayStars').innerHTML='';
+  t.endGame('Fases vencidas!',true);
+  const html=elements.get('overlayStars').innerHTML;
+  assert.match(html,/class="prog-hero[^"]*leveled tier-4"/,'Nv4 mantém o selo prata');
+  assert.match(html,/Nv2 <i>→<\/i> Nv4/);
+  assert.match(html,/--from:0%;width:\d+%/,'quem subiu enche a barra do zero');
+  const paladin=html.slice(html.lastIndexOf('<span class="prog-hero'));
+  assert.doesNotMatch(paladin,/leveled|prog-lvup/,'quem não subiu fica sem o selo animado');
+  assert.match(elements.get('overlayStats').innerHTML,/<p class="end-reason">Fases vencidas!<\/p>/);
 }));
 test('progressão: atalhos de teste não ganham nem aplicam progresso',()=>withLiveGame(()=>{
   const before=JSON.stringify(prog.snapshot());const h=new t.Hero(cfg('ninja'));
@@ -3636,9 +3751,12 @@ test('missões novas: ordem, câmara depois do castelo e nós do mapa sem sobrep
   try{
     const i=id=>t.MISSIONS.findIndex(m=>m.id===id);
     assert.ok(i('santuario')<i('chamas')&&i('chamas')<i('fazendas'));assert.ok(i('lago')<i('duelo')&&i('duelo')<i('caca'));
-    assert.deepEqual([...t.MISSIONS.slice(-7,-3).map(m=>m.id)],['castelo','cripta','trono','coracao-do-castelo']);
-    assert.deepEqual([...t.MISSIONS.slice(-3).map(m=>m.id)],['arauto','ninho','asas-de-osso'],'o capítulo VII fecha a campanha');
-    assert.match(mission('asas-de-osso').ending,/Dragão de Ossos/);
+    assert.deepEqual([...t.MISSIONS.slice(-10,-6).map(m=>m.id)],['castelo','cripta','trono','coracao-do-castelo']);
+    assert.deepEqual([...t.MISSIONS.slice(-6,-3).map(m=>m.id)],['arauto','ninho','asas-de-osso'],'o capítulo VII segue o coração');
+    assert.deepEqual([...t.MISSIONS.slice(-3).map(m=>m.id)],['brasas','forja','coroa-de-cinzas'],'o capítulo VIII fecha a campanha');
+    assert.match(mission('asas-de-osso').ending,/Dragão de Ossos.*brasa/,'a queda do dragão prepara o capítulo VIII');
+    assert.match(mission('coroa-de-cinzas').ending,/última brasa/);
+    assert.equal(new Set(t.MISSIONS.slice(-3).map(m=>m.goal.type)).size,3,'o capítulo VIII varia o objetivo');
     assert.match(mission('castelo').ending,/recua para o salão do trono/,'a batalha do castelo prepara o confronto seguinte');
     assert.match(mission('trono').ending,/sombra escapa/,'a fuga da sombra explica sua volta na câmara final');
     assert.match(mission('coracao-do-castelo').story,/sombra do Lich se refaz/,'a missão final conclui a continuidade do vilão');
@@ -3654,11 +3772,11 @@ test('missões novas: ordem, câmara depois do castelo e nós do mapa sem sobrep
     const map=el(),info=el(),root=el();map.children=[];root.isConnected=true;root.closest=()=>null;root.querySelector=s=>s==='.camp-map'?map:info;
     context.renderCampaign(root,noop);assert.equal(map.children.length,t.MISSIONS.length);
     const at=k=>[parseFloat(map.children[k].style.left),parseFloat(map.children[k].style.top)];
-    for(const id of ['chamas','duelo','cripta','trono','coracao-do-castelo'])for(let k=0;k<map.children.length;k++){
+    for(const id of ['chamas','duelo','cripta','trono','coracao-do-castelo','brasas','forja','coroa-de-cinzas'])for(let k=0;k<map.children.length;k++){
       if(k===i(id))continue;const [x,y]=at(i(id)),[x2,y2]=at(k);
       assert.ok(((x-x2)/9.4)**2+((y-y2)/7.5)**2>1,`${id} não encosta em ${t.MISSIONS[k].id}`);
     }
-    const [,cy]=at(i('castelo'));for(const id of ['cripta','trono','coracao-do-castelo','arauto','ninho','asas-de-osso'])assert.ok(at(i(id))[1]<cy,id+' fica além do castelo, no alto');   // mapa gerado: só a altura importa
+    const [,cy]=at(i('castelo'));for(const id of ['cripta','trono','coracao-do-castelo','arauto','ninho','asas-de-osso','brasas','forja','coroa-de-cinzas'])assert.ok(at(i(id))[1]<cy,id+' fica além do castelo, no alto');   // mapa gerado: só a altura importa
   }finally{context.location=previousLocation;context.localStorage.data=previousStorage;}
 });
 // ---------- inimigos novos: enxame, xamã, cavaleiro sombrio e o Carrasco (fase 9) ----------
@@ -3764,7 +3882,7 @@ test('guarda de aldeões só aparece quando a missão manda defender alguém',()
   clear();Object.assign(t.game,{mission:null,start:1,phase:1,test:true});t.musterMilitia();assert.equal(militiaUnits().length,0,'sem missão, sem guarda');
   const v=guardMission('ponte');t.musterMilitia();const ms=militiaUnits();
   assert.equal(ms.length,4,'escolta: quatro aldeões de guarda');
-  for(const m of ms)assert.ok(Math.abs(m.pos.distanceTo(v.pos)-1.9)<0.01,'em anel em volta do protegido');
+  for(const m of ms)assert.ok(Math.abs(m.pos.distanceTo(v.pos)-2.3)<0.01,'em anel em volta do protegido (fora da separação do aldeão)');
   assert.ok(ms.every(m=>m.bar.classList.contains('militia')),'barra menor própria');
   assert.ok(ms.every(m=>m.size<0.8),'menores que os heróis');
   clear();
@@ -3784,6 +3902,61 @@ test('guarda é fraca, não segue o grupo e só ataca quem chega perto do proteg
   const item=report.find(r=>r.id==='militia');assert.ok(item,'relatório tem a guarda');assert.match(item.text,/123/);
   assert.equal(report.find(r=>r.id==='top-hero').text,'A','destaque continua sendo herói');
   clear();
+});
+test('escolta com 4 heróis, aldeão e milícia: cada um na sua vaga, parados e sem empurra-empurra',()=>{
+  // Visto no jogo: na ponte os 4 heróis, o aldeão e os 4 guardas se amontoavam em volta do aldeão e se empurravam sem inimigos.
+  for(const party of [['paladin','pyro','guardian','archer'],['brute','berserker','paladin','cleric']]){
+    clear();const m=t.MISSIONS.find(x=>x.id==='ponte');Object.assign(t.game,{mission:m,start:m.from,phase:m.from,last:m.to,test:true,state:'advance',guideS:30});
+    const saved=t.world.obstacles;t.world.obstacles=[];
+    for(const id of party){const h=new t.Hero(cfg(id));if(id==='brute'){while(h.level<3)h.gainXp(400);h.size=h.heroSize();}}
+    t.arrangeParty();for(const h of t.heroes())h.pos.copy(h.post);
+    const v=t.game.villager=new t.Villager();t.musterMilitia();
+    const all=()=>t.units.filter(u=>!u.dead);
+    let shift=0,frames=0,worst=Infinity;
+    for(let f=0;f<120;f++){
+      for(const u of [...t.units])u.update(1/30);
+      const before=all().map(u=>[u.pos.x,u.pos.z]);t.separate();
+      if(f<30)continue;frames++;
+      all().forEach((u,i)=>{shift+=Math.hypot(u.pos.x-before[i][0],u.pos.z-before[i][1]);});
+      const us=all();for(let i=0;i<us.length;i++)for(let j=i+1;j<us.length;j++){
+        const d=Math.hypot(us[i].pos.x-us[j].pos.x,us[i].pos.z-us[j].pos.z)/(t.UNIT_SEPARATION_FACTOR*(us[i].size+us[j].size));
+        worst=Math.min(worst,d);
+      }
+    }
+    assert.equal(all().length,9,'4 heróis, aldeão e 4 guardas');
+    assert.ok(worst>=1,party.join('+')+': ninguém sobreposto (menor folga '+worst.toFixed(2)+')');
+    assert.ok(shift/frames<0.001,party.join('+')+': separação quase nula parada ('+(shift/frames*1000).toFixed(1)+' mm/quadro)');
+    assert.ok(all().every(u=>u.vel.length()<0.25),'ociosos ficam parados na vaga');
+    t.world.obstacles=saved;
+  }
+  clear();
+});
+test('heróis ociosos caçam o inimigo a ~10 m; um guarda fica com o aldeão e ninguém volta ao posto sem motivo',()=>{
+  // Visto na Ponte: com inimigo a poucos metros os heróis ficavam parados/voltando ao posto (trela LEASH do posto).
+  clear();const m=t.MISSIONS.find(x=>x.id==='ponte');Object.assign(t.game,{mission:m,start:m.from,phase:m.from,last:m.to,test:true,state:'advance',guideS:30});
+  const saved=t.world.obstacles;t.world.obstacles=[];
+  try{
+    for(const id of ['paladin','champion','cleric','archer'])new t.Hero(cfg(id));
+    t.arrangeParty();for(const h of t.heroes()){h.pos.copy(h.post);h.autoSkills.fill(false);}
+    const v=t.game.villager=new t.Villager();t.musterMilitia();
+    t.game.state='fight';t.game.toSpawn=0;
+    const center=t.world.pointAt(t.game.guideS);
+    const e=foe('Warrior',center.x+10,center.z);e.hp=e.maxHp=1e6;e.speed=0;
+    const guard=t.heroes().find(h=>h.cfg.id==='cleric');
+    for(let i=0;i<180;i++){for(const u of [...t.units])u.update(1/30);t.separate();}   // 6 s
+    const hunters=t.heroes().filter(h=>h!==guard);
+    for(const h of hunters){
+      assert.equal(h.engagedWith,e,h.cfg.id+' vai atacar o inimigo');
+      assert.ok(e.pos.distanceTo(h.pos)<=Math.max(h.range,t.UNIT_COMBAT_SEPARATION_FACTOR*(h.size+e.size))+0.6,h.cfg.id+' chega ao alcance ('+e.pos.distanceTo(h.pos).toFixed(2)+' m)');
+    }
+    assert.ok(guard.pos.distanceTo(v.pos)<4,'o curandeiro fica de guarda junto ao aldeão');
+    assert.ok(e.hp<e.maxHp,'o inimigo apanha');
+    // sem inimigos: ficam onde lutaram, não cruzam o mapa até o posto
+    e.die?e.die():(e.dead=true);
+    const spot=new Map(hunters.map(h=>[h,h.pos.clone()]));
+    for(let i=0;i<60;i++){for(const u of [...t.units])u.update(1/30);t.separate();}
+    for(const h of hunters)assert.ok(h.pos.distanceTo(spot.get(h))<1.5,h.cfg.id+' fica perto de onde lutou');
+  }finally{t.world.obstacles=saved;clear();}
 });
 test('guarda: quem cai não volta e não pesa em derrota, quedas ou estrelas',()=>{
   guardMission('ponte');const h=hero('paladin',30,0);t.musterMilitia();const [m]=militiaUnits();
@@ -3837,7 +4010,8 @@ test('herói corpo a corpo não pipoca na borda do alcance do posto',()=>{
   tick(.05,4);assert.equal(k.engagedWith,e,'engaja o alvo dentro do alcance');
   e.pos.z=k.post.z-(5+k.range+1.5);const z0=k.pos.z;tick(.05,4);   // passa um pouco do limite do posto
   assert.equal(k.engagedWith,e,'continua no alvo dentro da folga');assert.ok(k.pos.z<z0,'segue o alvo em vez de voltar ao posto');
-  e.pos.z=k.post.z-(5+k.range+5);tick(.05,4);assert.equal(k.engagedWith,null,'larga quando o alvo se afasta bem');clear();
+  // com a caça livre o herói só larga quando o alvo sai da arena visível (HERO_HUNT_RADIUS + folga) em volta do grupo
+  e.pos.z=-t.game.guideS-(18+3+2);tick(.05,4);assert.equal(k.engagedWith,null,'larga quando o alvo sai da arena');clear();
 });
 test('aviso da meta-progressão corrompida é específico e aparece no resultado',()=>{
   const corrupted=Object.getOwnPropertyDescriptor(t.progress,'corrupted');

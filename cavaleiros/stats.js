@@ -15,7 +15,10 @@ const LABELS = [
 const statCell = (icon, label, value) => `<span class="stat-cell" data-tip="${label}"><i aria-hidden="true">${icon}</i><b>${value}</b><span class="sr-only">${label}</span></span>`;
 const fmt = (k, v) => (k === 'distancia' ? `${Math.round(v)} m` : Math.round(v).toLocaleString('pt-BR'));
 const dps = (s) => (s.tempo > 1 ? s.dano / s.tempo : 0);
-const portraitOf = (h) => h.cfg.portraits?.[h.level - 1] || h.cfg.portrait;   // retrato do nível atual
+// só há 3 retratos/nomes: Nv4 e Nv5 reusam os do Nv3
+const artIndex = (h) => Math.min(h.level, 3) - 1;
+const portraitOf = (h) => h.cfg.portraits?.[artIndex(h)] || h.cfg.portrait;   // retrato do nível atual
+const nameOf = (h) => h.cfg.names?.[artIndex(h)] || h.cfg.name;
 
 // ---------- cartão do herói ----------
 const panel = () => document.getElementById('heroPanel');
@@ -75,9 +78,9 @@ function renderHeroPanel(full = false) {
     <button class="close" aria-label="Fechar">✕</button>
     <section class="hero-panel-main">
       <div class="hp-top">
-        <div class="portrait"><img src="${portraitOf(h)}" alt=""></div>
+        <div class="portrait${h.level > 3 ? ` tier-${h.level}` : ''}"><img src="${portraitOf(h)}" alt=""></div>
         <div class="hp-progress">
-          <div class="ribbon">${c.names ? c.names[h.level - 1] : c.name}</div>
+          <div class="ribbon">${nameOf(h)}</div>
           <div class="lvl">Nv ${h.level}${h.dead ? ' · caído' : ''}</div>
           <div class="xp" data-tip="${next ? `XP ${Math.round(h.xp)} / ${next}` : 'Nível máximo'}"><i style="width:${xpPct}%"></i></div>
         </div>
@@ -111,7 +114,8 @@ function renderHeroPanel(full = false) {
 // ---------- resumo do fim da partida ----------
 const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-// fim da partida: três números à vista (dano, abates, quedas), dica de 1 linha (derrota ou progresso da vitória) e o resto em "Detalhes"
+// fim da partida: miolo do "Detalhes" (main.js põe a moldura): três números (dano, abates, quedas),
+// dica de 1 linha (derrota ou progresso da vitória), destaques e a tabela por herói
 export function summaryHTML(heroes, highlights = [], totals = {}) {
   if (!heroes.length && !highlights.length) return '';
   const total = (k) => heroes.reduce((sum, h) => sum + h.stats[k], 0);
@@ -120,17 +124,16 @@ export function summaryHTML(heroes, highlights = [], totals = {}) {
     `<span class="end-key" tabindex="0" data-tip="${label}" aria-label="${label}: ${v}"><i aria-hidden="true">${icon}</i><b>${v}</b></span>`).join('')}</div>`;
   const tip = highlights.find((item) => item.id === 'next-try');
   const tipLine = tip ? `<p class="end-tip${totals.won ? ' won' : ''}">${escapeHTML(tip.text)}</p>` : '';
-  highlights = highlights.filter((item) => item.id !== 'next-try');   // a dica já aparece acima, fora dos detalhes
+  highlights = highlights.filter((item) => item.id !== 'next-try');   // a dica já aparece acima, não se repete nos cartões
   const best = (k) => heroes.length ? Math.max(...heroes.map((h) => h.stats[k])) : 0;
   const cols = [['dano', 'Dano'], ['abates', 'Abates'], ['recebido', 'Recebido'], ['cura', 'Cura']];
   const mvp = heroes.length ? heroes.reduce((a, b) => (b.stats.dano + b.stats.abates * 40 > a.stats.dano + a.stats.abates * 40 ? b : a)) : null;
   const rows = heroes.map((h) => `<tr>
-      <td><img src="${portraitOf(h)}" alt="">${h.cfg.names ? h.cfg.names[h.level - 1] : h.cfg.name}${h === mvp ? ' <span class="mvp">♛ MVP</span>' : ''}</td>
+      <td><img src="${portraitOf(h)}" alt="">${nameOf(h)}${h === mvp ? ' <span class="mvp">♛ MVP</span>' : ''}</td>
       ${cols.map(([k]) => `<td class="${h.stats[k] === best(k) && best(k) > 0 ? 'top' : ''}">${fmt(k, h.stats[k])}</td>`).join('')}
     </tr>`).join('');
   const cards = highlights.length ? `<section class="battle-report" aria-label="Destaques da partida">${highlights.map((item) =>
     `<article class="report-item"><b>${escapeHTML(item.title)}</b><span>${escapeHTML(item.text)}</span></article>`).join('')}</section>` : '';
   const table = heroes.length ? `<table><tr><th>Herói</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr>${rows}</table>` : '';
-  const details = cards || table ? `<details class="end-details"><summary>Detalhes</summary><div class="end-details-body">${cards}${table}</div></details>` : '';
-  return numbers + tipLine + details;
+  return numbers + tipLine + cards + table;
 }

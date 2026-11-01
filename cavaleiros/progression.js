@@ -345,21 +345,37 @@ export function toastAchievements(list, doc = globalThis.document) {
   });
 }
 
-// bloco do fim da partida: chip de ouro (a conta fica na dica) e mini-retratos com o XP de maestria
-export function rewardHTML(reward, variants = [], mvpId = null) {
+// bloco do fim da partida: chip de ouro (a conta fica na dica) e a equipe grande no centro;
+// `team` (opcional, por id) traz o nível e a barra de XP da partida: { level, pct, name, from, fromPct }.
+// Com `from` menor que `level`, o selo mostra "Nv2 → Nv3" e a barra enche do zero.
+// A maestria ganha fica só na dica; as conquistas vão para "Detalhes" (achievementChipsHTML).
+export function rewardHTML(reward, variants = [], mvpId = null, team = {}) {
   if (!reward) return '';
-  const { gold, heroes, unlocked } = reward;
+  const { gold, heroes } = reward;
   const lines = gold.lines.map(([label, v]) => `${label} +${v}`);
   if (gold.mult !== 1) lines.push(`Bônus ×${gold.mult.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`);
   const goldTip = escapeProgressText(`+${gold.total} ${GOLD.name}: ${lines.join(' · ')} · Total ${reward.total}`);
-  const heroRows = heroes.map((h) => {
+  const heroRows = heroes.map((h, i) => {
     const cfg = variants.find((v) => v.id === h.id);
     const up = h.after > h.before;
-    const tip = escapeProgressText(`${cfg?.name || h.id}${h.id === mvpId ? ' · MVP' : ''} · +${h.gained} XP · Maestria ${h.after}${up ? '!' : ''}`);
-    return `<span class="prog-hero${up ? ' up' : ''}${h.id === mvpId ? ' mvp' : ''}" tabindex="0" data-tip="${tip}" aria-label="${tip}"${cfg ? ` style="--c:${cfg.color[0]};--cd:${cfg.color[1]}"` : ''}>${h.id === mvpId ? '<i class="crown" aria-hidden="true">♛</i>' : ''}${cfg ? `<img src="${cfg.portrait}" alt="">` : ''}<small>+${h.gained}</small>${up ? '<b aria-hidden="true">⬆</b>' : ''}</span>`;
+    const lv = team?.[h.id];
+    const leveled = !!lv?.from && lv.from < lv.level;
+    const tier = lv?.level >= 4 ? ` tier-${Math.min(5, lv.level)}` : '';
+    const tip = escapeProgressText(`${lv?.name || cfg?.name || h.id}${h.id === mvpId ? ' · MVP' : ''}${lv ? ` · Nv ${leveled ? `${lv.from} → ` : ''}${lv.level}${lv.pct < 100 ? ` (${lv.pct}% do próximo)` : ''}` : ''} · Maestria ${h.after}${up ? '!' : ''} (+${h.gained} XP)`);
+    const level = lv ? `${leveled ? `<span class="prog-lvup" aria-hidden="true">Nv${lv.from} <i>→</i> Nv${lv.level}</span>` : ''}<em class="prog-lv" aria-hidden="true">${lv.level}</em>`
+      + `<span class="prog-xp" aria-hidden="true"><i style="--from:${leveled ? 0 : lv.fromPct ?? lv.pct}%;width:${lv.pct}%"></i></span>` : '';
+    const style = `--i:${i}${cfg ? `;--c:${cfg.color[0]};--cd:${cfg.color[1]}` : ''}`;
+    return `<span class="prog-hero${up ? ' up' : ''}${h.id === mvpId ? ' mvp' : ''}${leveled ? ' leveled' : ''}${tier}" tabindex="0" data-tip="${tip}" aria-label="${tip}" style="${style}">${h.id === mvpId ? '<i class="crown" aria-hidden="true">♛</i>' : ''}${cfg ? `<img src="${cfg.portrait}" alt="">` : ''}${level}</span>`;
   }).join('');
-  const ach = unlocked.map((a) => `<span class="end-chip ach" tabindex="0" data-tip="Conquista: ${escapeProgressText(a.name)}" aria-label="Conquista: ${escapeProgressText(a.name)}"><i aria-hidden="true">${a.icon}</i></span>`).join('');
-  return `<div class="progress-reward" aria-label="Ouro e maestria ganhos"><span class="end-chip gold" tabindex="0" data-tip="${goldTip}" aria-label="${goldTip}">+${gold.total} <i aria-hidden="true">${GOLD.icon}</i></span>${ach}${heroRows ? `<div class="prog-heroes">${heroRows}</div>` : ''}</div>`;
+  return `<div class="progress-reward" aria-label="Ouro e maestria ganhos"><span class="end-chip gold" tabindex="0" data-tip="${goldTip}" aria-label="${goldTip}">+${gold.total} <i aria-hidden="true">${GOLD.icon}</i></span>${heroRows ? `<div class="prog-heroes">${heroRows}</div>` : ''}</div>`;
+}
+
+// conquistas da partida em chips só de ícone (o nome fica na dica); vão para "Detalhes" no fim da partida
+export function achievementChipsHTML(unlocked = []) {
+  return (unlocked || []).map((a) => {
+    const tip = escapeProgressText(`Conquista: ${a.name}${a.desc ? ` · ${a.desc}` : ''}`);
+    return `<span class="end-chip ach" tabindex="0" data-tip="${tip}" aria-label="${tip}"><i aria-hidden="true">${a.icon}</i></span>`;
+  }).join('');
 }
 
 // Tela do acampamento: oficina, maestria dos heróis e conquistas.

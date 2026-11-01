@@ -20,6 +20,7 @@ const charactersSource = recipes.slice(recipes.indexOf('export const CHARACTERS'
 const heroesSource = slice('const HEROES = [', '\nconst variantsOf');
 const glyphSource = slice('const SKILL_GLYPHS = {', '\n};', 3);
 const tooltipSource = slice('const SKILL_KIND = [', "\nregisterTooltip('skill'");
+const levelsSource = slice('const XP_LEVELS', '\nconst SKELETONS');
 
 const context = vm.createContext({ Math, Object, Number, String, Array, onField: [] });
 vm.runInContext(`
@@ -30,6 +31,7 @@ vm.runInContext(`
   ${charactersSource}
   ${heroesSource}
   ${glyphSource}
+  ${levelsSource}
   const heroes = () => onField;
   ${tooltipSource}
   this.api = { VARIANTS, skillTooltip, skillSetFor };
@@ -56,13 +58,25 @@ for (const cfg of VARIANTS) {
   }
 }
 
-// Na batalha: herói em campo no nível máximo, com tecla e rota de evolução.
+// Na batalha: herói em campo no nível máximo (Nv5), com tecla e rota de evolução.
 const champion = VARIANTS.find((v) => v.id === 'champion');
-context.onField.push({ cfg: champion, level: 3, skillRate: 1, skillPower: 1.2, range: champion.range, evolutionBranches: { damage: 1 } });
+context.onField.push({ cfg: champion, level: 5, skillRate: 1, skillPower: 1.2, range: champion.range, evolutionBranches: { damage: 2, control: 1, support: 1 } });
 const battle = text(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2', 'data-key': 'E' })));
-assert.ok(battle.includes('Nv 3') && battle.includes('Nível máximo'), 'nível do herói em campo aparece na dica');
+assert.ok(battle.includes('Nv 5') && battle.includes('Nível máximo') && battle.includes('Ofensiva II'), 'nível do herói em campo aparece na dica');
 assert.ok(battle.includes('Tecla E'), 'tecla do atalho aparece na dica');
 assert.match(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2' })), /class="tt-routes"/, 'rota de evolução escolhida aparece na dica');
+
+// Habilidades param de melhorar no Nv3: no Nv4 a dica não promete recarga menor e a recarga é a do Nv3.
+const cdAt = () => text(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2' }))).match(/Recarga ([\d,.]+)/)[1];
+context.onField.splice(0, 1, { cfg: champion, level: 2, skillRate: 1, skillPower: 1, range: champion.range });
+assert.match(text(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2' }))), /Nv 3 recarga/, 'Nv2 mostra a melhora do Nv3');
+context.onField[0].level = 3; const cd3 = cdAt();
+assert.ok(text(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2' }))).includes('Habilidade no máximo'), 'Nv3 não promete melhora de habilidade');
+context.onField[0].level = 4;
+const nv4 = text(skillTooltip(el({ 'data-hero': 'champion', 'data-slot': '2' })));
+assert.ok(nv4.includes('Habilidade no máximo') && !/Nv 5 recarga/.test(nv4), 'Nv4 não promete melhora de habilidade');
+assert.equal(cdAt(), cd3, 'recarga do Nv4 igual à do Nv3');
+context.onField.length = 0;
 
 // Atributos inválidos não quebram a dica.
 assert.equal(skillTooltip(el({ 'data-hero': 'ninguem', 'data-slot': '0' })), '');

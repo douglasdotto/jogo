@@ -28,6 +28,7 @@ const greenBolt = glowMat(0x6dff8c), purpleBolt = glowMat(0xb35cff), tealBolt = 
 // materiais compartilhados dos inimigos: a tela de carregamento compila os shaders antes da fase
 export const MONSTER_MATERIALS = [...Object.values(MAT), greenBolt, purpleBolt, tealBolt];
 const mV = new THREE.Vector3();
+const mAway = new THREE.Vector3();   // destino do recuo dos atiradores, reaproveitado a cada quadro
 const hookPullTo = new THREE.Vector3(), hookPullNext = new THREE.Vector3();
 const dangerRel = new THREE.Vector3(), dangerPerp = new THREE.Vector3(), dangerDestination = new THREE.Vector3();
 const flat = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -373,7 +374,7 @@ function giveWard(shaman, o) {
 function keepRange(s, dt, target) {
   const d = flat(s.pos, target.pos);
   if (d > 7) s.moveTo(target.pos, dt);
-  else if (d < 4.5) s.moveTo(s.pos.clone().add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+  else if (d < 4.5) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
   else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
   return true;
 }
@@ -700,7 +701,7 @@ export const MONSTER_TYPES = {
       }
       const d = flat(s.pos, target.pos);
       if (d > 7) s.moveTo(target.pos, dt);
-      else if (d < 4.5) s.moveTo(s.pos.clone().add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+      else if (d < 4.5) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
       else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
       return true;
     } },
@@ -834,7 +835,7 @@ export const MONSTER_TYPES = {
       }
       const d = flat(s.pos, target.pos);
       if (d > 7) s.moveTo(target.pos, dt);
-      else if (d < 4.5) s.moveTo(s.pos.clone().add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
+      else if (d < 4.5) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(2)), dt);
       else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
       return true;
     } },
