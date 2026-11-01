@@ -37,7 +37,10 @@ export const MISSIONS = [
   { id: 'coracao-do-castelo', name: 'Coração do Castelo', desc: 'Três guardiões protegem o coração sombrio.', chapter: 'Capítulo VI · O coração sombrio', story: 'No coração da maldição, a sombra do Lich se refaz. O Carrasco e o Cavaleiro do Eclipse protegem a fonte.', tip: 'Os três chefes atacam juntos. Concentre o grupo em um por vez, interrompa os golpes marcados e guarde a cura para a investida final.', icon: '☼', from: 13, to: 13, heroes: 4, level: 3, goal: { type: 'bosses', bosses: ['Lich', 'Executioner', 'DarkKnight'], scale: 0.18 }, ending: 'O coração sombrio se parte. Nas ameias, um chamado antigo desperta.' },
   { id: 'arauto', name: 'O Arauto das Asas', desc: 'Um arauto corre para acordar o dragão.', chapter: 'Capítulo VII · Asas de osso', story: 'Com o coração partido, a terra treme sob as ameias. Um arauto leva o chamado a algo enorme que dorme nos ossos da montanha.', tip: 'Abata o alvo antes que fuja. Círculos marrons mostram onde o Escavador vai irromper: saia e bata enquanto ele fica zonzo.', icon: '⚐', from: 14, to: 14, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'hunt', time: 70 }, foes: ['Burrower', 'Bannerbearer'] },
   { id: 'ninho', name: 'Ninho de Ossos', desc: 'Totens chocam o ninho do dragão.', chapter: 'Capítulo VII · Asas de osso', story: 'O arauto caiu, mas o chamado ecoou. No ninho, totens de ossos aquecem o que está para nascer.', tip: 'Quebre os totens cedo. O anel laranja do Porta-Estandarte acelera os esqueletos: derrube-o primeiro.', icon: '❍', from: 15, to: 15, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'totems', count: 2 }, foes: ['Burrower', 'Bannerbearer'] },
-  { id: 'asas-de-osso', name: 'Asas de Osso', desc: 'O Dragão de Ossos levanta voo.', chapter: 'Capítulo VII · Asas de osso', story: 'Das ameias, o Dragão de Ossos abre as asas. É a última sombra da maldição.', tip: 'No ar, só ataques à distância o alcançam. Saia das faixas verdes dos rasantes e bata quando ele pousar exausto.', icon: '☬', from: 16, to: 16, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'boss' }, boss: { phase: 16, kind: 'BoneDragon' }, foes: ['Burrower', 'Bannerbearer'], ending: 'O Dragão de Ossos se desfaz em pó. O céu sobre o castelo enfim clareia.' },
+  { id: 'asas-de-osso', name: 'Asas de Osso', desc: 'O Dragão de Ossos levanta voo.', chapter: 'Capítulo VII · Asas de osso', story: 'Das ameias, o Dragão de Ossos abre as asas. É a última sombra da maldição.', tip: 'No ar, só ataques à distância o alcançam. Saia das faixas verdes dos rasantes e bata quando ele pousar exausto.', icon: '☬', from: 16, to: 16, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'boss' }, boss: { phase: 16, kind: 'BoneDragon' }, foes: ['Burrower', 'Bannerbearer'], ending: 'O Dragão de Ossos se desfaz em pó, mas nas cinzas uma última brasa ainda arde.' },
+  { id: 'brasas', name: 'Trilha de Brasas', desc: 'Um vigia sumiu entre as cinzas.', chapter: 'Capítulo VIII · A última brasa', story: 'As cinzas do dragão ainda ardem. Um vigia preso viu para onde a brasa levou a maldição.', tip: 'Aproxime-se do prisioneiro para libertá-lo. Círculos marrons mostram onde o Escavador vai irromper: limpe o caminho antes de avançar.', icon: '✺', from: 17, to: 17, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'rescue', waves: 0.8 }, foes: ['Burrower'] },
+  { id: 'forja', name: 'Forja de Ossos', desc: 'Duas torres atiçam a brasa.', chapter: 'Capítulo VIII · A última brasa', story: 'O vigia aponta a forja da montanha. Duas torres de ossos sopram a brasa rumo à coroa que a guarda.', tip: 'Derrube uma torre por vez. O anel laranja do Porta-Estandarte acelera os esqueletos: derrube-o primeiro.', icon: '⚒', from: 18, to: 18, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'tower', count: 2, waves: 0.8 }, foes: ['Bannerbearer', 'Burrower'] },
+  { id: 'coroa-de-cinzas', name: 'Coroa de Cinzas', desc: 'O Rei Espectral guarda a brasa.', chapter: 'Capítulo VIII · A última brasa', story: 'Na brasa repousa a coroa do primeiro Rei. Seu espectro se ergue para guardar o último foco da maldição.', tip: 'O Rei Espectral chama fantasmas no lugar de soldados. Em fúria, abaixo de 50%, cole nele ou afaste-se da onda de choque.', icon: '♚', from: 19, to: 19, heroes: 4, level: 3, biome: 'Cinzas', goal: { type: 'boss', waves: 0.8 }, boss: { phase: 19, kind: 'King', mod: 'spectral' }, foes: ['Burrower', 'Bannerbearer'], ending: 'A coroa se parte e a última brasa se apaga. A maldição enfim se cala.' },
 ];
 
 // Mantém as arenas estáveis enquanto o jogador navega entre mapa e dificuldade;
@@ -430,6 +433,7 @@ export const CHAPTER_COSMETICS = [
   { id: 'trono', chapter: 'Capítulo V · Além do Castelo', name: 'Auréola do Trono', icon: '♛', auraStyle: 'crown', color: 0xffd66e },
   { id: 'coracao', chapter: 'Capítulo VI · O coração sombrio', name: 'Espiral do Eclipse', icon: '☼', auraStyle: 'nightmare', color: 0xb451d6 },
   { id: 'asas', chapter: 'Capítulo VII · Asas de osso', name: 'Asas do Dragão', icon: '☬', auraStyle: 'wings', color: 0x7dffd0 },
+  { id: 'brasa', chapter: 'Capítulo VIII · A última brasa', name: 'Coroa de Brasas', icon: '♚', auraStyle: 'embers', color: 0xff8a4a },
 ];
 export const CHALLENGE_COSMETICS = [
   { id: 'vanguarda', chapter: 'Desafio 3★ · Difícil', name: 'Halo da Vanguarda', icon: '✹', auraStyle: 'vanguard', color: 0xffd36b, difficultyId: 'dificil', difficultyName: 'Difícil', track: 'challenge' },
@@ -437,10 +441,11 @@ export const CHALLENGE_COSMETICS = [
 ];
 const CHAPTER_COSMETIC_RULE_VERSION = 2;
 const CHAPTER_STICKY_RULE_VERSION = 1;
-const CHALLENGE_MISSION_RULE_VERSION = 2;
+const CHALLENGE_MISSION_RULE_VERSION = 3;
 const LEGACY_CHALLENGE_MISSIONS = ['vila', 'ponte', 'santuario', 'chamas', 'fazendas', 'lago', 'duelo', 'caca', 'resgate', 'ruinas', 'torre', 'lago-sombrio', 'cemiterio', 'horda', 'castelo', 'cripta', 'trono'];
 // arenas exigidas pelos desafios em cada versão da regra (índice = versão gravada no save)
-const CHALLENGE_SNAPSHOTS = [LEGACY_CHALLENGE_MISSIONS, [...LEGACY_CHALLENGE_MISSIONS, 'coracao-do-castelo']];
+const CHALLENGE_SNAPSHOTS = [LEGACY_CHALLENGE_MISSIONS, [...LEGACY_CHALLENGE_MISSIONS, 'coracao-do-castelo'],
+  [...LEGACY_CHALLENGE_MISSIONS, 'coracao-do-castelo', 'arauto', 'ninho', 'asas-de-osso']];
 // Snapshot dos IDs exigidos quando o desbloqueio de capítulo ainda não era sticky.
 // Permite reconhecer um save que só volta após novas arenas serem adicionadas.
 const CHAPTER_STICKY_MIGRATION_MISSIONS = {

@@ -14,7 +14,7 @@ const auraGeometryFactories = {
 };
 
 // asas não giram: acompanham as costas do herói
-const auraSpin = { banner: 0.11, bones: 0.34, crescent: 0.24, crest: 0.08, crown: 0.18, vanguard: 0.16, nightmare: 0.27, wings: 0 };
+const auraSpin = { banner: 0.11, bones: 0.34, crescent: 0.24, crest: 0.08, crown: 0.18, vanguard: 0.16, nightmare: 0.27, wings: 0, embers: 0.21 };
 
 function sharedAuraGeometry(THREE, name) {
   let cache = auraGeometryCaches.get(THREE);
@@ -82,6 +82,13 @@ export function createCampaignAura(THREE, cosmetic) {
     for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
       const tilt = 0.55 + k * 0.4;
       add('wingBone', [side * (0.3 + Math.sin(tilt) * 0.42), 1.25 + Math.cos(tilt) * 0.42, -0.32], [0, 0, -side * tilt]);
+    }
+  } else if (style === 'embers') {
+    // anel de cinzas com seis brasas subindo em alturas alternadas
+    add('ring', [0, 0.08, 0], [Math.PI / 2, 0, 0]);
+    for (let i = 0; i < 6; i++) {
+      const angle = i * Math.PI / 3;
+      add('boneTip', [Math.cos(angle) * 0.95, 0.35 + (i % 3) * 0.3, Math.sin(angle) * 0.95]);
     }
   } else {
     add('ring', [0, 0.08, 0], [Math.PI / 2, 0, 0]);

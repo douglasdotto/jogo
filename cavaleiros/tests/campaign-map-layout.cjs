@@ -28,13 +28,13 @@ function check(missions, label) {
   return layout;
 }
 
-const base = check(context.MISSIONS, '21 missões');
-assert.equal(base.regions.length, 7);
+const base = check(context.MISSIONS, '24 missões');
+assert.equal(base.regions.length, 8);
 const extra = (n, chapter) => Array.from({ length: n }, (_, k) => ({ ...context.MISSIONS.at(-1), id: `extra-${k}`, chapter: chapter ?? context.MISSIONS.at(-1).chapter }));
-check([...context.MISSIONS, ...extra(1)], '22 missões');
-const novo = check([...context.MISSIONS, ...extra(4, 'Capítulo VIII · Novo')], 'capítulo novo');
-assert.equal(novo.regions.length, 8);
-check([...context.MISSIONS, ...extra(12)], '33 missões');
+check([...context.MISSIONS, ...extra(1)], '25 missões');
+const novo = check([...context.MISSIONS, ...extra(4, 'Capítulo IX · Novo')], 'capítulo novo');
+assert.equal(novo.regions.length, 9);
+check([...context.MISSIONS, ...extra(12)], '36 missões');
 // a mesma lista gera sempre o mesmo mapa
 assert.deepEqual(JSON.parse(JSON.stringify(context.layoutOf(context.MISSIONS).nodes)), JSON.parse(JSON.stringify(base.nodes)));
-console.log('OK: mapa da campanha gera posições para 21, 22, 25 e 33 missões, sem sobreposição');
+console.log('OK: mapa da campanha gera posições para 24, 25, 28 e 36 missões, sem sobreposição');

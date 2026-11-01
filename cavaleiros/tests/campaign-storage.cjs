@@ -54,7 +54,7 @@ assert.equal(api.missionRecords('vila')[0].seconds, 123);
 const cosmeticData = new Map();
 const cosmeticStorage = { getItem(key) { return cosmeticData.get(key) ?? null; }, setItem(key, value) { cosmeticData.set(key, String(value)); } };
 const cosmetics = loadCampaign(cosmeticStorage);
-assert.equal(cosmetics.campaignCosmetics().length, 9, 'há um visual por capítulo e dois visuais de domínio');
+assert.equal(cosmetics.campaignCosmetics().length, 10, 'há um visual por capítulo e dois visuais de domínio');
 assert.equal(cosmetics.campaignStorageIsVolatile(), false, 'storage que grava normalmente não mostra aviso');
 const countedReads = new Map();
 const countedStorage = {
@@ -71,9 +71,9 @@ assert.equal(countedReads.get('cavaleiros-campanha'), countedCampaign.MISSIONS.l
 assert.equal(countedReads.get('cavaleiros-medalhas-missao'), 1, 'o cálculo de domínio lê as medalhas uma vez');
 const chapterCosmetics = cosmetics.campaignCosmetics().filter((cosmetic) => cosmetic.track !== 'challenge');
 const challengeCosmetics = cosmetics.campaignCosmetics().filter((cosmetic) => cosmetic.track === 'challenge');
-assert.deepEqual(Array.from(chapterCosmetics, (cosmetic) => cosmetic.requiredStars), [4, 3, 3, 5, 2, 1, 3], 'cada capítulo pede uma estrela por arena');
-assert.deepEqual(Array.from(chapterCosmetics, (cosmetic) => cosmetic.requiredArenas), [4, 3, 3, 5, 2, 1, 3], 'cada capítulo acompanha arenas concluídas');
-assert.deepEqual(Array.from(challengeCosmetics, (cosmetic) => cosmetic.requiredArenas), [21, 21], 'domínio 3★ inclui as arenas do capítulo VII');
+assert.deepEqual(Array.from(chapterCosmetics, (cosmetic) => cosmetic.requiredStars), [4, 3, 3, 5, 2, 1, 3, 3], 'cada capítulo pede uma estrela por arena');
+assert.deepEqual(Array.from(chapterCosmetics, (cosmetic) => cosmetic.requiredArenas), [4, 3, 3, 5, 2, 1, 3, 3], 'cada capítulo acompanha arenas concluídas');
+assert.deepEqual(Array.from(challengeCosmetics, (cosmetic) => cosmetic.requiredArenas), [24, 24], 'domínio 3★ inclui as arenas do capítulo VIII');
 assert.equal(cosmetics.equipCampaignCosmetic('ossos'), false, 'não equipa visual bloqueado');
 assert.equal(cosmetics.equipCampaignCosmetic('vanguarda'), false, 'desafio ainda bloqueado não pode ser equipado');
 cosmetics.saveStars('vila', 3);
@@ -90,13 +90,13 @@ assert.equal(cosmetics.equipCampaignCosmetic('vila'), true);
 assert.equal(loadCampaign(cosmeticStorage).equippedCampaignCosmetic().id, 'vila', 'aparência equipada persiste entre sessões');
 for (const mission of cosmetics.MISSIONS.slice(0, -1)) cosmetics.saveMissionMedal(mission.id, { won: true, stars: 3, difficultyId: 'dificil' });
 let vanguard = cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
-assert.equal(vanguard.completedArenas, 20, 'a barra conta as 20 arenas anteriores concluídas');
+assert.equal(vanguard.completedArenas, 23, 'a barra conta as 23 arenas anteriores concluídas');
 assert.equal(vanguard.unlocked, false, 'em saves novos, a arena final também é necessária para o domínio');
-assert.deepEqual(Array.from(vanguard.pendingMissions, (mission) => mission.id), ['asas-de-osso'], 'a missão nova aparece como pendência real');
+assert.deepEqual(Array.from(vanguard.pendingMissions, (mission) => mission.id), ['coroa-de-cinzas'], 'a missão nova aparece como pendência real');
 cosmetics.saveMissionMedal(cosmetics.MISSIONS.at(-1).id, { won: true, stars: 3, difficultyId: 'dificil' });
 vanguard = cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
 assert.equal(vanguard.unlocked, true, '3★ em todas as arenas, incluindo a final, libera a recompensa');
-assert.equal(vanguard.completedArenas, 21, 'a missão final aumenta o progresso do domínio');
+assert.equal(vanguard.completedArenas, 24, 'a missão final aumenta o progresso do domínio');
 assert.equal(cosmetics.equipCampaignCosmetic('vanguarda'), true);
 for (const mission of cosmetics.MISSIONS) cosmetics.saveMissionMedal(mission.id, { won: true, stars: 3, difficultyId: 'pesadelo' });
 assert.equal(cosmetics.campaignCosmetics().find((cosmetic) => cosmetic.id === 'pesadelo').unlocked, true, '3★ no Pesadelo em toda a campanha libera o cosmético próprio');
@@ -141,15 +141,15 @@ const legacyChallengeData = new Map([
 ]);
 const legacyChallenge = loadCampaign({ getItem(key) { return legacyChallengeData.get(key) ?? null; }, setItem(key, value) { legacyChallengeData.set(key, String(value)); } });
 let preservedVanguard = legacyChallenge.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
-assert.equal(preservedVanguard.requiredArenas, 21, 'o requisito atualizado inclui as missões novas');
+assert.equal(preservedVanguard.requiredArenas, 24, 'o requisito atualizado inclui as missões novas');
 assert.equal(preservedVanguard.completedArenas, 17);
 assert.equal(preservedVanguard.unlocked, true, 'a migração mantém uma recompensa conquistada sob a regra antiga');
 assert.equal(preservedVanguard.legacyEntitlement, true, 'a interface identifica a recompensa preservada e a missão extra');
-assert.deepEqual(Array.from(preservedVanguard.pendingMissions, (mission) => mission.id), ['coracao-do-castelo', 'arauto', 'ninho', 'asas-de-osso']);
+assert.deepEqual(Array.from(preservedVanguard.pendingMissions, (mission) => mission.id), ['coracao-do-castelo', 'arauto', 'ninho', 'asas-de-osso', 'brasas', 'forja', 'coroa-de-cinzas']);
 assert.deepEqual(JSON.parse(legacyChallengeData.get('cavaleiros-campanha-visual')).legacyUnlocked, ['vanguarda']);
-for (const id of ['coracao-do-castelo', 'arauto', 'ninho', 'asas-de-osso']) legacyChallenge.saveMissionMedal(id, { won: true, stars: 3, difficultyId: 'dificil' });
+for (const id of ['coracao-do-castelo', 'arauto', 'ninho', 'asas-de-osso', 'brasas', 'forja', 'coroa-de-cinzas']) legacyChallenge.saveMissionMedal(id, { won: true, stars: 3, difficultyId: 'dificil' });
 preservedVanguard = legacyChallenge.campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
-assert.equal(preservedVanguard.completedArenas, 21);
+assert.equal(preservedVanguard.completedArenas, 24);
 assert.equal(preservedVanguard.legacyEntitlement, false, '3★ na nova fase atualiza o domínio antigo para a campanha completa');
 assert.equal(preservedVanguard.pendingMissions.length, 0);
 
@@ -163,14 +163,27 @@ const firstEighteen = cosmetics.MISSIONS.slice(0, 18).map(({ id }) => id);
 assert.equal(firstEighteen.at(-1), 'coracao-do-castelo');
 assert.deepEqual(Array.from(cosmetics.MISSIONS.slice(18), ({ id, from, to }) => [id, from, to]), [
   ['arauto', 14, 14], ['ninho', 15, 15], ['asas-de-osso', 16, 16],
+  ['brasas', 17, 17], ['forja', 18, 18], ['coroa-de-cinzas', 19, 19],
 ], 'o arco após o coração continua a campanha nas fases seguintes, sem voltar às fases 10–11');
 assert.match(cosmetics.MISSIONS[17].ending, /ameias|chamado|arauto/i, 'o encerramento do Coração prepara o capítulo do dragão');
 const v1Complete = loadV1(firstEighteen).campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
 assert.equal(v1Complete.unlocked, true, 'save v1 com as 18 arenas mantém o domínio depois do capítulo VII');
 assert.equal(v1Complete.legacyEntitlement, true);
-assert.deepEqual(Array.from(v1Complete.pendingMissions, (mission) => mission.id), ['arauto', 'ninho', 'asas-de-osso']);
+assert.deepEqual(Array.from(v1Complete.pendingMissions, (mission) => mission.id), ['arauto', 'ninho', 'asas-de-osso', 'brasas', 'forja', 'coroa-de-cinzas']);
 assert.equal(loadV1(firstEighteen.slice(0, 17)).campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda').unlocked, false,
   'save v1 sem o Coração do Castelo não ganha o domínio pela lista antiga de 17');
+// regra v2 (antes do capítulo VIII): domínio exigia as 21 arenas até Asas de Osso
+const loadV2 = (ids) => {
+  const data = new Map([['cavaleiros-medalhas-missao', v1Medals(ids)], ['cavaleiros-campanha-visual', JSON.stringify({ rulesVersion: 2, challengeRulesVersion: 2 })]]);
+  return loadCampaign({ getItem(key) { return data.get(key) ?? null; }, setItem(key, value) { data.set(key, String(value)); } });
+};
+const firstTwentyOne = cosmetics.MISSIONS.slice(0, 21).map(({ id }) => id);
+assert.equal(firstTwentyOne.at(-1), 'asas-de-osso');
+const v2Complete = loadV2(firstTwentyOne).campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda');
+assert.equal(v2Complete.unlocked, true, 'save v2 com as 21 arenas mantém o domínio depois do capítulo VIII');
+assert.deepEqual(Array.from(v2Complete.pendingMissions, (mission) => mission.id), ['brasas', 'forja', 'coroa-de-cinzas']);
+assert.equal(loadV2(firstTwentyOne.slice(0, 20)).campaignCosmetics().find((cosmetic) => cosmetic.id === 'vanguarda').unlocked, false,
+  'save v2 sem Asas de Osso não ganha o domínio');
 
 const brokenRaw = '{"vila":3,';
 const brokenData = new Map([['cavaleiros-campanha', brokenRaw], ['cavaleiros-campanha-corrompido', 'backup anterior']]);

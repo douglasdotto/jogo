@@ -26,7 +26,8 @@ const SKY = [new THREE.Color(0xa9d6f0), new THREE.Color(0x6d6488)];
 // Marco ao lado de cada missão conhecida; missões novas ficam só com o estandarte.
 const LANDMARKS = { vila: 'village', santuario: 'shrine', chamas: 'fire', fazendas: 'farm', lago: 'lake', duelo: 'arena',
   caca: 'grove', resgate: 'cage', ruinas: 'ruins', torre: 'boneTower', 'lago-sombrio': 'darkLake', cemiterio: 'graves',
-  horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne', 'coracao-do-castelo': 'heart', arauto: 'herald', ninho: 'nest', 'asas-de-osso': 'dragonSkull' };
+  horda: 'bonfire', castelo: 'gatehouse', cripta: 'crypt', trono: 'throne', 'coracao-do-castelo': 'heart', arauto: 'herald', ninho: 'nest', 'asas-de-osso': 'dragonSkull',
+  brasas: 'bonfire', forja: 'boneTower', 'coroa-de-cinzas': 'throne' };
 const STATE_COLORS = { locked: 0x7c7f89, open: 0xf3c24f, done: 0xe9dfc6, lockedBanner: 0x5f636d, starOn: 0xffd84a, starOff: 0x3b3f4b, pole: 0x8a5a2e };
 
 const CAMERA_DIST = 46;   // trecho com 4–6 missões à vista
