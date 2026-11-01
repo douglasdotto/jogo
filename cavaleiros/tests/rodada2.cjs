@@ -431,8 +431,8 @@ const readGltf=f=>{if(f.endsWith('.gltf'))return JSON.parse(fs.readFileSync(f,'u
 const heroClipNames=[...heroAnims.HERO_ANIM_FILES.flatMap(f=>readGltf(path.join(dir,'assets',f)).animations.map(a=>a.name)),...Object.keys(heroAnims.LEGACY_CLIPS),...Object.keys(heroAnims.LARGE_CLIPS)];
 const modelGltf=n=>{const f=path.join(dir,'assets',heroAnims.HERO_MODEL_FILES[n]||n+'.glb');return readGltf(fs.existsSync(f)?f:path.join(dir,'assets',n+'.gltf'))};
 const clipsOf=n=>heroAnims.HERO_MODELS.includes(n)?heroClipNames:modelGltf(n).animations.map(a=>a.name);
-test('29 variantes, receitas e animações existentes nos GLB',()=>{
-  assert.equal(t.VARIANTS.length,29);
+test('30 variantes, receitas e animações existentes nos GLB',()=>{
+  assert.equal(t.VARIANTS.length,30);
   const glb=modelGltf;
   for(const v of t.VARIANTS){
     const clips=clipsOf(v.recipe?.base||v.model);
@@ -440,7 +440,7 @@ test('29 variantes, receitas e animações existentes nos GLB',()=>{
     if(v.recipe) for(const add of v.recipe.add||[]) assert.ok(glb(add.from).nodes.some(n=>n.name.replaceAll('.','')===add.part));
   }
 });
-test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
+test('120 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes nos GLB',()=>{
   let total=0;const allNames=[],allChoreographies=[],primaryClips=[];
   for(const v of t.VARIANTS){
     const anims=t.SKILL_ANIMS[v.id],clips=clipsOf(v.recipe?.base||v.model);
@@ -457,15 +457,15 @@ test('116 habilidades têm corpo próprio em SKILL_ANIMS com clipes existentes n
     assert.equal(new Set(anims.map(a=>JSON.stringify(a))).size,4,v.id+': as quatro habilidades devem ter corpos diferentes');
     assert.equal(new Set(anims.map(a=>a.clip)).size,4,v.id+': nenhum herói repete o clipe entre suas habilidades');
   }
-  assert.equal(total,116);
-  assert.equal(new Set(allNames).size,116,'os nomes das habilidades não se repetem entre heróis');
+  assert.equal(total,120);
+  assert.equal(new Set(allNames).size,120,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
-  assert.deepEqual(sharedPrimaryClips,[['Throw',['iceviking','ninja','viking']]],
+  assert.deepEqual(sharedPrimaryClips,[['Throw',['cook','iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
-  assert.equal(new Set(choreographySignatures).size,116,
-    `cada uma das 116 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
+  assert.equal(new Set(choreographySignatures).size,120,
+    `cada uma das 120 habilidades tem coreografia exclusiva; ${allChoreographies.filter((item,i)=>choreographySignatures.indexOf(item.signature)!==i).map(item=>item.label).join(', ')}`);
   // o corpo novo respeita o tempo de SKILL_MOVES e desfaz salto, giro e inclinação ao terminar
   clear();const h=new t.Hero(cfg('champion'));const pace=t.SKILL_MOVES.champion[1]*0.82;
   assert.ok(Math.abs(h.skillBody(2,pace,true)-1/pace)<1e-9);
@@ -619,7 +619,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute']);
   assert.deepEqual(Array.from(rowFor('Bárbaros').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','monk','beast_tamer']);
-  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist']);
+  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist','cook']);
   for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=8,'cada aba tem de 5 a 8 heróis');
   assert.equal(t.pick.classRows.reduce((sum,row)=>sum+row.children.length,0),t.VARIANTS.length,'todo herói está em exatamente uma aba');
   const filterFor=name=>t.pick.classFilters[t.PICK_GROUPS.findIndex(group=>group.name===name)];
@@ -637,7 +637,7 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
 });
 test('navegação respeita as abas e as linhas da grade, pula ocupadas e usa postos distintos',()=>{
   clear();const a=new t.Hero(cfg('pyro')),b=new t.Hero(cfg('arcane'));t.arrangeParty();
-  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,29);
+  assert.ok(a.post.distanceTo(b.post)>1);t.showPick('','');assert.equal(t.pick.options.length,30);
   const at=id=>t.pick.options.findIndex(v=>v.id===id);
   assert.equal(t.pick.cards[at('cryo')].tabIndex,0);
   assert.ok(t.pick.cards[at('cryo')].innerHTML.includes('pick-card-role'));
@@ -1150,7 +1150,7 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
 });
-test('técnicas, segundas técnicas e ultimates das 29 variantes executam seus efeitos sem erro',()=>{
+test('técnicas, segundas técnicas e ultimates das 30 variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2,3]){
     clear();const h=new t.Hero(v);h.pos.set(0,0,0);
     const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(0,0,2);e.hp=e.maxHp=100000;
@@ -1557,6 +1557,31 @@ test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo
   for(let i=0;i<60;i++)for(const s of herd)s.update(.1);
   assert.ok(herd.every(s=>s.sheepT===0),'a transmutação acaba');
   clear();
+});
+test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acelera um aliado, banquete cura o grupo e encurta recargas sem zerar',()=>{
+  clear();context.flames.length=0;
+  const k=cfg('cook');assert.equal(k.classId,4);assert.equal(t.pickGroupId(k),'suporte');assert.ok(t.variantOpen('cook'));
+  assert.ok(k.hp>=175&&k.hp<=200&&k.dmg<=14,'vida de suporte e dano baixo');
+  let c=new t.Hero(k);c.pos.set(0,0,0);
+  let ally=new t.Hero(cfg('guardian')),far=new t.Hero(cfg('paladin'));ally.pos.set(0,0,-3);far.pos.set(14,0,0);ally.hp=far.hp=ally.maxHp*0.4;far.hp=far.maxHp*0.4;
+  // torta: cai no aliado ferido; só quem está na área cura e ganha o bônus
+  assert.equal(c.useSkill(null),true);c.pendingHit.effect();
+  const hp0=ally.hp,far0=far.hp;runPools(0.3);assert.equal(ally.hp,hp0,'a torta ainda está no ar');
+  runPools(2);assert.ok(ally.hp>hp0,'a poça cura');assert.equal(far.hp,far0,'fora da área não cura');
+  assert.ok(ally.royalT>0&&ally.royalBonus>0&&ally.royalBonus<=0.1,'bônus pequeno de dano');
+  runPools(6);assert.equal(context.flames.length,0,'a poça some');
+  // marmita: cura o mais ferido e acelera o ataque
+  clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-3);ally.hp=ally.maxHp*0.4;newFoe(0,-6);
+  assert.equal(c.useSkill(null,false,false,1),true);c.pendingHit.effect();
+  assert.ok(ally.hp>ally.maxHp*0.4,'marmita cura');assert.ok(ally.songT>0&&ally.songHaste<1,'ataque mais rápido');
+  // banquete: cura em pulsos e encurta recargas (modesto, nunca zera)
+  clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(1,0,0);ally.hp=ally.maxHp*0.4;far=new t.Hero(cfg('paladin'));far.pos.set(14,0,0);newFoe(0,-3);newFoe(1,-3);
+  ally.skillTimers.fill(30);far.skillTimers.fill(30);
+  assert.equal(c.useSkill(null,false,false,2),true);c.pendingHit.effect();
+  const h1=ally.hp;runPools(3);assert.ok(ally.hp>h1,'o banquete cura ao longo do tempo');
+  runPools(4);assert.equal(context.flames.length,0,'a mesa some');
+  assert.ok(ally.skillTimers.every(x=>x<30&&x>20),'recargas encurtadas só um pouco');assert.ok(far.skillTimers.every(x=>x===30),'longe não é afetado');
+  clear();context.flames.length=0;
 });
 test('fúria acelera o berserker e o passo das sombras leva o assassino às costas do alvo',()=>{
   clear();const b=new t.Hero(cfg('berserker')),a=new t.Hero(cfg('assassin'));b.pos.set(0,0,0);a.pos.set(3,0,0);
@@ -2330,7 +2355,7 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
 test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
-  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,29);assert.equal(t.UNLOCKS.length,0);
+  assert.equal(t.VARIANTS.filter(v=>t.variantOpen(v.id)).length,30);assert.equal(t.UNLOCKS.length,0);
   clear();t.showPick('','');assert.ok(!t.pick.cards[idx('guardian')].innerHTML.includes('class="lock"'));
   context.saveStars('vila',3);assert.equal(t.totalStars(),3);assert.ok(t.unlocked(1)&&!t.unlocked(2));
   context.location={search:'?tudo=1'};assert.ok(t.unlocked(7));

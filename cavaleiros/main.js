@@ -119,6 +119,8 @@ const VARIANTS = [
     attacks: ['Brute_Punch', 'Brute_Kick'], armor: 3, scale: 1.6, frontline: true, classId: 1 },
   { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
+  { id: 'cook', names: ['Cozinheira', 'Chef de Campanha', 'Mestra do Banquete'], desc: 'Tortas e marmitas que curam e dão ânimo.', ability: 'Torta quente', color: ['#ffd9a0', '#d9803a'],
+    use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, model: 'Barbarian', hp: 185, dmg: 11, range: 5.5, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Throw'], classId: 4, pickGroup: 'cook' },
 ].map((v) => ({ ...HEROES[v.classId], ...v, name: v.names[0],
   // quem herda o respiro padrão alterna entre os dois idles do pacote (Idle_A/Idle_B), para o grupo parado não respirar em coro
   ...(!v.idle && HEROES[v.classId].idle === 'Idle' && v.id.length % 2 && { idle: 'Idle_B' }),
@@ -131,7 +133,7 @@ const PICK_GROUPS = [
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner'] },
   { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer'] },
-  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist'] },
+  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'cook'] },
 ];
 const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
 const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id === groupId)?.heroes || [])
@@ -1450,9 +1452,9 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain']);
+    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'lunchbox', 'feast']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist']);
-  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner']);
+  const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'cook']);
   const skills = skillSetFor(hero.cfg);
   const controlSkills = skills.filter((skill) => skill.control || controlEffects.has(skill.effect));
   const supportSkills = skills.filter((skill) => supportEffects.has(skill.effect));
@@ -1693,9 +1695,10 @@ const SKILL_GLYPHS = {
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
   brute: ['⛰', '⤴', '⬢', '▥'],
   summoner: ['✿', '⬢', '♆', '⚘'],
+  cook: ['◒', '▣', '♨', '✱'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
-const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link']);
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -2590,7 +2593,7 @@ class Unit {
 }
 
 // som do golpe comum de cada herói (e dos esqueletinhos do necromante)
-const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', archer: 'arrow', pyro: 'fire', cryo: 'ice', alchemist: 'ice' }[u.cfg.id] || 'zap') : u.cfg.id === 'monk' ? 'hit' : u.cfg.classId === 1 ? 'axe' : 'sword';
+const swingSound = (u) => u.ranged ? ({ crossbow: 'arrow', archer: 'arrow', pyro: 'fire', cryo: 'ice', alchemist: 'ice', cook: 'ice' }[u.cfg.id] || 'zap') : u.cfg.id === 'monk' ? 'hit' : u.cfg.classId === 1 ? 'axe' : 'sword';
 
 const skeletonsAlive = () => units.filter((u) => u.team === 'skeleton' && !u.dead);
 const heroes = () => units.filter((u) => u.team === 'hero');
@@ -3348,7 +3351,7 @@ const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THR
 const beamMaterials = materialPool(() => new THREE.MeshBasicMaterial({ transparent: true }), 32);
 const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false }), 128);
 const beamDirection = new THREE.Vector3(), beamUp = new THREE.Vector3(0, 1, 0), beamLift = new THREE.Vector3(0, 1.3, 0);
-const colors = { pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, oracle: 0xc6b4ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
+const colors = { cook: 0xe0603a, pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, oracle: 0xc6b4ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
@@ -3603,6 +3606,30 @@ function alchemyPool(owner, at, tonic, scale = 1) {
   FX.pool(mesh, radius, tonic);
 }
 
+// Cozinheira: a torta voa em arco e deixa um ensopado que cura e dá um bônus pequeno de dano a quem está nele
+function cookPool(owner, at) {
+  const radius = (1.6 + (owner.level - 1) * 0.2) * owner.skillPower;
+  const mesh = groundMark(at, radius, 0xd98a3a, 0.3);
+  flames.push({ mesh, radius, owner, wait: 0.45, t: (3.5 + owner.level * 0.5) * owner.skillPower, tick: 0, every: 0.5, dmg: 0,
+    heal: scaleBranchEffect(owner, 'support', 3 + owner.level * 1.5) * owner.skillPower,
+    onTick: (f) => { for (const h of heroes()) if (!h.dead && h.pos.distanceTo(f.mesh.position) <= f.radius + 0.3) {
+      h.royalT = Math.max(h.royalT, 2.5);
+      h.royalBonus = Math.max(h.royalBonus, 0.1);
+    } } });
+  FX.foodToss(owner, at, 0.45);
+  FX.stewPool(mesh, radius);
+}
+
+// Cozinheira (ultimate): a mesa do banquete cura o grupo em pulsos e acelera as recargas em 25% enquanto durar
+function cookFeast(owner, at, radius, duration, haste) {
+  const mesh = groundMark(at, radius, 0xd98a3a, 0.22);
+  flames.push({ mesh, radius, owner, wait: 0.5, t: duration, tick: 0, every: 0.5, dmg: 0,
+    heal: scaleBranchEffect(owner, 'support', 5 + owner.level * 2) * owner.skillPower,
+    onTick: (f) => { for (const h of heroes()) if (!h.dead && h.pos.distanceTo(f.mesh.position) <= f.radius + 0.3)
+      for (let s = 0; s < h.skillTimers.length; s++) if (h.skillTimers[s] > 0) h.skillTimers[s] = Math.max(0, h.skillTimers[s] - haste * f.every); } });
+  FX.feastTable(mesh, radius, duration);
+}
+
 // Arqueira: marca a área no chão e, depois do aviso, cinco salvas de flechas caem sobre ela
 function arrowRain(owner, at, radius, total) {
   const mesh = groundMark(at, radius, 0xe8f6ee, 0.25);
@@ -3780,6 +3807,7 @@ const barkMat = new THREE.MeshLambertMaterial({ color: 0x6b4423 });
 const leafMat = new THREE.MeshLambertMaterial({ color: 0x6cc24a, side: THREE.DoubleSide });
 const branchGeos = [0.09, 0.07, 0.05].map((r) => new THREE.CylinderGeometry(r * 0.75, r, 1, 5).translate(0, 0.5, 0));   // galhos afinando
 const shellGeo = new THREE.IcosahedronGeometry(0.2, 0);
+const foodGeo = new THREE.SphereGeometry(0.1, 6, 5), foodBoxGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15), pieGeo = new THREE.CylinderGeometry(0.2, 0.16, 0.1, 8);   // comidas pequenas da Cozinheira
 const iceGeo = new THREE.OctahedronGeometry(0.15, 0).scale(0.7, 0.7, 2.4);   // cristal comprido apontando em +z
 const thornGeo = new THREE.OctahedronGeometry(0.16, 0).scale(0.55, 0.18, 1.6);   // folha/espinho do druida
 // Alquimista: frasco (bojo e gargalo numa geometria só) e ovelha da transmutação, compartilhados
@@ -3806,12 +3834,13 @@ const BOLT_LOOKS = {
   alchemist: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.4], size: [1.3, 1.3], spin: true },
   oracle: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xc6b4ff, 0.52), 1.8]], orb: ['arcane', 0.34], size: [1.35, 2], spin: true },
   summoner: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xff8ad8, 0.45), 1.8]], orb: ['tonic', 0.36], size: [1.4, 1.4], spin: true },
+  cook: { geo: foodGeo, core: basic(0xe0603a), shells: [], size: [1.2, 1.5], spin: true },   // comida de verdade voando, sem brilho
 };
 for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells || []).map((x) => x[0])]) if (m) m.userData.keep = true;
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
 const starGlowMat = glowMaterial(0x6f8cff, 0.55);
 for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat, flaskGlassMat, woolMat, sheepFaceMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
-const TRAIL = { arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb] };
+const TRAIL = { cook: [0xffd27a, 0xe0603a], arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb] };
 // Símbolo e paleta próprios aparecem enquanto cada habilidade é preparada.
 const SKILL_ART = {
   paladin:   { color: 0xffe27a, accent: 0x8af5a8, glyph: crystalGeo, scale: 1.2 },
@@ -3843,6 +3872,7 @@ const SKILL_ART = {
   oracle: { color: 0xc6b4ff, accent: 0xffffff, glyph: crystalGeo, scale: 1.3 },
   brute: { color: 0xb8a88a, accent: 0xfff2d8, glyph: rockGeo, scale: 3.2 },
   summoner: { color: 0xff8ad8, accent: 0xfff0fb, glyph: leafGeo, scale: 3 },
+  cook: { color: 0xffb347, accent: 0xfff0d0, glyph: shellGeo, scale: 1.6 },
 };
 const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
 let shakeK = 0, stopT = 0, slowT = 0;
@@ -4975,6 +5005,76 @@ function flaskBlast(at, radius) {
   shake(0.3);
 }
 
+// Cozinheira: comidas pequenas e coloridas (torta, tomate, queijo, folha) voam em arco; confete de ingredientes e vapor suave
+const FOOD_COLORS = [0xe0432f, 0xf2c94c, 0x6fbf4a, 0xf08a3c, 0xc86ad0];
+const tableTopGeo = new THREE.BoxGeometry(1.9, 0.1, 1.05), clothGeo = new THREE.BoxGeometry(2, 0.04, 1.15), tableLegGeo = new THREE.BoxGeometry(0.12, 0.62, 0.12);
+function foodToss(h, to, life) {
+  const from = h.pos.clone().setY(h.pos.y + 1.4), end = to.clone().setY(to.y + 0.3);
+  const side = V(end.z - from.z, 0, from.x - end.x).normalize();
+  const items = [[pieGeo, 0xd9a05a, 1.3, 0, 2.4], [foodGeo, 0xe0432f, 1, 0.35, 1.8], [foodBoxGeo, 0xf2c94c, 1, -0.35, 2.9], [foodGeo, 0x6fbf4a, 0.9, 0.18, 2.1]];
+  for (const [geo, color, size, spread, peak] of items.slice(0, lowQuality ? 2 : 4)) {
+    const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
+    m.scale.setScalar(size);
+    addFx(m, life, (e, dt, k) => {
+      m.position.lerpVectors(from, end, k).setY(from.y + (end.y - from.y) * k + Math.sin(Math.PI * k) * peak).addScaledVector(side, spread * Math.sin(Math.PI * k));
+      m.rotation.x += dt * 9; m.rotation.z += dt * 6;
+    });
+  }
+}
+// confete de ingredientes e um sopro de vapor; radius = até onde os pedaços chegam
+function foodPop(at, radius = 1) {
+  const p = at.clone().setY(at.y + 0.9);
+  for (let i = 0; i < fewer(14); i++) {
+    const a = Math.random() * TAU, v = (radius / 0.72) * (0.4 + 0.6 * Math.random());
+    particle(i % 2 ? foodBoxGeo : foodGeo, FOOD_COLORS[i % FOOD_COLORS.length], p, V(Math.cos(a) * v, 2.5 + Math.random() * 2, Math.sin(a) * v), 0.9, { solid: true, gravity: 9, size: 0.6, drag: 0.5 });
+  }
+  puffs(p, 3, 'smoke', { spread: radius * 0.4, size: 0.9, opacity: 0.45, rise: 1.2, life: 1.2 });
+}
+// ensopado no chão: aterrissa com confete e anel, depois solta vapor e pedacinhos enquanto a poça durar
+function stewPool(base, radius) {
+  const p = new THREE.Group();
+  addFx(p, 99, (e, dt) => {
+    if (!base.parent) { e.done = true; return; }
+    const at = base.position;
+    if (!e.landed) { e.landed = true; foodPop(at, radius); wave(at, 0xffd27a, 0.2, radius, 0.5, { opacity: 0.4 }); }
+    e.next = (e.next ?? 0) - dt;
+    if (e.next > 0) return;
+    e.next = lowQuality ? 0.7 : 0.35;
+    const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * radius * 0.85, spot = V(at.x + Math.cos(a) * r, at.y + 0.15, at.z + Math.sin(a) * r);
+    puffs(spot, 1, 'smoke', { spread: 0.1, size: 0.65, opacity: 0.4, rise: 0.9, life: 1.2 });
+    if (e.alt = !e.alt) particle(foodGeo, FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)], spot, V(rnd(0.3), 1.6, rnd(0.3)), 0.7, { solid: true, gravity: 5, size: 0.5 });
+  }, 0.45);
+}
+// banquete: mesa com toalha e pratos que brota do chão, solta vapor e confete e afunda ao fim
+function feastTable(base, radius, duration) {
+  const g = new THREE.Group(), wood = new THREE.MeshLambertMaterial({ color: 0x9a6a3a }), cloth = new THREE.MeshLambertMaterial({ color: 0xe8554a });
+  const top = new THREE.Mesh(tableTopGeo, wood), sheet = new THREE.Mesh(clothGeo, cloth);
+  top.position.y = 0.66; sheet.position.y = 0.72;
+  g.add(top, sheet);
+  for (const [x, z] of [[-0.8, -0.4], [0.8, -0.4], [-0.8, 0.4], [0.8, 0.4]]) g.add(new THREE.Mesh(tableLegGeo, wood).translateX(x).translateY(0.31).translateZ(z));
+  for (const [geo, color, x, z] of [[pieGeo, 0xd9a05a, -0.5, 0], [foodGeo, 0xe0432f, 0.1, 0.25], [foodBoxGeo, 0xf2c94c, 0.1, -0.25], [foodGeo, 0x6fbf4a, 0.55, 0.1]]) {
+    const dish = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
+    dish.position.set(x, 0.86, z);
+    dish.scale.setScalar(1.4);
+    g.add(dish);
+  }
+  g.position.copy(base.position);
+  g.rotation.y = Math.random() * TAU;
+  addFx(g, duration, (e, dt) => {
+    if (!base.parent) { e.done = true; return; }
+    const grow = Math.min(1, e.t / 0.3), sink = Math.min(1, (duration - e.t) / 0.4);
+    g.scale.setScalar(Math.max(0.01, (1 - (1 - grow) ** 3) * Math.min(1, sink)));
+    if (!e.started) { e.started = true; foodPop(g.position, 1.6); wave(g.position, 0xffd27a, 0.2, radius, 0.5, { opacity: 0.4 }); }
+    e.next = (e.next ?? 0) - dt;
+    if (e.next > 0) return;
+    e.next = lowQuality ? 0.7 : 0.35;
+    const spot = V(g.position.x + rnd(0.7), g.position.y + 1, g.position.z + rnd(0.4));
+    puffs(spot, 1, 'smoke', { spread: 0.1, size: 0.7, opacity: 0.4, rise: 1, life: 1.3 });
+    if (e.alt = !e.alt) particle(foodBoxGeo, FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)], spot, V(rnd(0.6), 2.2, rnd(0.6)), 0.8, { solid: true, gravity: 6, size: 0.55 });
+    if ((e.pulse = (e.pulse ?? 0) + 1) % 3 === 0) wave(g.position, 0xffd27a, radius * 0.7, radius, 0.5, { opacity: 0.2 });
+  }, 0.5);
+}
+
 // Alquimista (Grande transmutação): onda e runas rosadas; cada inimigo comum vira uma ovelha até a magia acabar
 function transmuteWave(at, radius) {
   shaderDisc('rune', 'tonic', at, radius, 1.2, { seed: 7 });
@@ -5332,7 +5432,7 @@ const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: c
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
   whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
-Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall });   // Arqueira, Monge, Alquimista e Domador
+Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
 
@@ -5738,6 +5838,16 @@ class Hero extends Unit {
       }
       if (!target || target.pos.distanceTo(this.pos) > reach) return false;
       effect = () => fireBolt(this, target, kind, 0, true);
+    } else if (id === 'cook') {
+      // torta quente: cai onde o grupo precisa (ferido ou brigando) e deixa um ensopado que cura e anima
+      const reach = this.range + 1;
+      if (!manual) {
+        const near = partyNow().filter((h) => !h.dead && h.pos.distanceTo(this.pos) <= reach);
+        target = near.filter((h) => h.hp / h.maxHp <= 0.8).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]
+          || near.find((h) => h.engagedWith && !h.engagedWith.dead);
+      }
+      if (!target || target.pos.distanceTo(this.pos) > reach) return false;
+      effect = () => cookPool(this, target.pos.clone());
     } else if (id === 'viking' || id === 'iceviking') {
       if (!manual) target = highestPriorityHeroTarget(this, attackables.filter((s) => !s.dead && !s.spawning
         && s.pos.distanceTo(this.pos) > 2 && s.pos.distanceTo(this.pos) < 9));
@@ -5856,7 +5966,7 @@ class Hero extends Unit {
     const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'feast'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -6804,6 +6914,42 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'lunchbox': {
+        // Marmita: cura o aliado mais ferido ao alcance e acelera o ataque dele por alguns segundos
+        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8))
+          .reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        if (!ally || (!force && ally.hp / ally.maxHp > 0.8)) return false;
+        target = ally;
+        effect = () => {
+          if (ally.dead) return;
+          const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', ally.maxHp * 0.2) * power);
+          if (heal > 0) { ally.hp += heal; this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
+          ally.songT = Math.max(ally.songT, (skill.duration || 6) * (0.9 + 0.1 * power));
+          ally.songHaste = Math.min(ally.songHaste || 1, 1 / (1 + (skill.haste || 0.25)));
+          popText(ally.pos, 'Quentinho!', 'evolve');
+          FX.foodToss(this, ally.pos, 0.35);
+          FX.foodPop(ally.pos);
+        };
+        break;
+      }
+      case 'feast': {
+        // Banquete: mesa no chão em volta da Cozinheira; cura em pulsos e encurta as recargas (nunca zera)
+        effect = () => cookFeast(this, this.pos.clone().addScaledVector(this.fwd, 1.2), radius, (skill.duration || 6) * (0.9 + 0.1 * power), skill.haste || 0.25);
+        break;
+      }
+      case 'spice': {
+        // Tempero forte: os aliados próximos batem mais forte por alguns segundos
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+          for (const h of party) if (h.pos.distanceTo(this.pos) <= radius) {
+            h.royalT = Math.max(h.royalT, duration);
+            h.royalBonus = Math.max(h.royalBonus, skill.bonus || 0.15);
+            popText(h.pos, 'Tempero!', 'evolve');
+          }
+          FX.foodPop(this.pos, radius);
+        };
+        break;
+      }
       case 'giant-elixir': {
         // Elixir do gigante: o aliado na linha de frente bate mais forte, aguenta mais e se cura
         const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 8));
@@ -7332,6 +7478,7 @@ const SKILL_MOVES = {
   oracle: ['1H_Ranged_Shoot', 1.3, 0.35, 'zap'],
   brute: ['Jump_Full_Short', 0.9, 0.7, 'slam'],
   summoner: ['2H_Melee_Attack_Stab', 1.5, 0.45, 'summon'],
+  cook: ['Throw', 1.4, 0.45, 'ice'],
 };
 
 // Corpo de cada habilidade [básica, técnica, ultimate, segunda técnica]. O tempo continua o de SKILL_MOVES (o clipe novo é
@@ -7513,6 +7660,12 @@ const SKILL_ANIMS = {
     { clip: '1H_Melee_Attack_Stab', f: 0.55, arc: 'thrust', lean: 0.22, kick: 0.35 },          // bate no chão e o golem brota
     { clip: 'Spellcast_Summon', hold: 'Spellcast_Raise', f: 0.6, spin: 1.1, float: 0.5, lean: -0.14 },   // ergue o cajado e invoca o dragãozinho
     { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: -0.5, lean: -0.1, float: 0.12 },   // brada o pacto e atiça as criaturas
+  ],
+  cook: [
+    { clip: 'Throw', hold: 'Use_Item', f: 0.45, hop: 0.12, lean: 0.2 },    // lança a torta
+    { clip: 'Interact', f: 0.5, lean: 0.25, kick: 0.2 },                   // entrega a marmita
+    { clip: 'Cheer', hold: 'Use_Item', f: 0.5, hop: 0.3, lean: -0.12 },    // grita "à mesa!"
+    { clip: 'Use_Item', f: 0.5, lean: 0.12, kick: 0.15 },                  // polvilha o tempero
   ],
 };
 
