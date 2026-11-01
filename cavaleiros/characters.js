@@ -911,6 +911,11 @@ const ACCESSORIES = {
     g.add(m);
     return g;
   },
+  // presas pequenas de vampiro: duas pontas brancas na boca, apontando para baixo
+  fangs({ color = 0xfffaf0, y = 0.1, spread = 0.07, size = 1 } = {}) {
+    const parts = [-1, 1].map((s) => piece(new THREE.ConeGeometry(0.045 * size, 0.14 * size, 4), [s * spread, y, 0.5], [Math.PI, 0, 0]));
+    return new THREE.Mesh(merged(parts), lambert(color, { emissive: 0x8a8478, emissiveIntensity: 0.25 }));
+  },
   // ---------- rosto (osso da cabeça: olhos em y≈0.37, testa em y≈0.5, boca em y≈0.15, frente em z≈0.5) ----------
   // sobrancelhas: angle > 0 = cara fechada (pontas de dentro descem), < 0 = expressão gentil
   brows({ color = 0x3a2416, angle = 0.25, y = 0.5, size = 1 } = {}) {
