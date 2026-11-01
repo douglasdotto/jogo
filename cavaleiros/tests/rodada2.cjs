@@ -1709,7 +1709,7 @@ test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acele
   assert.equal(c.useSkill(null),true);c.pendingHit.effect();
   const hp0=ally.hp,far0=far.hp;runPools(0.3);assert.equal(ally.hp,hp0,'a torta ainda está no ar');
   runPools(2);assert.ok(ally.hp>hp0,'a poça cura');assert.equal(far.hp,far0,'fora da área não cura');
-  assert.ok(ally.royalT>0&&ally.royalBonus>0&&ally.royalBonus<=0.1,'bônus pequeno de dano');
+  assert.ok(ally.royalT>0&&ally.royalBonus>0&&ally.royalBonus<=0.12,'bônus pequeno de dano');
   runPools(6);assert.equal(context.flames.length,0,'a poça some');
   // marmita: cura o mais ferido e acelera o ataque
   clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-3);ally.hp=ally.maxHp*0.4;newFoe(0,-6);

@@ -4276,13 +4276,13 @@ function alchemyPool(owner, at, tonic, scale = 1) {
 
 // Cozinheira: a torta voa em arco e deixa um ensopado que cura e dá um bônus pequeno de dano a quem está nele
 function cookPool(owner, at) {
-  const radius = (1.6 + (owner.level - 1) * 0.2) * owner.skillPower;
+  const radius = (2.4 + (owner.level - 1) * 0.2) * owner.skillPower;
   const mesh = groundMark(at, radius, 0xd98a3a, 0.3);
   flames.push({ mesh, radius, owner, wait: 0.45, t: (3.5 + owner.level * 0.5) * owner.skillPower, tick: 0, every: 0.5, dmg: 0,
     heal: scaleBranchEffect(owner, 'support', 3 + owner.level * 1.5) * owner.skillPower,
     onTick: (f) => { for (const h of heroes()) if (!h.dead && h.pos.distanceTo(f.mesh.position) <= f.radius + 0.3) {
-      h.royalT = Math.max(h.royalT, 2.5);
-      h.royalBonus = Math.max(h.royalBonus, 0.1);
+      h.royalT = Math.max(h.royalT, 5);   // o bônus dura depois de sair da poça: o grupo está sempre se movendo
+      h.royalBonus = Math.max(h.royalBonus, 0.12);
     } } });
   FX.foodToss(owner, at, 0.45);
   FX.stewPool(mesh, radius);
