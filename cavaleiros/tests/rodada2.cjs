@@ -2327,6 +2327,22 @@ test('resgate mantém um resgatista enquanto os demais defendem e reatribui apó
   captive.rescued=true;party[1].update(.1);assert.equal(t.game.rescueRunner,null,'a função termina após a libertação');
   clear();
 });
+test('resgatado recua de inimigos próximos, nunca avança e sai de cena com segurança',()=>{
+  context.location={search:''};begin('resgate',['paladin','pyro','berserker']);
+  const v=t.game.villager;t.startPhase();
+  for(const g of t.skeletonsAlive())g.remove();
+  t.game.guideS=10;v.captive=true;v.rescued=true;v.exitT=1;v.dead=false;
+  const fwd=v.follow();v.pos.copy(v.post);v.pos.y=0;
+  const e=new t.Skeleton('Minion',1);e.spawning=false;e.pos.set(v.pos.x-fwd.z*2,v.pos.y,v.pos.z+fwd.x*2);
+  for(const h of t.heroes()){h.pos.copy(v.pos).addScaledVector(fwd,3);h.dead=false;}
+  const z0=v.pos.clone();v.exitT=5;for(let i=0;i<3;i++)v.update(.2);
+  const step=v.pos.clone().sub(z0);
+  assert.ok(step.length()>0,'foge do inimigo');assert.ok(step.dot(fwd)<=1e-6,'não avança para a frente do grupo');assert.ok(v.pos.distanceTo(e.pos)>2.5,'afasta-se do inimigo');
+  v.exitT=.3;for(let i=0;i<10&&!v.left;i++)v.update(.2);
+  assert.ok(v.left&&v.untargetable&&!v.dead,'sai de cena viva após o tempo');
+  t.game.missionVillagerRatio=null;
+  clear();
+});
 test('21 missões com objetivo e todo o elenco liberado desde o início',()=>{
   assert.equal(t.MISSIONS.length,21);for(const m of t.MISSIONS)assert.ok(context.goalText(m.goal),m.id);
   context.location={search:''};context.localStorage.data={};
