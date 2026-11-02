@@ -1149,7 +1149,7 @@ test('cada variante oferece quatro habilidades e a ultimate tem recarga maior',(
   for(const v of t.VARIANTS){
     const skills=t.skillSetFor(v);
     assert.equal(skills.length,4,v.id);assert.deepEqual(Array.from(skills,s=>s.slot),[0,1,2,3],v.id+' slots em ordem');
-    assert.ok(t.cooldownForSkill(v,3)>=14&&t.cooldownForSkill(v,3)<=18,v.id+' segunda técnica com recarga intermediária');
+    assert.ok(t.cooldownForSkill(v,3)>=14&&t.cooldownForSkill(v,3)<=24,v.id+' segunda técnica com recarga intermediária');
     assert.ok(t.cooldownForSkill(v,2)>t.cooldownForSkill(v,3),v.id+' ultimate vs segunda técnica');
     assert.equal(t.skillSetFor(v),skills,v.id+' lista fica em cache por variante');
     assert.equal(skills.filter(s=>s.ultimate).length,1,v.id);
@@ -1184,7 +1184,7 @@ test('técnicas, segundas técnicas e ultimates das variantes executam seus efei
   }
   context.flames.length=0;clear();
 });
-test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio esquiva, bênção segura a queda e rebobinar devolve vida',()=>{
+test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio esquiva, voto de proteção segura a queda e rebobinar devolve vida',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
   const cast=(h,slot,target)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,h.cfg.id+' slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
   clear();const paladin=new t.Hero(cfg('paladin')),ally=new t.Hero(cfg('pyro'));paladin.pos.set(0,0,0);ally.pos.set(2,0,0);ally.hp=ally.maxHp*0.3;
@@ -1199,7 +1199,16 @@ test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio
   before=friend.hp;friend.takeDamage(40,null,null);assert.equal(friend.hp,before,'Presságio esquiva o primeiro dano');
   friend.takeDamage(40,null,null);assert.ok(friend.hp<before,'só o primeiro');
   clear();const cleric=new t.Hero(cfg('cleric')),hurt=new t.Hero(cfg('crossbow'));cleric.pos.set(0,0,0);hurt.pos.set(2,0,0);hurt.hp=hurt.maxHp*0.2;foe(3,0);cast(cleric,3,null);
-  assert.ok(hurt.blessT>0,'a Bênção vai para o mais ferido');hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,false,'a Bênção segura a queda');assert.equal(Math.round(hurt.hp),1);
+  assert.ok(hurt.vowT>0&&cleric.vowT>0,'o Voto cobre os aliados próximos');
+  const hpVow=hurt.hp;hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,false,'o Voto segura a queda');assert.equal(Math.round(hurt.hp),1,'deixa 1 de vida');assert.ok(hurt.hp<=hpVow,'sem curar');
+  vm.runInContext('runeDomes.length=0',context);hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,true,'só uma vez por aliado');
+  clear();const vc=new t.Hero(cfg('cleric')),near=new t.Hero(cfg('guardian')),far=new t.Hero(cfg('pyro'));vc.pos.set(0,0,0);near.pos.set(5,0,0);far.pos.set(12,0,0);
+  const boss=new t.Skeleton('Warrior',1,true);boss.spawning=false;boss.busy=99;boss.pos.set(3,0,3);
+  assert.equal(vc.useSkill(boss,false,false,3),true,'a IA usa com chefe perto');vc.pendingHit.effect();vc.pendingHit=null;
+  assert.ok(near.vowT>0&&!(far.vowT>0),'só quem está a até 8 m recebe o Voto');
+  vc.skillTimers[3]=0;vc.busy=0;assert.equal(vc.useSkill(boss,false,false,3),false,'não recasta enquanto todos já têm o Voto');
+  clear();const lazy=new t.Hero(cfg('cleric')),ok=new t.Hero(cfg('guardian'));lazy.pos.set(0,0,0);ok.pos.set(2,0,0);foe(3,0);
+  assert.equal(lazy.useSkill(null,false,false,3),false,'sem perigo e sem ferido a IA guarda o Voto');
   clear();const chronist=new t.Hero(cfg('chronist')),tank=new t.Hero(cfg('guardian'));chronist.pos.set(0,0,0);tank.pos.set(2,0,0);foe(3,0);
   tank.hpHistory=[tank.maxHp];tank.hp=tank.maxHp*0.4;cast(chronist,3,null);assert.equal(tank.hp,tank.maxHp,'Rebobinar devolve a vida de 3 s atrás');
   clear();const archer=new t.Hero(cfg('archer'));archer.pos.set(0,0,0);const prey=foe(0,5);cast(archer,3,prey);
@@ -1442,11 +1451,11 @@ test('Brutamontes avança durante a Pancada e o Auto aguarda um alvo para invoca
   clear();
 });
 
-test('Vampira: garra cura o mais ferido, vínculo divide o dano, noite de sangue cura o grupo e beijo devolve o dano',()=>{
+test('Vampira: garra cura o mais ferido, vínculo divide o dano, eclipse rubro explode comuns fracos e cura o grupo e beijo devolve o dano',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
   const cast=(h,slot,target)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,'slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
   assert.equal(cfg('vampire').classId,4);assert.ok(cfg('vampire').hp>=175&&cfg('vampire').hp<=200);
-  assert.deepEqual(Array.from(t.skillSetFor(cfg('vampire')),s=>s.effect),['primary','blood-bond','blood-night','blood-kiss']);
+  assert.deepEqual(Array.from(t.skillSetFor(cfg('vampire')),s=>s.effect),['primary','blood-bond','blood-eclipse','blood-kiss']);
   clear();const v=new t.Hero(cfg('vampire')),a=new t.Hero(cfg('guardian')),b=new t.Hero(cfg('pyro'));
   v.pos.set(0,0,0);a.pos.set(2,0,0);b.pos.set(3,0,0);a.hp=a.maxHp*0.3;
   const e=foe(0,2);v.face(e.pos,1);
@@ -1461,13 +1470,29 @@ test('Vampira: garra cura o mais ferido, vínculo divide o dano, noite de sangue
   assert.ok(b1-f1.hp<20&&b2-f2.hp>0,'o par divide o dano');
   f1.hp=1.5;f2.hp=1.5;f1.takeDamage(50,null,e2);assert.equal(f2.dead,false,'ninguém cai pelo vínculo do outro');
   f1.bondT=0;f2.bondT=0;b2=f2.hp;f1.takeDamage(5,null,e2);assert.equal(f2.hp,b2,'sem vínculo, nada é dividido');
-  // noite de sangue: todos curam ao causar dano
+  // eclipse rubro: comuns abaixo de 30% explodem e curam os aliados em volta; chefe e comuns saudáveis ficam
   clear();const v3=new t.Hero(cfg('vampire')),g1=new t.Hero(cfg('guardian')),g2=new t.Hero(cfg('pyro'));
-  v3.pos.set(0,0,0);g1.pos.set(2,0,0);g2.pos.set(3,0,0);const e3=foe(0,3);cast(v3,2,e3);
-  assert.ok([v3,g1,g2].every(h=>h.leechT>0&&h.leech>=0.25),'todos os aliados ganham a cura por dano');
+  v3.pos.set(0,0,0);g1.pos.set(2,0,0);g2.pos.set(3,0,0);const e3=foe(0,3);e3.hp=e3.maxHp;
+  const weak=[foe(2,3),foe(1,4),foe(4,2)];for(const w of weak)w.hp=w.maxHp*0.2;
+  const healthy=foe(-2,4);healthy.hp=healthy.maxHp*0.5;
+  const boss=new t.Skeleton('Warrior',1,true);boss.spawning=false;boss.busy=99;boss.pos.set(0,0,-3);boss.hp=boss.maxHp*0.1;
+  assert.equal(v3.useSkill(null,false,false,2),true,'a IA usa com 3 ou mais inimigos no alcance');v3.pendingHit.effect();v3.pendingHit=null;
+  assert.ok(v3.eclipseT>5&&v3.eclipseT<=6.2,'dura cerca de 6 s');
+  g1.hp=g1.maxHp*0.3;g2.hp=g2.maxHp*0.5;const hg1=g1.hp,hg2=g2.hp;
+  v3.update(0.3);
+  assert.ok(weak.every(w=>w.dead),'comuns abaixo de 30% explodem');assert.ok(!healthy.dead&&!e3.dead,'comuns saudáveis ficam');assert.ok(!boss.dead,'chefe não é executado');
+  assert.ok(g1.hp>hg1&&g2.hp>hg2,'a explosão cura os aliados em volta');
+  const healed=(g1.hp-hg1)+(g2.hp-hg2);
+  // teto por uso: com muitas explosões a cura total não passa do teto
+  v3.eclipseHeal=5;g1.hp=1;const swarm=Array.from({length:8},(_,i)=>foe(1+i*0.2,2));for(const w of swarm)w.hp=w.maxHp*0.1;
+  const before=g1.hp;v3.eclipseTick=0;v3.update(0.3);
+  assert.ok(swarm.every(w=>w.dead)&&g1.hp-before<=5.01,'a cura de um uso tem teto');assert.ok(healed>0);
+  v3.eclipseT=0;const late=foe(1,3);late.hp=late.maxHp*0.1;v3.update(1);assert.ok(!late.dead,'acabou o tempo: ninguém explode');
   // beijo sombrio: o dano todo volta ao aliado mais ferido
   g1.hp=g1.maxHp*0.2;const h3=g1.hp,d3=e3.hp;e3.pos.set(0,0,2);cast(v3,3,e3);
   assert.ok(e3.hp<d3&&g1.hp-h3>=(d3-e3.hp)*0.95-0.01,'beijo devolve o dano como cura');
+  clear();const lone=new t.Hero(cfg('vampire'));lone.pos.set(0,0,0);foe(0,3);foe(1,3);
+  assert.equal(lone.useSkill(null,false,false,2),false,'com menos de 3 inimigos a IA guarda o Eclipse');
 });
 test('Ilusionista: cópia provoca e some ao primeiro golpe; espelhos confundem; chefe resiste; nada disso conta como herói ou invocação',()=>{
   clear();
@@ -1830,8 +1855,17 @@ test('Xamã: totem de cura pulsa vida, no máximo 2 totens, raízes deixam lento
   assert.equal(t.spiritTotems.length,2,'no máximo 2 totens');assert.ok(!t.spiritTotems.includes(first),'o mais antigo some');
   const root=t.spiritTotems.find(x=>x.kind==='root');assert.ok(root);
   foe.slowT=0;for(let i=0;i<4;i++)t.updateBolts(.1);assert.ok(foe.slowT>0,'o totem de raízes deixa o inimigo lento');
-  // chamado: pulsa e prolonga
-  const life=root.life;sh.skillTimers[3]=0;assert.equal(sh.useSkill(null,false,true,3),true);sh.pendingHit.effect();assert.ok(root.life>life+2);
+  // espírito acompanhante: segue o mais ferido, pulsa cura pequena a cada ~1 s e não fica parado
+  while(t.spiritTotems.length)t.removeSpiritTotem(t.spiritTotems[0]);
+  ally.hp=ally.maxHp*0.5;ally.pos.set(1,0,0);sh.skillTimers[3]=0;sh.busy=0;
+  assert.equal(sh.useSkill(null,false,false,3),true,'a IA usa com aliado abaixo de 70%');const hpS=ally.hp;sh.pendingHit.effect();sh.pendingHit=null;
+  assert.equal(vm.runInContext('followSpirits.length',context),1);assert.equal(vm.runInContext('followSpirits[0].ally',context),ally,'segue o aliado mais ferido');
+  for(let i=0;i<25;i++)t.updateBolts(.1);
+  const pulses=vm.runInContext('followSpirits[0].pulses',context);assert.ok(pulses>=2&&pulses<=3,'pulsa a cada ~1 s ('+pulses+')');assert.ok(ally.hp>hpS,'cura um pouco');assert.ok(ally.hp-hpS<ally.maxHp*0.2,'cura pequena');
+  ally.pos.set(7,0,5);for(let i=0;i<12;i++)t.updateBolts(.1);assert.ok(vm.runInContext('followSpirits[0].ally',context)===ally,'continua com o aliado que se move');
+  for(let i=0;i<40;i++)t.updateBolts(.1);assert.equal(vm.runInContext('followSpirits.length',context),0,'some depois de 6 s');
+  ally.hp=ally.maxHp*0.9;sh.skillTimers[3]=0;sh.busy=0;assert.equal(sh.useSkill(null,false,false,3),false,'sem ferido abaixo de 70% a IA guarda');
+  ally.pos.set(-3,0,0);
   // ultimate com herói caído: ele volta
   const fallen=new t.Hero(cfg('berserker'));fallen.pos.set(2,0,2);fallen.die();assert.equal(fallen.dead,true);
   sh.skillTimers[2]=0;assert.equal(sh.useSkill(null,false,false,2),true,'a IA usa a ultimate com herói caído');sh.pendingHit.effect();
@@ -1842,7 +1876,7 @@ test('Xamã: totem de cura pulsa vida, no máximo 2 totens, raízes deixam lento
   while(t.spiritTotems.length)t.removeSpiritTotem(t.spiritTotems[0]);
   clear();
 });
-test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo, frasco volátil explode e a transmutação vira ovelhas até acabar',()=>{
+test('Alquimista: frasco de tônico cura na poça, veneno gruda no inimigo e fere ao longo do tempo, frasco volátil explode e a transmutação vira ovelhas até acabar',()=>{
   clear();t.bolts.length=0;context.flames.length=0;t.frameTargetContext.skeletons.length=0;
   assert.equal(cfg('alchemist').classId,4);
   let al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);
@@ -1858,9 +1892,17 @@ test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo
   clear();t.bolts.length=0;al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);const target=newFoe(0,-4);
   assert.equal(al.useSkill(null),true);al.pendingHit.effect();assert.equal(t.bolts.at(-1).kind,'flask');
   for(let i=0;i<30;i++)t.updateBolts(.05);
-  const first=target.hp;runPools(1);const mid=target.hp;runPools(1);
-  assert.ok(first>mid&&mid>target.hp,'o veneno continua ferindo a cada pulso');
-  runPools(6);context.flames.length=0;
+  assert.equal(context.flames.length,0,'veneno não deixa poça no chão');assert.ok(target.poisonT>0,'o veneno gruda no inimigo');
+  const total=3.5*al.skillPower+0.5*al.skillPower,tick=al.dmg*0.14;   // nível 1: 4 s de veneno, mesmo total da antiga poça
+  const first=target.hp;for(let i=0;i<10;i++)target.update(.1);const mid=target.hp;for(let i=0;i<10;i++)target.update(.1);
+  assert.ok(first>mid&&mid>target.hp,'o veneno continua ferindo a cada tique');
+  for(let i=0;i<60;i++)target.update(.1);const done=target.hp;for(let i=0;i<20;i++)target.update(.1);
+  assert.equal(target.hp,done,'o veneno acaba');
+  assert.ok(Math.abs((target.maxHp-done)-tick*Math.floor(total/0.5))<tick*1.5,'dano total concentrado no alvo = pulsos da antiga poça');
+  // o alvo se move e o veneno vai junto: nada fica no chão
+  const walker=target;al.skillTimers[0]=0;al.busy=0;t.bolts.length=0;assert.equal(al.useSkill(null),true);al.pendingHit.effect();for(let i=0;i<30;i++)t.updateBolts(.05);
+  const w0=walker.hp;walker.pos.set(8,0,8);for(let i=0;i<10;i++)walker.update(.1);assert.ok(walker.hp<w0,'o veneno segue o alvo');
+  context.flames.length=0;
   // técnica: explode no grupo depois do voo, empurra e deixa veneno
   clear();t.bolts.length=0;al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);
   const pack=[newFoe(0,-5),newFoe(0.8,-5.4),newFoe(-0.6,-5.2)];
@@ -1883,7 +1925,7 @@ test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo
   assert.ok(herd.every(s=>s.sheepT===0),'a transmutação acaba');
   clear();
 });
-test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acelera um aliado, banquete cura o grupo e encurta recargas sem zerar',()=>{
+test('Cozinheira: torta cura e dá bônus de dano na área, prato do dia acelera e protege quem está lutando, banquete cura o grupo e encurta recargas sem zerar',()=>{
   clear();context.flames.length=0;
   const k=cfg('cook');assert.equal(k.classId,4);assert.equal(t.pickGroupId(k),'suporte');assert.ok(t.variantOpen('cook'));
   assert.ok(k.hp>=175&&k.hp<=200&&k.dmg<=14,'vida de suporte e dano baixo');
@@ -1895,10 +1937,14 @@ test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acele
   runPools(2);assert.ok(ally.hp>hp0,'a poça cura');assert.equal(far.hp,far0,'fora da área não cura');
   assert.ok(ally.royalT>0&&ally.royalBonus>0&&ally.royalBonus<=0.12,'bônus pequeno de dano');
   runPools(6);assert.equal(context.flames.length,0,'a poça some');
-  // marmita: cura o mais ferido e acelera o ataque
-  clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-3);ally.hp=ally.maxHp*0.4;newFoe(0,-6);
-  assert.equal(c.useSkill(null,false,false,1),true);c.pendingHit.effect();
-  assert.ok(ally.hp>ally.maxHp*0.4,'marmita cura');assert.ok(ally.songT>0&&ally.songHaste<1,'ataque mais rápido');
+  // prato do dia: só vai para aliado em combate; acelera o ataque e dá escudo curto (sem cura)
+  clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-3);const idle=new t.Hero(cfg('paladin'));idle.pos.set(2,0,0);const foe0=newFoe(0,-5);
+  assert.equal(c.useSkill(null,false,false,1),false,'sem aliado em combate a IA guarda o prato');
+  ally.engagedWith=foe0;ally.hp=ally.maxHp;const hp1=ally.hp;
+  assert.equal(c.useSkill(null,false,false,1),true,'aliado em combate, mesmo com vida cheia');c.pendingHit.effect();
+  assert.equal(ally.hp,hp1,'o prato não cura');assert.ok(ally.songT>5&&ally.songHaste<=1/1.25+1e-9,'ataque 25% mais rápido por ~6 s');assert.ok(ally.guardT>0,'escudo curto');
+  assert.ok(!(idle.songT>0),'quem não luta não recebe');
+  c.skillTimers[1]=0;c.busy=0;assert.equal(c.useSkill(null,false,false,1),false,'não repete no aliado que já tem o prato');
   // banquete: cura em pulsos e encurta recargas (modesto, nunca zera)
   clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(1,0,0);ally.hp=ally.maxHp*0.4;far=new t.Hero(cfg('paladin'));far.pos.set(14,0,0);newFoe(0,-3);newFoe(1,-3);
   ally.skillTimers.fill(30);far.skillTimers.fill(30);

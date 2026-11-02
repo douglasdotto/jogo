@@ -46,7 +46,7 @@ for (const cfg of VARIANTS) {
   fourthEffects.add(fourth.effect);
   fourthNames.add(fourth.name);
   const cd = cooldownForSkill(cfg, 3);
-  assert.ok(cd >= 14 && cd <= 18, `${cfg.id}: recarga ${cd} fora de 14–18 s`);
+  assert.ok(cd >= 14 && cd <= 24, `${cfg.id}: recarga ${cd} fora de 14–24 s`);
   assert.ok(cooldownForSkill(cfg, 3, 3) < cd, `${cfg.id}: recarga cai com o nível`);
 }
 assert.equal(fourthEffects.size, VARIANTS.length, 'cada herói tem um efeito próprio no slot 3');

@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['shield-ricochet', 'march-decree', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'follow-spirit']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2145,7 +2145,7 @@ const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda
 const isPriorityEnemy = (s) => !s.dead && !s.spawning && (s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || !!s.kind?.priority);   // alvo prioritário da Caçada em Matilha
 const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
 const MARCH_SPEED = 0.2, MARCH_HASTE = 0.3;   // Decreto de Marcha: +20% de velocidade e recargas 30% mais rápidas
-const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'feast', 'ancestral-totem']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -4056,7 +4056,7 @@ function updateBolts(dt) {
       const d = goal.distanceTo(at);
       at.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
       if (b.base) b.mesh.position.copy(at).setY(at.y + Math.sin(Math.PI * THREE.MathUtils.clamp(1 - d / b.dist0, 0, 1)) * b.arc);
-      if (d <= 14 * dt + 0.25 && (b.kind === 'flask' || b.kind === 'tonic')) { alchemyPool(b.owner, b.target.pos, b.kind === 'tonic'); b.life = 0; }
+      if (d <= 14 * dt + 0.25 && (b.kind === 'flask' || b.kind === 'tonic')) { if (b.kind === 'tonic') alchemyPool(b.owner, b.target.pos, true); else venomStick(b.owner, b.target); b.life = 0; }
       else if (d <= 14 * dt + 0.25) {
         const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0
           : b.kind === 'pyro' ? (1.1 + (b.level - 1) * 0.2) * b.power
@@ -4119,6 +4119,7 @@ function updateBolts(dt) {
   }
   updateSentries(dt);
   updateSpiritTotems(dt);
+  updateFollowSpirits(dt);
   updateRuneDomes(dt);
 }
 
@@ -4259,6 +4260,8 @@ function updateSentries(dt) {
 
 // ---------- Totens do Xamã: aliados fixos no chão (no máximo 2 por Xamã; o mais antigo some) ----------
 const spiritTotems = [], SPIRIT_TOTEM_MAX = 2;
+const followSpirits = [], SPIRIT_PULSE = 1;   // Espírito Acompanhante do Xamã
+const ECLIPSE_BLAST = 4;   // Eclipse Rubro: raio da explosão que cura os aliados (o anel desenhado tem o mesmo tamanho)
 const TOTEM_PLANT_RANGE = 8, HEAL_TOTEM_RADIUS = 4.5;   // alcance de plantio e raio do totem de cura (cobre a formação em movimento)
 const TOTEM_LOOKS = {   // madeira, faixa, cor da marca no chão, intervalo do pulso (s)
   heal: { wood: 0x8a5a34, band: 0x3fe0b0, mark: 0x7ad8a0, every: 1 },
@@ -4345,6 +4348,33 @@ function updateSpiritTotems(dt) {
   }
 }
 
+// Espírito Acompanhante do Xamã: um espírito por Xamã segue o aliado e o cura um pouco a cada segundo
+function callFollowSpirit(owner, ally, seconds) {
+  for (const old of followSpirits) if (old.owner === owner) old.life = 0;   // o novo substitui o antigo
+  const spirit = { owner, ally, life: seconds, tickT: SPIRIT_PULSE, pulses: 0 };
+  followSpirits.push(spirit);
+  FX.followSpirit(spirit);
+  popText(ally.pos, 'Espírito!', 'evolve');
+  return spirit;
+}
+function updateFollowSpirits(dt) {
+  for (let i = followSpirits.length - 1; i >= 0; i--) {
+    const sp = followSpirits[i];
+    sp.life -= dt;
+    if (sp.life <= 0 || sp.ally.dead || sp.owner.dead) { followSpirits.splice(i, 1); continue; }
+    sp.tickT -= dt;
+    if (sp.tickT > 0) continue;
+    sp.tickT += SPIRIT_PULSE;
+    sp.pulses++;
+    const heal = Math.min(sp.ally.maxHp - sp.ally.hp, scaleBranchEffect(sp.owner, 'support', 3 + sp.owner.level * 1.5) * sp.owner.skillPower);
+    if (heal < 1) continue;
+    sp.ally.hp += heal;
+    sp.owner.stats.cura += heal;
+    popText(sp.ally.pos, '+' + Math.round(heal), 'heal');
+    FX.spiritPulse(sp);
+  }
+}
+
 // ---------- áreas no chão da Arqueira e da Alquimista (mesma lista das chamas do Piromante) ----------
 const ARCHER_SHOT = 1.3;   // Flecha longa: dano de cada inimigo atravessado (× dano do herói)
 
@@ -4379,6 +4409,17 @@ function alchemyPool(owner, at, tonic, scale = 1) {
     dmg: tonic ? 0 : owner.dmg * 0.14,
     heal: tonic ? scaleBranchEffect(owner, 'support', 5 + skillLevel(owner.level) * 2) * owner.skillPower : 0 });
   FX.pool(mesh, radius, tonic);
+}
+
+// Alquimista (Veneno Aderente): o frasco estoura no inimigo e o envenena no corpo; o mesmo total da antiga poça, concentrado no alvo
+const VENOM_EVERY = 0.5;
+function venomStick(owner, enemy) {
+  if (!enemy || enemy.dead) return;
+  enemy.poisonT = Math.max(enemy.poisonT || 0, (3.5 + skillLevel(owner.level) * 0.5) * owner.skillPower);
+  enemy.poisonTick = Math.min(enemy.poisonTick || VENOM_EVERY, VENOM_EVERY);
+  enemy.poisonDmg = Math.max(enemy.poisonDmg || 0, owner.dmg * 0.14);
+  enemy.poisonOwner = owner;
+  FX.venomHit(enemy);
 }
 
 // Cozinheira: a torta voa em arco e deixa um ensopado que cura e dá um bônus pequeno de dano a quem está nele
@@ -6099,6 +6140,41 @@ function feastTable(base, radius, duration) {
   }, 0.5);
 }
 
+// Alquimista (Veneno Aderente): o frasco estoura no alvo; depois, uma bolha sobe do corpo a cada tique
+function venomHit(enemy) {
+  const at = enemy.pos.clone().setY(enemy.pos.y + 0.8);
+  puffs(at, 4, 'venom', { spread: 0.5, size: 0.9, rise: 1.2, life: 0.9 });
+  burst(at, [0x9cff3a, 0xe8ffb0], fewer(8), 4, { size: 1.1 });
+}
+function venomDrip(enemy) {
+  puffs(enemy.pos.clone().setY(enemy.pos.y + 0.9 * (enemy.size || 1)), 1, 'venom', { spread: 0.2, size: 0.45, rise: 1, life: 0.8, opacity: 0.8 });
+}
+
+// Vampira (Eclipse Rubro): explosão de sangue; o anel mostra até onde a cura alcança
+function bloodBurst(at, radius) {
+  const p = at.clone().setY(at.y + 0.7);
+  burst(p, [0xb0243c, 0x3a0a14], fewer(10), 4, { size: 1.1 });
+  wave(at, 0xb0243c, 0.3, radius, 0.4, { opacity: 0.4 });
+}
+
+// Xamã (Espírito Acompanhante): esfera verde translúcida (sem aditivo) que gira em volta do aliado, deixando um rastro curto; o anel do pulso tem o raio da cura
+function followSpirit(sp) {
+  const m = new THREE.Mesh(shellGeo, glow(0x6fe0a0, 0.6, false));
+  m.scale.setScalar(1);
+  addFx(m, sp.life + 0.4, (e, dt) => {
+    if (!followSpirits.includes(sp)) { e.done = true; return; }
+    const a = e.t * 2.8, at = sp.ally.pos;
+    m.position.set(at.x + Math.cos(a) * 0.9, at.y + 1.5 + Math.sin(e.t * 4) * 0.12, at.z + Math.sin(a) * 0.9);
+    e.trail = (e.trail ?? 0) - dt;
+    if (e.trail <= 0) { e.trail = lowQuality ? 0.35 : 0.18; puffs(m.position, 1, 'nature', { spread: 0.05, size: 0.4, rise: 0.2, life: 0.5, opacity: 0.7 }); }
+  });
+}
+function spiritPulse(sp) {
+  const at = sp.ally.pos;
+  wave(at, 0x6fe0a0, 0.2, 1.2, 0.4, { opacity: 0.35 });
+  burst(at.clone().setY(at.y + 1.2), [0x6fe0a0, 0xe8ffd0], fewer(4), 2, { gravity: -1 });
+}
+
 // Alquimista (Grande transmutação): onda e runas rosadas; cada inimigo comum vira uma ovelha até a magia acabar
 function transmuteWave(at, radius) {
   shaderDisc('rune', 'tonic', at, radius, 1.2, { seed: 7 });
@@ -6457,7 +6533,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -7193,7 +7269,7 @@ class Hero extends Unit {
       && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -7356,15 +7432,13 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'totem-surge': {
-        // Chamado dos totens: todos os totens ativos pulsam agora e duram mais
-        const mine = spiritTotems.filter((t) => t.owner === this);
-        if (!mine.length && !force) return false;
-        effect = () => {
-          if (!mine.length) plantSpiritTotem(this, this.pos, 'heal', 6 * power, HEAL_TOTEM_RADIUS * power);   // sem totens: finca um de cura aos pés
-          for (const t of mine) if (spiritTotems.includes(t)) { t.life += skill.duration || 3; spiritTotemPulse(t); }
-          popText(this.pos, 'Totens!', 'evolve');
-        };
+      case 'follow-spirit': {
+        // Espírito Acompanhante: segue o aliado mais ferido e pulsa uma cura pequena (nada fica parado no chão)
+        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 10))
+          .reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        if (!ally || (!force && ally.hp / ally.maxHp >= 0.7)) return false;
+        target = ally;
+        effect = () => { if (!ally.dead) callFollowSpirit(this, ally, scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power)); };
         break;
       }
       case 'stone-golem': case 'little-dragon':
@@ -7786,18 +7860,17 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'blood-night': {
-        // Noite de sangue: todos os aliados curam parte do dano que causam (mesma regra da Sede de Sangue)
+      case 'blood-eclipse': {
+        // Eclipse Rubro: por alguns segundos, comuns abaixo de 30% de vida explodem em sangue ao redor da Vampira e curam os aliados (teto por uso)
+        if (!force && enemies.length < 3) return false;
         effect = () => {
-          const seconds = scaleBranchEffect(this, 'support', skill.duration || 7) * (0.9 + 0.1 * power);
-          for (const h of party) {
-            h.leechT = Math.max(h.leechT, seconds);
-            h.leech = Math.max(h.leech || 0, skill.leech || 0.25);
-            column(h.pos, color, 0.45, 2.2, 0.6, { follow: h });
-            burst(h.pos, [color, 0x3a0a14], 8, 2.5);
-          }
-          popText(this.pos, 'Noite de sangue!', 'crit');
-          wave(this.pos, color, 0.2, radius, 0.7);
+          this.eclipseT = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+          this.eclipseR = radius;
+          this.eclipseHeal = scaleBranchEffect(this, 'support', 40 + level * 12) * power;   // teto de cura por uso
+          this.eclipseTick = 0;
+          popText(this.pos, 'Eclipse!', 'crit');
+          wave(this.pos, color, 0.3, radius, 0.7, { opacity: 0.45 });
+          FX.rays(this.pos, 'rage', 0.5, 3.2, this.eclipseT, { follow: this, opacity: 0.45 });
         };
         break;
       }
@@ -8375,19 +8448,21 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'blessing': {
-        // Bênção duradoura: cura aos poucos e segura uma queda com 1 de vida
-        const pool = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 9) && !(h.blessT > 0));
-        const ally = pool.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
-        if (!ally || (!force && ally.hp / ally.maxHp > 0.6)) return false;
-        target = ally;
+      case 'protection-vow': {
+        // Voto de Proteção: por alguns segundos, o próximo golpe que mataria cada aliado próximo o deixa com 1 de vida (uma vez por aliado, sem curar)
+        const reach = skill.range || 8;
+        const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= reach);
+        const needy = allies.filter((h) => !(h.vowT > 0));
+        const danger = enemies.some((s) => s.boss || s.kind?.priority || ['Bomber', 'Priest'].includes(s.enemyKind) || s.telegraph?.interruptible && s.telegraph.t > 0);
+        if (!force && (!needy.length || !(danger || needy.some((h) => h.hp / h.maxHp < 0.5)))) return false;
         effect = () => {
-          const duration = skill.duration || 6;
-          ally.blessT = duration;
-          ally.blessBy = this;
-          ally.blessHeal = scaleBranchEffect(this, 'support', 6 + level * 2) * power;
-          popText(ally.pos, 'Abençoado!', 'heal');
-          FX.rays(ally.pos, 'holy', 0.4, 5, 0.8, { follow: ally });
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 8);
+          for (const h of party) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
+            h.vowT = seconds;
+            column(h.pos, color, 0.4, 2, 0.5, { follow: h, opacity: 0.25 });
+          }
+          popText(this.pos, 'Voto!', 'evolve');
+          wave(this.pos, color, 0.3, reach, 0.7, { opacity: 0.4 });
         };
         break;
       }
@@ -8493,21 +8568,21 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'lunchbox': {
-        // Marmita: cura o aliado mais ferido ao alcance e acelera o ataque dele por alguns segundos
-        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8))
+      case 'daily-plate': {
+        // Prato do Dia: o aliado que está em combate ganha ataque mais rápido e um escudo curto
+        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8) && h.engagedWith && !h.engagedWith.dead && !(h.songT > 1.5))
           .reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
-        if (!ally || (!force && ally.hp / ally.maxHp > 0.8)) return false;
-        target = ally;
+        if (!ally && !force) return false;
+        const served = ally || party.find((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8)) || this;
+        target = served;
         effect = () => {
-          if (ally.dead) return;
-          const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', ally.maxHp * 0.2) * power);
-          if (heal > 0) { ally.hp += heal; this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
-          ally.songT = Math.max(ally.songT, (skill.duration || 6) * (0.9 + 0.1 * power));
-          ally.songHaste = Math.min(ally.songHaste || 1, 1 / (1 + (skill.haste || 0.25)));
-          popText(ally.pos, 'Quentinho!', 'evolve');
-          FX.foodToss(this, ally.pos, 0.35);
-          FX.foodPop(ally.pos);
+          if (served.dead) return;
+          served.songT = Math.max(served.songT, (skill.duration || 6) * (0.9 + 0.1 * power));
+          served.songHaste = Math.min(served.songHaste || 1, 1 / (1 + (skill.haste || 0.25)));
+          served.guardT = Math.max(served.guardT, 3 * power);
+          popText(served.pos, 'Prato do dia!', 'evolve');
+          FX.foodToss(this, served.pos, 0.35);
+          FX.foodPop(served.pos);
         };
         break;
       }
@@ -8911,9 +8986,10 @@ class Hero extends Unit {
     this.riposteT = 0;      // Contra-ataque do Duelista
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
     this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
-    this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
+    this.vowT = 0;          // Voto de Proteção da Clériga: o próximo golpe fatal deixa 1 de vida
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
     this.roarT = 0;         // Berro de Guerra do Brutamontes: o golpe atordoa quem está colado
+    this.eclipseT = 0; this.eclipseR = 0; this.eclipseHeal = 0; this.eclipseTick = 0;   // Eclipse Rubro da Vampira
     if (this.spearOn) this.range /= SPEAR_REACH;
     this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
     this.runeHp = 0; this.runeMax = 0; this.runeT = 0; this.runeHeal = 0; this.runePush = false; this.runeBy = null;   // runa-escudo da Rúnica
@@ -8966,10 +9042,36 @@ class Hero extends Unit {
     }
   }
 
+  // Eclipse Rubro: a cada 0,25 s, comuns abaixo de 30% de vida perto da Vampira explodem e curam os aliados em volta da explosão
+  updateEclipse(dt) {
+    this.eclipseT -= dt;
+    this.eclipseTick -= dt;
+    if (this.dead || game.over || this.eclipseT <= 0) { if (this.dead || game.over) this.eclipseT = 0; return; }
+    if (this.eclipseTick > 0) return;
+    this.eclipseTick = 0.25;
+    const reach = this.eclipseR || 10, healRadius = ECLIPSE_BLAST;
+    for (const s of skeletonsAlive()) {
+      if (s.dead || s.spawning || s.boss || s.hp >= s.maxHp * 0.3 || s.pos.distanceTo(this.pos) > reach) continue;
+      this.stats.dano += s.hp;
+      s.lastHit = this;
+      s.hp = 0;
+      s.die();
+      const per = scaleBranchEffect(this, 'support', 4 + skillLevel(this.level) * 1.5) * this.skillPower;
+      for (const h of partyNow()) if (!h.dead && this.eclipseHeal > 0 && h.pos.distanceTo(s.pos) <= healRadius) {
+        const heal = Math.min(h.maxHp - h.hp, per, this.eclipseHeal);
+        if (heal < 1) continue;
+        h.hp += heal; this.eclipseHeal -= heal; this.stats.cura += heal;
+        popText(h.pos, '+' + Math.round(heal), 'heal');
+      }
+      FX.bloodBurst(s.pos, healRadius);
+    }
+  }
+
   updateSkillStates(dt) {
+    if (this.eclipseT > 0) this.updateEclipse(dt);
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.roarT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.roarT -= dt; this.vowT -= dt;
     this.echoT -= dt; this.frostT -= dt; this.frostGapT -= dt; this.critT -= dt;
     if (this.pactT > 0 && (this.pactT -= dt) <= 0) this.pactShield = 0;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
@@ -8983,11 +9085,6 @@ class Hero extends Unit {
           burst(tmp.copy(this.pos).add(mate.pos).multiplyScalar(0.5), [0x8a1a2e, 0x3a0a14], 2, 0.8);
         }
       }
-    }
-    if (this.blessT > 0) {
-      this.blessT -= dt;
-      const heal = Math.min(this.maxHp - this.hp, this.blessHeal * dt);
-      if (heal > 0 && !this.dead) { this.hp += heal; if (this.blessBy?.stats) this.blessBy.stats.cura += heal; }
     }
     this.hpSampleT -= dt;
     if (this.hpSampleT <= 0) {
@@ -9044,10 +9141,10 @@ class Hero extends Unit {
         this.bondWith.hp -= taken; this.bondWith.stats.recebido += taken; popText(this.bondWith.pos, taken, 'hurt');
       }
     }
-    if (this.blessT > 0 && n >= this.hp && this.hp > 1) {
-      n = this.hp - 1;
-      this.blessT = 0;
-      popText(this.pos, 'Bênção!', 'evolve');
+    if (this.vowT > 0 && n >= this.hp) {   // Voto de Proteção: uma vez por aliado, o golpe fatal deixa 1 de vida
+      n = Math.max(0, this.hp - 1);
+      this.vowT = 0;
+      popText(this.pos, 'Salvo!', 'evolve');
       FX.rays(this.pos, 'holy', 0.45, 4, 0.8, { follow: this });
     }
     if (n >= this.hp && runeDomeCovers(this)) {   // cúpula rúnica: ninguém dentro cai
@@ -10331,6 +10428,10 @@ class Skeleton extends Unit {
     this.burnDmg = 0;
     this.burnOwner = null;
     this.weakT = 0;       // Escudo Ricochete: causa −25% de dano em aliados enquanto durar
+    this.poisonT = 0;     // Veneno Aderente da Alquimista: dano ao longo do tempo no corpo
+    this.poisonTick = 0;
+    this.poisonDmg = 0;
+    this.poisonOwner = null;
     this.tauntT = 0;
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
@@ -10434,6 +10535,15 @@ class Skeleton extends Unit {
     if (this.burnT > 0 && this.burnTick <= 0 && this.burnOwner && !this.dead) {
       this.takeDamage(this.burnDmg, this.pos, this.burnOwner);
       this.burnTick = 0.65;
+    }
+    if (this.poisonT > 0) {
+      this.poisonT = Math.max(0, this.poisonT - dt);
+      this.poisonTick -= dt;
+      if (this.poisonTick <= 0 && this.poisonOwner && !this.dead) {
+        this.poisonTick += VENOM_EVERY;
+        this.takeDamage(this.poisonDmg, null, this.poisonOwner, false, true);
+        FX.venomDrip(this);
+      }
     }
     this.root.rotation.z = this.rootT > 0 && !this.dead ? Math.sin(this.rootT * 45) * 0.05 : 0;   // preso pelos galhos: treme tentando se soltar
     this.tauntT -= dt;
@@ -11493,6 +11603,7 @@ function startGame(view = 'menu') {
   }
   while (sentries.length) removeSentry(sentries[0]);
   while (spiritTotems.length) removeSpiritTotem(spiritTotems[0]);
+  followSpirits.length = 0;
   clearFx();
   FX.clear();
   audio.stopMusic();

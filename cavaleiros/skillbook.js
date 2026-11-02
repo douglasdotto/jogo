@@ -91,7 +91,7 @@ const EXTRA_SKILLS = {
   cleric: [
     { name: 'Manto de Misericórdia', description: 'Protege os aliados próximos contra parte do dano recebido.', effect: 'ward', cooldown: 20, duration: 5.5, color: 0xffd676 },
     { name: 'Milagre Radiante', description: 'Uma onda de luz cura o grupo e fere os inimigos próximos.', effect: 'holy-nova', cooldown: 70, radius: 7.5, power: 2.25, color: 0xffe8a3 },
-    { name: 'Bênção Duradoura', description: 'Abençoa o aliado mais ferido: recupera vida aos poucos e, se cair a zero, resiste com 1 de vida.', effect: 'blessing', cooldown: 18, range: 9, duration: 6, color: 0xffe8a3 },
+    { name: 'Voto de Proteção', description: 'Por 8 s, o próximo golpe que mataria um aliado próximo (até 8 m) o deixa com 1 de vida. Uma vez por aliado, sem curar.', effect: 'protection-vow', cooldown: 24, range: 8, duration: 8, color: 0xffe8a3 },
   ],
   bard: [
     { name: 'Refrão de Impacto', description: 'Uma batida sonora empurra os inimigos ao redor.', effect: 'burst', cooldown: 21, radius: 5, power: 1.45, control: 'push', color: 0xe9a7ff },
@@ -145,18 +145,18 @@ const EXTRA_SKILLS = {
   ],
   vampire: [
     { name: 'Vínculo de Sangue', description: 'Liga o aliado mais ferido ao mais próximo por alguns segundos: os dois dividem o dano que receberem.', effect: 'blood-bond', cooldown: 18, range: 9, duration: 6, share: 0.5, color: 0xa81c34 },
-    { name: 'Noite de Sangue', description: 'Por alguns segundos, todos os aliados curam parte do dano que causam.', effect: 'blood-night', cooldown: 70, radius: 14, duration: 7, leech: 0.25, color: 0x8a1a2e },
+    { name: 'Eclipse Rubro', description: 'Por 6 s, inimigos comuns abaixo de 30% de vida explodem em sangue ao redor da Vampira e curam os aliados por perto. Chefes resistem.', effect: 'blood-eclipse', cooldown: 65, radius: 10, duration: 6, color: 0x8a1a2e },
     { name: 'Beijo Sombrio', description: 'Morde o inimigo mais perigoso à frente e devolve todo o dano como cura ao aliado mais ferido.', effect: 'blood-kiss', cooldown: 17, range: 6, power: 1.5, color: 0xc8465e },
   ],
   cook: [
-    { name: 'Marmita', description: 'Entrega uma marmita quentinha a um aliado: cura e ataque mais rápido por alguns segundos.', effect: 'lunchbox', cooldown: 18, range: 8, duration: 6, haste: 0.25, color: 0xffb347 },
+    { name: 'Prato do Dia', description: 'Serve um prato a um aliado que está lutando: ataque 25% mais rápido e um escudo curto por alguns segundos.', effect: 'daily-plate', cooldown: 16, range: 8, duration: 6, haste: 0.25, color: 0xffb347 },
     { name: 'Banquete', description: 'Uma mesa farta surge no chão: cura os aliados próximos aos poucos e agiliza as recargas das habilidades.', effect: 'feast', cooldown: 70, radius: 5.5, duration: 6, haste: 0.25, color: 0xffd27a },
     { name: 'Tempero Forte', description: 'Uma pitada de pimenta: aliados próximos batem mais forte por alguns segundos.', effect: 'spice', cooldown: 18, radius: 6, duration: 6, bonus: 0.15, color: 0xff6a3a },
   ],
   shaman: [
     { name: 'Totem de Raízes', description: 'Finca um totem que deixa os inimigos da área lentos e prende os comuns por um instante.', effect: 'root-totem', targeting: 'ground', cooldown: 18, range: 9, radius: 4, duration: 7, control: 'slow', color: 0xc8a050 },
     { name: 'Totem Ancestral', description: 'Traz de volta um herói caído; se ninguém caiu, cura bastante o grupo e dá um escudo.', effect: 'ancestral-totem', cooldown: 72, radius: 7, duration: 6, color: 0xffd866 },
-    { name: 'Chamado dos Totens', description: 'Todos os totens ativos pulsam agora e duram mais 3 s.', effect: 'totem-surge', cooldown: 16, duration: 3, color: 0x6fe0a0 },
+    { name: 'Espírito Acompanhante', description: 'Um espírito segue o aliado mais ferido por 6 s e o cura um pouco a cada segundo.', effect: 'follow-spirit', cooldown: 16, range: 10, duration: 6, color: 0x6fe0a0 },
   ],
   oracle: [
     { name: 'Visão do Alvo', description: 'Por 5 s, aliados próximos ganham +25% de chance de crítico e o inimigo mais frágil fica marcado: recebe +10% de dano de todos.', effect: 'vision-mark', cooldown: 20, radius: 10, duration: 5, bonus: 0.25, mark: 0.1, color: 0xc6b4ff },
