@@ -2139,7 +2139,7 @@ const SKILL_GLYPHS = {
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
   shaman: ['♣', '☘', '☥', '✺'],
-  illusionist: ['☻', '⇄', '▦', '☁'],
+  illusionist: ['☻', '⇄', '❢', '◐'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
@@ -8334,32 +8334,44 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'mirror-hall': {
-        // Salão de Espelhos: três imagens (2 golpes cada) cercam o Ilusionista; cada inimigo próximo escolhe uma e, ao quebrá-la, perde o golpe
+      case 'panic': {
+        // Pânico: os inimigos comuns em volta do alvo atacam o vizinho mais próximo (com metade do dano) em vez dos heróis; chefe só desacelera
+        const commons = enemies.filter((s) => !s.boss && !s.totem);
+        const { center: anchor, count } = densest(commons, radius, force && commons.includes(target) ? target : null);
+        if (!anchor) return false;
+        if (!force && count < 3 && !(count >= 2 && (criticalAlly || missingHp > this.maxHp * 0.3))) return false;
+        target = anchor;
         effect = () => {
-          const life = scaleBranchEffect(this, 'control', skill.duration + 1) * (0.9 + 0.1 * power), base = Math.random() * Math.PI * 2;
-          const images = [0, 1, 2].map((i) => {
-            const a = base + (i * Math.PI * 2) / 3;
-            return new Illusion(this, illusionSpot(this, new THREE.Vector3(this.pos.x + Math.cos(a), this.pos.y, this.pos.z + Math.sin(a)), 2.3), { kind: 'mirror', life, hits: 2 });
-          });
-          for (const enemy of enemies) illusionTaunt(enemy, images[Math.floor(Math.random() * images.length)], scaleBranchEffect(this, 'control', 3.5) * power, true);
-          wave(this.pos, color, 0.3, radius, 0.8, { opacity: 0.6 });
-          popText(this.pos, 'Espelhos!', 'evolve');
+          const center = anchor.dead ? this.pos.clone() : anchor.pos.clone();
+          const seconds = scaleBranchEffect(this, 'control', skill.duration || 3) * (0.9 + 0.1 * power);
+          for (const s of skeletonsAlive()) {
+            if (s.spawning || s.totem || s.pos.distanceTo(center) > radius + 0.4 * (s.size - 1)) continue;
+            if (s.boss) { controlEnemy(s, 'slowT', seconds); continue; }
+            s.panicT = Math.max(s.panicT, seconds); s.panicVictim = null; s.panicLook = 0; s.pendingHit = null;
+            FX.statusMark(s, 'panicT', color);
+          }
+          wave(center, color, 0.3, radius, 0.8, { opacity: 0.5 });
+          FX.illusionSmoke(center, 4);
+          popText(center, 'Pânico!', 'evolve');
         };
         break;
       }
-      case 'mirage': {
-        // Miragem: os aliados próximos desviam do próximo golpe por alguns segundos
-        const exposed = party.filter((h) => h.pos.distanceTo(this.pos) <= radius && !(h.mirageT > 0));
-        if (!force && (!exposed.length || enemies.length < 2)) return false;
+      case 'dazzle': {
+        // Ofuscar: névoa de luz nos olhos dos inimigos próximos: erram parte dos golpes por alguns segundos (chefe, menos)
+        const hitsHero = (s) => s.pendingHit?.target?.team === 'hero' || (s.target?.team === 'hero' && s.pos.distanceTo(s.target.pos) <= (s.range || 1.5) + 1.5);
+        const attacking = enemies.filter((s) => !s.totem && !(s.blindT > 1) && hitsHero(s));
+        if (!force && attacking.length < 2) return false;
         effect = () => {
-          const duration = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
-          for (const h of party) if (h.pos.distanceTo(this.pos) <= radius) {
-            h.mirageT = Math.max(h.mirageT, duration);
-            FX.illusionSmoke(h.pos, 2);
+          const seconds = scaleBranchEffect(this, 'control', skill.duration || 4) * (0.9 + 0.1 * power);
+          for (const s of skeletonsAlive()) {
+            if (s.spawning || s.totem || s.pos.distanceTo(this.pos) > radius + 0.4 * (s.size - 1)) continue;
+            s.blindT = Math.max(s.blindT, seconds);
+            s.blindMiss = s.boss ? 0.25 : 0.5;
+            FX.statusMark(s, 'blindT', color);
           }
-          wave(this.pos, color, 0.2, radius, 0.7, { opacity: 0.5 });
-          popText(this.pos, 'Miragem!', 'evolve');
+          wave(this.pos, color, 0.3, radius, 0.7, { opacity: 0.5 });
+          FX.illusionSmoke(this.pos, 3);
+          popText(this.pos, 'Ofuscar!', 'evolve');
         };
         break;
       }
@@ -8599,7 +8611,6 @@ class Hero extends Unit {
     this.vampFrac = 0;      // Vampira: fração do dano que vira cura durante uma técnica
     this.iceSkinT = 0;      // Pele de Gelo do Viking do Gelo
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
-    this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
     this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
@@ -8637,7 +8648,7 @@ class Hero extends Unit {
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.omenT -= dt; this.leechT -= dt; this.wallT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
       const mate = this.bondWith;
@@ -8666,7 +8677,6 @@ class Hero extends Unit {
   // dano já reduzido chegando ao herói: segundas técnicas podem esquivar, aparar, refletir, dividir ou segurar a queda
   skillGuard(n, owner) {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
-    if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.wallT > 0) n *= 0.5;
     if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
@@ -9172,8 +9182,8 @@ const SKILL_ANIMS = {
   illusionist: [
     { clip: 'Dodge_Left', f: 0.5, lean: 0.1, kick: -0.5 },                                      // gira de lado e a cópia fica no lugar
     { clip: 'Dodge_Backward', f: 0.5, hop: 0.25, spin: 0.5 },                                    // troca de lugar com um salto
-    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, spin: 1.5, float: 0.4 },          // os espelhos giram em volta
-    { clip: 'Interact', f: 0.4, hop: 0.12, lean: -0.1 },                                         // um aceno e a névoa cobre o grupo
+    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, spin: 1.5, float: 0.4 },          // o medo gira em volta dos inimigos
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.5, float: 0.2, lean: -0.1 },           // a mão se ergue e um clarão ofusca
   ],
 };
 
@@ -10112,6 +10122,14 @@ class Skeleton extends Unit {
       if (held !== target && !held.dead && !held.untargetable && target.engageFull === engageGeneration - 1
         && held.pos.distanceTo(this.pos) < target.pos.distanceTo(this.pos) + 4) target = held;
       else this.engageSwitched = null;
+    }
+    if (this.panicT > 0 && !this.boss) {   // Pânico: ataca o inimigo mais próximo em vez dos heróis
+      this.panicLook -= dt;
+      if (!this.panicVictim || this.panicVictim.dead || this.panicLook <= 0) {
+        this.panicLook = 0.5;
+        this.panicVictim = nearest(this.pos, (activeTargetContext?.skeletons ?? skeletonsAlive()).filter((o) => o !== this && !o.dead && !o.spawning && !o.totem && !(o.sheepT > 0)));
+      }
+      target = this.panicVictim;
     }
     this.target = target;
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)

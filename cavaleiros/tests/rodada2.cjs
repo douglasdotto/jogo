@@ -1386,14 +1386,19 @@ test('Ilusionista: cópia provoca e some ao primeiro golpe; espelhos confundem; 
   copy.takeDamage(10,null,e1);
   assert.equal(copy.dead,true);assert.ok(e1.stunT>0);assert.equal(images().length,0);
   copy.update(0.3);assert.ok(!t.units.includes(copy),'some em fumaça');
-  // salão: três imagens de dois golpes cada
-  cast(2);
-  const hall=images();assert.equal(hall.length,3);assert.ok(hall.every(i=>i.hits===2&&i.kind==='mirror'));
-  assert.ok(hall.includes(e1.taunt)&&hall.includes(e2.taunt),'cada inimigo escolhe uma imagem');
-  hall[0].takeDamage(5,null,e1);assert.equal(hall[0].dead,false);hall[0].takeDamage(5,null,e1);assert.equal(hall[0].dead,true);
-  hall[0].update(0.3);
-  for(let i=0;i<3;i++){h.busy=0;cast(2);}
-  assert.ok(images().length<=4,'no máximo 4 imagens por herói');
+  // pânico: comuns perto do alvo atacam o vizinho com metade do dano; chefe só desacelera
+  e1.pendingHit={target:h,t:1};cast(2,e1);
+  assert.ok(e1.panicT>2.5&&e2.panicT>2.5,'comuns em pânico');assert.equal(boss.panicT<=0,true,'chefe não entra em pânico');assert.ok(boss.slowT>0,'chefe desacelera');
+  assert.equal(e1.pendingHit,null,'o golpe a caminho do herói é cancelado');
+  e1.update(0.1);assert.notEqual(e1.target?.team,'hero','em pânico, o alvo é um vizinho');
+  const hp2=e2.hp;e2.takeDamage(40,null,e1);assert.equal(hp2-e2.hp,20,'o vizinho leva só metade do golpe');
+  e1.panicT=e2.panicT=0;e1.panicVictim=null;
+  // ofuscar: erram parte dos golpes (chefe, menos)
+  e1.pendingHit={target:h,t:1};e2.pendingHit={target:h,t:1};h.busy=0;cast(3,null);
+  assert.ok(e1.blindT>3.5&&e1.blindMiss===0.5&&boss.blindMiss===0.25,'cegueira em área, mais fraca no chefe');
+  h.hp=h.maxHp=100000;
+  let missed=0;for(let i=0;i<400;i++){const before=h.hp;h.takeDamage(10,null,e1);if(h.hp===before)missed++;}
+  assert.ok(missed>120&&missed<280,'cerca de metade dos golpes erra ('+missed+'/400)');
   // fim do tempo
   for(const i of images())i.life=0.01;for(const i of images())i.update(0.02);
   for(const i of [...t.units].filter(u=>u.illusion))i.update(0.3);
@@ -1403,9 +1408,6 @@ test('Ilusionista: cópia provoca e some ao primeiro golpe; espelhos confundem; 
   cast(1,null);
   assert.ok(Math.abs(h.pos.x-3)<0.01&&Math.abs(ally.pos.x)<0.01,'trocam de lugar');
   assert.equal(images().length,1);assert.strictEqual(e1.taunt,images()[0]);
-  // miragem: o próximo golpe é desviado
-  cast(3,null);
-  const hp=ally.hp;assert.ok(ally.mirageT>0);ally.takeDamage(20,null,e1);assert.equal(ally.hp,hp,'Miragem desvia o próximo golpe');
   clear();
 });
 
