@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2142,7 +2142,7 @@ const SKILL_GLYPHS = {
   illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
-const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -8038,19 +8038,21 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'blessing': {
-        // Bênção duradoura: cura aos poucos e segura uma queda com 1 de vida
-        const pool = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 9) && !(h.blessT > 0));
-        const ally = pool.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
-        if (!ally || (!force && ally.hp / ally.maxHp > 0.6)) return false;
-        target = ally;
+      case 'protection-vow': {
+        // Voto de Proteção: por alguns segundos, o próximo golpe que mataria cada aliado próximo o deixa com 1 de vida (uma vez por aliado, sem curar)
+        const reach = skill.range || 8;
+        const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= reach);
+        const needy = allies.filter((h) => !(h.vowT > 0));
+        const danger = enemies.some((s) => s.boss || s.kind?.priority || ['Bomber', 'Priest'].includes(s.enemyKind) || s.telegraph?.interruptible && s.telegraph.t > 0);
+        if (!force && (!needy.length || !(danger || needy.some((h) => h.hp / h.maxHp < 0.5)))) return false;
         effect = () => {
-          const duration = skill.duration || 6;
-          ally.blessT = duration;
-          ally.blessBy = this;
-          ally.blessHeal = scaleBranchEffect(this, 'support', 6 + level * 2) * power;
-          popText(ally.pos, 'Abençoado!', 'heal');
-          FX.rays(ally.pos, 'holy', 0.4, 5, 0.8, { follow: ally });
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 8);
+          for (const h of party) if (!h.dead && h.pos.distanceTo(this.pos) <= reach) {
+            h.vowT = seconds;
+            column(h.pos, color, 0.4, 2, 0.5, { follow: h, opacity: 0.25 });
+          }
+          popText(this.pos, 'Voto!', 'evolve');
+          wave(this.pos, color, 0.3, reach, 0.7, { opacity: 0.4 });
         };
         break;
       }
@@ -8574,7 +8576,7 @@ class Hero extends Unit {
     this.riposteT = 0;      // Contra-ataque do Duelista
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
     this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
-    this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
+    this.vowT = 0;          // Voto de Proteção da Clériga: o próximo golpe fatal deixa 1 de vida
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
     this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
     if (this.spearOn) this.range /= SPEAR_REACH;
@@ -8611,7 +8613,7 @@ class Hero extends Unit {
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt; this.vowT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
       const mate = this.bondWith;
@@ -8623,11 +8625,6 @@ class Hero extends Unit {
           burst(tmp.copy(this.pos).add(mate.pos).multiplyScalar(0.5), [0x8a1a2e, 0x3a0a14], 2, 0.8);
         }
       }
-    }
-    if (this.blessT > 0) {
-      this.blessT -= dt;
-      const heal = Math.min(this.maxHp - this.hp, this.blessHeal * dt);
-      if (heal > 0 && !this.dead) { this.hp += heal; if (this.blessBy?.stats) this.blessBy.stats.cura += heal; }
     }
     this.hpSampleT -= dt;
     if (this.hpSampleT <= 0) {
@@ -8667,10 +8664,10 @@ class Hero extends Unit {
         this.bondWith.hp -= taken; this.bondWith.stats.recebido += taken; popText(this.bondWith.pos, taken, 'hurt');
       }
     }
-    if (this.blessT > 0 && n >= this.hp && this.hp > 1) {
-      n = this.hp - 1;
-      this.blessT = 0;
-      popText(this.pos, 'Bênção!', 'evolve');
+    if (this.vowT > 0 && n >= this.hp) {   // Voto de Proteção: uma vez por aliado, o golpe fatal deixa 1 de vida
+      n = Math.max(0, this.hp - 1);
+      this.vowT = 0;
+      popText(this.pos, 'Salvo!', 'evolve');
       FX.rays(this.pos, 'holy', 0.45, 4, 0.8, { follow: this });
     }
     if (n >= this.hp && runeDomeCovers(this)) {   // cúpula rúnica: ninguém dentro cai

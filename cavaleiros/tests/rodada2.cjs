@@ -1149,7 +1149,7 @@ test('cada variante oferece quatro habilidades e a ultimate tem recarga maior',(
   for(const v of t.VARIANTS){
     const skills=t.skillSetFor(v);
     assert.equal(skills.length,4,v.id);assert.deepEqual(Array.from(skills,s=>s.slot),[0,1,2,3],v.id+' slots em ordem');
-    assert.ok(t.cooldownForSkill(v,3)>=14&&t.cooldownForSkill(v,3)<=18,v.id+' segunda técnica com recarga intermediária');
+    assert.ok(t.cooldownForSkill(v,3)>=14&&t.cooldownForSkill(v,3)<=24,v.id+' segunda técnica com recarga intermediária');
     assert.ok(t.cooldownForSkill(v,2)>t.cooldownForSkill(v,3),v.id+' ultimate vs segunda técnica');
     assert.equal(t.skillSetFor(v),skills,v.id+' lista fica em cache por variante');
     assert.equal(skills.filter(s=>s.ultimate).length,1,v.id);
@@ -1184,7 +1184,7 @@ test('técnicas, segundas técnicas e ultimates das variantes executam seus efei
   }
   context.flames.length=0;clear();
 });
-test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio esquiva, bênção segura a queda e rebobinar devolve vida',()=>{
+test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio esquiva, voto de proteção segura a queda e rebobinar devolve vida',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
   const cast=(h,slot,target)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,h.cfg.id+' slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
   clear();const paladin=new t.Hero(cfg('paladin')),ally=new t.Hero(cfg('pyro'));paladin.pos.set(0,0,0);ally.pos.set(2,0,0);ally.hp=ally.maxHp*0.3;
@@ -1199,7 +1199,16 @@ test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio
   before=friend.hp;friend.takeDamage(40,null,null);assert.equal(friend.hp,before,'Presságio esquiva o primeiro dano');
   friend.takeDamage(40,null,null);assert.ok(friend.hp<before,'só o primeiro');
   clear();const cleric=new t.Hero(cfg('cleric')),hurt=new t.Hero(cfg('crossbow'));cleric.pos.set(0,0,0);hurt.pos.set(2,0,0);hurt.hp=hurt.maxHp*0.2;foe(3,0);cast(cleric,3,null);
-  assert.ok(hurt.blessT>0,'a Bênção vai para o mais ferido');hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,false,'a Bênção segura a queda');assert.equal(Math.round(hurt.hp),1);
+  assert.ok(hurt.vowT>0&&cleric.vowT>0,'o Voto cobre os aliados próximos');
+  const hpVow=hurt.hp;hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,false,'o Voto segura a queda');assert.equal(Math.round(hurt.hp),1,'deixa 1 de vida');assert.ok(hurt.hp<=hpVow,'sem curar');
+  vm.runInContext('runeDomes.length=0',context);hurt.takeDamage(99999,null,null);assert.equal(hurt.dead,true,'só uma vez por aliado');
+  clear();const vc=new t.Hero(cfg('cleric')),near=new t.Hero(cfg('guardian')),far=new t.Hero(cfg('pyro'));vc.pos.set(0,0,0);near.pos.set(5,0,0);far.pos.set(12,0,0);
+  const boss=new t.Skeleton('Warrior',1,true);boss.spawning=false;boss.busy=99;boss.pos.set(3,0,3);
+  assert.equal(vc.useSkill(boss,false,false,3),true,'a IA usa com chefe perto');vc.pendingHit.effect();vc.pendingHit=null;
+  assert.ok(near.vowT>0&&!(far.vowT>0),'só quem está a até 8 m recebe o Voto');
+  vc.skillTimers[3]=0;vc.busy=0;assert.equal(vc.useSkill(boss,false,false,3),false,'não recasta enquanto todos já têm o Voto');
+  clear();const lazy=new t.Hero(cfg('cleric')),ok=new t.Hero(cfg('guardian'));lazy.pos.set(0,0,0);ok.pos.set(2,0,0);foe(3,0);
+  assert.equal(lazy.useSkill(null,false,false,3),false,'sem perigo e sem ferido a IA guarda o Voto');
   clear();const chronist=new t.Hero(cfg('chronist')),tank=new t.Hero(cfg('guardian'));chronist.pos.set(0,0,0);tank.pos.set(2,0,0);foe(3,0);
   tank.hpHistory=[tank.maxHp];tank.hp=tank.maxHp*0.4;cast(chronist,3,null);assert.equal(tank.hp,tank.maxHp,'Rebobinar devolve a vida de 3 s atrás');
   clear();const archer=new t.Hero(cfg('archer'));archer.pos.set(0,0,0);const prey=foe(0,5);cast(archer,3,prey);

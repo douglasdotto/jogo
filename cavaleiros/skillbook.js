@@ -91,7 +91,7 @@ const EXTRA_SKILLS = {
   cleric: [
     { name: 'Manto de Misericórdia', description: 'Protege os aliados próximos contra parte do dano recebido.', effect: 'ward', cooldown: 20, duration: 5.5, color: 0xffd676 },
     { name: 'Milagre Radiante', description: 'Uma onda de luz cura o grupo e fere os inimigos próximos.', effect: 'holy-nova', cooldown: 70, radius: 7.5, power: 2.25, color: 0xffe8a3 },
-    { name: 'Bênção Duradoura', description: 'Abençoa o aliado mais ferido: recupera vida aos poucos e, se cair a zero, resiste com 1 de vida.', effect: 'blessing', cooldown: 18, range: 9, duration: 6, color: 0xffe8a3 },
+    { name: 'Voto de Proteção', description: 'Por 8 s, o próximo golpe que mataria um aliado próximo (até 8 m) o deixa com 1 de vida. Uma vez por aliado, sem curar.', effect: 'protection-vow', cooldown: 24, range: 8, duration: 8, color: 0xffe8a3 },
   ],
   bard: [
     { name: 'Refrão de Impacto', description: 'Uma batida sonora empurra os inimigos ao redor.', effect: 'burst', cooldown: 21, radius: 5, power: 1.45, control: 'push', color: 0xe9a7ff },
