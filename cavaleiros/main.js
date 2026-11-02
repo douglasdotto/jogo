@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -4164,6 +4164,7 @@ function updateSentries(dt) {
 
 // ---------- Totens do Xamã: aliados fixos no chão (no máximo 2 por Xamã; o mais antigo some) ----------
 const spiritTotems = [], SPIRIT_TOTEM_MAX = 2;
+const ECLIPSE_BLAST = 4;   // Eclipse Rubro: raio da explosão que cura os aliados (o anel desenhado tem o mesmo tamanho)
 const TOTEM_PLANT_RANGE = 8, HEAL_TOTEM_RADIUS = 4.5;   // alcance de plantio e raio do totem de cura (cobre a formação em movimento)
 const TOTEM_LOOKS = {   // madeira, faixa, cor da marca no chão, intervalo do pulso (s)
   heal: { wood: 0x8a5a34, band: 0x3fe0b0, mark: 0x7ad8a0, every: 1 },
@@ -5933,6 +5934,13 @@ function venomDrip(enemy) {
   puffs(enemy.pos.clone().setY(enemy.pos.y + 0.9 * (enemy.size || 1)), 1, 'venom', { spread: 0.2, size: 0.45, rise: 1, life: 0.8, opacity: 0.8 });
 }
 
+// Vampira (Eclipse Rubro): explosão de sangue; o anel mostra até onde a cura alcança
+function bloodBurst(at, radius) {
+  const p = at.clone().setY(at.y + 0.7);
+  burst(p, [0xb0243c, 0x3a0a14], fewer(10), 4, { size: 1.1 });
+  wave(at, 0xb0243c, 0.3, radius, 0.4, { opacity: 0.4 });
+}
+
 // Alquimista (Grande transmutação): onda e runas rosadas; cada inimigo comum vira uma ovelha até a magia acabar
 function transmuteWave(at, radius) {
   shaderDisc('rune', 'tonic', at, radius, 1.2, { seed: 7 });
@@ -6289,7 +6297,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  venomHit, venomDrip, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -6989,7 +6997,7 @@ class Hero extends Unit {
 
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -7593,18 +7601,17 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'blood-night': {
-        // Noite de sangue: todos os aliados curam parte do dano que causam (mesma regra da Sede de Sangue)
+      case 'blood-eclipse': {
+        // Eclipse Rubro: por alguns segundos, comuns abaixo de 30% de vida explodem em sangue ao redor da Vampira e curam os aliados (teto por uso)
+        if (!force && enemies.length < 3) return false;
         effect = () => {
-          const seconds = scaleBranchEffect(this, 'support', skill.duration || 7) * (0.9 + 0.1 * power);
-          for (const h of party) {
-            h.leechT = Math.max(h.leechT, seconds);
-            h.leech = Math.max(h.leech || 0, skill.leech || 0.25);
-            column(h.pos, color, 0.45, 2.2, 0.6, { follow: h });
-            burst(h.pos, [color, 0x3a0a14], 8, 2.5);
-          }
-          popText(this.pos, 'Noite de sangue!', 'crit');
-          wave(this.pos, color, 0.2, radius, 0.7);
+          this.eclipseT = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+          this.eclipseR = radius;
+          this.eclipseHeal = scaleBranchEffect(this, 'support', 40 + level * 12) * power;   // teto de cura por uso
+          this.eclipseTick = 0;
+          popText(this.pos, 'Eclipse!', 'crit');
+          wave(this.pos, color, 0.3, radius, 0.7, { opacity: 0.45 });
+          FX.rays(this.pos, 'rage', 0.5, 3.2, this.eclipseT, { follow: this, opacity: 0.45 });
         };
         break;
       }
@@ -8599,6 +8606,7 @@ class Hero extends Unit {
     this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.vowT = 0;          // Voto de Proteção da Clériga: o próximo golpe fatal deixa 1 de vida
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
+    this.eclipseT = 0; this.eclipseR = 0; this.eclipseHeal = 0; this.eclipseTick = 0;   // Eclipse Rubro da Vampira
     this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
     if (this.spearOn) this.range /= SPEAR_REACH;
     this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
@@ -8631,7 +8639,33 @@ class Hero extends Unit {
     }
   }
 
+  // Eclipse Rubro: a cada 0,25 s, comuns abaixo de 30% de vida perto da Vampira explodem e curam os aliados em volta da explosão
+  updateEclipse(dt) {
+    this.eclipseT -= dt;
+    this.eclipseTick -= dt;
+    if (this.dead || game.over || this.eclipseT <= 0) { if (this.dead || game.over) this.eclipseT = 0; return; }
+    if (this.eclipseTick > 0) return;
+    this.eclipseTick = 0.25;
+    const reach = this.eclipseR || 10, healRadius = ECLIPSE_BLAST;
+    for (const s of skeletonsAlive()) {
+      if (s.dead || s.spawning || s.boss || s.hp >= s.maxHp * 0.3 || s.pos.distanceTo(this.pos) > reach) continue;
+      this.stats.dano += s.hp;
+      s.lastHit = this;
+      s.hp = 0;
+      s.die();
+      const per = scaleBranchEffect(this, 'support', 4 + skillLevel(this.level) * 1.5) * this.skillPower;
+      for (const h of partyNow()) if (!h.dead && this.eclipseHeal > 0 && h.pos.distanceTo(s.pos) <= healRadius) {
+        const heal = Math.min(h.maxHp - h.hp, per, this.eclipseHeal);
+        if (heal < 1) continue;
+        h.hp += heal; this.eclipseHeal -= heal; this.stats.cura += heal;
+        popText(h.pos, '+' + Math.round(heal), 'heal');
+      }
+      FX.bloodBurst(s.pos, healRadius);
+    }
+  }
+
   updateSkillStates(dt) {
+    if (this.eclipseT > 0) this.updateEclipse(dt);
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
     this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt; this.vowT -= dt;

@@ -1348,11 +1348,11 @@ test('Brutamontes avança durante a Pancada e o Auto aguarda um alvo para invoca
   clear();
 });
 
-test('Vampira: garra cura o mais ferido, vínculo divide o dano, noite de sangue cura o grupo e beijo devolve o dano',()=>{
+test('Vampira: garra cura o mais ferido, vínculo divide o dano, eclipse rubro explode comuns fracos e cura o grupo e beijo devolve o dano',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
   const cast=(h,slot,target)=>{h.busy=0;assert.equal(h.useSkill(target,false,true,slot),true,'slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
   assert.equal(cfg('vampire').classId,4);assert.ok(cfg('vampire').hp>=175&&cfg('vampire').hp<=200);
-  assert.deepEqual(Array.from(t.skillSetFor(cfg('vampire')),s=>s.effect),['primary','blood-bond','blood-night','blood-kiss']);
+  assert.deepEqual(Array.from(t.skillSetFor(cfg('vampire')),s=>s.effect),['primary','blood-bond','blood-eclipse','blood-kiss']);
   clear();const v=new t.Hero(cfg('vampire')),a=new t.Hero(cfg('guardian')),b=new t.Hero(cfg('pyro'));
   v.pos.set(0,0,0);a.pos.set(2,0,0);b.pos.set(3,0,0);a.hp=a.maxHp*0.3;
   const e=foe(0,2);v.face(e.pos,1);
@@ -1367,13 +1367,29 @@ test('Vampira: garra cura o mais ferido, vínculo divide o dano, noite de sangue
   assert.ok(b1-f1.hp<20&&b2-f2.hp>0,'o par divide o dano');
   f1.hp=1.5;f2.hp=1.5;f1.takeDamage(50,null,e2);assert.equal(f2.dead,false,'ninguém cai pelo vínculo do outro');
   f1.bondT=0;f2.bondT=0;b2=f2.hp;f1.takeDamage(5,null,e2);assert.equal(f2.hp,b2,'sem vínculo, nada é dividido');
-  // noite de sangue: todos curam ao causar dano
+  // eclipse rubro: comuns abaixo de 30% explodem e curam os aliados em volta; chefe e comuns saudáveis ficam
   clear();const v3=new t.Hero(cfg('vampire')),g1=new t.Hero(cfg('guardian')),g2=new t.Hero(cfg('pyro'));
-  v3.pos.set(0,0,0);g1.pos.set(2,0,0);g2.pos.set(3,0,0);const e3=foe(0,3);cast(v3,2,e3);
-  assert.ok([v3,g1,g2].every(h=>h.leechT>0&&h.leech>=0.25),'todos os aliados ganham a cura por dano');
+  v3.pos.set(0,0,0);g1.pos.set(2,0,0);g2.pos.set(3,0,0);const e3=foe(0,3);e3.hp=e3.maxHp;
+  const weak=[foe(2,3),foe(1,4),foe(4,2)];for(const w of weak)w.hp=w.maxHp*0.2;
+  const healthy=foe(-2,4);healthy.hp=healthy.maxHp*0.5;
+  const boss=new t.Skeleton('Warrior',1,true);boss.spawning=false;boss.busy=99;boss.pos.set(0,0,-3);boss.hp=boss.maxHp*0.1;
+  assert.equal(v3.useSkill(null,false,false,2),true,'a IA usa com 3 ou mais inimigos no alcance');v3.pendingHit.effect();v3.pendingHit=null;
+  assert.ok(v3.eclipseT>5&&v3.eclipseT<=6.2,'dura cerca de 6 s');
+  g1.hp=g1.maxHp*0.3;g2.hp=g2.maxHp*0.5;const hg1=g1.hp,hg2=g2.hp;
+  v3.update(0.3);
+  assert.ok(weak.every(w=>w.dead),'comuns abaixo de 30% explodem');assert.ok(!healthy.dead&&!e3.dead,'comuns saudáveis ficam');assert.ok(!boss.dead,'chefe não é executado');
+  assert.ok(g1.hp>hg1&&g2.hp>hg2,'a explosão cura os aliados em volta');
+  const healed=(g1.hp-hg1)+(g2.hp-hg2);
+  // teto por uso: com muitas explosões a cura total não passa do teto
+  v3.eclipseHeal=5;g1.hp=1;const swarm=Array.from({length:8},(_,i)=>foe(1+i*0.2,2));for(const w of swarm)w.hp=w.maxHp*0.1;
+  const before=g1.hp;v3.eclipseTick=0;v3.update(0.3);
+  assert.ok(swarm.every(w=>w.dead)&&g1.hp-before<=5.01,'a cura de um uso tem teto');assert.ok(healed>0);
+  v3.eclipseT=0;const late=foe(1,3);late.hp=late.maxHp*0.1;v3.update(1);assert.ok(!late.dead,'acabou o tempo: ninguém explode');
   // beijo sombrio: o dano todo volta ao aliado mais ferido
   g1.hp=g1.maxHp*0.2;const h3=g1.hp,d3=e3.hp;e3.pos.set(0,0,2);cast(v3,3,e3);
   assert.ok(e3.hp<d3&&g1.hp-h3>=(d3-e3.hp)*0.95-0.01,'beijo devolve o dano como cura');
+  clear();const lone=new t.Hero(cfg('vampire'));lone.pos.set(0,0,0);foe(0,3);foe(1,3);
+  assert.equal(lone.useSkill(null,false,false,2),false,'com menos de 3 inimigos a IA guarda o Eclipse');
 });
 test('Ilusionista: cópia provoca e some ao primeiro golpe; espelhos confundem; chefe resiste; nada disso conta como herói ou invocação',()=>{
   clear();

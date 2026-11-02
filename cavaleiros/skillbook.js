@@ -145,7 +145,7 @@ const EXTRA_SKILLS = {
   ],
   vampire: [
     { name: 'Vínculo de Sangue', description: 'Liga o aliado mais ferido ao mais próximo por alguns segundos: os dois dividem o dano que receberem.', effect: 'blood-bond', cooldown: 18, range: 9, duration: 6, share: 0.5, color: 0xa81c34 },
-    { name: 'Noite de Sangue', description: 'Por alguns segundos, todos os aliados curam parte do dano que causam.', effect: 'blood-night', cooldown: 70, radius: 14, duration: 7, leech: 0.25, color: 0x8a1a2e },
+    { name: 'Eclipse Rubro', description: 'Por 6 s, inimigos comuns abaixo de 30% de vida explodem em sangue ao redor da Vampira e curam os aliados por perto. Chefes resistem.', effect: 'blood-eclipse', cooldown: 65, radius: 10, duration: 6, color: 0x8a1a2e },
     { name: 'Beijo Sombrio', description: 'Morde o inimigo mais perigoso à frente e devolve todo o dano como cura ao aliado mais ferido.', effect: 'blood-kiss', cooldown: 17, range: 6, power: 1.5, color: 0xc8465e },
   ],
   cook: [
