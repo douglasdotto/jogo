@@ -44,18 +44,18 @@ const EXTRA_SKILLS = {
     { name: 'Pele de Gelo', description: 'Cobre-se de gelo: recebe menos dano e quem o golpeia de perto fica lento e se fere.', effect: 'ice-skin', cooldown: 18, radius: 3.5, duration: 6, power: 0.4, color: 0x9cecff },
   ],
   pyro: [
-    { name: 'Onda de Brasas', description: 'Uma explosão de fogo atinge vários inimigos próximos.', effect: 'burst', cooldown: 23, radius: 5, power: 1.7, control: 'burn', color: 0xff7738 },
+    { name: 'Combustão', description: 'Detona na hora toda queimadura do campo (dano restante +25%) e incendeia os 3 inimigos mais próximos do alvo.', effect: 'combustion', targeting: 'enemy', cooldown: 20, range: 9, radius: 6, control: 'burn', color: 0xff7738 },
     { name: 'Meteoro', description: 'Invoca um meteoro que incendeia uma grande área.', effect: 'meteor', cooldown: 66, radius: 6.5, power: 3, color: 0xff542e },
     { name: 'Muralha de Fogo', description: 'Ergue uma linha de chamas na frente dos inimigos que queima quem a atravessa.', effect: 'fire-wall', targeting: 'ground', cooldown: 18, range: 8, radius: 1.1, pulse: 0.22, duration: 4, color: 0xff7738 },
   ],
   arcane: [
     { name: 'Descarga Astral', description: 'Um raio salta entre vários inimigos.', effect: 'chain', cooldown: 20, power: 1.5, jumps: 4, color: 0xb68aff },
-    { name: 'Convergência', description: 'Uma tempestade arcana atinge toda a área próxima.', effect: 'storm', cooldown: 64, radius: 7, power: 2.6, color: 0xa46cff },
-    { name: 'Translocação', description: 'Teleporta-se para longe de quem o encurrala e deixa uma explosão arcana no lugar de onde saiu.', effect: 'blink', cooldown: 17, range: 6, radius: 2.6, power: 1.3, control: 'slow', color: 0xb68aff },
+    { name: 'Colapso Gravitacional', description: 'Puxa para um ponto os inimigos em volta do alvo, atordoa por 0,8 s e fere em área. Chefe só fica lento.', effect: 'gravity-collapse', targeting: 'enemy', cooldown: 64, range: 9, radius: 7, power: 2, duration: 0.8, control: 'stun', color: 0xa46cff },
+    { name: 'Eco Arcano', description: 'Deixa um eco que repete o próximo feitiço do mago, com 60% do dano, no inimigo mais distante.', effect: 'arcane-echo', cooldown: 16, range: 10, power: 0.6, duration: 8, color: 0xb68aff },
   ],
   cryo: [
-    { name: 'Armadura de Gelo', description: 'Protege o grupo e congela quem se aproxima.', effect: 'frost-ward', cooldown: 21, radius: 4.5, duration: 5, color: 0x9deaff },
-    { name: 'Nevasca', description: 'Uma nevasca prende e fere os inimigos em grande área.', effect: 'blizzard', cooldown: 68, radius: 6.5, power: 2.1, control: 'root', color: 0x9deaff },
+    { name: 'Geada Cortante', description: 'Por 8 s, os 4 próximos golpes corpo a corpo recebidos por cada aliado próximo congelam o agressor por 1 s (um por aliado a cada 6 s). Chefe só fica lento.', effect: 'frost-guard', cooldown: 20, radius: 8, duration: 8, hits: 4, freeze: 1, color: 0x9deaff },
+    { name: 'Tormenta Móvel', description: 'Uma nevasca segue o inimigo mais forte por 5 s: deixa lento, prende por instantes e fere quem a acompanha.', effect: 'storm-cloud', targeting: 'enemy', cooldown: 66, range: 10, radius: 4.5, duration: 5, pulse: 0.24, control: 'root', color: 0x9deaff },
     { name: 'Lança de Gelo', description: 'Uma lança atravessa a fila; inimigos já lentos ou presos se estilhaçam e sofrem o dobro.', effect: 'ice-lance', targeting: 'enemy', cooldown: 17, range: 9, power: 1, color: 0x9deaff },
   ],
   assassin: [
@@ -79,9 +79,9 @@ const EXTRA_SKILLS = {
     { name: 'Contra-ataque', description: 'Assume a guarda: apara todos os golpes por instantes e devolve um corte a cada ataque corpo a corpo.', effect: 'riposte', cooldown: 18, radius: 3, duration: 2.5, power: 1.4, color: 0xc9d4e2 },
   ],
   necro: [
-    { name: 'Escudo Ósseo', description: 'Reveste o grupo com uma barreira de ossos.', effect: 'ward', cooldown: 24, duration: 6, color: 0x73d97e },
+    { name: 'Pacto de Ossos', description: 'Por 6 s, 30% do dano recebido pelos aliados próximos vira escudo, e cada herói ferido ganha um esqueleto temporário.', effect: 'bone-pact', cooldown: 22, radius: 7, duration: 6, share: 0.3, color: 0x73d97e },
     { name: 'Exército dos Mortos', description: 'Seis esqueletos brotam da terra em círculo; a onda de ossos empurra e atordoa de leve quem está perto.', effect: 'summon', cooldown: 70, count: 6, radius: 3.6, power: 0.5, color: 0x73d97e },
-    { name: 'Drenar Vida', description: 'Suga a vida de até três inimigos e a transfere aos aliados mais feridos.', effect: 'life-drain', cooldown: 18, radius: 7, power: 0.9, leech: 0.6, color: 0x73d97e },
+    { name: 'Ceifa', description: 'Marca por 6 s o inimigo mais ferido: se ele morrer, o grupo se cura em 25% da vida máxima dele e o Pacto de Ossos recarrega 3 s mais rápido.', effect: 'reap-mark', targeting: 'enemy', cooldown: 16, range: 9, duration: 6, heal: 0.25, rebate: 3, color: 0x73d97e },
   ],
   druid: [
     { name: 'Crescimento Selvagem', description: 'Raízes prendem inimigos e curam os heróis próximos.', effect: 'roots-heal', cooldown: 23, radius: 5, power: 1.2, color: 0x80d78a },
@@ -104,7 +104,7 @@ const EXTRA_SKILLS = {
     { name: 'Lança Celestial', description: 'Uma lança de luz cai sobre o inimigo mais forte e ampara o aliado mais perto dele.', effect: 'sky-lance', targeting: 'enemy', cooldown: 18, range: 9, power: 1.6, color: 0xffe27a },
   ],
   chronist: [
-    { name: 'Fagulha do Instante', description: 'Um raio temporal salta entre vários inimigos.', effect: 'chain', cooldown: 21, power: 1.3, jumps: 4, color: 0x8feaff },
+    { name: 'Eco Temporal', description: 'O inimigo mais próximo de um herói recebe de volta, 1,5 s depois, o dano que acabou de causar.', effect: 'time-echo', targeting: 'enemy', cooldown: 18, range: 9, duration: 1.5, power: 1.2, color: 0x8feaff },
     { name: 'Parada do Tempo', description: 'Prende e fere os inimigos em uma ampla área.', effect: 'blizzard', cooldown: 74, radius: 7, power: 1.9, duration: 3.5, control: 'root', color: 0x8feaff },
     { name: 'Rebobinar', description: 'Volta no tempo a vida dos aliados próximos para como estava três segundos atrás.', effect: 'rewind', cooldown: 18, radius: 9, color: 0x8feaff },
   ],
@@ -159,7 +159,7 @@ const EXTRA_SKILLS = {
     { name: 'Chamado dos Totens', description: 'Todos os totens ativos pulsam agora e duram mais 3 s.', effect: 'totem-surge', cooldown: 16, duration: 3, color: 0x6fe0a0 },
   ],
   oracle: [
-    { name: 'Passo Previsto', description: 'Durante os avisos de chefes, garante que os aliados tentem escapar das áreas anunciadas.', effect: 'oracle-dodge', cooldown: 22, radius: 12, color: 0xc6b4ff },
+    { name: 'Visão do Alvo', description: 'Por 5 s, aliados próximos ganham +25% de chance de crítico e o inimigo mais frágil fica marcado: recebe +10% de dano de todos.', effect: 'vision-mark', cooldown: 20, radius: 10, duration: 5, bonus: 0.25, mark: 0.1, color: 0xc6b4ff },
     { name: 'Destino Reescrito', description: 'Cancela os golpes anunciados por chefes próximos e os atordoa por um breve instante.', effect: 'rewrite-fate', cooldown: 72, radius: 9, duration: 1.1, control: 'stun', color: 0xe3d7ff },
     { name: 'Presságio', description: 'Mostra aos aliados próximos o próximo golpe: cada um esquiva o próximo dano em alguns segundos.', effect: 'omen', cooldown: 18, radius: 9, duration: 5, color: 0xc6b4ff },
   ],

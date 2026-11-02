@@ -41,7 +41,7 @@ const VARIANT_INFO = {
   vampire: ['Cura roubando vida', 'Rasga os inimigos à frente com uma garra; o dano causado vira cura no aliado mais ferido.', 'O vínculo divide o dano entre dois aliados. Na noite de sangue o grupo todo cura ao bater: comece a briga antes de ativar.'],
   geomancer: ['Controle de espaço', 'Ergue espinhos de pedra numa linha à frente: ferem e atordoam de leve quem estiver no caminho.', 'Use a muralha para segurar inimigos comuns longe dos atiradores. O terremoto derruba a horda e deixa o chão lento.'],
   illusionist: ['Cópias e esquiva', 'Cria uma cópia ilusória que atrai os golpes dos inimigos próximos; ela some ao levar um golpe ou com o tempo.', 'Solte a cópia na frente do grupo quando a horda chegar. Chefes resistem à provocação; a ultimate cria três imagens.'],
-  oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Passo Previsto durante um aviso para garantir que os heróis tentem escapar. Destino Reescrito interrompe ameaças próximas.'],
+  oracle: ['Previsão e interrupção', 'Dispara um estilhaço que causa dano extra e cancela o aviso de um golpe de chefe.', 'Use Visão do Alvo quando a horda chegar: crítico para o grupo e um alvo marcado. Destino Reescrito interrompe ameaças próximas.'],
   lancer: ['Lança e controle de linha', 'Estoca em linha reta: fere todos os inimigos à frente e empurra os da frente.', 'Mire na fila mais cheia. A postura segura o avanço e a carga atropela hordas comuns.'],
   brute: ['Tanque pesado', 'Soca o chão: atordoa por instantes e provoca quem está em volta. Golpes fracos quase não o ferem (−3 por golpe).', 'Deixe-o na frente contra hordas. Mais lento e com menos dano que o Guardião, mas aguenta mais.'],
 };

@@ -1875,10 +1875,10 @@ function evolutionGain(hero, id) {
 
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
-  const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
+  const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2123,14 +2123,14 @@ const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 
 const SKILL_GLYPHS = {
   paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '⚑', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
   berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
-  pyro: ['♨', '♨', '☄', '☲'], arcane: ['⚡', '✺', '✷', '⊛'], cryo: ['❄', '⛨', '❆', '⟡'],
+  pyro: ['♨', '✸', '☄', '☲'], arcane: ['⚡', '✺', '◎', '❋'], cryo: ['❄', '✥', '❅', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
   duelist: ['⚔', '✕', '✺', '⤺'],
-  king: ['♛', '✦', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '♟', '☥', '⚱'],
+  king: ['♛', '✦', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '☩', '☥', '✠'],
   druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
-  angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '⚡', '◷', '⟲'],
+  angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '↻', '◷', '⟲'],
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
-  engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
+  engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◎', '☯', '◈'],
   brute: ['⛰', '⤴', '⬢', '▥'],
   lancer: ['↟', '⇈', '♞', '⇥'],
   geomancer: ['⛰', '▤', '≋', '▲'],
@@ -2963,6 +2963,8 @@ class Unit {
       game.damageSources[name] ||= { name, damage: 0, hits: 0 };
       game.damageSources[name].damage += real;
       game.damageSources[name].hits++;
+      owner.echoDmg = (game.runTime - (owner.echoAt ?? -9) < 3 ? owner.echoDmg : 0) + real;   // Eco Temporal: dano que este inimigo causou nos últimos 3 s
+      owner.echoAt = game.runTime;
       if (hasRelic('thorn-mail') && !owner.ranged && !owner.dead) owner.takeDamage(real * 0.35, null, this);   // Cota de espinhos
     }
     this.hp -= n;
@@ -3005,6 +3007,7 @@ class Unit {
       for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
       monsterDied(this);
       relicOnKill(this);
+      if (this.reapT > 0) reapPayoff(this);   // Ceifa
     }
     if (this.aura) this.aura.visible = false;
     if (this.halo) this.halo.visible = false;
@@ -3321,7 +3324,8 @@ function damageArea(center, radius, dmg, owner = null) {
 
 function heroHit(owner, target, dmg, center = owner.pos) {
   dmg = applySynergy(owner, target, dmg);
-  const critical = owner.cfg.id === 'assassin' && Math.random() < Math.min(0.7, (0.35 + (skillLevel(owner.level) - 1) * 0.05) * owner.skillPower);
+  const critChance = (owner.cfg.id === 'assassin' ? Math.min(0.7, (0.35 + (skillLevel(owner.level) - 1) * 0.05) * owner.skillPower) : 0) + (owner.critT > 0 ? owner.critBonus : 0);   // Visão do Alvo soma ao crítico
+  const critical = critChance > 0 && Math.random() < critChance;
   const dealt = dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1);
   const hpBefore = target.hp;
   target.takeDamage(dealt, center, owner.summoner || owner, critical);
@@ -4078,9 +4082,69 @@ function updateBolts(dt) {
     bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
     if (bl.t <= 0) { scene.remove(bl.mesh); releaseFxMaterial(bl.mesh.material); blasts.splice(i, 1); }
   }
+  for (let i = skillTasks.length - 1; i >= 0; i--) {
+    const task = skillTasks[i];
+    if ((task.t -= dt) <= 0) { skillTasks.splice(i, 1); task.fn(); }
+  }
   updateSentries(dt);
   updateSpiritTotems(dt);
   updateRuneDomes(dt);
+}
+
+// ---------- Magos: marcas, ecos e nuvem móvel das técnicas novas ----------
+const skillTasks = [];   // efeitos de habilidade agendados (Eco Arcano, Eco Temporal)
+const after = (seconds, fn) => skillTasks.push({ t: seconds, fn });
+const REAP_HEAL = 0.25, REAP_REBATE = 3, REAP_CAP = 0.35;   // Ceifa: fração da vida máxima do morto · segundos tirados do slot 1 · teto por aliado (fração da vida dele)
+const NECRO_MINION_MAX = 4;   // esqueletos comuns do Necromante vivos ao mesmo tempo (a assinatura cria 2; o Pacto de Ossos completa)
+
+// Ceifa: o inimigo marcado morreu; o grupo se cura e o Pacto de Ossos recarrega mais rápido
+function reapPayoff(enemy) {
+  const owner = enemy.reapBy;
+  enemy.reapT = 0;
+  enemy.reapBy = null;
+  if (!owner || owner.dead || !units.includes(owner)) return;
+  const pool = enemy.maxHp * REAP_HEAL;
+  for (const h of partyNow()) if (!h.dead) {
+    const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(owner, 'support', Math.min(pool, h.maxHp * REAP_CAP)));
+    if (heal > 0) { h.hp += heal; owner.stats.cura += heal; popText(h.pos, '+' + Math.round(heal), 'heal'); }
+    FX.reapSoul(enemy, h);
+  }
+  owner.skillTimers[1] = Math.max(0, owner.skillTimers[1] - REAP_REBATE);
+  popText(enemy.pos, 'Ceifa!', 'crit');
+}
+
+// Eco Arcano: raio em cadeia que parte do inimigo mais distante, com parte do dano do feitiço repetido
+function arcaneEchoChain(hero, first, mult, jumps = 2) {
+  const hit = new Set();
+  let at = hero.pos, next = first;
+  for (let i = 0; i < jumps && next && !next.dead; i++) {
+    FX.zigzag(at, next.pos, i * 0.055);
+    hit.add(next);
+    heroHit(hero, next, hero.dmg * hero.skillPower * mult);
+    at = next.pos;
+    next = highestPriorityHeroTarget(hero, skeletonsAlive().filter((s) => !s.spawning && !hit.has(s) && s.pos.distanceTo(at) < 4.5), at);
+  }
+}
+
+// Tormenta Móvel: nuvem de neve que segue o inimigo; a cada pulso fere, deixa lento e, de tempos em tempos, prende por um instante
+function stormCloud(owner, prey, radius, duration, pulse, color) {
+  const mesh = groundMark(prey.pos, radius, 0x9fd8ee, 0.3);
+  let n = 0;
+  flames.push({ mesh, radius, owner, t: duration, tick: 0.15, every: 0.5, dmg: pulse, follow: prey,
+    onTick: (f) => {
+      const at = f.mesh.position, boost = ++n % 3 === 1;
+      for (const s of skeletonsAlive()) {
+        if (s.dead || s.spawning || s.pos.distanceTo(at) > radius + 0.4 * (s.size - 1)) continue;
+        controlEnemy(s, 'slowT', 1.1);
+        if (boost && !s.totem && controlEnemy(s, 'rootT', 0.7)) s.pendingHit = null;
+      }
+      if (f.follow.dead) {   // o alvo caiu: a nuvem passa para o inimigo mais próximo
+        const heir = nearest(at, skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(at) <= radius + 3));
+        if (heir) f.follow = heir;
+      }
+    } });
+  FX.stormCloud(mesh, radius);
+  return mesh;
 }
 
 function removeSentry(sentry) {
@@ -4722,6 +4786,7 @@ function updateSkillFx(dt) {
 }
 
 function clearSkillFx() {
+  skillTasks.length = 0;   // ecos agendados (Eco Arcano, Eco Temporal) não sobrevivem ao reinício
   while (skillFx.length) dropFx(skillFx.pop());
   for (const b of sparkBatches.values()) { b.list.length = 0; b.mesh.count = 0; }
   shakeK = 0;
@@ -5717,8 +5782,8 @@ function hunterShot(h, prey) {
 }
 
 // Arqueira: mira de caça girando sobre o alvo marcado enquanto a marca durar
-function huntMark(prey) {
-  const g = new THREE.Group(), mat = glow(0x3fe0b0, 0.9);
+function huntMark(prey, key = 'markT', color = 0x3fe0b0) {   // key: campo de tempo da marca (Flecha do caçador, Ceifa, Visão do Alvo)
+  const g = new THREE.Group(), mat = glow(color, 0.9);
   const rim = new THREE.Mesh(thinRingGeo, mat);
   rim.rotation.x = -Math.PI / 2;
   g.add(rim);
@@ -5729,10 +5794,110 @@ function huntMark(prey) {
     g.add(tip);
   }
   addFx(g, 99, (e, dt) => {
-    if (prey.dead || prey.markT <= 0 || !units.includes(prey)) e.done = true;
+    if (prey.dead || !(prey[key] > 0) || !units.includes(prey)) e.done = true;
     g.position.copy(prey.pos).setY(prey.pos.y + 2.3 * prey.size + Math.sin(e.t * 4) * 0.08);
     g.rotation.y += dt * 1.6;
     g.scale.setScalar(0.42 * prey.size * Math.min(1, e.t / 0.2) * (1 + 0.08 * Math.sin(e.t * 9)));
+  });
+}
+
+// ---------- Magos: visuais das técnicas novas (simples, sem brilho aditivo; o tamanho é o alcance real) ----------
+// anel fino no chão acompanhando uma unidade enquanto active() valer (buffs de aliados)
+function followRing(unit, active, color, size = 1.1, opacity = 0.45) {
+  const m = new THREE.Mesh(thinRingGeo, glow(color, opacity, false));
+  m.rotation.x = -Math.PI / 2;
+  addFx(m, 99, (e) => {
+    if (unit.dead || !active() || !units.includes(unit)) { e.done = true; return; }
+    m.position.set(unit.pos.x, unit.pos.y + 0.1, unit.pos.z);
+    m.scale.setScalar(size * Math.min(1, e.t / 0.2) * (1 + 0.05 * Math.sin(e.t * 5)));
+  });
+}
+
+// Piromante (Combustão): estouro curto no inimigo que queimava
+function combust(enemy, color = 0xff7738) {
+  wave(enemy.pos, color, 0.2, Math.max(0.9, enemy.size), 0.4, { opacity: 0.4, dust: true });
+  burst(enemy.pos.clone().setY(enemy.pos.y + 0.9 * enemy.size), [color, 0xffe070], fewer(8), 3.5);
+}
+
+// Arcano (Colapso Gravitacional): runas no raio inteiro e faíscas puxadas para o centro
+function collapse(center, radius) {
+  shaderDisc('rune', 'arcane', center, radius, 0.9, { seed: 2 });
+  wave(center, 0xa46cff, radius, 0.4, 0.6, { opacity: 0.4, dust: true });
+  const n = fewer(16);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU, p = V(center.x + Math.cos(a) * radius, center.y + 0.8, center.z + Math.sin(a) * radius);
+    particle(sparkGeo, i % 2 ? 0x8a3cff : 0xe0c8ff, p, V(-Math.cos(a) * radius * 2.2, 0.4, -Math.sin(a) * radius * 2.2), 0.45, { size: 1.2 });
+  }
+  blast(center.clone().setY(center.y + 0.8), 1.8, 0.45, 'arcane', 0.15);
+}
+
+// Arcano (Eco Arcano): esfera pequena girando em volta do mago até o eco disparar
+function echoOrb(h, color = 0xb68aff) {
+  const orb = vfxMesh('orb', 'arcane', SPRITE, { size: 0.7 });
+  addFx(orb, 99, (e) => {
+    if (h.dead || !(h.echoT > 0) || !units.includes(h)) { e.done = true; return; }
+    const a = e.t * 2.6;
+    orb.position.set(h.pos.x + Math.cos(a) * 0.95, h.pos.y + 1.5 + Math.sin(e.t * 3) * 0.12, h.pos.z + Math.sin(a) * 0.95);
+  });
+}
+
+// Criomante (Geada Cortante): anel de gelo no aliado enquanto a proteção valer
+function frostSkin(h) {
+  followRing(h, () => h.frostT > 0 && h.frostHits > 0, 0x9deaff, 1.2);
+  burst(h.pos.clone().setY(h.pos.y + 1), [0xe6fbff, 0x8be8ff], fewer(6), 2.5, { gravity: -1 });
+}
+
+// Criomante: o agressor congela em cristais
+function frostFreeze(enemy) {
+  crystals(enemy.pos, Math.max(0.9, enemy.size * 0.9));
+  burst(enemy.pos.clone().setY(enemy.pos.y + 1), [0xe6fbff, 0x8be8ff], fewer(8), 3);
+}
+
+// Criomante (Tormenta Móvel): flocos caindo e névoa fria sobre a nuvem, que acompanha o disco no chão
+function snowCloud(base, radius) {
+  addFx(new THREE.Group(), 99, (e, dt) => {
+    if (!base.parent) { e.done = true; return; }
+    e.next = (e.next ?? 0) - dt;
+    if (e.next > 0) return;
+    e.next = lowQuality ? 0.35 : 0.16;
+    const at = base.position, a = Math.random() * TAU, r = Math.sqrt(Math.random()) * radius * 0.9;
+    particle(sparkGeo, e.alt ? 0xe6fbff : 0x8be8ff, V(at.x + Math.cos(a) * r, at.y + 3.2, at.z + Math.sin(a) * r), V(rnd(0.6), -2.2, rnd(0.6)), 1.4, { size: 1 });
+    if (e.alt = !e.alt) puffs(V(at.x + Math.cos(a) * r, at.y + 0.3, at.z + Math.sin(a) * r), 1, 'frostMist', { spread: 0.2, size: 1.5, opacity: 0.5, rise: 0.3, life: 1.4 });
+  });
+}
+
+// Necromante (Pacto de Ossos): anel verde no aliado e coluna fraca ao ativar
+function pactAura(h) {
+  followRing(h, () => h.pactT > 0, 0x73d97e, 1.3);
+  column(h.pos, 0x73d97e, 0.45, 2, 0.6, { follow: h, opacity: 0.2 });
+}
+
+// Necromante (Ceifa): alma verde que sobe do morto até cada aliado
+function reapSoul(enemy, hero) {
+  const orb = vfxMesh('orb', 'necro', SPRITE, { size: 0.6 }), from = enemy.pos.clone().setY(enemy.pos.y + 1);
+  addFx(orb, 0.7, (e, dt, k) => {
+    orb.position.lerpVectors(from, V(hero.pos.x, hero.pos.y + 1.2, hero.pos.z), 1 - (1 - k) ** 2);
+    orb.position.y += Math.sin(Math.PI * k) * 0.8;
+  });
+}
+
+// Oráculo (Visão do Alvo): anel lilás no aliado com a mira aguçada
+function visionRing(h) {
+  followRing(h, () => h.critT > 0, 0xc6b4ff, 1.15);
+  rays(h.pos, 'arcane', 0.35, 2.4, 0.55, { follow: h });
+}
+
+// Cronomante (Eco Temporal): relógio no agressor, ponteiro voltando, até o dano ser devolvido
+function timeEcho(enemy, delay) {
+  const g = new THREE.Group(), mat = glow(0x8feaff, 0.7, false), rim = new THREE.Mesh(thinRingGeo, mat), hand = new THREE.Mesh(crackGeo, glow(0xffffff, 0.8, false));
+  rim.rotation.x = -Math.PI / 2;
+  hand.scale.set(0.8, 1, 1.2);
+  g.add(rim, hand);
+  addFx(g, delay, (e, dt, k) => {
+    g.position.set(enemy.pos.x, enemy.pos.y + 0.12, enemy.pos.z);
+    g.scale.setScalar(Math.max(0.8, enemy.size) * Math.min(1, e.t / 0.15));
+    hand.rotation.y -= dt * 9;
+    mat.opacity = 0.7 * (1 - k * k);
   });
 }
 
@@ -6140,7 +6305,9 @@ function bossDown(boss) {
 }
 
 // Partículas do elemento de cada herói ao soltar uma habilidade extra (fogo, gelo, arcano, luz, natureza, sombra, tempo, som).
+const OWN_FX_SKILLS = new Set(['combustion', 'gravity-collapse', 'arcane-echo', 'frost-guard', 'storm-cloud', 'bone-pact', 'reap-mark', 'vision-mark', 'time-echo']);
 function element(h, skill, target, impactPoint = null) {
+  if (OWN_FX_SKILLS.has(skill.effect)) return;   // Magos: técnicas com efeito próprio (no tamanho do alcance real)
   const id = h.cfg.id, ult = !!skill.ultimate, n = ult ? 18 : 10;
   const meteor = skill.effect === 'meteor';
   const area = !!skill.radius || !target;
@@ -6307,6 +6474,7 @@ FX.runeDome = (dome) => {   // raio da cúpula = raio real da proteção
   burst(dome.pos.clone().setY(dome.pos.y + 1), [0x6fd8e0, 0xffffff], fewer(12), 5);
 };
 Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
+Object.assign(FX, { combust, collapse, echoOrb, frostSkin, frostFreeze, stormCloud: snowCloud, pactAura, reapSoul, visionRing, timeEcho });   // Magos: técnicas novas
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
 // Ilusionista: fumaça violeta translúcida (sombra em shader, sem brilho aditivo)
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
@@ -6924,7 +7092,7 @@ class Hero extends Unit {
     } else return false;
     const [, pace, at, sound] = SKILL_MOVES[id];
     const run = effect;
-    effect = () => { audio.play(sound); FX.release(this); run(); };
+    effect = () => { audio.play(sound); FX.release(this); run(); this.fireEcho(null); };
     if (id === 'brute' && target && target.pos.distanceTo(this.pos) > this.range + 0.4 * (target.size || 1)) this.skillAdvanceTarget = target;
     this.face(target ? target.pos : this.pos.clone().add(this.fwd), 1);
     this.busy = this.skillBody(0, pace);
@@ -6968,7 +7136,7 @@ class Hero extends Unit {
 
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -7150,20 +7318,6 @@ class Hero extends Unit {
       case 'stone-golem': case 'little-dragon':
         effect = () => callSummon(this, skill.effect === 'stone-golem' ? 'golem' : 'dragon');
         break;
-      case 'oracle-dodge': {
-        const warnings = [...new Set(attackables.map((enemy) => enemy.telegraph).filter((warning) => warning?.interruptible && warning.t > 0 && warning.dodge))];
-        if (!warnings.length && !force) return false;
-        effect = () => {
-          for (const warning of warnings) {
-            if (warning.alive === false || warning.t <= 0 || !warning.dodge || warning.owner?.telegraph !== warning) continue;
-            for (const ally of party) if (ally.pos.distanceTo(warning.at) <= radius + 1) warning.dodge.set(ally, true);
-          }
-          wave(this.pos, color, 0.2, radius, 0.7);
-          if (typeof rays === 'function') for (const ally of party) if (ally.pos.distanceTo(this.pos) <= radius) rays(ally.pos, 'arcane', 0.45, 2.4, 0.55, { follow: ally });
-          burst(this.pos, [color, 0xffffff], 20, 4);
-        };
-        break;
-      }
       case 'rewrite-fate': {
         const warnings = [...new Set(attackables.map((enemy) => enemy.telegraph).filter((warning) => warning?.interruptible && warning.t > 0
           && warning.owner?.pos.distanceTo(this.pos) <= radius))];
@@ -7857,32 +8011,181 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'blink': {
-        // Translocação: foge de quem encurrala o Arcano e deixa uma explosão onde estava
-        const threats = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= 2.8);
-        if (!force && !threats.length) return false;
-        const from = this.pos.clone();
-        const away = new THREE.Vector3();
-        for (const s of threats) away.add(tmp.subVectors(from, s.pos).setY(0).normalize());
-        if (away.lengthSq() < 0.01) away.copy(this.fwd).multiplyScalar(-1);
-        away.setY(0).normalize();
-        let dest = null;
-        for (const step of [skill.range || 6, 4.5, 3]) {
-          const p = from.clone().addScaledVector(away, step);
-          if (world.canStep(from, p)) { dest = p; break; }
-        }
-        if (!dest && !force) return false;
-        target = null;
+      case 'combustion': {
+        // Combustão: detona toda queimadura ativa (dano restante +25%) e incendeia os 3 inimigos mais próximos do alvo, até 6 m do mago
+        if (target?.groundTarget) target = nearest(target.pos, targetPool);
+        if (!target || (!force && targetPool.length < 3)) return false;
+        const burning = (list) => list.filter((s) => !s.dead && s.burnT > 0 && s.burnOwner);
+        if (!force && !enemies.length && !burning(attackables).length) return false;
+        const aim = target.pos.clone();
         effect = () => {
-          if (dest) { this.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z)); this.vel.set(0, 0, 0); }
-          const area = (skill.radius || 2.6) * (0.9 + 0.1 * power);
-          for (const s of attackables) if (!s.dead && !s.spawning && s.pos.distanceTo(from) <= area + 0.4 * (s.size - 1)) {
-            damageOne(s);
-            s.slowT = Math.max(s.slowT || 0, scaleBranchEffect(this, 'control', 2.5) * power);
+          const foes = skeletonsAlive().filter((s) => !s.spawning);
+          for (const s of burning(foes)) {   // primeiro detona o que já queimava; os novos focos só acendem depois
+            const rest = s.burnDmg * Math.ceil(s.burnT / 0.65) * 1.25;
+            s.burnT = 0; s.burnTick = 0.65;
+            s.takeDamage(rest, null, this);
+            FX.combust(s);
           }
-          FX.zigzag(from, this.pos);
-          wave(from, color, 0.2, area, 0.6);
-          burst(from, [color, 0xffffff], 22, 5);
+          const center = target.dead ? aim : target.pos;
+          const reach = skill.radius || 6;
+          const picks = foes.filter((s) => !s.dead && s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1))
+            .sort((a, b) => a.pos.distanceTo(center) - b.pos.distanceTo(center)).slice(0, 3);
+          for (const s of picks) {
+            s.burnT = Math.max(s.burnT || 0, scaleBranchEffect(this, 'control', 4) * power);
+            s.burnTick = Math.min(s.burnTick || 0.5, 0.35);
+            s.burnDmg = Math.max(s.burnDmg || 0, this.dmg * power * 0.17);
+            s.burnOwner = this;
+            beam(this.pos.clone().setY(this.pos.y + 1.2), s.pos.clone().setY(s.pos.y + 0.8), color);
+            column(s.pos, color, 0.35, 2.2, 0.7, { follow: s });
+          }
+        };
+        break;
+      }
+      case 'gravity-collapse': {
+        // Colapso Gravitacional: puxa para um ponto os inimigos num raio de 7 m do alvo, atordoa e fere; chefe só desacelera
+        if (target?.groundTarget) target = nearest(target.pos, targetPool);
+        if (!target) return false;
+        const aim = target.pos.clone();
+        const caught = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(aim) <= radius + 0.4 * (s.size - 1));
+        if (!force && caught.length < 3) return false;
+        effect = () => {
+          const center = (target.dead || !units.includes(target) ? aim : target.pos).clone();
+          for (const s of skeletonsAlive()) {
+            if (s.dead || s.spawning || s.pos.distanceTo(center) > radius + 0.4 * (s.size - 1)) continue;
+            damageOne(s);
+            if (s.boss || s.totem) { controlEnemy(s, 'slowT', 3 * power); continue; }
+            const dest = s.pos.clone().lerp(center, 0.85);
+            dest.y = world.groundHeight(dest.x, dest.z);
+            if (world.canStep(s.pos, dest)) s.pos.copy(dest);
+            s.vel.set(0, 0, 0);
+            if (controlEnemy(s, 'stunT', scaleBranchEffect(this, 'control', skill.duration || 0.8) * power)) s.pendingHit = null;
+          }
+          FX.collapse(center, radius);
+        };
+        break;
+      }
+      case 'arcane-echo': {
+        // Eco Arcano: o próximo feitiço do Arcano é repetido com 60% do dano; a IA arma o eco quando a assinatura está pronta
+        if (!force && (this.echoT > 0 || this.skillTimers[0] > 0 || !target)) return false;
+        effect = () => {
+          this.echoT = scaleBranchEffect(this, 'control', skill.duration || 8) * (0.9 + 0.1 * power);
+          this.echoMult = skill.power || 0.6;
+          FX.echoOrb(this, color);
+          popText(this.pos, 'Eco armado', 'evolve');
+        };
+        break;
+      }
+      case 'frost-guard': {
+        // Geada Cortante: os golpes corpo a corpo que os aliados recebem congelam o agressor (ver skillGuard)
+        const guarded = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
+        const melee = attackables.filter((s) => !s.dead && !s.spawning && !s.ranged && s.target?.team === 'hero' && s.pos.distanceTo(s.target.pos) < 3.6 && s.target.pos.distanceTo(this.pos) <= radius);
+        if (!force && (melee.length < 2 || guarded.every((h) => h.frostT > 2 && h.frostHits > 0))) return false;
+        effect = () => {
+          const seconds = scaleBranchEffect(this, 'control', skill.duration || 8) * (0.9 + 0.1 * power);
+          for (const h of party) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
+            h.frostT = seconds; h.frostHits = skill.hits || 4; h.frostGapT = 0; h.frostFreeze = skill.freeze || 1;
+            FX.frostSkin(h);
+          }
+          wave(this.pos, color, 0.4, radius, 0.8, { opacity: 0.35, dust: true });
+          popText(this.pos, 'Geada!', 'evolve');
+        };
+        break;
+      }
+      case 'storm-cloud': {
+        // Tormenta Móvel: nuvem de neve que segue o inimigo mais forte (chefe primeiro)
+        const worth = (s) => (s.boss ? 1e6 : 0) + s.hp;
+        const pool = targetPool.filter((s) => !s.totem && s.pos.distanceTo(this.pos) <= (skill.range || 10));
+        const prey = pool.reduce((best, s) => (!best || worth(s) > worth(best) ? s : best), null);
+        if (!prey) return false;
+        if (!force && !prey.boss && pool.filter((s) => s.pos.distanceTo(prey.pos) <= radius).length < 3) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          stormCloud(this, prey, radius, scaleBranchEffect(this, 'control', skill.duration || 5), this.dmg * power * (skill.pulse || 0.24), color);
+          popText(prey.pos, 'Tormenta!', 'evolve');
+        };
+        break;
+      }
+      case 'bone-pact': {
+        // Pacto de Ossos: parte do dano que os aliados recebem vira escudo (ver skillGuard) e cada ferido ganha um esqueleto
+        const allies = party.filter((h) => h.pos.distanceTo(this.pos) <= radius);
+        if (!force && !allies.some((h) => h.hp / h.maxHp < 0.6)) return false;
+        effect = () => {
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
+          let alive = units.filter((u) => u.summoner === this && !u.dead && !u.ultimate).length;
+          for (const h of allies) {
+            if (h.dead) continue;
+            h.pactT = seconds; h.pactShare = skill.share || 0.3;
+            FX.pactAura(h);
+            if (h.hp < h.maxHp * 0.85 && alive < NECRO_MINION_MAX) {
+              const side = h.pos.x >= this.pos.x ? 1 : -1;
+              const bone = new Minion(this, side, { at: new THREE.Vector3(h.pos.x + side * 0.9, h.pos.y, h.pos.z + 0.7) });
+              bone.life = seconds;
+              alive++;
+            }
+          }
+          wave(this.pos, color, 0.4, radius, 0.8, { opacity: 0.35, dust: true });
+          popText(this.pos, 'Pacto!', 'evolve');
+        };
+        break;
+      }
+      case 'reap-mark': {
+        // Ceifa: marca o inimigo mais ferido; se ele morrer, cura o grupo e encurta a recarga do slot 1
+        const pool = targetPool.filter((s) => !s.totem && !(s.reapT > 0));
+        const prey = pool.reduce((best, s) => (!best || s.hp / s.maxHp < best.hp / best.maxHp ? s : best), null);
+        if (!prey || (!force && prey.hp / prey.maxHp >= 0.4)) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          prey.reapT = scaleBranchEffect(this, 'control', skill.duration || 6) * (0.9 + 0.1 * power);
+          prey.reapBy = this;
+          popText(prey.pos, 'Marcado!', 'crit');
+          beam(this.pos.clone().setY(this.pos.y + 1.2), prey.pos.clone().setY(prey.pos.y + 1), color);
+          FX.huntMark(prey, 'reapT', color);
+        };
+        break;
+      }
+      case 'vision-mark': {
+        // Visão do Alvo: aliados próximos ganham chance de crítico e o inimigo mais frágil fica marcado (+10% de dano de todos)
+        if (!force && enemies.length < 3) return false;
+        effect = () => {
+          const seconds = scaleBranchEffect(this, 'control', skill.duration || 5) * (0.9 + 0.1 * power);
+          for (const h of party) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) {
+            h.critT = seconds; h.critBonus = skill.bonus || 0.25;
+            FX.visionRing(h);
+          }
+          const weakest = skeletonsAlive().filter((s) => !s.spawning && !s.totem && s.pos.distanceTo(this.pos) <= radius + 0.4 * (s.size - 1))
+            .reduce((best, s) => (!best || (s.boss ? 1e9 : 0) + s.hp < (best.boss ? 1e9 : 0) + best.hp ? s : best), null);
+          if (weakest) {
+            weakest.markT = Math.max(weakest.markT || 0, seconds);
+            weakest.markBonus = Math.max(weakest.markBonus || 0, skill.mark || 0.1);
+            FX.huntMark(weakest, 'markT', color);
+          }
+          wave(this.pos, color, 0.4, radius, 0.8, { opacity: 0.35, dust: true });
+          popText(this.pos, 'Visão!', 'evolve');
+        };
+        break;
+      }
+      case 'time-echo': {
+        // Eco Temporal: o agressor prioritário de um herói recebe de volta, 1,5 s depois, o dano recente que causou
+        const now = game.runTime;
+        const recent = targetPool.filter((s) => !s.totem && s.echoDmg > 0 && now - s.echoAt < 4 && party.some((h) => h.pos.distanceTo(s.pos) < 6));
+        const prey = force && target && !target.groundTarget && targetPool.includes(target) ? target
+          : highestPriorityHeroTarget(this, recent) || (force ? nearest(this.pos, targetPool) : null);
+        if (!prey) return false;
+        target = prey;
+        effect = () => {
+          if (prey.dead) return;
+          const owed = prey.echoDmg > 0 && game.runTime - prey.echoAt < 4 ? prey.echoDmg : 0;
+          prey.echoDmg = 0;
+          const delay = skill.duration || 1.5;
+          FX.timeEcho(prey, delay);
+          after(delay, () => {
+            if (prey.dead) return;
+            prey.takeDamage(Math.max(owed, this.dmg * power * (skill.power || 1.2)), null, this);   // o piso mantém o eco útil contra golpes fracos
+            popText(prey.pos, 'Eco!', 'crit');
+            FX.combust(prey, 0x8feaff);
+          });
         };
         break;
       }
@@ -7909,32 +8212,6 @@ class Hero extends Unit {
           }
           FX.zigzag(from, end);
           burst(aim.pos, [color, 0xffffff], 16, 4);
-        };
-        break;
-      }
-      case 'life-drain': {
-        // Drenar vida: fere até três inimigos e transfere parte do dano aos aliados mais feridos
-        if (!force && !wounded.length && enemies.length < 3) return false;
-        const victims = prioritizedHeroTargets(this, enemies).slice(0, 3);
-        if (!victims.length) return false;
-        effect = () => {
-          let drained = 0;
-          for (const enemy of victims) {
-            if (enemy.dead) continue;
-            const before = enemy.hp;
-            damageOne(enemy);
-            drained += Math.max(0, before - Math.max(0, enemy.hp));
-            FX.zigzag(enemy.pos, this.pos);
-          }
-          let pool = scaleBranchEffect(this, 'support', drained * (skill.leech || 0.6));
-          for (const ally of [...party].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)) {
-            if (pool <= 0) break;
-            const heal = Math.min(ally.maxHp - ally.hp, pool);
-            if (heal <= 0) continue;
-            ally.hp += heal; pool -= heal; this.stats.cura += heal;
-            popText(ally.pos, '+' + Math.round(heal), 'heal');
-          }
-          burst(this.pos, [color, 0x1e4a24], 16, 3);
         };
         break;
       }
@@ -8414,7 +8691,7 @@ class Hero extends Unit {
     this.busy = this.skillBody(slot, pace * (skill.ultimate ? 0.82 : 0.92), skill.ultimate);
     const hitAt = this.busy * at;
     const pending = { target, skill, slot, meteorImpact: meteorImpactAt, effect: null, t: hitAt };
-    pending.effect = () => { audio.play(sound); FX.release(this, skill.ultimate, skill.effect === 'meteor' ? 0 : radius); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target, pending.meteorImpact); };
+    pending.effect = () => { audio.play(sound); FX.release(this, skill.ultimate, skill.effect === 'meteor' ? 0 : radius); this.ultHit = !!skill.ultimate; effect(); this.ultHit = false; FX.element(this, skill, target, pending.meteorImpact); if (skill.effect !== 'arcane-echo') this.fireEcho(skill); };
     this.pendingHit = pending;
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
@@ -8580,6 +8857,27 @@ class Hero extends Unit {
     if (this.spearOn) this.range /= SPEAR_REACH;
     this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
     this.runeHp = 0; this.runeMax = 0; this.runeT = 0; this.runeHeal = 0; this.runePush = false; this.runeBy = null;   // runa-escudo da Rúnica
+    this.echoT = 0; this.echoMult = 0.6;                     // Eco Arcano do Arcano: repete o próximo feitiço
+    this.frostT = 0; this.frostHits = 0; this.frostGapT = 0; this.frostFreeze = 1;   // Geada Cortante do Criomante
+    this.pactT = 0; this.pactShield = 0; this.pactShare = 0.3;   // Pacto de Ossos do Necromante
+    this.critT = 0; this.critBonus = 0;                      // Visão do Alvo do Oráculo: chance extra de crítico
+  }
+
+  // Eco Arcano: o próximo feitiço do Arcano é repetido, depois de um instante, no inimigo mais distante do alcance
+  fireEcho(skill) {
+    if (!(this.echoT > 0)) return;
+    this.echoT = 0;
+    const reach = Math.max(10, this.range + 2);
+    let far = null, farD = -1;
+    for (const s of activeTargetContext?.skeletons ?? skeletonsAlive()) {
+      if (s.dead || s.spawning) continue;
+      const d = s.pos.distanceTo(this.pos);
+      if (d <= reach + 0.4 * (s.size - 1) && d > farD) { far = s; farD = d; }
+    }
+    if (!far) return;
+    const mult = Math.min(skill?.power || 0.9, 1.5) * this.echoMult;   // a ultimate repetida não passa do teto de uma técnica
+    after(0.45, () => { if (!this.dead && !game.over) arcaneEchoChain(this, far.dead ? nearest(far.pos, skeletonsAlive().filter((s) => !s.spawning)) : far, mult); });
+    popText(this.pos, 'Eco!', 'evolve');
   }
 
   // Lanceiro: a postura estende o alcance e, a cada pulso, fere e freia quem está ao alcance da lança
@@ -8612,6 +8910,8 @@ class Hero extends Unit {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
     this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.echoT -= dt; this.frostT -= dt; this.frostGapT -= dt; this.critT -= dt;
+    if (this.pactT > 0 && (this.pactT -= dt) <= 0) this.pactShield = 0;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
       const mate = this.bondWith;
@@ -8643,7 +8943,25 @@ class Hero extends Unit {
     if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.wallT > 0) n *= 0.5;
     if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
+    if (this.pactShield > 0) {   // Pacto de Ossos: o escudo comido de golpes anteriores absorve primeiro
+      const soak = Math.min(n, this.pactShield);
+      this.pactShield -= soak; n -= soak;
+      if (this.synergyNoticeT <= 0) { popText(this.pos, '⛨' + Math.round(soak), 'block'); this.synergyNoticeT = 0.6; }
+      if (n <= 0) return 0;
+    }
+    if (this.pactT > 0) this.pactShield = Math.min(this.maxHp * 0.5, this.pactShield + n * this.pactShare);   // 30% do dano que passa vira escudo
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
+    if (melee && this.frostT > 0 && this.frostHits > 0) {   // Geada Cortante: congela o agressor (um por aliado a cada 6 s)
+      this.frostHits--;
+      if (this.frostGapT <= 0) {
+        this.frostGapT = 6;
+        if (owner.boss || owner.totem) controlEnemy(owner, 'slowT', 2.5);
+        else if (controlEnemy(owner, 'stunT', this.frostFreeze)) owner.pendingHit = null;
+        owner.slowT = Math.max(owner.slowT || 0, 1.5);
+        popText(owner.pos, 'Congelado!', 'crit');
+        FX.frostFreeze(owner);
+      }
+    }
     if (this.riposteT > 0) {
       popText(this.pos, 'Aparou!', 'block');
       if (melee) { heroHit(this, owner, this.dmg * this.skillPower * (this.riposteBy || 1.4)); FX.bladeCut(owner, this, 0); }
@@ -8988,7 +9306,7 @@ const SKILL_ANIMS = {
   ],
   pyro: [
     { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -1 },
-    { clip: '2H_Melee_Attack_Spin', f: 0.5, arc: 'ring', spin: 1 },
+    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, lean: 0.14, kick: -0.5 },   // Combustão: pose firme e estalo à distância
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.6, lean: -0.22, float: 0.25 },
     { clip: 'Spellcast_Long', f: 0.5, lean: 0.15, kick: -0.4 },
   ],
@@ -8996,7 +9314,7 @@ const SKILL_ANIMS = {
     { clip: '1H_Ranged_Shoot', hold: 'Spellcasting', f: 0.3, kick: -0.8 },
     { clip: 'Spellcast_Raise', f: 0.44, arc: 'thrust', spin: 0.6, float: 0.28, lean: 0.12, kick: -0.35 },
     { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.55, float: 0.45 },
-    { clip: 'Dodge_Backward', f: 0.45, float: 0.2, kick: -1.6 },
+    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.5, float: 0.2, lean: -0.15 },   // Eco Arcano: invoca o eco ao lado
   ],
   cryo: [
     { clip: '1H_Ranged_Shooting', hold: '1H_Ranged_Aiming', f: 0.3, kick: -1 },
@@ -9030,9 +9348,9 @@ const SKILL_ANIMS = {
   ],
   necro: [
     { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, lean: -0.1 },
-    { clip: 'Spellcast_Shoot', f: 0.5, kick: -0.8 },
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.5, lean: -0.1, kick: -0.4 },   // Pacto de Ossos
     { clip: '2H_Melee_Attack_Chop', hold: 'Spellcasting', f: 0.55, arc: 'ring', float: 0.3 },
-    { clip: 'Spellcast_Long', hold: 'Spellcasting', f: 0.5, lean: 0.1, float: 0.15 },
+    { clip: '1H_Ranged_Shoot', f: 0.3, lean: 0.12, kick: -0.5 },   // Ceifa: aponta a marca
   ],
   druid: [
     { clip: 'PickUp', f: 0.5, lean: 0.15 },
@@ -9827,6 +10145,7 @@ class Skeleton extends Unit {
     this.tauntT = 0;
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
+    this.reapT = 0; this.reapBy = null;   // Ceifa do Necromante: marca que cura o grupo se o inimigo morrer
     this.sheepT = 0;      // Grande transmutação: ovelha que não ataca
     this.stars = new THREE.Group();
     for (let i = 0; i < 3; i++) {
@@ -9930,6 +10249,7 @@ class Skeleton extends Unit {
     this.tauntT -= dt;
     this.markT = Math.max(0, this.markT - dt);
     if (this.markT <= 0) this.markBonus = 0;
+    this.reapT = Math.max(0, this.reapT - dt);
     this.sheepT = Math.max(0, this.sheepT - dt);
     if (this.stunT > 0 || this.sheepT > 0) { this.pendingHit = null; if (this.stunT > 0) this.vel.set(0, 0, 0); }
     this.updateCommon(dt);
