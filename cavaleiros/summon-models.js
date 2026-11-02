@@ -199,6 +199,26 @@ function summonKit() {
     [cone4, horn, [0.52, 0.03, 0.2], [0.07, 0.14, 0.07], [0.6, 0, 0]],
   ];
 
+  // ---------- slime: gosma verde de barriga clara, olhões, bochechas rosa, broto rosa na cabeça e manchinhas ----------
+  const gel = 0x6fdc8c, gelLight = 0xb4f2a4, slimePink = 0xff8ac4;
+  const slime = [
+    [round, gel, [0, 0.07, 0], [1.1, 0.24, 1.0]],
+    [round, gel, [0, 0.36, 0], [1.0, 0.8, 0.92]],
+    [round, gelLight, [0, 0.2, 0.2], [0.7, 0.42, 0.5]],
+    [round, slimePink, [-0.28, 0.62, -0.2], [0.16, 0.1, 0.16]],
+    [round, slimePink, [0.3, 0.5, -0.3], [0.2, 0.12, 0.2]],
+    [round, slimePink, [0.05, 0.4, -0.45], [0.12, 0.08, 0.12]],
+    [cone4, slimePink, [0, 0.86, -0.02], [0.12, 0.28, 0.12], [-0.15, 0, 0]],
+    [round, 0xffd0e8, [0, 1.02, -0.04], [0.15, 0.15, 0.15]],
+    [dot, ink, [0, 0.27, 0.45], [0.1, 0.045, 0.03]],
+  ];
+  for (const s of SIDES) slime.push(
+    [dot, white, [s * 0.2, 0.46, 0.4], [0.2, 0.26, 0.1], [0, s * 0.3, 0]],
+    [dot, ink, [s * 0.2, 0.45, 0.45], [0.12, 0.17, 0.06], [0, s * 0.3, 0]],
+    [dot, white, [s * 0.17, 0.5, 0.49], [0.05, 0.055, 0.02]],
+    [dot, blush, [s * 0.36, 0.3, 0.34], [0.13, 0.075, 0.05], [0, s * 0.8, 0]],
+  );
+
   const additive = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
   const glowMap = summonGlowTexture();
   summonParts = {
@@ -225,6 +245,7 @@ function summonKit() {
     dragonBody: summonMerge(dragonBody), dragonHead: summonMerge(dragonHead), dragonTail: summonMerge(dragonTail),
     dragonJaw: summonMerge([[round, belly, [0, -0.04, 0.14], [0.34, 0.12, 0.28]]]),
     dragonWing: summonMerge(dragonWing, 0.12),
+    slimeBody: summonMerge(slime, 0.2),
   };
   for (const value of Object.values(summonParts)) if (value?.isMaterial) value.userData.keep = true;
   for (const g of [round, dot, gem, box, boxSoft, block, cyl, cone4, cone6, bell]) g.dispose();   // só serviram de molde
@@ -294,6 +315,13 @@ const SUMMON_BODIES = {
     return { core, head, jaw, mouth, tail, wings, hover: 4.4, shellY: 0.15, shellR: 1.1, auraR: 1.9 };
   },
 };
+
+SUMMON_BODIES.slime = (g, k) => {
+  const core = summonMesh(g, null);
+  summonMesh(core, k.slimeBody, k.solid);
+  return { core, hover: 0, shellY: 0.4, shellR: 0.8, auraR: 0.8 };
+};
+SUMMON_BODIES.slimemini = SUMMON_BODIES.slime;   // o mini é o mesmo corpo em escala menor (feita na pose)
 
 // monta a criatura: corpo em visual (grupo que flutua/pula), anel da Fúria em root (fica no chão) e brilho da Fúria no core
 export function buildSummon(kind, root, visual) {

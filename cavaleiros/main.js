@@ -133,7 +133,7 @@ const VARIANTS = [
     attacks: ['2H_Melee_Attack_Stab', '2H_Melee_Attack_Slice'], classId: 0 },
   { id: 'runic', names: ['Rúnica', 'Tecelã de Escudos', 'Guardiã das Runas'], desc: 'Runas de escudo que protegem antes do golpe.', ability: 'Runa-escudo', color: ['#9be0ee', '#2e7d8c'],
     use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, hp: 185, dmg: 12, range: 6, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'runic' },
-  { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem e dragãozinho.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
+  { id: 'summoner', names: ['Invocador', 'Mestre dos Pactos', 'Senhor do Bestiário'], desc: 'Invoca fada, golem, dragãozinho e slime.', ability: 'Fada', color: ['#ffb8dc', '#b04a86'],
     use: ['2H_Staff'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 }, hp: 175, dmg: 19, range: 6, speed: 2.9, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], classId: 4, pickGroup: 'summoner' },
   { id: 'cook', names: ['Cozinheira', 'Chef de Campanha', 'Mestra do Banquete'], desc: 'Tortas e marmitas que curam e dão ânimo.', ability: 'Torta quente', color: ['#ffd9a0', '#d9803a'],
     use: [], stats: { Vida: 3, Força: 2, Rapidez: 3, Alcance: 4 }, model: 'Barbarian', hp: 185, dmg: 11, range: 5.5, speed: 3, cooldown: 1.2, ranged: true, attacks: ['Throw'], classId: 4, pickGroup: 'cook' },
@@ -2135,7 +2135,7 @@ const SKILL_GLYPHS = {
   lancer: ['↟', '⇈', '♞', '⇥'],
   geomancer: ['⛰', '▤', '≋', '▲'],
   runic: ['◈', '⬡', '◍', '✺'],
-  summoner: ['✿', '⬢', '♆', '⚘'],
+  summoner: ['✿', '⬢', '♆', '◕'],
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
   shaman: ['♣', '☘', '☥', '✺'],
@@ -5573,6 +5573,14 @@ function summonFade(creature) {
   } else burst(at.clone().setY(at.y + 1.3), kind === 'fairy' ? FAIRY_SPARKS : [0x46b8a8, 0xff9ccf, 0xffd27a], fewer(12), 3, { gravity: 1, size: 1 });
 }
 
+// Slime: pouso. Anel verde com o raio real do impacto e respingos de gosma (o mini estoura em rosa); sem brilho aditivo forte
+const SLIME_GOO = [0x7be08c, 0xff9ccf, 0xb8f5a8];
+function slimeLand(at, radius, mini) {
+  wave(at, mini ? 0xff9ccf : 0x7be08c, 0.3, radius, 0.45, { opacity: 0.45 });
+  burst(at.clone().setY(at.y + 0.2), SLIME_GOO, fewer(mini ? 8 : 10), 3.2, { gravity: 10, size: 1, life: 0.5 });
+  puffs(at.clone().setY(at.y + 0.2), mini ? 2 : 3, 'dust', { spread: radius * 0.4, rise: 0.4, size: 0.6, life: 0.6 });
+}
+
 // Assassino: rastro de sombra entre a saída e a chegada
 function shadowStep(from, to) {
   for (let i = 0; i <= 8; i++) {
@@ -6310,7 +6318,7 @@ Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
 // Ilusionista: fumaça violeta translúcida (sombra em shader, sem brilho aditivo)
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
-Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
+Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade, slimeLand });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
 Object.assign(FX, { lanceThrust, lanceStance });   // Lanceiro
 
@@ -7531,27 +7539,10 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'bestiary-fury': {
-        // Fúria do Bestiário: atiça as criaturas ativas; sem nenhuma, a fada atende por pouco tempo
-        const creatures = units.filter((unit) => unit.summonKind && unit.summoner === this && !unit.dead);
-        if (!force && !creatures.length && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
-        if (!force && creatures.length && !enemies.length) return false;
-        effect = () => {
-          const alive = creatures.filter((unit) => !unit.dead && units.includes(unit));
-          if (!alive.length) {
-            const fairy = callSummon(this, 'fairy');
-            fairy.life = Math.min(fairy.life, 6);
-            return;
-          }
-          const duration = scaleBranchEffect(this, 'support', skill.duration || 5) * (0.9 + 0.1 * power);
-          for (const unit of alive) {
-            unit.frenzyT = duration;
-            unit.frenzyHaste = skill.haste || 0.5;
-            wave(unit.pos, color, 0.2, 1.6, 0.5);
-            burst(unit.pos, [color, 0xffffff], 10, 2.5);
-          }
-          popText(this.pos, 'Fúria!', 'evolve');
-        };
+      case 'slime-hop': {
+        // Slime Saltitante: invoca um slime que salta sobre o grupo mais denso (SummonedCreature.thinkSlime); a IA pede 2+ inimigos perto
+        if (!force && enemies.length < 2) return false;
+        effect = () => callSummon(this, 'slime');
         break;
       }
       case 'blood-bond': {
@@ -9122,7 +9113,7 @@ const SKILL_ANIMS = {
     { clip: '2H_Melee_Attack_Stab', hold: 'Spellcasting', f: 0.5, lean: 0.12, float: 0.18 },   // finca o cajado e a fada sai da gema
     { clip: '1H_Melee_Attack_Stab', f: 0.55, arc: 'thrust', lean: 0.22, kick: 0.35 },          // bate no chão e o golem brota
     { clip: 'Spellcast_Summon', hold: 'Spellcast_Raise', f: 0.6, spin: 1.1, float: 0.5, lean: -0.14 },   // ergue o cajado e invoca o dragãozinho
-    { clip: 'Cheer', hold: 'Spellcasting', f: 0.5, spin: -0.5, lean: -0.1, float: 0.12 },   // brada o pacto e atiça as criaturas
+    { clip: 'Throw', hold: 'Spellcasting', f: 0.5, hop: 0.14, lean: 0.22, spin: -0.4 },   // arremessa o slime à frente
   ],
   vampire: [
     { clip: '2H_Melee_Attack_Slice', f: 0.45, arc: 'slash', lean: 0.18, kick: 0.4 },   // garra em meia-lua
@@ -9370,6 +9361,15 @@ const SUMMON_RULES = {
   fairy: { hp: 60, dmg: 0, range: 3.5, speed: 4.6, cooldown: 2, every: 2, life: 12, size: 0.8, bar: 2.15, color: 0xffb8dc },
   golem: { hp: 240, dmg: 14, range: 1.6, speed: 2.7, cooldown: 1.5, every: 6, life: 15, size: 1.05, bar: 2.95, color: 0xd8c29a },
   dragon: { hp: 120, dmg: 0, range: 4.5, speed: 3.8, cooldown: 3, every: 3, life: 18, size: 0.95, bar: 6.6, color: 0xff7a3a, flying: true },   // voa alto: inimigos não o miram nem acertam
+  // Slime Saltitante: pula de grupo em grupo (every = intervalo entre saltos) e, ao fim, vira dois pequenos (slimemini, um salto e estouram).
+  // Gelatina saltitante: inimigos não a miram. O dano vem dos saltos, não de hp/dmg.
+  slime: { hp: 60, dmg: 0, range: 1, speed: 3, cooldown: 1, every: 1.5, life: 9, size: 0.9, bar: 1.7, color: 0x7be08c, untargetable: true },
+  slimemini: { hp: 30, dmg: 0, range: 1, speed: 3, cooldown: 1, every: 1.5, life: 3, size: 0.55, bar: 1.2, color: 0xff9ccf, untargetable: true },
+};
+// salto do slime: raio do impacto, dano (fração do dano do Invocador), lentidão (s), duração do voo e altura
+const SLIME_HOP = {
+  slime: { radius: 2.2, dmg: 0.5, slow: 2.5, dur: 0.6, height: 2.2, scan: 14 },
+  slimemini: { radius: 1.4, dmg: 0.22, slow: 1.2, dur: 0.5, height: 1.5, scan: 14 },
 };
 const SUMMON_DRAGON_SCALE = 1.9;   // só o visual do dragãozinho cresce; tamanho de colisão (rule.size) e alcance não mudam
 const SUMMON_TAUNT = 3, SUMMON_SLAM_RADIUS = 2.4, SUMMON_STUN = 0.9, SUMMON_BOSS_CONTROL = 0.35;   // chefes: controle mais curto
@@ -9377,7 +9377,7 @@ const EMPTY_GLTF = { scene: new THREE.Group(), animations: [] };
 const summonAt = new THREE.Vector3();
 
 class SummonedCreature extends Unit {
-  constructor(summoner, kind) {
+  constructor(summoner, kind, at = null, index = 0) {
     const rule = SUMMON_RULES[kind], grow = summoner.skillPower * (1 + (skillLevel(summoner.level) - 1) * 0.1);
     super(EMPTY_GLTF, { hp: Math.round(rule.hp * grow), dmg: rule.dmg * grow, range: rule.range, speed: rule.speed, cooldown: rule.cooldown }, 'ally');
     this.summoner = summoner;
@@ -9387,16 +9387,20 @@ class SummonedCreature extends Unit {
     this.level = summoner.level;
     this.phase = game.phase;
     this.life = this.maxLife = scaleBranchEffect(summoner, 'support', rule.life);
-    this.abilityT = kind === 'fairy' ? 0.3 : kind === 'golem' ? 2 : 0.6;
+    this.abilityT = kind === 'fairy' ? 0.3 : kind === 'golem' ? 2 : kind === 'slimemini' ? 0.25 : 0.6;
     this.age = 0;
     this.size = rule.size;
     this.barHeight = rule.bar;
-    this.untargetable = !!rule.flying;
+    this.untargetable = !!(rule.flying || rule.untargetable);
     this.goal = new THREE.Vector3();
     this.popT = 0;
     this.bar.classList.add('ally');
-    const side = kind === 'fairy' ? 0.8 : kind === 'golem' ? -0.9 : 0;
-    this.pos.copy(summoner.pos).add(tmp.set(side, 0, kind === 'dragon' ? -1 : 0.6));
+    const side = kind === 'fairy' ? 0.8 : kind === 'golem' ? -0.9 : kind === 'slime' ? 0.9 : 0;
+    if (at) this.pos.copy(at);
+    else this.pos.copy(summoner.pos).add(tmp.set(side, 0, kind === 'dragon' ? -1 : 0.6));
+    this.jump = null;   // slime: salto em curso { from, to, t, dur, h }
+    this.landT = 9;     // slime: segundos desde o último pouso (amassa ao pousar)
+    this.miniIndex = index;
     this.pos.y = world.groundHeight(this.pos.x, this.pos.z);
     this.root.rotation.y = summoner.root.rotation.y;
     this.visual = new THREE.Group();
@@ -9459,8 +9463,11 @@ class SummonedCreature extends Unit {
     this.abilityT -= dt * (1 + fury);
     if (fury) this.attackTimer -= dt * fury;
     const summoner = this.summoner;
-    if (this.dead || this.life <= 0 || summoner.dead || !units.includes(summoner) || game.state === 'cleared' || game.phase !== this.phase) { this.vanish(); return; }
+    const gone = this.dead || summoner.dead || !units.includes(summoner) || game.state === 'cleared' || game.phase !== this.phase;
+    if (!gone && this.life <= 0 && this.summonKind === 'slime' && !this.jump) this.splitSlime();   // o grande se divide ao fim
+    if (gone || (this.life <= 0 && !this.jump)) { this.vanish(); return; }   // salto em curso termina antes de sumir
     this.animate(dt);
+    if (this.summonKind === 'slime' || this.summonKind === 'slimemini') { if (!game.over && game.state === 'fight') this.thinkSlime(dt); return; }
     if (game.over || game.state !== 'fight' || this.busy > 0) return;
     if (this.summonKind === 'fairy') this.thinkFairy(dt);
     else if (this.summonKind === 'golem') this.thinkGolem(dt);
@@ -9475,6 +9482,7 @@ class SummonedCreature extends Unit {
     const act = this.actT > 0 ? 1 - this.actT / this.actDur : -1;
     if (this.summonKind === 'fairy') this.poseFairy(p, t, act, speed, fury, dt);
     else if (this.summonKind === 'golem') this.poseGolem(p, t, act, speed, dt);
+    else if (this.summonKind === 'slime' || this.summonKind === 'slimemini') this.poseSlime(p, t, dt);
     else this.poseDragon(p, t, act, speed, fury);
     p.aura.visible = p.shell.visible = fury;
     if (fury) {
@@ -9661,13 +9669,109 @@ class SummonedCreature extends Unit {
   }
 }
 
+// ---------- Slime Saltitante (métodos de SummonedCreature, definidos aqui para ficarem juntos) ----------
+// gosma que amassa, estica no ar e achata ao pousar; o mini é a mesma gosma em escala menor
+SummonedCreature.prototype.poseSlime = function poseSlime(p, t, dt) {
+  const v = this.visual, base = this.summonKind === 'slimemini' ? 0.6 : 1, j = this.jump;
+  this.landT += dt;
+  let y = 0, sy = 1, sx = 1;
+  if (j) {
+    const k = Math.min(1, j.t / j.dur);
+    y = 4 * j.h * k * (1 - k);
+    sy = 1 + Math.sin(k * Math.PI) * 0.22;   // estica subindo e descendo
+    sx = 1 / Math.sqrt(sy);
+  } else if (this.landT < 0.4) {   // pousa achatando e balança até assentar
+    const e = this.landT / 0.4, squash = Math.cos(e * Math.PI * 2.5) * (1 - e) * 0.32;
+    sy = 1 - squash; sx = 1 + squash * 0.6;
+  } else {
+    const crouch = this.abilityT < 0.25 && this.hasPrey ? 0.22 * (1 - Math.max(0, this.abilityT) / 0.25) : 0;   // agacha antes de saltar
+    const b = Math.sin(t * 4);
+    sy = 1 + b * 0.05 - crouch; sx = 1 - b * 0.03 + crouch * 0.5;
+  }
+  v.position.y = y;
+  v.scale.set(sx * base, sy * base, sx * base);
+  v.rotation.z = j ? 0 : Math.sin(t * 2) * 0.04;
+};
+
+// grupo inimigo mais denso (raio do impacto) perto do Invocador; devolve o centro dos que cabem no impacto
+SummonedCreature.prototype.slimeSpot = function slimeSpot() {
+  const hop = SLIME_HOP[this.summonKind], pool = [];
+  for (const enemy of this.enemies()) if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(this.summoner.pos) <= hop.scan) pool.push(enemy);
+  if (!pool.length) return null;
+  if (this.summonKind === 'slimemini') {   // cada mini escolhe um alvo diferente: o mais próximo, depois o seguinte
+    pool.sort((a, b) => a.pos.distanceTo(this.pos) - b.pos.distanceTo(this.pos));
+    return pool[this.miniIndex % pool.length].pos.clone();
+  }
+  const { center } = densest(pool, hop.radius, null), spot = new THREE.Vector3();
+  let n = 0;
+  for (const enemy of pool) if (enemy.pos.distanceTo(center.pos) <= hop.radius) { spot.add(enemy.pos); n++; }
+  return spot.multiplyScalar(1 / n);
+};
+
+SummonedCreature.prototype.thinkSlime = function thinkSlime(dt) {
+  const mini = this.summonKind === 'slimemini', hop = SLIME_HOP[this.summonKind];
+  if (this.jump) { this.hopStep(dt); return; }
+  if (mini && this.landT < 9) { this.life = 0; return; }   // o mini estoura depois do único pulo
+  const spot = this.slimeSpot();
+  this.hasPrey = !!spot;
+  if (!spot) {
+    if (mini) { this.life = 0; return; }
+    if (this.pos.distanceTo(this.summoner.pos) > 3) this.moveTo(this.summoner.pos, dt);   // sem inimigos, volta para perto do mago
+    return;
+  }
+  if (this.abilityT > 0) { this.face(spot, dt); return; }
+  this.abilityT = this.rule.every;
+  spot.y = world.groundHeight(spot.x, spot.z);
+  this.face(spot, 1);
+  this.jump = { from: this.pos.clone(), to: spot, t: 0, dur: hop.dur, h: hop.height };
+  burst(this.pos.clone().setY(this.pos.y + 0.2), [this.rule.color, 0xff9ccf], fewer(4), 2, { gravity: 8, size: 0.9 });
+};
+
+SummonedCreature.prototype.hopStep = function hopStep(dt) {
+  const j = this.jump;
+  j.t += dt;
+  const k = Math.min(1, j.t / j.dur);
+  const x = j.from.x + (j.to.x - j.from.x) * k, z = j.from.z + (j.to.z - j.from.z) * k;
+  this.pos.set(x, world.groundHeight(x, z), z);
+  if (k < 1) return;
+  this.jump = null;
+  this.landT = 0;
+  this.slimeLand();
+};
+
+// pouso: dano de impacto e lentidão em quem está no raio; chefe só fica lento (controlEnemy já não encurta o que vale)
+SummonedCreature.prototype.slimeLand = function slimeLand() {
+  const hop = SLIME_HOP[this.summonKind], summoner = this.summoner, power = summoner.skillPower;
+  let hits = 0;
+  for (const enemy of this.enemies()) {
+    if (enemy.dead || enemy.spawning || enemy.pos.distanceTo(this.pos) > hop.radius + 0.4 * (enemy.size - 1)) continue;
+    hits++;
+    heroHit(summoner, enemy, summoner.dmg * hop.dmg * power, this.pos);
+    if (!enemy.dead) controlEnemy(enemy, 'slowT', scaleBranchEffect(summoner, 'control', hop.slow) * power);
+  }
+  this.lastHits = hits;
+  FX.slimeLand(this.pos, hop.radius, this.summonKind === 'slimemini');
+};
+
+// fim do slime grande: dois pequenos nascem onde ele está (cada um dá um salto e estoura)
+SummonedCreature.prototype.splitSlime = function splitSlime() {
+  if (this.split) return;
+  this.split = true;
+  for (let i = 0; i < 2; i++) {
+    const at = this.pos.clone().add(tmp.set(i ? 0.5 : -0.5, 0, 0));
+    const mini = new SummonedCreature(this.summoner, 'slimemini', at, i);
+    mini.phase = this.phase;
+  }
+  popText(this.pos, 'Plop!', 'evolve');
+};
+
 // Uma criatura de cada tipo por Invocador: chamar de novo renova a duração e a vida.
 function callSummon(summoner, kind) {
   let creature = units.find((unit) => unit.summonKind === kind && unit.summoner === summoner && !unit.dead);
   if (creature) creature.renew();
   else creature = new SummonedCreature(summoner, kind);
   FX.pactCall(summoner, creature, SUMMON_RULES[kind].color);
-  popText(creature.pos, { fairy: 'Fada!', golem: 'Golem!', dragon: 'Dragão!' }[kind], 'evolve');
+  popText(creature.pos, { fairy: 'Fada!', golem: 'Golem!', dragon: 'Dragão!', slime: 'Slime!' }[kind], 'evolve');
   return creature;
 }
 
