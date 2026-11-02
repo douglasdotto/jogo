@@ -4165,6 +4165,7 @@ function updateSentries(dt) {
 
 // ---------- Totens do Xamã: aliados fixos no chão (no máximo 2 por Xamã; o mais antigo some) ----------
 const spiritTotems = [], SPIRIT_TOTEM_MAX = 2;
+const followSpirits = [], SPIRIT_PULSE = 1;   // Espírito Acompanhante do Xamã
 const ECLIPSE_BLAST = 4;   // Eclipse Rubro: raio da explosão que cura os aliados (o anel desenhado tem o mesmo tamanho)
 const TOTEM_PLANT_RANGE = 8, HEAL_TOTEM_RADIUS = 4.5;   // alcance de plantio e raio do totem de cura (cobre a formação em movimento)
 const TOTEM_LOOKS = {   // madeira, faixa, cor da marca no chão, intervalo do pulso (s)
@@ -4253,7 +4254,6 @@ function updateSpiritTotems(dt) {
 }
 
 // Espírito Acompanhante do Xamã: um espírito por Xamã segue o aliado e o cura um pouco a cada segundo
-const followSpirits = [], SPIRIT_PULSE = 1;
 function callFollowSpirit(owner, ally, seconds) {
   for (const old of followSpirits) if (old.owner === owner) old.life = 0;   // o novo substitui o antigo
   const spirit = { owner, ally, life: seconds, tickT: SPIRIT_PULSE, pulses: 0 };
