@@ -1442,7 +1442,7 @@ test('Invocador: fada, golem e dragãozinho duram, agem, renovam sem duplicar e 
   assert.ok(golem.dead,'o golem some marcado como morto para soltar a provocação');
   clear();
 });
-test('4ª habilidade: Muralha do Brutamontes segura dano e bloqueia projéteis; Fúria do Bestiário acelera as criaturas',()=>{
+test('4ª habilidade: Muralha do Brutamontes segura dano e bloqueia projéteis',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
   const fly=n=>{for(let i=0;i<n&&t.enemyBolts.length;i++)t.updateEnemyBolts(0.05);};
   clear();t.enemyBolts.length=0;
@@ -1460,16 +1460,49 @@ test('4ª habilidade: Muralha do Brutamontes segura dano e bloqueia projéteis; 
   hp=b.hp;b.takeDamage(40,null,null);assert.ok(walled>0&&walled<(hp-b.hp)*0.6,'com a Muralha recebe metade do dano');
   t.fireEnemyBolt(shooter,mage);fly(40);assert.ok(mage.hp<mage.maxHp,'sem Muralha o projétil passa');
   t.enemyBolts.length=0;clear();
-  const s=new t.Hero(cfg('summoner'));s.pos.set(0,0,0);const e=foe(0,2);
-  const summons=()=>t.units.filter(u=>u.summonKind&&!u.dead);
-  const cast=slot=>{s.busy=0;assert.equal(s.useSkill(e,false,true,slot),true,'slot '+slot);s.pendingHit.effect();s.pendingHit=null;};
-  cast(3);const [fairy]=summons();
-  assert.ok(fairy&&fairy.summonKind==='fairy'&&fairy.life<=6,'sem criaturas a Fúria chama uma fada curta');
-  cast(1);const golem=summons().find(u=>u.summonKind==='golem');cast(3);
-  assert.equal(summons().length,2,'com criaturas a Fúria não invoca outra');
-  assert.ok(golem.frenzyT>=4&&fairy.frenzyT>=4,'todas as criaturas ativas ficam em fúria');
-  golem.abilityT=4;golem.busy=9;golem.update(1);assert.ok(Math.abs(golem.abilityT-2.5)<1e-9,'poderes 50% mais rápidos');
-  golem.frenzyT=0;golem.abilityT=4;golem.update(1);assert.ok(Math.abs(golem.abilityT-3)<1e-9,'sem fúria volta ao ritmo normal');
+  clear();
+});
+test('Slime Saltitante: salta sobre o grupo denso, fere e deixa lento, divide em dois minis que estouram; chefe só fica lento; IA usa com 2+ inimigos',()=>{
+  const foe=(x,z,boss=false)=>{const e=new t.Skeleton(boss?'Warrior':'Minion',1,boss);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
+  const kinds=k=>t.units.filter(u=>u.summonKind===k&&!u.dead);
+  const run=(c,sec)=>{for(let i=0;i<Math.round(sec/0.05);i++){c.update(0.05);}};
+  clear();
+  const s=new t.Hero(cfg('summoner'));s.pos.set(0,0,0);
+  const lone=foe(0,5),far=foe(40,40);
+  s.busy=0;assert.equal(s.useSkill(null,false,false,3),false,'a IA guarda o Slime com um só inimigo perto');
+  const near=foe(0.5,6);
+  s.busy=0;assert.equal(s.useSkill(null,false,false,3),true,'a IA usa com 2+ inimigos a até 9 m');
+  s.pendingHit.effect();s.pendingHit=null;
+  const [slime]=kinds('slime');assert.ok(slime&&slime.summoner===s&&slime.team==='ally','invoca o slime');
+  assert.equal(t.units.filter(u=>u.summonKind==='slime'&&!u.dead).length,1);
+  const hp0=lone.hp;
+  // salta: sai do lugar, pousa sobre o grupo, fere e deixa lento
+  run(slime,0.7);
+  assert.ok(slime.jump||slime.landT<9,'o slime saltou');
+  run(slime,0.6);
+  assert.ok(lone.hp<hp0&&near.hp<near.maxHp,'o impacto fere os dois');
+  assert.ok(lone.slowT>1.5&&near.slowT>1.5,'quem foi atingido fica lento');
+  assert.equal(far.hp,far.maxHp,'quem estava longe não é atingido');
+  assert.ok(slime.pos.distanceTo(lone.pos)<2.5,'pousou sobre o grupo');
+  // intervalo de ~1,5 s entre saltos: segundo impacto
+  const hp1=lone.hp;run(slime,1.5);assert.ok(lone.hp<hp1,'salta de novo a cada ~1,5 s');
+  // chefe: lento, dano só do impacto
+  const boss=foe(lone.pos.x+0.4,lone.pos.z,true);boss.hp=boss.maxHp=100000;
+  run(slime,1.6);assert.ok(boss.slowT>0&&boss.stunT<=0,'o chefe fica lento, sem atordoar');
+  // fim da duração: divide em 2 minis que dão um último salto e estouram
+  slime.life=0.01;slime.jump=null;slime.abilityT=9;
+  slime.update(0.05);
+  assert.equal(kinds('slimemini').length,2,'divide em dois slimes pequenos');assert.ok(slime.dead,'o grande some');
+  const minis=kinds('slimemini');const mhp=near.hp+lone.hp;
+  for(const m of minis)run(m,1.2);
+  assert.ok(near.hp+lone.hp<mhp,'os minis causam dano no último salto');
+  assert.equal(kinds('slimemini').length,0,'os minis estouram e somem');
+  // renovar não duplica; fim da fase remove
+  s.busy=0;s.skillTimers[3]=0;assert.equal(s.useSkill(null,false,true,3),true);s.pendingHit.effect();s.pendingHit=null;
+  s.busy=0;s.skillTimers[3]=0;s.useSkill(null,false,true,3);s.pendingHit.effect();s.pendingHit=null;
+  assert.equal(kinds('slime').length,1,'chamar de novo renova, sem duplicar');
+  t.game.state='cleared';kinds('slime')[0].update(0.05);
+  assert.equal(t.units.filter(u=>u.summonKind).length,0,'nada sobra depois da fase');
   clear();
 });
 test('virotes perfurantes reutilizam vetores e acertam vários inimigos no quadro',()=>{

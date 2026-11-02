@@ -141,7 +141,7 @@ const EXTRA_SKILLS = {
   summoner: [
     { name: 'Golem', description: 'Um golem de pedra provoca os inimigos próximos e dá pancadas que atordoam.', effect: 'stone-golem', cooldown: 22, radius: 4.5, duration: 15, control: 'stun', color: 0xd8c29a },
     { name: 'Dragãozinho', description: 'Um dragãozinho voa até os inimigos e cospe fogo em cone, deixando-os queimando.', effect: 'little-dragon', cooldown: 68, radius: 4.5, duration: 18, control: 'burn', color: 0xff7a3a },
-    { name: 'Fúria do Bestiário', description: 'As criaturas ativas atacam e usam seus poderes 50% mais rápido por 5 s; sem nenhuma, chama uma fada por 6 s.', effect: 'bestiary-fury', cooldown: 18, duration: 5, haste: 0.5, color: 0xff8ad8 },
+    { name: 'Slime Saltitante', description: 'Um slime salta sobre o grupo de inimigos mais denso a cada 1,5 s por 9 s: o impacto fere e deixa todos lentos. No fim divide-se em dois slimes pequenos que dão um último pulo.', effect: 'slime-hop', cooldown: 18, radius: 2.2, range: 9, power: 0.5, duration: 9, control: 'slow', color: 0x7be08c },
   ],
   vampire: [
     { name: 'Vínculo de Sangue', description: 'Liga o aliado mais ferido ao mais próximo por alguns segundos: os dois dividem o dano que receberem.', effect: 'blood-bond', cooldown: 18, range: 9, duration: 6, share: 0.5, color: 0xa81c34 },
