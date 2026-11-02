@@ -2125,7 +2125,7 @@ const SKILL_GLYPHS = {
   berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
   pyro: ['♨', '✸', '☄', '☲'], arcane: ['⚡', '✺', '◎', '❋'], cryo: ['❄', '✥', '❅', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
-  duelist: ['⚔', '✕', '✺', '⤺'],
+  duelist: ['⚔', '✕', '✺', '⛓'],
   king: ['♛', '⇉', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '☩', '☥', '✠'],
   druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '↻', '◷', '⟲'],
@@ -2139,8 +2139,9 @@ const SKILL_GLYPHS = {
   vampire: ['☾', '⚭', '♥', '☽'],
   cook: ['◒', '▣', '♨', '✱'],
   shaman: ['♣', '☘', '☥', '✺'],
-  illusionist: ['☻', '⇄', '▦', '☁'],
+  illusionist: ['☻', '⇄', '❢', '◐'],
 };
+const LADINO_ULTS = new Map([['blade-dance', 'area'], ['shadow-storm', 'area'], ['arrow-rain', 'area'], ['sentry-overcharge', 'area'], ['panic', 'area'], ['execute', 'single'], ['hunter-mark', 'single']]);
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const isPriorityEnemy = (s) => !s.dead && !s.spawning && (s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || !!s.kind?.priority);   // alvo prioritário da Caçada em Matilha
 const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
@@ -2918,6 +2919,11 @@ class Unit {
 
   takeDamage(n, from, owner = null, critical = false, dot = false) {   // dot: veneno e afins, sem esquiva, bloqueio nem tropeço
     if (this.dead || game.over || this.untargetable) return;   // dragãozinho voando: fora do alcance de golpes e áreas
+    if (owner?.team === 'skeleton') {   // estados nos inimigos: Desarmar (dano menor), Ofuscar (erra o golpe) e Pânico (fere o vizinho com metade da força)
+      if (owner.disarmT > 0) n *= 1 - owner.disarmCut;
+      if (!dot && owner.blindT > 0 && Math.random() < owner.blindMiss) { popText(this.pos, 'Errou!', 'dodge'); return; }
+      if (owner.panicT > 0 && this.team === 'skeleton') n *= 0.5;
+    }
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
     if (owner?.weakT > 0 && this.team !== 'skeleton') n *= 1 - SHIELD_WEAK;   // Escudo Ricochete: o inimigo marcado bate mais fraco contra aliados
@@ -6576,6 +6582,20 @@ Object.assign(FX, { combust, collapse, echoOrb, frostSkin, frostFreeze, stormClo
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
 // Ilusionista: fumaça violeta translúcida (sombra em shader, sem brilho aditivo)
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
+// marca que acompanha o inimigo enquanto o estado `field` (disarmT, blindT, panicT) durar: anel fino e translúcido (material do estoque, sem aditivo)
+let statusMarks = 0;
+FX.statusMark = (enemy, field, color) => {
+  if (enemy.statusMarks?.[field] || (lowQuality && statusMarks >= 6)) return;
+  (enemy.statusMarks ||= {})[field] = true; statusMarks++;
+  const m = new THREE.Mesh(thinRingGeo, glow(color, 0.75, false));
+  m.rotation.x = -Math.PI / 2;
+  addFx(m, 99, (e, dt) => {
+    if (enemy.dead || !(enemy[field] > 0) || !units.includes(enemy)) { e.done = true; enemy.statusMarks[field] = false; statusMarks--; return; }
+    m.position.set(enemy.pos.x, enemy.pos.y + 2.2 * enemy.size, enemy.pos.z);
+    m.rotation.z += dt * 2.5;
+    m.scale.setScalar(0.4 * enemy.size * (1 + 0.1 * Math.sin(e.t * 8)));
+  });
+};
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade, slimeLand });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
 // Rei: um anel dourado fino sobe do chão de cada herói e o segue enquanto a marcha dura (sem brilho aditivo)
@@ -7270,6 +7290,10 @@ class Hero extends Unit {
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+    if (!force && slot === 2 && LADINO_ULTS.has(skill.effect)) {   // ultimates dos Ladinos: área exige 3 inimigos juntos ou chefe/elite; alvo único, chefe/elite (ou 4 por perto)
+      const big = enemies.some((s) => s.boss || s.elite || s.kind?.priority);
+      if (!big && (LADINO_ULTS.get(skill.effect) === 'area' ? densest(enemies, radius).count < 3 : enemies.length < 4)) return false;
+    }
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
@@ -8415,16 +8439,31 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'riposte': {
-        // Contra-ataque: apara tudo por instantes e devolve um corte a cada golpe corpo a corpo
-        const attackers = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3) && (s.pendingHit?.target === this || s.engagedWith === this || s.target === this));
-        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3));
-        if (!force && !attackers.length && close.length < 2) return false;
+      case 'disarm': {
+        // Desarmar: um golpe no inimigo que está batendo (ou no mais forte ao alcance) e, por alguns segundos, os ataques dele causam menos dano
+        const reach = skill.range || 5;
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && !s.totem && s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        const fresh = pool.filter((s) => !(s.disarmT > 1));
+        const striking = fresh.filter((s) => s.pendingHit?.target?.team === 'hero');
+        const strongest = (list) => list.reduce((best, s) => (!best || s.dmg > best.dmg ? s : best), null);
+        const aim = force && pool.includes(target) ? target : strongest(striking) || strongest(fresh);
+        if (!aim) return false;
+        target = aim;
         effect = () => {
-          this.riposteT = (skill.duration || 2.5) * (0.9 + 0.1 * power);
-          this.riposteBy = skill.power || 1.4;
-          popText(this.pos, 'Em guarda!', 'block');
-          FX.bladeDance(this, 1.5);
+          if (aim.dead) return;
+          const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, this.pos).setY(0);
+          if (dir.length() > this.range + 0.5 * aim.size) {   // entra no alcance do golpe com um passo rápido
+            dir.normalize();
+            const dest = aim.pos.clone().addScaledVector(dir, -(this.range * 0.7 + 0.3 * aim.size));
+            if (world.canStep(this.pos, dest)) { this.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z)); this.vel.set(0, 0, 0); FX.steelDash(from, this.pos); }
+          }
+          this.face(aim.pos, 1);
+          damageOne(aim);
+          aim.disarmT = Math.max(aim.disarmT || 0, scaleBranchEffect(this, 'control', skill.duration || 4) * (0.9 + 0.1 * power));
+          aim.disarmCut = aim.boss ? 0.25 : 0.5;   // chefe só perde 25% do dano
+          FX.slashX(aim, this);
+          FX.statusMark(aim, 'disarmT', color);
+          popText(aim.pos, 'Desarmado!', 'crit');
         };
         break;
       }
@@ -8719,32 +8758,44 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'mirror-hall': {
-        // Salão de Espelhos: três imagens (2 golpes cada) cercam o Ilusionista; cada inimigo próximo escolhe uma e, ao quebrá-la, perde o golpe
+      case 'panic': {
+        // Pânico: os inimigos comuns em volta do alvo atacam o vizinho mais próximo (com metade do dano) em vez dos heróis; chefe só desacelera
+        const commons = enemies.filter((s) => !s.boss && !s.totem);
+        const { center: anchor, count } = densest(commons, radius, force && commons.includes(target) ? target : null);
+        if (!anchor) return false;
+        if (!force && count < 3 && !(count >= 2 && (criticalAlly || missingHp > this.maxHp * 0.3))) return false;
+        target = anchor;
         effect = () => {
-          const life = scaleBranchEffect(this, 'control', skill.duration + 1) * (0.9 + 0.1 * power), base = Math.random() * Math.PI * 2;
-          const images = [0, 1, 2].map((i) => {
-            const a = base + (i * Math.PI * 2) / 3;
-            return new Illusion(this, illusionSpot(this, new THREE.Vector3(this.pos.x + Math.cos(a), this.pos.y, this.pos.z + Math.sin(a)), 2.3), { kind: 'mirror', life, hits: 2 });
-          });
-          for (const enemy of enemies) illusionTaunt(enemy, images[Math.floor(Math.random() * images.length)], scaleBranchEffect(this, 'control', 3.5) * power, true);
-          wave(this.pos, color, 0.3, radius, 0.8, { opacity: 0.6 });
-          popText(this.pos, 'Espelhos!', 'evolve');
+          const center = anchor.dead ? this.pos.clone() : anchor.pos.clone();
+          const seconds = scaleBranchEffect(this, 'control', skill.duration || 3) * (0.9 + 0.1 * power);
+          for (const s of skeletonsAlive()) {
+            if (s.spawning || s.totem || s.pos.distanceTo(center) > radius + 0.4 * (s.size - 1)) continue;
+            if (s.boss) { controlEnemy(s, 'slowT', seconds); continue; }
+            s.panicT = Math.max(s.panicT, seconds); s.panicVictim = null; s.panicLook = 0; s.pendingHit = null;
+            FX.statusMark(s, 'panicT', color);
+          }
+          wave(center, color, 0.3, radius, 0.8, { opacity: 0.5 });
+          FX.illusionSmoke(center, 4);
+          popText(center, 'Pânico!', 'evolve');
         };
         break;
       }
-      case 'mirage': {
-        // Miragem: os aliados próximos desviam do próximo golpe por alguns segundos
-        const exposed = party.filter((h) => h.pos.distanceTo(this.pos) <= radius && !(h.mirageT > 0));
-        if (!force && (!exposed.length || enemies.length < 2)) return false;
+      case 'dazzle': {
+        // Ofuscar: névoa de luz nos olhos dos inimigos próximos: erram parte dos golpes por alguns segundos (chefe, menos)
+        const hitsHero = (s) => s.pendingHit?.target?.team === 'hero' || (s.target?.team === 'hero' && s.pos.distanceTo(s.target.pos) <= (s.range || 1.5) + 1.5);
+        const attacking = enemies.filter((s) => !s.totem && !(s.blindT > 1) && hitsHero(s));
+        if (!force && attacking.length < 2) return false;
         effect = () => {
-          const duration = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
-          for (const h of party) if (h.pos.distanceTo(this.pos) <= radius) {
-            h.mirageT = Math.max(h.mirageT, duration);
-            FX.illusionSmoke(h.pos, 2);
+          const seconds = scaleBranchEffect(this, 'control', skill.duration || 4) * (0.9 + 0.1 * power);
+          for (const s of skeletonsAlive()) {
+            if (s.spawning || s.totem || s.pos.distanceTo(this.pos) > radius + 0.4 * (s.size - 1)) continue;
+            s.blindT = Math.max(s.blindT, seconds);
+            s.blindMiss = s.boss ? 0.25 : 0.5;
+            FX.statusMark(s, 'blindT', color);
           }
-          wave(this.pos, color, 0.2, radius, 0.7, { opacity: 0.5 });
-          popText(this.pos, 'Miragem!', 'evolve');
+          wave(this.pos, color, 0.3, radius, 0.7, { opacity: 0.5 });
+          FX.illusionSmoke(this.pos, 3);
+          popText(this.pos, 'Ofuscar!', 'evolve');
         };
         break;
       }
@@ -8983,9 +9034,7 @@ class Hero extends Unit {
     this.bondT = 0; this.bondWith = null; this.bondShare = 0; this.bondLead = false; this.bondDrawT = 0;   // Vínculo de sangue da Vampira
     this.vampFrac = 0;      // Vampira: fração do dano que vira cura durante uma técnica
     this.iceSkinT = 0;      // Pele de Gelo do Viking do Gelo
-    this.riposteT = 0;      // Contra-ataque do Duelista
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
-    this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.vowT = 0;          // Voto de Proteção da Clériga: o próximo golpe fatal deixa 1 de vida
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
     this.roarT = 0;         // Berro de Guerra do Brutamontes: o golpe atordoa quem está colado
@@ -9071,7 +9120,7 @@ class Hero extends Unit {
     if (this.eclipseT > 0) this.updateEclipse(dt);
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.roarT -= dt; this.vowT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.omenT -= dt; this.leechT -= dt; this.roarT -= dt; this.vowT -= dt;
     this.echoT -= dt; this.frostT -= dt; this.frostGapT -= dt; this.critT -= dt;
     if (this.pactT > 0 && (this.pactT -= dt) <= 0) this.pactShield = 0;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
@@ -9097,7 +9146,6 @@ class Hero extends Unit {
   // dano já reduzido chegando ao herói: segundas técnicas podem esquivar, aparar, refletir, dividir ou segurar a queda
   skillGuard(n, owner) {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
-    if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
     if (this.pactShield > 0) {   // Pacto de Ossos: o escudo comido de golpes anteriores absorve primeiro
       const soak = Math.min(n, this.pactShield);
@@ -9117,11 +9165,6 @@ class Hero extends Unit {
         popText(owner.pos, 'Congelado!', 'crit');
         FX.frostFreeze(owner);
       }
-    }
-    if (this.riposteT > 0) {
-      popText(this.pos, 'Aparou!', 'block');
-      if (melee) { heroHit(this, owner, this.dmg * this.skillPower * (this.riposteBy || 1.4)); FX.bladeCut(owner, this, 0); }
-      return 0;
     }
     if (this.iceSkinT > 0) {
       n *= 0.7;
@@ -9495,7 +9538,7 @@ const SKILL_ANIMS = {
     { clip: 'Dualwield_Melee_Attack_Slice', f: 0.45, arc: 'slash', kick: 0.6 },
     { clip: 'Dualwield_Melee_Attack_Stab', hold: 'Blocking', f: 0.5, arc: 'thrust', kick: 1.4, lean: 0.25 },
     { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 3, hop: 0.3 },
-    { clip: 'Block', hold: 'Blocking', f: 0.4, arc: 'slash', kick: -0.5, lean: -0.1 },
+    { clip: 'Dualwield_Melee_Attack_Chop', f: 0.5, arc: 'chop', kick: 0.9, lean: 0.2 },   // golpe seco que desarma o inimigo
   ],
   ninja: [
     { clip: 'Throw', f: 0.45, lean: 0.15, hop: 0.25 },
@@ -9626,8 +9669,8 @@ const SKILL_ANIMS = {
   illusionist: [
     { clip: 'Dodge_Left', f: 0.5, lean: 0.1, kick: -0.5 },                                      // gira de lado e a cópia fica no lugar
     { clip: 'Dodge_Backward', f: 0.5, hop: 0.25, spin: 0.5 },                                    // troca de lugar com um salto
-    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, spin: 1.5, float: 0.4 },          // os espelhos giram em volta
-    { clip: 'Interact', f: 0.4, hop: 0.12, lean: -0.1 },                                         // um aceno e a névoa cobre o grupo
+    { clip: 'Spellcast_Summon', hold: 'Spellcasting', f: 0.55, spin: 1.5, float: 0.4 },          // o medo gira em volta dos inimigos
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.5, float: 0.2, lean: -0.1 },           // a mão se ergue e um clarão ofusca
   ],
 };
 
@@ -10436,6 +10479,9 @@ class Skeleton extends Unit {
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
     this.reapT = 0; this.reapBy = null;   // Ceifa do Necromante: marca que cura o grupo se o inimigo morrer
+    this.disarmT = 0; this.disarmCut = 0;   // Desarmar do Duelista: dano menor
+    this.blindT = 0; this.blindMiss = 0;    // Ofuscar do Ilusionista: erra golpes
+    this.panicT = 0; this.panicVictim = null; this.panicLook = 0;   // Pânico do Ilusionista: ataca o vizinho
     this.sheepT = 0;      // Grande transmutação: ovelha que não ataca
     this.stars = new THREE.Group();
     for (let i = 0; i < 3; i++) {
@@ -10551,6 +10597,7 @@ class Skeleton extends Unit {
     if (this.markT <= 0) this.markBonus = 0;
     this.reapT = Math.max(0, this.reapT - dt);
     this.sheepT = Math.max(0, this.sheepT - dt);
+    this.disarmT -= dt; this.blindT -= dt; this.panicT -= dt;
     if (this.stunT > 0 || this.sheepT > 0) { this.pendingHit = null; if (this.stunT > 0) this.vel.set(0, 0, 0); }
     this.updateCommon(dt);
     this.stars.visible = !this.dead && this.stunT > 0;
@@ -10594,6 +10641,14 @@ class Skeleton extends Unit {
       if (held !== target && !held.dead && !held.untargetable && target.engageFull === engageGeneration - 1
         && held.pos.distanceTo(this.pos) < target.pos.distanceTo(this.pos) + 4) target = held;
       else this.engageSwitched = null;
+    }
+    if (this.panicT > 0 && !this.boss) {   // Pânico: ataca o inimigo mais próximo em vez dos heróis
+      this.panicLook -= dt;
+      if (!this.panicVictim || this.panicVictim.dead || this.panicLook <= 0) {
+        this.panicLook = 0.5;
+        this.panicVictim = nearest(this.pos, (activeTargetContext?.skeletons ?? skeletonsAlive()).filter((o) => o !== this && !o.dead && !o.spawning && !o.totem && !(o.sheepT > 0)));
+      }
+      target = this.panicVictim;
     }
     this.target = target;
     if (this.kind?.think?.(this, dt, target)) {   // comportamento próprio (golpes especiais, cura, bomba)

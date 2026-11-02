@@ -76,7 +76,7 @@ const EXTRA_SKILLS = {
   duelist: [
     { name: 'Corte em X', description: 'Avança em linha reta e corta em X todos os inimigos no caminho; contra um inimigo isolado, causa 25% mais dano.', effect: 'cross-dash', cooldown: 19, radius: 6.5, range: 6.5, power: 1.6, color: 0xc9d4e2 },
     { name: 'Dança de Lâminas', description: 'Gira por alguns segundos cortando todos ao redor e desviando de parte dos golpes.', effect: 'blade-dance', cooldown: 62, radius: 3.5, power: 2.6, duration: 3, color: 0xc9d4e2 },
-    { name: 'Contra-ataque', description: 'Assume a guarda: apara todos os golpes por instantes e devolve um corte a cada ataque corpo a corpo.', effect: 'riposte', cooldown: 18, radius: 3, duration: 2.5, power: 1.4, color: 0xc9d4e2 },
+    { name: 'Desarmar', description: 'Golpeia um inimigo: por 4 s os ataques dele causam 50% menos dano (chefe, 25%).', effect: 'disarm', targeting: 'enemy', control: 'Enfraquece', cooldown: 17, range: 5, power: 1, duration: 4, color: 0xc9d4e2 },
   ],
   necro: [
     { name: 'Pacto de Ossos', description: 'Por 6 s, 30% do dano recebido pelos aliados próximos vira escudo, e cada herói ferido ganha um esqueleto temporário.', effect: 'bone-pact', cooldown: 22, radius: 7, duration: 6, share: 0.3, color: 0x73d97e },
@@ -170,8 +170,8 @@ const EXTRA_SKILLS = {
   ],
   illusionist: [
     { name: 'Troca de Lugar', description: 'Troca de lugar com o aliado ameaçado e deixa uma imagem que atrai os inimigos; sem aliado em perigo, salta para trás deixando a imagem.', effect: 'mirror-swap', cooldown: 17, radius: 4.5, range: 9, duration: 3.5, color: 0xb8a8ff },
-    { name: 'Salão de Espelhos', description: 'Três imagens cercam o grupo: provocam e confundem os inimigos, que atacam o alvo errado e perdem o golpe.', effect: 'mirror-hall', cooldown: 66, radius: 7, duration: 5, color: 0xc8b8ff },
-    { name: 'Miragem', description: 'Uma névoa de miragem cobre os aliados próximos: cada um desvia do próximo golpe nos próximos segundos.', effect: 'mirage', cooldown: 17, radius: 6, duration: 4, color: 0xa8b8ff },
+    { name: 'Pânico', description: 'Inimigos comuns perto do alvo passam 3 s atacando o vizinho em vez dos heróis; chefe só desacelera.', effect: 'panic', control: 'Confunde', cooldown: 62, radius: 6.5, range: 9, duration: 3, color: 0xc8b8ff },
+    { name: 'Ofuscar', description: 'Inimigos próximos erram 50% dos golpes por 4 s (chefe, 25%).', effect: 'dazzle', control: 'Cega', cooldown: 17, radius: 6, duration: 4, color: 0xa8b8ff },
   ],
   brute: [
     { name: 'Arremesso', description: 'Agarra o inimigo comum mais perto e o arremessa no grupo mais denso; a queda fere todos em volta.', effect: 'grab-throw', cooldown: 16, radius: 2.4, range: 8, splash: 2.6, power: 1, color: 0xc9bba2 },
