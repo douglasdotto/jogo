@@ -2101,6 +2101,7 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
     t.game.mission={goal:{type:goalType}};
     t.game.surviveT=75;
+    if(goalType==='defend')guards[0].maxHp*=10;   // o paladino é o guarda do santuário (a âncora da defesa)
     if(goalType==='defend')t.game.shrine=objective;else t.game.gate=objective;
     const shooter=new t.Skeleton('Mage',1);shooter.spawning=false;shooter.ranged=true;shooter.mobile=false;shooter.pos.set(0,0,17);
     let team=t.makeTargetContext();
@@ -2128,7 +2129,8 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
 
     shooter.pos.set(0,0,10);shooter.pendingHit=null;
     team=t.makeTargetContext();
-    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': a âncora mantém o posto diante de uma ameaça próxima');
+    // santuário: a âncora é o guarda e ataca quem chega a 10 m do cristal; na ponte mantém o posto
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),goalType==='defend'?shooter:null,goalType+': a âncora mantém o posto diante de uma ameaça próxima');
     assert.equal(t.chooseHeroTarget(guards[1],[shooter],.016,team),shooter,goalType+': outro herói intercepta a ameaça próxima');
     guards[0].targetFocus=null;guards[0].targetFocusT=0;
     shooter.pos.set(0,0,11);shooter.pendingHit={target:objective};
@@ -2149,7 +2151,7 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     guards[1].busy=0;guards[2].kiteT=0;guards[3].busy=0;
 
     shooter.pos.set(0,0,8);shooter.pendingHit={target:guards[0]};team=t.makeTargetContext();
-    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),null,goalType+': a âncora mantém o posto enquanto ainda há outros defensores vivos');
+    assert.equal(t.chooseHeroTarget(guards[0],[shooter],.016,team),goalType==='defend'?shooter:null,goalType+': a âncora mantém o posto enquanto ainda há outros defensores vivos');
 
     for(const h of guards.slice(1))h.dead=true;guards[0].targetFocus=null;guards[0].targetFocusT=0;
     shooter.pos.set(0,0,10.9);team=t.makeTargetContext();
@@ -2209,11 +2211,12 @@ test('defesa fixa reserva uma âncora sem depender da ordem de atualização e t
     const objective={team:'villager',dead:false,pos:new Vector3(0,0,0),reach:0};
     t.game.mission={goal:{type:goalType}};
     if(goalType==='defend')t.game.shrine=objective;else t.game.gate=objective;
-    const threats=[-10,10].map((x,i)=>{const s=new t.Skeleton('Warrior',1);s.spawning=false;s.pos.set(x,0,0);s.enemyKind='Warrior'+i;return s;});
+    const threats=[-12,12].map((x,i)=>{const s=new t.Skeleton('Warrior',1);s.spawning=false;s.pos.set(x,0,0);s.enemyKind='Warrior'+i;return s;});
     const team=t.makeTargetContext(),results=new Map();
     for(const i of orderIndices)results.set(guards[i],t.chooseHeroTarget(guards[i],threats,.016,team));
-    assert.strictEqual(team.defenseAnchor,guards[0],goalType+': âncora é derivada da ordem estável da equipe, não da chamada');
-    assert.equal(results.get(guards[0]),null,goalType+': a âncora não persegue nenhum dos dois lados');
+    const anchor=goalType==='defend'?team.escortGuard:guards[0];   // santuário: a âncora é o guarda (curandeiro/tanque)
+    assert.strictEqual(team.defenseAnchor,anchor,goalType+': âncora é derivada da ordem estável da equipe, não da chamada');
+    assert.equal(results.get(anchor),null,goalType+': a âncora não persegue nenhum dos dois lados');
     assert.ok([...results.values()].filter(Boolean).length<=count-1,goalType+': pelo menos um herói continua no posto');
     assert.ok([...results.values()].some(Boolean),goalType+': os demais ainda podem interceptar');
   }
@@ -4237,6 +4240,46 @@ test('escolta: o guarda ataca quem chega a 10 m do aldeão, os caçadores respei
     decoy.dead=true;
     const open=t.makeTargetContext();
     assert.ok(hunters.some(h=>t.canHeroReachTarget(h,far,open)),'sem inimigo dentro do limite, a caça alcança o distante');
+  }finally{t.world.obstacles=saved;clear();}
+});
+test('santuário: o grupo fica em volta do cristal, prioriza quem o ataca e volta a ele depois de limpar',()=>{
+  clear();const m=t.MISSIONS.find(x=>x.id==='santuario');Object.assign(t.game,{mission:m,start:m.from,phase:m.from,last:m.to,test:true,state:'advance',guideS:t.world.anchorS(m.from)});
+  const saved=t.world.obstacles;t.world.obstacles=[];
+  try{
+    for(const id of ['paladin','champion','cleric','archer'])new t.Hero(cfg(id));
+    const shrine=t.game.shrine=new t.Shrine(t.world.along(t.world.anchorS(m.from)-5,0));
+    t.arrangeParty();for(const h of t.heroes()){h.pos.copy(h.post);h.autoSkills.fill(false);}
+    t.game.state='fight';t.game.toSpawn=0;t.game.surviveT=60;
+    const guard=t.heroes().find(h=>h.cfg.id==='cleric'),hunters=t.heroes().filter(h=>h!==guard&&!h.ranged);   // atiradores já alcançam mais longe só pelo posto
+    const fwd=t.world.tangentAt(t.game.guideS),side=t.world.sideOf(fwd);
+    const at=(d,lat=0)=>[shrine.pos.x+fwd.x*d+side.x*lat,shrine.pos.z+fwd.z*d+side.z*lat];
+    // 1) o curandeiro é o guarda (e a âncora); ataca quem chega a 9 m do cristal, fora do leash do posto
+    const near=foe('Warrior',...at(0,9));near.hp=near.maxHp=1e6;near.speed=0;
+    let ctx=t.makeTargetContext();
+    assert.equal(ctx.escortGuard,guard);assert.equal(ctx.defenseAnchor,guard);
+    assert.ok(t.canHeroReachTarget(guard,near,ctx),'o guarda alcança o inimigo a 9 m do cristal');
+    // 2) com ameaça ao cristal ninguém caça além de 16 m dele, nem pela caça livre
+    const far=foe('Warrior',...at(17));far.hp=far.maxHp=1e6;far.speed=0;
+    assert.ok(far.pos.distanceTo(shrine.pos)>16);
+    ctx=t.makeTargetContext();
+    for(const h of hunters){h.freeHuntT=5;
+      assert.equal(t.canHeroReachTarget(h,far,ctx),false,h.cfg.id+' não caça além do limite do cristal');
+      assert.equal(t.chooseHeroTarget(h,[far],.016,ctx),null,h.cfg.id+' nem pela caça livre');
+      const p=at(17);h.pos.set(p[0],0,p[1]);}
+    assert.equal(hunters.some(h=>h.holdsGround(ctx)),false,'longe do cristal, voltam ao posto');
+    // 3) saqueador correndo para o cristal vence um inimigo comum mais perto do herói
+    const raider=foe('Warrior',...at(12,3));raider.raider=true;raider.target=shrine;
+    const plain=foe('Warrior',...at(6,6));
+    for(const h of hunters)h.pos.copy(h.post);
+    ctx=t.makeTargetContext();
+    for(const h of hunters)assert.ok(t.heroTargetScore(h,raider,h.pos,ctx)<t.heroTargetScore(h,plain,h.pos,ctx),h.cfg.id+' prioriza o saqueador');
+    // 4) limpo o perto e sem ameaça ao cristal, a caça abre e o último distante não trava a fase
+    for(const e of [near,raider,plain])e.dead=true;
+    ctx=t.makeTargetContext();assert.equal(ctx.huntLimited,false);
+    assert.ok(hunters.some(h=>{h.freeHuntT=5;return t.canHeroReachTarget(h,far,ctx)||t.chooseHeroTarget(h,[far],.016,ctx)===far;}),'sem ameaça, a caça alcança o distante');
+    // 5) cristal com <35%: a trava vale mesmo sem inimigo por perto
+    far.dead=true;shrine.hp=shrine.maxHp*.3;
+    ctx=t.makeTargetContext();assert.equal(ctx.huntLimited,true,'cristal fraco prende todos à defesa');
   }finally{t.world.obstacles=saved;clear();}
 });
 test('guarda: quem cai não volta e não pesa em derrota, quedas ou estrelas',()=>{
