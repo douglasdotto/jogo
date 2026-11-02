@@ -9,7 +9,7 @@ const EXTRA_SKILLS = {
     { name: 'Juramento', description: 'Jura proteger o aliado mais ferido: assume parte do dano que ele recebe e o cura um pouco.', effect: 'oath-link', cooldown: 18, range: 9, duration: 6, share: 0.4, color: 0xfff0a8 },
   ],
   guardian: [
-    { name: 'Marca de Provocação', description: 'Atrai inimigos próximos e interrompe seus golpes.', effect: 'taunt', cooldown: 19, radius: 6, duration: 5 },
+    { name: 'Escudo Ricochete', description: 'Arremessa o escudo: quica por até 3 inimigos, fere de leve e deixa cada um 2 s com −25% de dano contra aliados.', effect: 'shield-ricochet', cooldown: 19, range: 8, power: 0.6, duration: 2, hops: 3, color: 0x9fcfff },
     { name: 'Fortaleza', description: 'Cria uma proteção reforçada e chama os inimigos para si.', effect: 'bastion', cooldown: 66, radius: 7, duration: 7 },
     { name: 'Investida de Escudo', description: 'Avança de escudo erguido até um inimigo, atordoa e empurra quem estiver perto do impacto.', effect: 'shield-rush', targeting: 'enemy', cooldown: 17, range: 7, radius: 2.2, power: 1.2, control: 'stun', color: 0x9fcfff },
   ],
@@ -19,7 +19,7 @@ const EXTRA_SKILLS = {
     { name: 'Desafio do Campeão', description: 'Desafia o inimigo mais forte: ele só ataca o Campeão, que ganha dano e defesa durante o duelo.', effect: 'duel-challenge', targeting: 'enemy', cooldown: 18, range: 8, duration: 5, bonus: 0.3, color: 0xffe59b },
   ],
   king: [
-    { name: 'Ordem Real', description: 'Aumenta o dano dos heróis por vários segundos.', effect: 'rally', cooldown: 22, duration: 8, bonus: 0.25 },
+    { name: 'Decreto de Marcha', description: 'O grupo anda 20% mais rápido e as recargas das habilidades correm 30% mais depressa por 6 s.', effect: 'march-decree', cooldown: 22, duration: 6, color: 0xffd84a },
     { name: 'Julgamento Dourado', description: 'Uma onda dourada atinge todos os inimigos próximos.', effect: 'storm', cooldown: 64, radius: 7, power: 2.7, color: 0xffd84a },
     { name: 'Édito Real', description: 'Ordena que os inimigos próximos se ajoelhem: comuns ficam atordoados e chefes, lentos.', effect: 'royal-edict', cooldown: 18, radius: 6.5, power: 0.6, duration: 3, color: 0xffd84a },
   ],
@@ -130,7 +130,7 @@ const EXTRA_SKILLS = {
   ],
   beast_tamer: [
     { name: 'Rugido da Matilha', description: 'A fera provoca inimigos próximos e protege os aliados ao redor.', effect: 'pack-roar', cooldown: 21, radius: 6, duration: 4, color: 0xcbb36f },
-    { name: 'Alfa Ancestral', description: 'Fortalece a fera, recupera parte de sua vida e a faz golpear em uma onda de impacto.', effect: 'alpha-beast', cooldown: 70, radius: 5.5, duration: 8, power: 2.1, color: 0xe5ca75 },
+    { name: 'Caçada em Matilha', description: 'Por 8 s a fera persegue o inimigo mais perigoso com +50% de velocidade e dano; cada mordida o faz sangrar.', effect: 'pack-hunt', cooldown: 70, range: 10, duration: 8, bonus: 0.5, color: 0xe5ca75 },
     { name: 'Comando de Ataque', description: 'A fera salta no inimigo prioritário, morde e o faz sangrar; sem fera, o Domador lança uma rede.', effect: 'sic-em', targeting: 'enemy', cooldown: 17, range: 10, power: 1.4, duration: 4, color: 0xcbb36f },
   ],
   runic: [
@@ -176,7 +176,7 @@ const EXTRA_SKILLS = {
   brute: [
     { name: 'Arremesso', description: 'Agarra o inimigo comum mais perto e o arremessa no grupo mais denso; a queda fere todos em volta.', effect: 'grab-throw', cooldown: 16, radius: 2.4, range: 8, splash: 2.6, power: 1, color: 0xc9bba2 },
     { name: 'Pele de Pedra', description: 'Cresce por 8 s: recebe 60% menos dano, devolve 30% dos golpes corpo a corpo e provoca quem está em volta.', effect: 'stone-skin', cooldown: 64, radius: 6, duration: 8, color: 0xb8a88a },
-    { name: 'Muralha', description: 'Finca-se no chão por 3 s: fica imóvel, recebe metade do dano e bloqueia os projéteis que passam por ele.', effect: 'stone-wall', cooldown: 18, radius: 1.4, range: 9, duration: 3, color: 0xc9bba2 },
+    { name: 'Berro de Guerra', description: 'Por 5 s, o golpe do Brutamontes atordoa 1 s os inimigos colados (até 3 por golpe, cada um 1 vez a cada 3 s). Chefes só desaceleram.', effect: 'war-roar', cooldown: 18, radius: 3.5, duration: 5, color: 0xe0b070 },
   ],
   lancer: [
     { name: 'Postura de Lança', description: 'Por 5 s a lança alcança mais longe; quem chega perto leva dano e fica lento.', effect: 'spear-stance', cooldown: 18, radius: 5, duration: 5, power: 0.3, color: 0xbcd0ff },

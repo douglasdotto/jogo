@@ -1875,7 +1875,7 @@ function evolutionGain(hero, id) {
 
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
-  const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
+  const controlEffects = new Set(['shield-ricochet', 'march-decree', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
     'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
@@ -2121,17 +2121,17 @@ let skillItems = [], skillHeroes = [];
 const skillParty = [], skillRoster = [];
 const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F'], ['Z', 'X', 'V', 'B']];   // linha = slot, coluna = herói (C fica para o controle direto)
 const SKILL_GLYPHS = {
-  paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '⚑', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
+  paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '◉', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
   berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
   pyro: ['♨', '✸', '☄', '☲'], arcane: ['⚡', '✺', '◎', '❋'], cryo: ['❄', '✥', '❅', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
   duelist: ['⚔', '✕', '✺', '⤺'],
-  king: ['♛', '✦', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '☩', '☥', '✠'],
+  king: ['♛', '⇉', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '☩', '☥', '✠'],
   druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '↻', '◷', '⟲'],
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◎', '☯', '◈'],
-  brute: ['⛰', '⤴', '⬢', '▥'],
+  brute: ['⛰', '⤴', '⬢', '❢'],
   lancer: ['↟', '⇈', '♞', '⇥'],
   geomancer: ['⛰', '▤', '≋', '▲'],
   runic: ['◈', '⬡', '◍', '✺'],
@@ -2142,6 +2142,9 @@ const SKILL_GLYPHS = {
   illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
+const isPriorityEnemy = (s) => !s.dead && !s.spawning && (s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || !!s.kind?.priority);   // alvo prioritário da Caçada em Matilha
+const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
+const MARCH_SPEED = 0.2, MARCH_HASTE = 0.3;   // Decreto de Marcha: +20% de velocidade e recargas 30% mais rápidas
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
 
 function buildSkillBar(party) {
@@ -2765,6 +2768,7 @@ class Unit {
 
   // anda até o alvo desviando dos obstáculos que estão na frente
   moveTo(target, dt, moveSpeed = this.speed) {
+    if (this.marchT > 0 && moveSpeed === this.speed) moveSpeed *= 1 + MARCH_SPEED;   // Decreto de Marcha
     const goal = target;   // posição de uma unidade (alvo, protegido, invocador): essa não se contorna
     const watch = this.moveProgress || (this.moveProgress = {
       goalX: target.x, goalZ: target.z, lastDistance: Infinity, lastX: null, lastZ: null, targetX: null, targetZ: null, stalled: 0, side: 1,
@@ -2916,6 +2920,7 @@ class Unit {
     if (this.dead || game.over || this.untargetable) return;   // dragãozinho voando: fora do alcance de golpes e áreas
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
+    if (owner?.weakT > 0 && this.team !== 'skeleton') n *= 1 - SHIELD_WEAK;   // Escudo Ricochete: o inimigo marcado bate mais fraco contra aliados
     if (this.ward) { n = absorbWard(this, n); if (!(n > 0)) return; }   // escudo de ossos do xamã
     if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
@@ -3099,6 +3104,7 @@ class Unit {
           const hit = !target.dead && inMeleeArc(this, target);
           damageCleave(this, target);
           if (hit) FX.meleeHit(target, false);
+          if (hit && this.roarT > 0 && this.team !== 'skeleton') roarStun(this, target);   // Berro de Guerra do Brutamontes (o golpe dele é em arco)
         }
         else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) {
           if (this.team !== 'skeleton') FX.meleeHit(target, heroHit(this, target, this.dmg));
@@ -3319,6 +3325,21 @@ function controlEnemy(enemy, key, duration) {
   }
   enemy[key] = Math.max(enemy[key] || 0, duration);
   return duration;
+}
+
+// Berro de Guerra: o golpe do Brutamontes atordoa até 3 inimigos colados nele (o alvo primeiro), cada um no máximo 1 vez por 3 s; chefe só desacelera
+const ROAR = { reach: 3.5, max: 3, stun: 1, icd: 3 };
+function roarStun(hero, target) {
+  const near = skeletonsAlive().filter((s) => !s.spawning && !s.totem && s.pos.distanceTo(hero.pos) <= ROAR.reach + 0.4 * (s.size - 1) && !(game.runTime - (s.roarAt ?? -99) < ROAR.icd));
+  near.sort((a, b) => (a === target ? -1 : b === target ? 1 : a.pos.distanceTo(hero.pos) - b.pos.distanceTo(hero.pos)));
+  let n = 0;
+  for (const s of near) {
+    if (n++ >= ROAR.max) break;
+    s.roarAt = game.runTime;
+    if (s.boss) controlEnemy(s, 'slowT', ROAR.stun);
+    else if (controlEnemy(s, 'stunT', ROAR.stun)) s.pendingHit = null;
+  }
+  if (n) FX.roarPulse(hero, ROAR.reach);
 }
 
 function damageArea(center, radius, dmg, owner = null) {
@@ -4506,32 +4527,15 @@ function fireEnemyBolt(from, target) {
   scene.add(mesh);
   enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
 }
-// Muralha do Brutamontes: um projétil que passa rente a ele (rumo a outro alvo) bate na pedra e some
-function wallBlocking(b, walls) {
-  for (const h of walls) {
-    if (!(h.wallT > 0) || h.dead || h === b.target) continue;
-    const dx = b.mesh.position.x - h.pos.x, dz = b.mesh.position.z - h.pos.z;
-    if (dx * dx + dz * dz <= 1.4 * 1.4 * h.size * h.size) return h;
-  }
-  return null;
-}
 const enemyBoltGoal = new THREE.Vector3(), enemyBoltDir = new THREE.Vector3(), enemyBoltUp = new THREE.Vector3(0, 1, 0);
-const enemyBoltWalls = [];   // reaproveitada a cada quadro: sem array novo enquanto há flechas no ar
 function updateEnemyBolts(dt) {
   if (dt <= 0) return;
-  const walls = enemyBoltWalls;
-  walls.length = 0;
-  if (enemyBolts.length) for (const u of units) if (u.wallT > 0 && u.team === 'hero') walls.push(u);
   for (let i = enemyBolts.length - 1; i >= 0; i--) {
     const b = enemyBolts[i], goal = enemyBoltGoal.copy(b.target.pos);
     goal.y += 1.1;
     b.life -= dt;
     const d = b.mesh.position.distanceTo(goal);
-    const wall = walls.length && !b.target.dead ? wallBlocking(b, walls) : null;
-    if (wall) {
-      popText(wall.pos, 'Bloqueado!', 'block'); burst(b.mesh.position, [0xc9bba2, 0xffffff], 6, 2); b.life = 0;
-      if (b.from.enemyKind === 'Crossbow') FX.brokenArrow(b.mesh.position, wall.pos);
-    } else if (!b.target.dead) {
+    if (!b.target.dead) {
       b.mesh.quaternion.setFromUnitVectors(enemyBoltUp, enemyBoltDir.subVectors(goal, b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
       if (d < 12 * dt + 0.2) {
@@ -6498,6 +6502,36 @@ Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, 
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade, slimeLand });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
+// Rei: um anel dourado fino sobe do chão de cada herói e o segue enquanto a marcha dura (sem brilho aditivo)
+FX.marchDecree = (king, party, duration) => {
+  wave(king.pos, 0xffd84a, 0.3, 3, 0.5, { dust: true, opacity: 0.6 });
+  for (const h of party) if (!h.dead) column(h.pos, 0xffd84a, 0.55, 1.6, Math.min(1.2, duration), { follow: h, opacity: 0.2 });
+};
+// Brutamontes: anel de poeira no chão com o raio real do atordoamento a cada golpe que o dispara (só desenha; sem brilho aditivo)
+FX.roarPulse = (hero, reach) => {
+  wave(hero.pos, 0xe0b070, 0.4, reach, 0.35, { dust: true, opacity: 0.4 });
+  burst(hero.pos.clone().setY(hero.pos.y + 0.3), [0xe0b070, 0xc9bba2], fewer(6), 3, { up: 0.4 });
+};
+FX.roarStart = (hero, seconds) => {
+  wave(hero.pos, 0xe0b070, 0.3, ROAR.reach, 0.6, { dust: true, opacity: 0.55 });
+  column(hero.pos, 0xe0b070, 0.9, 2.4, seconds, { follow: hero, opacity: 0.14 });
+};
+// Guardião: o escudo (disco achatado de 0,9 m, sem brilho aditivo) voa de inimigo em inimigo e um anel marca cada acerto
+const shieldDiscGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.09, 14);
+FX.shieldRicochet = (hero, path) => {
+  const HOP = 0.12, disc = new THREE.Mesh(shieldDiscGeo, glow(0x9fcfff, 0.95, false));
+  addFx(disc, HOP * path.length, (e, dt) => {
+    const leg = Math.min(path.length - 1, Math.floor(e.t / HOP)), k = Math.min(1, e.t / HOP - leg);
+    const a = leg ? path[leg - 1].pos : hero.pos, b = path[leg].pos;
+    disc.position.set(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k + 1.1 + Math.sin(k * Math.PI) * 0.3, a.z + (b.z - a.z) * k);
+    disc.rotation.y += dt * 30;
+    disc.rotation.x = 0.4;
+  });
+  path.forEach((s, i) => {
+    wave(s.pos, 0x9fcfff, 0.2, 0.9, 0.35, { delay: i * HOP, opacity: 0.55 });
+    burst(s.pos.clone().setY(s.pos.y + 1), [0x9fcfff, 0xffffff], fewer(5), 3, { delay: i * HOP });
+  });
+};
 Object.assign(FX, { lanceThrust, lanceStance });   // Lanceiro
 
 class Hero extends Unit {
@@ -6514,6 +6548,7 @@ class Hero extends Unit {
     this.damageTaken = 1;
     this.royalT = 0;
     this.royalBonus = 0;
+    this.marchT = 0;   // Decreto de Marcha: mais veloz e com recargas mais rápidas
     this.songT = 0;
     this.songHaste = 1;
     this.formation = POSTS[Math.min(3, heroes().length - 1)];
@@ -7153,21 +7188,24 @@ class Hero extends Unit {
     if (skill.effect === 'meteor' && !target) target = highestPriorityHeroTarget(this, targetPool);
     const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
+    // Decreto de Marcha: vale no começo da onda ou quando alguém está longe do posto, com ou sem inimigos por perto
+    const marchWanted = skill.effect === 'march-decree' && game.state === 'fight' && !(this.marchT > 1)
+      && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
-    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+    const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
+      'sentry-overcharge', 'pack-roar', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
     if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
-      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !(skill.effect === 'alpha-beast' && ownBeast)) return false;
+      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !marchWanted) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
     const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
     const canRestoreAllies = SKILLS_USEFUL_WITHOUT_ENEMIES.has(skill.effect)
       && (missingHp > 0 || this.hp < this.maxHp || fallenAlly);
-    if (!force && !enemies.length && !canRestoreAllies) return false;
+    if (!force && !enemies.length && !canRestoreAllies && !marchWanted) return false;
     if (areaEffects.includes(skill.effect) && !enemies.length && !(supportSkill && (criticalAlly || missingHp > this.maxHp * 0.35))) return false;
 
     const damageOne = (enemy, multiplier = 1) => {
@@ -7187,7 +7225,7 @@ class Hero extends Unit {
         column(enemy.pos, color, 0.35, 2.2, 0.55, { follow: enemy });
       }
       if (skill.control === 'push') enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(5));
-      if (skill.effect === 'taunt' || skill.effect === 'bastion') { enemy.taunt = this; enemy.tauntT = skill.duration * power; enemy.pendingHit = null; }
+      if (skill.effect === 'bastion') { enemy.taunt = this; enemy.tauntT = skill.duration * power; enemy.pendingHit = null; }
     };
     const healFriends = (amount, reach = radius) => {
       const healed = [];
@@ -7256,25 +7294,20 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'alpha-beast': {
+      case 'pack-hunt': {
+        // Caçada em Matilha: por 8 s a fera persegue o inimigo mais perigoso com +50% de velocidade e dano, e cada mordida faz o alvo sangrar (ver BeastCompanion.update); sem fera, ela é chamada
+        if (!enemies.length || (!force && !enemies.some(isPriorityEnemy))) return false;
         effect = () => {
+          const fresh = !ownBeast;
           const companion = ownBeast || new BeastCompanion(this);
-          companion.life = Math.max(companion.life, skill.duration || 8);
-          companion.empowerT = Math.max(companion.empowerT || 0, skill.duration || 8);
-          companion.hp = Math.min(companion.maxHp, companion.hp + companion.maxHp * 0.4);
-          const center = companion.pos.clone();
-          for (const enemy of attackables) if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius) {
-            heroHit(this, enemy, this.dmg * power * (skill.power || 1) * 0.45);
-            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, center).setY(0).normalize().multiplyScalar(enemy.boss ? 1.8 : 4));
-          }
-          for (const ally of party) if (ally.pos.distanceTo(center) <= radius) {
-            const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', 8 + level * 2) * power);
-            ally.hp += heal;
-            if (heal) { this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
-          }
-          FX.beastCall(this, companion);
-          wave(center, color, 0.25, radius, 0.8);
-          burst(center.clone().setY(center.y + 0.8), [color, 0xffe6a1, 0xffffff], 30, 5);
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 8) * power;
+          companion.life = Math.max(companion.life, seconds);
+          companion.empowerT = Math.max(companion.empowerT || 0, seconds);
+          companion.huntBonus = 1 + (skill.bonus || 0.5);
+          companion.huntTarget = null;   // escolhe de novo o mais perigoso no próximo quadro
+          if (fresh) FX.beastCall(this, companion);
+          else { companion.howl(); burst(companion.pos.clone().setY(companion.pos.y + 0.8), [color, 0xffe6a1], fewer(10), 4); }
+          popText(companion.pos, 'Caçada!', 'evolve');
         };
         break;
       }
@@ -7367,14 +7400,44 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'taunt':
-        if (!enemies.length) return false;
-        effect = () => { const stance = scaleBranchEffect(this, 'control', skill.duration) * power; this.guardT = Math.max(this.guardT, stance); this.stanceT = Math.max(this.stanceT, stance); for (const enemy of enemies) control(enemy); FX.dome(this, radius); burst(this.pos, color, 16, 3); };
+      case 'shield-ricochet': {
+        // Escudo Ricochete: quica por até 3 inimigos (o mais perigoso primeiro, depois o mais perto do anterior); cada um leva dano leve e fica 2 s com −25% de dano contra aliados
+        const first = target && enemies.includes(target) ? target : highestPriorityHeroTarget(this, enemies);
+        if (!first || (!force && enemies.length < 2)) return false;
+        target = first;
+        effect = () => {
+          const path = [], hit = new Set();
+          let from = first;
+          while (from && path.length < (skill.hops || 3)) {
+            path.push(from); hit.add(from);
+            let next = null, best = 5.5;
+            for (const s of enemies) if (!hit.has(s) && !s.dead) { const d = s.pos.distanceTo(from.pos); if (d < best) { best = d; next = s; } }
+            from = next;
+          }
+          FX.shieldRicochet(this, path);
+          for (const enemy of path) {
+            if (enemy.dead) continue;
+            damageOne(enemy);
+            enemy.weakT = Math.max(enemy.weakT || 0, scaleBranchEffect(this, 'control', skill.duration || 2) * power);
+          }
+        };
         break;
+      }
       case 'holy-nova': {
         const heal = scaleBranchEffect(this, 'support', 28 + level * 5) * power;
         if (!enemies.length && !wounded.length) return false;
         effect = () => { const healed = healFriends(heal, Math.max(radius, 6.5)); damageAreaNow(0.8); FX.holyLight(this, healed, radius); wave(this.pos, color, 0.2, radius, 0.75); burst(this.pos, color, 28, 5); };
+        break;
+      }
+      case 'march-decree': {
+        // Decreto de Marcha: o grupo todo anda mais depressa e as recargas correm mais rápido por alguns segundos
+        if (!force && !marchWanted) return false;
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'support', skill.duration || 6) * power;
+          for (const h of party) if (!h.dead) h.marchT = Math.max(h.marchT, duration);
+          popText(this.pos, 'Marcha!', 'evolve');
+          FX.marchDecree(this, party, duration);
+        };
         break;
       }
       case 'rally': {
@@ -7688,20 +7751,14 @@ class Hero extends Unit {
         break;
       }
       // ---------- segundas técnicas (slot 3): um comportamento próprio por herói ----------
-      case 'stone-wall': {
-        // Muralha: o Brutamontes finca os pés; segura metade do dano e engole os projéteis que passam por ele
-        const threats = enemyBolts.filter((b) => b.target !== this && !b.target.dead).length;
-        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= 3.5).length;
-        if (!force && !threats && close < 3 && !urgentEnemy) return false;
+      case 'war-roar': {
+        // Berro de Guerra: por 5 s o golpe comum do Brutamontes atordoa quem está colado (ver roarStun); ele segue andando e batendo
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= ROAR.reach + 0.4 * (s.size - 1)).length;
+        if (!force && (close < 2 || this.roarT > 1)) return false;
         effect = () => {
-          this.wallT = (skill.duration || 3) * (0.9 + 0.1 * power);
-          this.busy = this.wallT;
-          this.pendingHit = null;
-          this.vel.set(0, 0, 0);
-          this.loop('Blocking');
-          popText(this.pos, 'Muralha!', 'evolve');
-          FX.quake(this, 1.2);
-          column(this.pos, color, 0.9, 2.4, this.wallT, { follow: this, opacity: 0.18 });
+          this.roarT = scaleBranchEffect(this, 'control', skill.duration || 5) * (0.9 + 0.1 * power);
+          popText(this.pos, 'Berro!', 'evolve');
+          FX.roarStart(this, this.roarT);
         };
         break;
       }
@@ -8856,7 +8913,7 @@ class Hero extends Unit {
     this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
-    this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
+    this.roarT = 0;         // Berro de Guerra do Brutamontes: o golpe atordoa quem está colado
     if (this.spearOn) this.range /= SPEAR_REACH;
     this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
     this.runeHp = 0; this.runeMax = 0; this.runeT = 0; this.runeHeal = 0; this.runePush = false; this.runeBy = null;   // runa-escudo da Rúnica
@@ -8912,7 +8969,7 @@ class Hero extends Unit {
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.roarT -= dt;
     this.echoT -= dt; this.frostT -= dt; this.frostGapT -= dt; this.critT -= dt;
     if (this.pactT > 0 && (this.pactT -= dt) <= 0) this.pactShield = 0;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
@@ -8944,7 +9001,6 @@ class Hero extends Unit {
   skillGuard(n, owner) {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
-    if (this.wallT > 0) n *= 0.5;
     if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
     if (this.pactShield > 0) {   // Pacto de Ossos: o escudo comido de golpes anteriores absorve primeiro
       const soak = Math.min(n, this.pactShield);
@@ -9062,7 +9118,7 @@ class Hero extends Unit {
   update(dt) {
     if (dt <= 0) return;
     for (let slot = 0; slot < this.skillTimers.length; slot++) {
-      this.skillTimers[slot] -= dt;
+      this.skillTimers[slot] -= dt * (this.marchT > 0 ? 1 + MARCH_HASTE : 1);
       this.skillRequests[slot] -= dt;
       if (this.skillRequests[slot] <= 0) { this.skillTargets[slot] = null; this.skillManuals[slot] = false; }
     }
@@ -9070,6 +9126,7 @@ class Hero extends Unit {
     this.guardT -= dt;
     this.stanceT -= dt;
     this.royalT -= dt;
+    this.marchT -= dt;
     if (this.royalT <= 0) this.royalBonus = 0;
     this.songT -= dt;
     if (this.songT <= 0) this.songHaste = 1;
@@ -9267,7 +9324,7 @@ const SKILL_ANIMS = {
   ],
   guardian: [
     { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: -1 },
-    { clip: '1H_Melee_Attack_Stab', f: 0.45, arc: 'thrust', kick: 1.4 },
+    { clip: 'Throw', f: 0.45, lean: 0.2, kick: -0.3 },   // arremessa o escudo
     { clip: 'Cheer', hold: 'Blocking', f: 0.35, arc: 'ring', lean: -0.15, hop: 0.25 },
     { clip: 'Dodge_Forward', hold: 'Blocking', f: 0.55, arc: 'slash', kick: 1.8 },
   ],
@@ -9425,7 +9482,7 @@ const SKILL_ANIMS = {
     { clip: 'Brute_Smash', f: 0.3, arc: 'ring', hop: 0.2, lean: 0.1 },   // ergue os dois punhos e esmaga o chão
     { clip: 'Throw', hold: 'Brute_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
     { clip: 'Cheer', hold: 'Block', f: 0.4, lean: -0.2, hop: 0.25 },
-    { clip: 'Block', hold: 'Blocking', f: 0.42, hop: 0.35, lean: 0.12, kick: -0.25 },   // salta e crava os pés: vira muralha
+    { clip: 'Spellcast_Raise', hold: 'Brute_Idle', f: 0.5, lean: -0.28, hop: 0.15 },   // ergue os braços e ruge
   ],
   lancer: [
     { clip: '1H_Melee_Attack_Stab', hold: '2H_Melee_Idle', f: 0.45, arc: 'thrust', lean: 0.15, kick: 1 },   // estocada reta
@@ -9600,7 +9657,9 @@ class BeastCompanion extends Unit {
     this.cfg = { id: 'beast_companion' };
     this.level = summoner.level;
     this.life = scaleBranchEffect(summoner, 'support', 13 + skillLevel(summoner.level)) * summoner.skillPower;
-    this.empowerT = 0;
+    this.empowerT = 0;   // Caçada em Matilha: tempo restante (também acende o brilho dourado da fera)
+    this.huntBonus = 1.5;
+    this.huntTarget = null;
     this.beastCompanion = true;
     this.threatScratch = [];
     this.size = 1.12;
@@ -9658,10 +9717,15 @@ class BeastCompanion extends Unit {
     for (const enemy of targets) {
       if (!enemy.dead && enemy.pendingHit?.target?.team === 'hero' && enemy.pendingHit.target.pos.distanceTo(this.pos) < 10) threats.push(enemy);
     }
-    const target = threats.length ? highestPriorityHeroTarget(this.summoner, threats, this.pos) : nearest(this.pos, targets);
+    const hunting = this.empowerT > 0;
+    if (hunting && (!this.huntTarget || this.huntTarget.dead || !units.includes(this.huntTarget))) {
+      const urgent = targets.filter(isPriorityEnemy);   // o mais perigoso: chefe, totem, sacerdote, bombardeiro ou prioritário
+      this.huntTarget = highestPriorityHeroTarget(this.summoner, urgent.length ? urgent : targets, this.pos);
+    } else if (!hunting) this.huntTarget = null;
+    const target = hunting && this.huntTarget ? this.huntTarget : threats.length ? highestPriorityHeroTarget(this.summoner, threats, this.pos) : nearest(this.pos, targets);
     if (target) {
       const distance = target.pos.distanceTo(this.pos);
-      if (!this.inReach(target, distance) || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt);
+      if (!this.inReach(target, distance) || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt, this.speed * (hunting ? this.huntBonus : 1));
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) {
         const duration = this.once('1H_Melee_Attack_Chop', 1.25);
         this.busy = duration * 0.9;
@@ -9670,9 +9734,17 @@ class BeastCompanion extends Unit {
         const enemy = target;
         this.pendingHit = { target: enemy, t: duration * 0.36, effect: () => {
           if (enemy.dead || !units.includes(enemy)) return;
-          heroHit(this.summoner, enemy, this.dmg * (this.empowerT > 0 ? 1.75 : 1), this.pos);
-          burst(enemy.pos.clone().setY(enemy.pos.y + 0.6), [0xcbb36f, 0xffe6a1], 7, 2.4);
-          if (this.empowerT > 0) controlEnemy(enemy, 'stunT', 0.45);
+          const hunt = this.empowerT > 0;   // Caçada em Matilha: mais dano e cada mordida faz sangrar
+          heroHit(this.summoner, enemy, this.dmg * (hunt ? this.huntBonus : 1), this.pos);
+          burst(enemy.pos.clone().setY(enemy.pos.y + 0.6), hunt ? [0xb0202a, 0xe5ca75] : [0xcbb36f, 0xffe6a1], 7, 2.4);
+          if (hunt) {
+            const owner = this.summoner;
+            if (!(enemy.burnT > 0)) popText(enemy.pos, 'Sangrando!', 'crit');
+            enemy.burnT = Math.max(enemy.burnT || 0, scaleBranchEffect(owner, 'control', 3));
+            enemy.burnTick = Math.min(enemy.burnTick || 0.5, 0.35);
+            enemy.burnDmg = Math.max(enemy.burnDmg || 0, owner.dmg * owner.skillPower * 0.2);
+            enemy.burnOwner = owner;
+          }
         } };
       }
       for (const enemy of threats) if (enemy.pos.distanceTo(this.pos) <= 2.8 && enemy.tauntT <= 0.35) {
@@ -10258,6 +10330,7 @@ class Skeleton extends Unit {
     this.burnTick = 0;
     this.burnDmg = 0;
     this.burnOwner = null;
+    this.weakT = 0;       // Escudo Ricochete: causa −25% de dano em aliados enquanto durar
     this.tauntT = 0;
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
@@ -10356,6 +10429,7 @@ class Skeleton extends Unit {
     this.slowT = Math.max(0, this.slowT - dt);
     this.controlWindowT = Math.max(0, (this.controlWindowT || 0) - dt);
     this.burnT = Math.max(0, this.burnT - dt);
+    this.weakT = Math.max(0, this.weakT - dt);
     this.burnTick -= dt;
     if (this.burnT > 0 && this.burnTick <= 0 && this.burnOwner && !this.dead) {
       this.takeDamage(this.burnDmg, this.pos, this.burnOwner);
@@ -11520,6 +11594,7 @@ const partyCap = (cap) => Math.round(cap * Math.min(PARTY_SCALE.cap, partyCount(
 function startPhase() {
   if (game.mission) game.partyScale = partyScale(game.mission, heroes(), game.phase);
   game.state = 'fight';
+  game.phaseAt = game.runTime;   // Decreto de Marcha: a IA usa no começo da onda
   syncDirectControlUI();
   if (game.arena) {   // modo Teste: primeira onda; as seguintes vêm de arenaTick
     for (const h of heroes()) h.kiteT = 0;
