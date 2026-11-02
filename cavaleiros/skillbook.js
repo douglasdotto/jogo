@@ -60,12 +60,12 @@ const EXTRA_SKILLS = {
   ],
   assassin: [
     { name: 'Dança Sombria', description: 'Desaparece e ataca o inimigo prioritário pelas costas.', effect: 'shadow', cooldown: 18, power: 2.8 },
-    { name: 'Execução', description: 'Um golpe crítico concentra todo o dano em um alvo.', effect: 'execute', cooldown: 62, power: 4.8 },
+    { name: 'Execução', description: 'Surge atrás do alvo mais forte e o executa num golpe devastador; abaixo de 45% de vida o dano é quase o dobro.', effect: 'execute', cooldown: 62, power: 7.5 },
     { name: 'Lâmina Envenenada', description: 'Arremessa uma adaga envenenada: o veneno corrói o alvo por vários segundos.', effect: 'poison-blade', targeting: 'enemy', cooldown: 17, range: 7, power: 0.8, duration: 6, color: 0x9cff5a },
   ],
   crossbow: [
     { name: 'Rajada Perfurante', description: 'Dispara uma sequência rápida de virotes.', effect: 'volley', range: 9, cooldown: 20, power: 1.2, shots: 4 },
-    { name: 'Chuva de Virotes', description: 'Uma salva atinge os inimigos espalhados pela área.', effect: 'arrow-rain', cooldown: 64, radius: 8, power: 1.9, shots: 6 },
+    { name: 'Chuva de Virotes', description: 'Uma salva pesada atinge até 9 inimigos espalhados pela área, ferindo muito e pregando-os no chão: ficam lentos por 2,5 s.', effect: 'arrow-rain', cooldown: 64, radius: 8, power: 3.2, shots: 9 },
     { name: 'Virote Arpão', description: 'Fisga um inimigo distante, puxa-o para perto da linha de frente e o prende no lugar.', effect: 'harpoon', targeting: 'enemy', cooldown: 17, range: 9, minRange: 3, power: 1.2, duration: 1.6, control: 'root', color: 0xc9eaa4 },
   ],
   ninja: [
@@ -75,7 +75,7 @@ const EXTRA_SKILLS = {
   ],
   duelist: [
     { name: 'Corte em X', description: 'Avança em linha reta e corta em X todos os inimigos no caminho; contra um inimigo isolado, causa 25% mais dano.', effect: 'cross-dash', cooldown: 19, radius: 6.5, range: 6.5, power: 1.6, color: 0xc9d4e2 },
-    { name: 'Dança de Lâminas', description: 'Gira por alguns segundos cortando todos ao redor e desviando de parte dos golpes.', effect: 'blade-dance', cooldown: 62, radius: 3.5, power: 2.6, duration: 3, color: 0xc9d4e2 },
+    { name: 'Dança de Lâminas', description: 'Gira por 3 s num redemoinho de aço: corta todos num raio de 5 m, desvia de metade dos golpes e deixa os cortados lentos.', effect: 'blade-dance', cooldown: 62, radius: 5, power: 6.5, duration: 3, color: 0xc9d4e2 },
     { name: 'Desarmar', description: 'Golpeia um inimigo: por 4 s os ataques dele causam 50% menos dano (chefe, 25%).', effect: 'disarm', targeting: 'enemy', control: 'Enfraquece', cooldown: 17, range: 5, power: 1, duration: 4, color: 0xc9d4e2 },
   ],
   necro: [
@@ -105,12 +105,12 @@ const EXTRA_SKILLS = {
   ],
   chronist: [
     { name: 'Eco Temporal', description: 'O inimigo mais próximo de um herói recebe de volta, 1,5 s depois, o dano que acabou de causar.', effect: 'time-echo', targeting: 'enemy', cooldown: 18, range: 9, duration: 1.5, power: 1.2, color: 0x8feaff },
-    { name: 'Parada do Tempo', description: 'Prende e fere os inimigos em uma ampla área.', effect: 'blizzard', cooldown: 74, radius: 7, power: 1.9, duration: 3.5, control: 'root', color: 0x8feaff },
+    { name: 'Parada do Tempo', description: 'O tempo pára numa ampla área: inimigos presos por 3,5 s e feridos, e as recargas das habilidades dos aliados correm 4 s.', effect: 'blizzard', cooldown: 74, radius: 8, power: 3, duration: 3.5, control: 'root', color: 0x8feaff },
     { name: 'Rebobinar', description: 'Volta no tempo a vida dos aliados próximos para como estava três segundos atrás.', effect: 'rewind', cooldown: 18, radius: 9, color: 0x8feaff },
   ],
   archer: [
     { name: 'Chuva de Flechas', description: 'Marca uma área no grupo de inimigos e faz chover flechas sobre ela.', effect: 'arrow-storm', cooldown: 18, radius: 3, range: 9, power: 1.5, color: 0x3fe0b0 },
-    { name: 'Flecha do Caçador', description: 'Fere e marca o inimigo mais forte: ele recebe mais dano de todos por alguns segundos.', effect: 'hunter-mark', cooldown: 60, range: 11, power: 2.6, duration: 8, bonus: 0.3, control: 'mark', color: 0x3fe0b0 },
+    { name: 'Flecha do Caçador', description: 'Fere e marca o inimigo mais forte: ele recebe mais dano de todos por alguns segundos.', effect: 'hunter-mark', cooldown: 60, range: 11, power: 3.6, duration: 8, bonus: 0.3, control: 'mark', color: 0x3fe0b0 },
     { name: 'Armadilha', description: 'Arma uma armadilha no caminho dos inimigos: o primeiro que pisar fica preso e ferido.', effect: 'snare-trap', targeting: 'ground', cooldown: 17, range: 9, radius: 1.4, power: 1.4, duration: 2.5, control: 'root', color: 0x3fe0b0 },
   ],
   monk: [
@@ -160,7 +160,7 @@ const EXTRA_SKILLS = {
   ],
   oracle: [
     { name: 'Visão do Alvo', description: 'Por 5 s, aliados próximos ganham +25% de chance de crítico e o inimigo mais frágil fica marcado: recebe +10% de dano de todos.', effect: 'vision-mark', cooldown: 20, radius: 10, duration: 5, bonus: 0.25, mark: 0.1, color: 0xc6b4ff },
-    { name: 'Destino Reescrito', description: 'Cancela os golpes anunciados por chefes próximos e os atordoa por um breve instante.', effect: 'rewrite-fate', cooldown: 72, radius: 9, duration: 1.1, control: 'stun', color: 0xe3d7ff },
+    { name: 'Destino Reescrito', description: 'Reescreve os próximos segundos: os golpes dos inimigos próximos são anulados e eles ficam atordoados por 2 s (chefes 1,1 s e lentos), marcados (+15% de dano de todos); os aliados recebem 40% menos dano por 3 s.', effect: 'rewrite-fate', cooldown: 72, radius: 9, duration: 2, control: 'stun', color: 0xe3d7ff },
     { name: 'Presságio', description: 'Mostra aos aliados próximos o próximo golpe: cada um esquiva o próximo dano em alguns segundos.', effect: 'omen', cooldown: 18, radius: 9, duration: 5, color: 0xc6b4ff },
   ],
   geomancer: [
