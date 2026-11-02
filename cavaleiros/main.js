@@ -13,6 +13,7 @@ import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
 import { activeSynergies, damageSynergies, synergyDamageMultiplier, synergyDamageTakenMultiplier, synergyHealMultiplier, synergySummonHaste } from './synergies.js';
 import { EVOLUTION_BRANCHES, applyEvolutionBranch, branchRankLimit, scaleBranchEffect } from './upgrade-branches.js';
 import { buildBattleReport } from './battle-report.js';
+import { PASSIVES, passiveReady, passiveHTML } from './passives.js';
 import { newStats, openHeroPanel, closeHeroPanel, panelHero, tickHeroPanel, summaryHTML } from './stats.js';
 import * as audio from './audio.js';
 import { initTooltips, registerTooltip, hideTooltip } from './tooltip.js';
@@ -1391,6 +1392,7 @@ function renderInfo(cfg) {
       <div class="hero-profile-copy"><div class="ribbon" data-tip="${attrText(`${info.name} · ${cfg.ranged ? 'à distância' : 'corpo a corpo'}`)}">${cfg.name}</div>
         <span class="hero-role-pill" tabindex="0" data-tip="${attrText(`${CLASSES[cfg.classId].summary} ${info.tip}`)}">${info.role}</span>${masteryLine}</div></div>
     <section class="ability skill-list" aria-label="Habilidades do herói">${skills.map((skill) => `<article class="skill-detail${skill.ultimate ? ' ultimate-detail' : skill.slot > 0 ? ' technique-detail' : ''}" tabindex="0" data-tip="skill" data-hero="${cfg.id}" data-slot="${skill.slot}" aria-label="${attrText(`${skill.name}, ${kindName(skill)}, recarga ${cooldownForSkill(cfg, skill.slot)} s: ${skill.description}`)}"><span class="skill-icon" aria-hidden="true">${SKILL_GLYPHS[cfg.id]?.[skill.slot] || ['✦', '⚔', '☼', '✧'][skill.slot]}</span><strong>${skill.name}</strong><span class="skill-meta" aria-hidden="true">⟳ ${cooldownForSkill(cfg, skill.slot)} s</span></article>`).join('')}</section>
+    ${passiveHTML(cfg.id)}
     <div class="stats hero-stats" aria-label="Atributos">${stats}</div>
     ${variantOpen(cfg.id) ? '' : `<div class="lock-info" aria-label="Ganhe ${starsToUnlock(cfg.id)} estrelas na campanha para liberar">\u{1F512}︎ ★ ${starsToUnlock(cfg.id)}</div>`}`;
   // equipe fixa ao lado dos cartões: mini-retratos, contagem, papéis cobertos e os que faltam
@@ -2990,6 +2992,7 @@ class Unit {
     }
     this.hp -= n;
     if (owner) this.lastHit = owner;
+    if (real > 0 && this.team === 'hero') passiveHook(this, 'onHurt', owner, real);
     const heavy = critical || !!owner?.ultHit;   // crítico e ultimate piscam branco e mostram o número grande
     this.flash = heavy ? 0.12 : 0.14;
     this.flashHeavy = heavy;
@@ -3015,6 +3018,7 @@ class Unit {
       this.diedIn = game.phase;   // no Pesadelo, decide quando volta
       game.fallLog.push({ name: heroLevelName(this.cfg, this.level), phase: game.phase, time: game.runTime });
       FX.heroFall(this);
+      if (this instanceof Hero) for (const h of heroes()) if (h !== this && !h.dead) passiveHook(h, 'onAllyDown', this);
       if (directControl?.hero === this) {
         clearDirectControlOrders();
         syncDirectControlUI();
@@ -3025,7 +3029,7 @@ class Unit {
       game.kills++;
       if (this.lastHit?.stats) this.lastHit.stats.abates++;
       if (this.lastHit?.militia && game.militia) game.militia.kills++;
-      for (const h of heroes()) if (!h.dead) h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0));
+      for (const h of heroes()) if (!h.dead) { h.gainXp((this.boss ? 12 : 3) + (h === this.lastHit ? 2 : 0)); passiveEnemyDeath(h, this); }
       monsterDied(this);
       relicOnKill(this);
       if (this.reapT > 0) reapPayoff(this);   // Ceifa
@@ -3404,6 +3408,7 @@ function heroHit(owner, target, dmg, center = owner.pos) {
   const dealt = dmg * (critical ? 2 : 1) * (owner.royalT > 0 ? 1 + owner.royalBonus : 1);
   const hpBefore = target.hp;
   target.takeDamage(dealt, center, owner.summoner || owner, critical);
+  passiveHook(owner, 'onHit', target, dealt);
   if (owner.cfg?.id === 'vampire' && !owner.dead) vampireLeech(owner, hpBefore - Math.max(0, target.hp));
   if (owner.leechT > 0 && !owner.dead) {   // Sede de Sangue: o golpe devolve vida ao Berserker
     const heal = Math.min(owner.maxHp - owner.hp, dealt * owner.leech);
@@ -7349,6 +7354,7 @@ class Hero extends Unit {
     FX.charge(this, this.pendingHit.t);
     this.skillTimers[0] = this.skillMaxes[0] = cooldownForSkill(this.cfg, 0, level, this.skillRate);
     relicAfterCast(this, 0, false);
+    passiveHook(this, 'onCast', 0);
     this.stats.habilidades++;
     return true;
   }
@@ -9129,6 +9135,7 @@ class Hero extends Unit {
     FX.charge(this, hitAt);
     this.skillTimers[slot] = this.skillMaxes[slot] = cooldownForSkill(this.cfg, slot, level, this.skillRate);
     relicAfterCast(this, slot, !!skill.ultimate);
+    passiveHook(this, 'onCast', slot);
     this.stats.habilidades++;
     if (skill.ultimate) game.ultimates = (game.ultimates || 0) + 1;
     return true;
@@ -9519,6 +9526,7 @@ class Hero extends Unit {
 
   update(dt) {
     if (dt <= 0) return;
+    passiveTick(this, dt);
     for (let slot = 0; slot < this.skillTimers.length; slot++) {
       this.skillTimers[slot] -= dt * (this.marchT > 0 ? 1 + MARCH_HASTE : 1);
       this.skillRequests[slot] -= dt;
@@ -10001,6 +10009,33 @@ function updateRuneDomes(dt) {
       enemy.pos.z += dz / dist * step;
     }
   }
+}
+
+// ---------- passivas dos heróis (registro e documentação em passives.js) ----------
+const PASSIVE_CTX = {
+  units, popText, THREE, passiveReady, killedByHero: false, dist: 0,
+  get game() { return game; },
+  proc(hero, text) { if (passiveReady(hero, '_proc', 0.6)) popText(hero.pos, text, 'evolve'); },   // texto flutuante, no máx. 1 a cada 0,6 s
+  canSummonSkull: (hero) => units.filter((u) => u.summoner === hero && !u.dead && !u.ultimate).length < NECRO_MINION_MAX,
+  summonSkull(hero, at) { const skull = new Minion(hero, 1, { at: at.clone() }); skull.skull = true; skull.life = 6; skull.dmg *= 0.7; return skull; },   // caveira: mini-esqueleto curto e fraco
+};
+const passiveOf = (u) => (u instanceof Hero ? PASSIVES[u.cfg.id] : undefined);   // só heróis jogáveis: nunca ilusões, invocações ou inimigos
+function passiveHook(u, name, a, b) {
+  const fn = passiveOf(u)?.[name];
+  if (!fn || u.dead) return;
+  if (name === 'onHit' || name === 'onHurt') fn(u, a, b, PASSIVE_CTX); else fn(u, a, PASSIVE_CTX);
+}
+function passiveEnemyDeath(h, enemy) {
+  const fn = passiveOf(h)?.onEnemyDeath;
+  if (!fn) return;
+  PASSIVE_CTX.killedByHero = h === enemy.lastHit;
+  PASSIVE_CTX.dist = h.pos.distanceTo(enemy.pos);
+  fn(h, enemy, PASSIVE_CTX);
+}
+function passiveTick(h, dt) {
+  const cd = h.passiveCd;
+  if (cd) for (const k in cd) if (cd[k] > 0) cd[k] -= dt;
+  passiveOf(h)?.tick?.(h, dt, PASSIVE_CTX);
 }
 
 class Minion extends Unit {
@@ -12086,6 +12121,7 @@ function startPhase() {
   if (game.mission) game.partyScale = partyScale(game.mission, heroes(), game.phase);
   game.state = 'fight';
   game.phaseAt = game.runTime;   // Decreto de Marcha: a IA usa no começo da onda
+  for (const h of heroes()) passiveHook(h, 'onPhaseStart');
   syncDirectControlUI();
   if (game.arena) {   // modo Teste: primeira onda; as seguintes vêm de arenaTick
     for (const h of heroes()) h.kiteT = 0;

@@ -88,6 +88,7 @@ vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace(
 vm.runInContext(campaign.replaceAll('export ', ''), context);
 vm.runInContext(classInfo.replaceAll('export ', ''), context);
 vm.runInContext(skillbook.replace(/^import .*$/gm, '').replaceAll('export ', ''), context);
+vm.runInContext(fs.readFileSync(path.join(dir, 'passives.js'), 'utf8').replaceAll('export ', ''), context);
 vm.runInContext(fs.readFileSync(path.join(dir, 'hero-anims.js'), 'utf8').replace(/^export /gm, ''), context);   // HERO_IDLES, HERO_HITS...
 vm.runInContext(skillTargeting.replace(/^import .*$/gm, '').replaceAll('export ', ''), context);
 vm.runInContext(synergies.replaceAll('export ', ''), context);
