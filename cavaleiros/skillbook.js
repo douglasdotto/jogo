@@ -20,22 +20,22 @@ const EXTRA_SKILLS = {
   ],
   king: [
     { name: 'Decreto de Marcha', description: 'O grupo anda 20% mais rápido e as recargas das habilidades correm 30% mais depressa por 6 s.', effect: 'march-decree', cooldown: 22, duration: 6, color: 0xffd84a },
-    { name: 'Julgamento Dourado', description: 'Uma onda dourada atinge todos os inimigos próximos.', effect: 'storm', cooldown: 64, radius: 7, power: 2.7, color: 0xffd84a },
+    { name: 'Julgamento Dourado', description: 'Marca todos os inimigos próximos; após 1 s, colunas de luz caem sobre cada um: muito dano e atordoamento (chefes ficam lentos).', effect: 'golden-judgment', cooldown: 64, radius: 7, power: 3.1, control: 'stun', duration: 0.9, color: 0xffd84a },
     { name: 'Édito Real', description: 'Ordena que os inimigos próximos se ajoelhem: comuns ficam atordoados e chefes, lentos.', effect: 'royal-edict', cooldown: 18, radius: 6.5, power: 0.6, duration: 3, color: 0xffd84a },
   ],
   berserker: [
     { name: 'Corte Sangrento', description: 'Salta sobre um inimigo e desfere um golpe devastador.', effect: 'charge', cooldown: 18, power: 1.9 },
-    { name: 'Fúria Titânica', description: 'Explode em uma onda de força ao redor do Berserker.', effect: 'storm', cooldown: 62, radius: 6, power: 2.8, control: 'push', color: 0xff4a42 },
+    { name: 'Fúria Titânica', description: 'Por 6 s o Berserker vira um furacão: fere a cada 0,5 s quem está ao redor e recupera vida com os golpes.', effect: 'titan-fury', cooldown: 62, radius: 4.5, power: 0.4, duration: 6, leech: 0.25, color: 0xff4a42 },
     { name: 'Sede de Sangue', description: 'Por alguns segundos, cada golpe do Berserker recupera parte do dano causado.', effect: 'bloodthirst', cooldown: 18, radius: 3.5, duration: 6, leech: 0.3, color: 0xff4a42 },
   ],
   crusher: [
     { name: 'Onda Sísmica', description: 'Abala o chão e atordoa os inimigos próximos.', effect: 'burst', cooldown: 22, radius: 4.8, power: 1.5, control: 'stun', color: 0xffb060 },
-    { name: 'Cataclismo', description: 'Uma ruptura sísmica atinge a área inteira e interrompe ataques.', effect: 'storm', cooldown: 66, radius: 7, power: 2.7, control: 'stun', color: 0xff8a30 },
+    { name: 'Cataclismo', description: 'O chão se parte: a ruptura atordoa a área inteira e, 1 s depois, um tremor secundário fere e atordoa de novo.', effect: 'cataclysm', cooldown: 66, radius: 7, power: 1.4, control: 'stun', duration: 1, color: 0xff8a30 },
     { name: 'Rocha Arremessada', description: 'Arranca uma rocha do chão e a lança num inimigo distante; o impacto fere e atordoa ao redor.', effect: 'boulder', targeting: 'ground', cooldown: 18, range: 10, minRange: 2.5, radius: 2.2, power: 1.5, control: 'stun', color: 0xb08a5a },
   ],
   viking: [
     { name: 'Lançamento Duplo', description: 'Arremessa uma sequência de machados contra o alvo.', effect: 'volley', cooldown: 20, power: 1.25, shots: 3 },
-    { name: 'Tempestade de Machados', description: 'Uma saraivada de machados busca vários inimigos.', effect: 'volley-storm', cooldown: 62, radius: 8, power: 1.7, shots: 7 },
+    { name: 'Tempestade de Machados', description: 'Três saraivadas seguidas de machados buscam até 8 inimigos cada, os mais perigosos primeiro.', effect: 'volley-storm', cooldown: 62, radius: 8, power: 1.4, shots: 8, waves: 3 },
     { name: 'Brado Nórdico', description: 'Um grito de guerra assusta os inimigos próximos: eles recuam, ficam lentos e perdem o golpe preparado.', effect: 'war-cry', cooldown: 18, radius: 5.5, duration: 2.5, control: 'slow', color: 0xb8dfe5 },
   ],
   iceviking: [
@@ -115,7 +115,7 @@ const EXTRA_SKILLS = {
   ],
   monk: [
     { name: 'Palma do Vento', description: 'Uma rajada em cone fere, interrompe e empurra os inimigos à frente.', effect: 'wind-palm', cooldown: 17, radius: 5, range: 5, power: 1.8, control: 'push', color: 0xfff2c8 },
-    { name: 'Meditação', description: 'Medita imune a dano e cura o grupo próximo por alguns segundos.', effect: 'meditate', cooldown: 64, radius: 6.5, duration: 4, color: 0xffd27a },
+    { name: 'Meditação', description: 'Medita imune a dano e cura o grupo próximo por alguns segundos; ao começar, uma onda de paz empurra e deixa lentos os inimigos colados.', effect: 'meditate', cooldown: 64, radius: 6.5, duration: 4, color: 0xffd27a },
     { name: 'Chi Compartilhado', description: 'Transfere parte da própria vida ao aliado mais ferido, que recebe o dobro.', effect: 'chi-transfer', cooldown: 17, range: 8, color: 0xfff2c8 },
   ],
   alchemist: [
@@ -130,7 +130,7 @@ const EXTRA_SKILLS = {
   ],
   beast_tamer: [
     { name: 'Rugido da Matilha', description: 'A fera provoca inimigos próximos e protege os aliados ao redor.', effect: 'pack-roar', cooldown: 21, radius: 6, duration: 4, color: 0xcbb36f },
-    { name: 'Caçada em Matilha', description: 'Por 8 s a fera persegue o inimigo mais perigoso com +50% de velocidade e dano; cada mordida o faz sangrar.', effect: 'pack-hunt', cooldown: 70, range: 10, duration: 8, bonus: 0.5, color: 0xe5ca75 },
+    { name: 'Estouro da Matilha', description: 'A matilha avança em estouro pela área: pisoteia e derruba os inimigos próximos e, por 8 s, a fera caça o mais perigoso com +50% de velocidade e dano.', effect: 'pack-hunt', cooldown: 70, range: 10, radius: 6, power: 1.5, duration: 8, bonus: 0.5, control: 'stun', color: 0xe5ca75 },
     { name: 'Comando de Ataque', description: 'A fera salta no inimigo prioritário, morde e o faz sangrar; sem fera, o Domador lança uma rede.', effect: 'sic-em', targeting: 'enemy', cooldown: 17, range: 10, power: 1.4, duration: 4, color: 0xcbb36f },
   ],
   runic: [

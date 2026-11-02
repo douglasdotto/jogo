@@ -5358,6 +5358,32 @@ function dome(h, radius) {
 }
 
 // Campeão: lâminas de luz girando em volta e rastro circular no chão
+// efeitos temporizados das ultimates dos guerreiros: executa fn quando o tempo passa (limpo junto com os demais efeitos)
+function later(seconds, fn) {
+  addFx(new THREE.Object3D(), seconds, (e, dt, k) => { if (k >= 1 && !e.fired) { e.fired = true; fn(); } });
+}
+// Julgamento Dourado: anel de aviso dourado sob cada marcado, que fecha até a coluna cair
+function judgmentMark(enemy, seconds) {
+  const m = new THREE.Mesh(ringGeo, glow(0xffd84a, 0.5));
+  m.rotation.x = -Math.PI / 2;
+  addFx(m, seconds, (e, dt, k) => {
+    m.position.copy(enemy.pos).setY(enemy.pos.y + 0.1);
+    m.scale.setScalar((1.9 - 1.1 * k) * enemy.size);
+    m.rotation.z += dt * 4;
+    m.material.opacity = e.base * (0.5 + 0.5 * k);
+  });
+}
+function judgmentStrike(at, size = 1) {
+  column(at, 0xffe9a0, 0.9 * size, 9, 0.5, { opacity: 0.4 });
+  column(at, 0xffffff, 0.35 * size, 9, 0.3, { opacity: 0.55 });
+  wave(at, 0xffd84a, 0.2, 2 * size, 0.4, { opacity: 0.5 });
+  burst(at.clone().setY(at.y + 0.6), [0xffd84a, 0xffffff], fewer(8), 5, { up: 0.4 });
+}
+// Fúria Titânica: pulso vermelho curto a cada giro do furacão
+function furyPulse(h, radius) {
+  wave(h.pos, 0xff3b3b, 0.3, radius, 0.35, { opacity: 0.35, geo: ringGeo, spin: 12 });
+  burst(h.pos.clone().setY(h.pos.y + 1), [0xff5a3a, 0xffd0a0], fewer(6), 6, { up: 0.2 });
+}
 function whirl(h, radius) {
   for (let i = 0; i < 3; i++) {
     const m = new THREE.Mesh(arcGeo, glow(i ? 0xffe59b : 0xfff6d8, 0.75));
@@ -6551,7 +6577,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, later, judgmentMark, judgmentStrike, furyPulse, quake, quakeAt, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -7392,6 +7418,61 @@ class Hero extends Unit {
         };
         break;
       }
+      case 'golden-judgment': {
+        // Julgamento Dourado: marca todos em volta e, após um instante, uma coluna de luz cai sobre cada um (atordoa comuns; chefe só fica lento)
+        const marked = enemies.filter((e) => !e.dead);
+        if (!marked.length) return false;
+        const wait = skill.duration || 0.9;
+        effect = () => {
+          for (const enemy of marked) FX.judgmentMark(enemy, wait);
+          wave(this.pos, color, 0.3, radius, 0.6, { opacity: 0.4 });
+          popText(this.pos, 'Julgamento!', 'evolve');
+          FX.later(wait, () => {
+            if (game.over) return;
+            for (const enemy of marked) {
+              if (enemy.dead) continue;
+              damageOne(enemy);
+              if (enemy.boss || enemy.totem) controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', 2.5) * power);
+              else if (controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 1.4 + (level - 1) * 0.2) * power)) enemy.pendingHit = null;
+              FX.judgmentStrike(enemy.pos.clone(), Math.min(1.6, enemy.size));
+            }
+            FX.shake(0.35);
+          });
+        };
+        break;
+      }
+      case 'titan-fury': {
+        // Fúria Titânica: furacão de golpes ao redor do Berserker; cura pelos golpes e ninguém o empurra
+        if (!force && !enemies.length) return false;
+        effect = () => {
+          const seconds = (skill.duration || 6) * (0.9 + 0.1 * power);
+          this.titanT = seconds; this.titanTick = 0; this.titanReach = radius; this.titanPower = skill.power || 0.4;
+          this.leechT = Math.max(this.leechT, seconds); this.leech = skill.leech || 0.25;
+          this.furyT = Math.max(this.furyT, seconds);
+          popText(this.pos, 'Fúria!', 'crit');
+          FX.fury(this);
+        };
+        break;
+      }
+      case 'cataclysm': {
+        // Cataclismo: ruptura que atordoa a área e, 1 s depois, um tremor secundário que fere e atordoa de novo
+        if (!enemies.length) return false;
+        effect = () => {
+          const strike = (stun) => {
+            for (const enemy of skeletonsAlive()) {
+              if (enemy.dead || enemy.spawning || enemy.pos.distanceTo(this.pos) > radius + 0.4 * (enemy.size - 1)) continue;
+              damageOne(enemy);
+              if (enemy.boss || enemy.totem) controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', 2) * power);
+              else if (controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', stun) * power)) enemy.pendingHit = null;
+            }
+            FX.quake(this, radius * 0.5);
+            wave(this.pos, color, 0.3, radius, 0.6, { opacity: 0.45 });
+          };
+          strike(1.2 + (level - 1) * 0.15);
+          FX.later(skill.duration || 1, () => { if (!game.over) { strike(0.9); FX.shake(0.4); } });
+        };
+        break;
+      }
       case 'pack-roar': {
         const companion = ownBeast;
         const center = (companion || this).pos;
@@ -7409,7 +7490,7 @@ class Hero extends Unit {
       }
       case 'pack-hunt': {
         // Caçada em Matilha: por 8 s a fera persegue o inimigo mais perigoso com +50% de velocidade e dano, e cada mordida faz o alvo sangrar (ver BeastCompanion.update); sem fera, ela é chamada
-        if (!enemies.length || (!force && !enemies.some(isPriorityEnemy))) return false;
+        if (!enemies.length || (!force && !enemies.some(isPriorityEnemy) && enemies.length < 3)) return false;
         effect = () => {
           const fresh = !ownBeast;
           const companion = ownBeast || new BeastCompanion(this);
@@ -7420,7 +7501,18 @@ class Hero extends Unit {
           companion.huntTarget = null;   // escolhe de novo o mais perigoso no próximo quadro
           if (fresh) FX.beastCall(this, companion);
           else { companion.howl(); burst(companion.pos.clone().setY(companion.pos.y + 0.8), [color, 0xffe6a1], fewer(10), 4); }
-          popText(companion.pos, 'Caçada!', 'evolve');
+          popText(companion.pos, 'Estouro!', 'evolve');
+          // estouro: a matilha pisoteia quem está em volta da fera
+          const center = companion.pos.clone();
+          for (const enemy of skeletonsAlive()) {
+            if (enemy.dead || enemy.spawning || enemy.pos.distanceTo(center) > radius + 0.4 * (enemy.size - 1)) continue;
+            damageOne(enemy);
+            if (enemy.boss || enemy.totem) controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', 2.5) * power);
+            else if (controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', 1.1 + (level - 1) * 0.15) * power)) enemy.pendingHit = null;
+            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, center).setY(0).normalize().multiplyScalar(enemy.boss ? 1 : 4));
+          }
+          wave(center, color, 0.3, radius, 0.6, { opacity: 0.45 });
+          FX.quakeAt(center, radius * 0.45, 0.3);
         };
         break;
       }
@@ -7585,13 +7677,20 @@ class Hero extends Unit {
         if (!sorted.length) return false;
         effect = () => {
           const count = skill.effect === 'volley' ? shots : Math.min(shots, sorted.length);
-          for (let i = 0; i < count; i++) {
-            const enemy = skill.effect === 'volley' ? target : sorted[i];
-            if (enemy.dead) continue;
-            FX.zigzag(this.pos, enemy.pos, i * 0.04); damageOne(enemy, skill.effect === 'volley' ? 1 / shots : 0.75);
-            if (skill.effect === 'arrow-rain' && !enemy.dead) controlEnemy(enemy, 'slowT', 2.5 * power);
+          const volleys = skill.effect === 'volley-storm' ? (skill.waves || 1) : 1;
+          for (let w = 0; w < volleys; w++) {
+            const fire = () => {
+              if (game.over) return;
+              for (let i = 0; i < count; i++) {
+                const enemy = skill.effect === 'volley' ? target : sorted[i];
+                if (enemy.dead) continue;
+                FX.zigzag(this.pos, enemy.pos, i * 0.04); damageOne(enemy, skill.effect === 'volley' ? 1 / shots : 0.75);
+                if (skill.effect === 'arrow-rain' && !enemy.dead) controlEnemy(enemy, 'slowT', 2.5 * power);
+              }
+              if (skill.effect !== 'volley') { wave(this.pos, color, 0.2, radius, 0.55); burst(this.pos, color, shots * 3, 4); }
+            };
+            if (w) FX.later(w * 0.45, fire); else fire();
           }
-          if (skill.effect !== 'volley') { wave(this.pos, color, 0.2, radius, 0.55); burst(this.pos, color, shots * 3, 4); }
         };
         break;
       }
@@ -7734,11 +7833,16 @@ class Hero extends Unit {
       }
       case 'meditate': {
         // Meditação: só quando o grupo precisa de cura ou o Monge está acuado
-        if (!force && !criticalAlly && missingHp < this.maxHp * 0.3 && this.hp > this.maxHp * 0.45) return false;
+        if (!force && !criticalAlly && missingHp < this.maxHp * 0.3 && this.hp > this.maxHp * 0.45 && !(enemies.length >= 3 && missingHp >= this.maxHp * 0.12)) return false;
         effect = () => {
           this.meditateT = this.immuneT = (skill.duration || 4) * (0.9 + 0.1 * power);
           this.meditateTick = 0;
           this.meditation = { radius, heal: scaleBranchEffect(this, 'support', 7 + level * 2) * power };
+          for (const enemy of enemies) {   // onda de paz: afasta e atrasa quem está colado
+            if (enemy.dead || enemy.pos.distanceTo(this.pos) > radius) continue;
+            controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', 2.5) * power);
+            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(enemy.boss ? 1.5 : 5));
+          }
           this.busy = this.meditateT;
           this.pendingHit = null;
           this.loop('Sit_Floor_Idle');
@@ -9055,6 +9159,20 @@ class Hero extends Unit {
     audio.play('sword');
   }
 
+  // Fúria Titânica: a cada 0,5 s fere todos ao redor; vale só enquanto o Berserker está de pé
+  updateTitanFury(dt) {
+    this.titanT -= dt;
+    if (this.dead || game.over) { this.titanT = 0; return; }
+    this.titanTick -= dt;
+    if (this.titanTick > 0) return;
+    this.titanTick += 0.5;
+    for (const enemy of skeletonsAlive()) {
+      if (enemy.dead || enemy.spawning || enemy.pos.distanceTo(this.pos) > this.titanReach + 0.4 * (enemy.size - 1)) continue;
+      heroHit(this, enemy, this.dmg * this.skillPower * this.titanPower);
+    }
+    FX.furyPulse(this, this.titanReach);
+  }
+
   // Meditação: sentado e imune, cura a cada pulso os heróis ao redor
   updateMeditation(dt) {
     this.meditateT -= dt;
@@ -9084,6 +9202,7 @@ class Hero extends Unit {
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
     this.vowT = 0;          // Voto de Proteção da Clériga: o próximo golpe fatal deixa 1 de vida
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
+    this.titanT = 0; this.titanTick = 0;   // Fúria Titânica do Berserker
     this.roarT = 0;         // Berro de Guerra do Brutamontes: o golpe atordoa quem está colado
     this.eclipseT = 0; this.eclipseR = 0; this.eclipseHeal = 0; this.eclipseTick = 0;   // Eclipse Rubro da Vampira
     if (this.spearOn) this.range /= SPEAR_REACH;
@@ -9318,6 +9437,7 @@ class Hero extends Unit {
     this.songT -= dt;
     if (this.songT <= 0) this.songHaste = 1;
     this.furyT -= dt;
+    if (this.titanT > 0) this.updateTitanFury(dt);
     if (this.stoneT > 0) { this.stoneT -= dt; this.size += (this.heroSize() - this.size) * Math.min(1, dt * 6); }
     else if (this.cfg.scale && this.size !== this.heroSize()) this.size += (this.heroSize() - this.size) * Math.min(1, dt * 6);
     this.noTarget -= dt;
