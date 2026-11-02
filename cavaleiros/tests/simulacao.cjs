@@ -288,6 +288,7 @@ const profiles = {
   xama: ['shaman', 'guardian', 'pyro', 'viking'],
   geomante: ['geomancer', 'paladin', 'guardian', 'cleric'],
   ilusionista: ['illusionist', 'paladin', 'pyro', 'cleric'],
+  apostador: ['bard', 'paladin', 'pyro', 'cleric'],
   fazendas: ['paladin', 'viking', 'guardian', 'cleric'],
   cacada: ['paladin', 'guardian', 'viking', 'cleric'],
   chefes: ['paladin', 'guardian', 'viking', 'cleric'],

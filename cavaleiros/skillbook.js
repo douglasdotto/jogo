@@ -94,9 +94,9 @@ const EXTRA_SKILLS = {
     { name: 'Voto de Proteção', description: 'Por 8 s, o próximo golpe que mataria um aliado próximo (até 8 m) o deixa com 1 de vida. Uma vez por aliado, sem curar.', effect: 'protection-vow', cooldown: 24, range: 8, duration: 8, color: 0xffe8a3 },
   ],
   bard: [
-    { name: 'Refrão de Impacto', description: 'Uma batida sonora empurra os inimigos ao redor.', effect: 'burst', cooldown: 21, radius: 5, power: 1.45, control: 'push', color: 0xe9a7ff },
-    { name: 'Hino dos Campeões', description: 'Aumenta o dano de todo o grupo por vários segundos.', effect: 'rally', cooldown: 60, duration: 12, bonus: 0.35, color: 0xf2c6ff },
-    { name: 'Balada da Coragem', description: 'Uma balada encurta a recarga das habilidades dos aliados próximos e os cura um pouco.', effect: 'ballad', cooldown: 16, radius: 8, color: 0xe9a7ff },
+    { name: 'Dados Viciados', description: 'Rola um dado (1–6): o grupo ganha dano extra e um escudo por 6 s, maiores quanto maior o número. Mesmo o 1 ajuda.', effect: 'loaded-dice', range: 9, cooldown: 20, duration: 6, color: 0xffd84a },
+    { name: 'All-in', description: 'Joga o monte inteiro: uma chuva de cartas fere a área e vale os quatro naipes de uma vez (cura o grupo, atrasa os inimigos, acelera os ataques). 20% de Royal Flush: tudo dobra.', effect: 'all-in', cooldown: 65, radius: 7, range: 9, power: 5, color: 0xff6a7a },
+    { name: 'Blefe', description: 'Embaralha as recargas das técnicas dos aliados próximos (nenhuma piora) e deixa pronta a que estava mais perto.', effect: 'bluff', cooldown: 18, radius: 9, range: 9, color: 0xf6efdc },
   ],
   angel: [
     { name: 'Asas Guardiãs', description: 'Uma barreira celeste protege os aliados próximos.', effect: 'ward', cooldown: 22, duration: 5, color: 0xffe27a },
