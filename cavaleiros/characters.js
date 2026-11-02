@@ -429,19 +429,21 @@ const ACCESSORIES = {
     return g;
   },
   // chapéu de viajante com aba larga; usado pelo bardo para não repetir a silhueta do mago
-  travelHat({ color = 0x7c482e, band = 0xd9ae56 } = {}) {
+  travelHat({ color = 0x7c482e, band = 0xd9ae56, y = 0, scale = 1, crownH = 1 } = {}) {
     const g = new THREE.Group();
     const felt = lambert(color), trim = lambert(band);
     const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.47, 0.075, 12), felt);
     brim.position.y = 0.9;
     g.add(brim);
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.32, 0.38, 10), felt);
-    crown.position.set(0, 1.11, -0.015);
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.32, 0.38 * crownH, 10), felt);
+    crown.position.set(0, 0.92 + 0.19 * crownH, -0.015);
     g.add(crown);
     const ribbon = new THREE.Mesh(new THREE.CylinderGeometry(0.325, 0.325, 0.07, 10), trim);
     ribbon.position.y = 0.99;
     g.add(ribbon);
     g.rotation.z = -0.08;
+    g.position.y = y;
+    g.scale.setScalar(scale);
     return g;
   },
   // elmo fechado de fortaleza: perfil largo e pesado para o guardião, diferente do elmo emplumado do paladino
