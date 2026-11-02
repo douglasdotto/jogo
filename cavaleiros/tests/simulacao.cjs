@@ -358,11 +358,27 @@ const HeroClass = vm.runInContext('Hero', context);
 const extraUses = {};
 const [offSlot, offHeroes] = (process.env.SIM_SEM_SLOT || '').split(':');
 const offIds = offHeroes ? offHeroes.split(',') : null;
+// SIM_ULT=1: por herói, usos da ultimate, inimigos num raio de 8 no uso, dano próprio e do grupo nos 6 s seguintes, cura
+const simUlt = { open: [], done: {} };
+const simTeamDmg = () => vm.runInContext('heroes()', context).reduce((s, h) => s + h.stats.dano, 0);
+const simNear = (h) => vm.runInContext('units', context).filter((u) => u.team === 'skeleton' && !u.dead && u.pos.distanceTo(h.pos) <= 8).length;
+if (process.env.SIM_ULT) {
+  const us2 = HeroClass.prototype.updateSkillStates;
+  HeroClass.prototype.updateSkillStates = function (dt) {
+    for (const o of simUlt.open) if (o.h === this) {
+      o.t += dt;
+      if (o.t >= 6) { o.fin = true; const r = (simUlt.done[o.id] ||= { n: 0, near: 0, own: 0, team: 0, heal: 0 }); r.n++; r.near += o.n; r.own += this.stats.dano - o.d0; r.team += simTeamDmg() - o.team0; r.heal += this.stats.cura - o.c0; }
+    }
+    simUlt.open = simUlt.open.filter((o) => !o.fin);
+    return us2.call(this, dt);
+  };
+}
 const useExtra = HeroClass.prototype.useExtraSkill;
 HeroClass.prototype.useExtraSkill = function (slot, target, force) {
   if (offSlot && +offSlot === slot && (!offIds || offIds.includes(this.cfg.id))) return false;
   const ok = useExtra.call(this, slot, target, force);
   if (ok) { const k = this.cfg.id; (extraUses[k] ||= [0, 0, 0, 0])[slot]++; }
+  if (ok && slot === 2 && process.env.SIM_ULT) simUlt.open.push({ h: this, id: this.cfg.id, t: 0, d0: this.stats.dano, c0: this.stats.cura, team0: simTeamDmg(), n: simNear(this) });
   return ok;
 };
 function useSeed(seed) {
@@ -410,6 +426,7 @@ if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): da
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
 if (!campaignMode) for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
   console.log(`  ${id.padEnd(10)} ${String(Math.round(mean(list, 0))).padStart(6)} · ${mean(list, 1).toFixed(1).padStart(5)}/s · cura ${String(Math.round(mean(list, 2))).padStart(5)} · vit ${Math.round(mean(list, 3) * 100)}% · usos ${(extraUses[id] || [0, 0, 0, 0]).slice(1).map((n) => (n / list.length).toFixed(1)).join('/')} (${list.length})`);
+for (const [id, r] of Object.entries(simUlt.done)) console.log(`Ultimate ${id}: usos ${(r.n / simPlays).toFixed(1)}/partida · inimigos<=8m ${(r.near / r.n).toFixed(1)} · dano próprio 6s ${Math.round(r.own / r.n)} · dano grupo 6s ${Math.round(r.team / r.n)} · cura ${Math.round(r.heal / r.n)}`);
 for (const [k, r] of Object.entries(simReady)) console.log(`Pronta e sem uso ${k}: ${Math.round(r.ready / Math.max(1, r.total) * 100)}% do tempo de luta`);
 if (process.env.SIM_ECLIPSE) console.log(`Eclipse por partida (${simPlays} partidas): explosões ${(simEclipse.blasts / simPlays).toFixed(1)} · cura ${(simEclipse.heal / simPlays).toFixed(0)}`);
 if (process.env.SIM_VENENO) console.log(`Veneno por partida (${simPlays} partidas): aplicações ${(simVenom.applied / simPlays).toFixed(1)} · tiques ${(simVenom.ticks / simPlays).toFixed(1)} · dano ${(simVenom.damage / simPlays).toFixed(0)}`);

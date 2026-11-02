@@ -2945,7 +2945,7 @@ class Unit {
         this.stats.esquivas++;
         return;
       }
-      if (!dot && this.bladeDanceT > 0 && Math.random() < 0.35) {   // girando, o Duelista desvia de parte dos golpes
+      if (!dot && this.bladeDanceT > 0 && Math.random() < 0.5) {   // girando, o Duelista desvia de metade dos golpes
         popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
         return;
@@ -7301,7 +7301,7 @@ class Hero extends Unit {
       && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'light-legion', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && LADINO_ULTS.has(skill.effect)) {   // ultimates dos Ladinos: área exige 3 inimigos juntos ou chefe/elite; alvo único, chefe/elite (ou 4 por perto)
       const big = enemies.some((s) => s.boss || s.elite || s.kind?.priority);
       if (!big && (LADINO_ULTS.get(skill.effect) === 'area' ? densest(enemies, radius).count < 3 : enemies.length < 4)) return false;
@@ -7311,7 +7311,7 @@ class Hero extends Unit {
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
     if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
       && !(skill.effect === 'sentry-overcharge' && ownSentry) && !marchWanted) return false;
-    if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
+    if (!force && skill.effect === 'summon' && !urgentEnemy && units.filter((u) => u.summoner === this && !u.dead).length >= 4) return false;
     if (!force && skill.effect === 'light-legion' && (units.some((u) => u.lightKnight && u.summoner === this && !u.dead) || enemies.length < 3 && !friends.some((h) => h.hp < h.maxHp * 0.5))) return false;
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
@@ -7482,19 +7482,21 @@ class Hero extends Unit {
         effect = () => callSummon(this, skill.effect === 'stone-golem' ? 'golem' : 'dragon');
         break;
       case 'rewrite-fate': {
-        const warnings = [...new Set(attackables.map((enemy) => enemy.telegraph).filter((warning) => warning?.interruptible && warning.t > 0
-          && warning.owner?.pos.distanceTo(this.pos) <= radius))];
-        if (!warnings.length && !force) return false;
+        // Destino Reescrito: cancela os golpes de todos ao redor e os atordoa (chefe: pouco e lento), marca os inimigos e protege o grupo
+        if (!enemies.length && !force) return false;
         effect = () => {
-          for (const warning of warnings) {
-            const owner = warning.owner;
-            if (!owner || owner.dead || warning.alive === false || warning.t <= 0 || owner.telegraph !== warning) continue;
-            if (!controlEnemy(owner, 'stunT', scaleBranchEffect(this, 'control', skill.duration || 1.1) * power)) continue;
-            owner.pendingHit = null;
-            popText(owner.pos, 'Destino reescrito!', 'crit');
-            FX.stasis(owner);
+          for (const enemy of enemies) {
+            if (enemy.dead) continue;
+            enemy.pendingHit = null;
+            if (enemy.telegraph?.interruptible) enemy.telegraph.t = 0;
+            if (enemy.boss || enemy.totem) controlEnemy(enemy, 'slowT', 3);
+            controlEnemy(enemy, 'stunT', scaleBranchEffect(this, 'control', skill.duration || 2) * power * (enemy.boss || enemy.totem ? 0.55 : 1));
+            enemy.markT = Math.max(enemy.markT || 0, 6);
+            enemy.markBonus = Math.max(enemy.markBonus || 0, 0.15);
+            popText(enemy.pos, 'Destino reescrito!', 'crit');
+            FX.stasis(enemy);
           }
-          for (const ally of party) if (ally.pos.distanceTo(this.pos) <= radius) ally.guardT = Math.max(ally.guardT, 1.5 * power);
+          for (const ally of party) if (ally.pos.distanceTo(this.pos) <= radius) ally.guardT = Math.max(ally.guardT, 3 * power);
           wave(this.pos, color, 0.25, radius, 0.8);
           burst(this.pos, [color, 0xffffff, 0x8feaff], 34, 5);
         };
@@ -7587,6 +7589,7 @@ class Hero extends Unit {
             const enemy = skill.effect === 'volley' ? target : sorted[i];
             if (enemy.dead) continue;
             FX.zigzag(this.pos, enemy.pos, i * 0.04); damageOne(enemy, skill.effect === 'volley' ? 1 / shots : 0.75);
+            if (skill.effect === 'arrow-rain' && !enemy.dead) controlEnemy(enemy, 'slowT', 2.5 * power);
           }
           if (skill.effect !== 'volley') { wave(this.pos, color, 0.2, radius, 0.55); burst(this.pos, color, shots * 3, 4); }
         };
@@ -7623,7 +7626,10 @@ class Hero extends Unit {
           };
         } else {
           effect = () => { damageAreaNow(0.8);
-            if (skill.effect === 'blizzard' && this.cfg.id === 'chronist') for (const enemy of enemies) FX.stasis(enemy);
+            if (skill.effect === 'blizzard' && this.cfg.id === 'chronist') {
+              for (const enemy of enemies) FX.stasis(enemy);
+              for (const ally of party) for (let k = 0; k < ally.skillTimers.length; k++) if (k !== 2) ally.skillTimers[k] = Math.max(0, ally.skillTimers[k] - 4);   // o tempo pára: as recargas dos aliados correm
+            }
             else if (skill.effect === 'blizzard') FX.iceFan(this, target || this);
             else if (skill.effect === 'storm') FX.whirl(this, radius);
             else FX.quake(this, radius * 0.35);
@@ -9042,7 +9048,7 @@ class Hero extends Unit {
       && Math.abs(s.pos.y - this.pos.y) < 0.85);
     if (!near.length) return;
     let cx = 0, cz = 0;
-    for (const s of near) { heroHit(this, s, hit); cx += s.pos.x / near.length; cz += s.pos.z / near.length; }
+    for (const s of near) { heroHit(this, s, hit); if (!s.dead) controlEnemy(s, 'slowT', 1); cx += s.pos.x / near.length; cz += s.pos.z / near.length; }
     const dx = cx - this.pos.x, dz = cz - this.pos.z, d = Math.hypot(dx, dz);
     if (d > 0.5) { this.vel.x += dx / d * 1.6; this.vel.z += dz / d * 1.6; }
     FX.bladeSpin(this, radius);
