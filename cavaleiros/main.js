@@ -2125,7 +2125,7 @@ const SKILL_GLYPHS = {
   berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
   pyro: ['♨', '♨', '☄', '☲'], arcane: ['⚡', '✺', '✷', '⊛'], cryo: ['❄', '⛨', '❆', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
-  duelist: ['⚔', '✕', '✺', '⤺'],
+  duelist: ['⚔', '✕', '✺', '⛓'],
   king: ['♛', '✦', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '♟', '☥', '⚱'],
   druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '⚡', '◷', '⟲'],
@@ -2905,6 +2905,11 @@ class Unit {
 
   takeDamage(n, from, owner = null, critical = false, dot = false) {   // dot: veneno e afins, sem esquiva, bloqueio nem tropeço
     if (this.dead || game.over || this.untargetable) return;   // dragãozinho voando: fora do alcance de golpes e áreas
+    if (owner?.team === 'skeleton') {   // estados nos inimigos: Desarmar (dano menor), Ofuscar (erra o golpe) e Pânico (fere o vizinho com metade da força)
+      if (owner.disarmT > 0) n *= 1 - owner.disarmCut;
+      if (!dot && owner.blindT > 0 && Math.random() < owner.blindMiss) { popText(this.pos, 'Errou!', 'dodge'); return; }
+      if (owner.panicT > 0 && this.team === 'skeleton') n *= 0.5;
+    }
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
     if (this.ward) { n = absorbWard(this, n); if (!(n > 0)) return; }   // escudo de ossos do xamã
@@ -6318,6 +6323,20 @@ Object.assign(FX, { bladeCut, steelDash, bladeDance, bladeSpin });   // Duelista
 Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, windPalm, meditate, calmPulse, pool: puddle, flaskToss, flaskBlast, transmuteWave, sheep, beastCall, foodToss, foodPop, stewPool, feastTable });   // Arqueira, Monge, Alquimista e Domador
 // Ilusionista: fumaça violeta translúcida (sombra em shader, sem brilho aditivo)
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
+// marca que acompanha o inimigo enquanto o estado `field` (disarmT, blindT, panicT) durar: anel fino e translúcido (material do estoque, sem aditivo)
+let statusMarks = 0;
+FX.statusMark = (enemy, field, color) => {
+  if (enemy.statusMarks?.[field] || (lowQuality && statusMarks >= 6)) return;
+  (enemy.statusMarks ||= {})[field] = true; statusMarks++;
+  const m = new THREE.Mesh(thinRingGeo, glow(color, 0.75, false));
+  m.rotation.x = -Math.PI / 2;
+  addFx(m, 99, (e, dt) => {
+    if (enemy.dead || !(enemy[field] > 0) || !units.includes(enemy)) { e.done = true; enemy.statusMarks[field] = false; statusMarks--; return; }
+    m.position.set(enemy.pos.x, enemy.pos.y + 2.2 * enemy.size, enemy.pos.z);
+    m.rotation.z += dt * 2.5;
+    m.scale.setScalar(0.4 * enemy.size * (1 + 0.1 * Math.sin(e.t * 8)));
+  });
+};
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade, slimeLand });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
 Object.assign(FX, { lanceThrust, lanceStance });   // Lanceiro
@@ -7998,16 +8017,31 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'riposte': {
-        // Contra-ataque: apara tudo por instantes e devolve um corte a cada golpe corpo a corpo
-        const attackers = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3) && (s.pendingHit?.target === this || s.engagedWith === this || s.target === this));
-        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= (skill.radius || 3));
-        if (!force && !attackers.length && close.length < 2) return false;
+      case 'disarm': {
+        // Desarmar: um golpe no inimigo que está batendo (ou no mais forte ao alcance) e, por alguns segundos, os ataques dele causam menos dano
+        const reach = skill.range || 5;
+        const pool = attackables.filter((s) => !s.dead && !s.spawning && !s.totem && s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85);
+        const fresh = pool.filter((s) => !(s.disarmT > 1));
+        const striking = fresh.filter((s) => s.pendingHit?.target?.team === 'hero');
+        const strongest = (list) => list.reduce((best, s) => (!best || s.dmg > best.dmg ? s : best), null);
+        const aim = force && pool.includes(target) ? target : strongest(striking) || strongest(fresh);
+        if (!aim) return false;
+        target = aim;
         effect = () => {
-          this.riposteT = (skill.duration || 2.5) * (0.9 + 0.1 * power);
-          this.riposteBy = skill.power || 1.4;
-          popText(this.pos, 'Em guarda!', 'block');
-          FX.bladeDance(this, 1.5);
+          if (aim.dead) return;
+          const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(aim.pos, this.pos).setY(0);
+          if (dir.length() > this.range + 0.5 * aim.size) {   // entra no alcance do golpe com um passo rápido
+            dir.normalize();
+            const dest = aim.pos.clone().addScaledVector(dir, -(this.range * 0.7 + 0.3 * aim.size));
+            if (world.canStep(this.pos, dest)) { this.pos.copy(dest).setY(world.groundHeight(dest.x, dest.z)); this.vel.set(0, 0, 0); FX.steelDash(from, this.pos); }
+          }
+          this.face(aim.pos, 1);
+          damageOne(aim);
+          aim.disarmT = Math.max(aim.disarmT || 0, scaleBranchEffect(this, 'control', skill.duration || 4) * (0.9 + 0.1 * power));
+          aim.disarmCut = aim.boss ? 0.25 : 0.5;   // chefe só perde 25% do dano
+          FX.slashX(aim, this);
+          FX.statusMark(aim, 'disarmT', color);
+          popText(aim.pos, 'Desarmado!', 'crit');
         };
         break;
       }
@@ -8564,7 +8598,6 @@ class Hero extends Unit {
     this.bondT = 0; this.bondWith = null; this.bondShare = 0; this.bondLead = false; this.bondDrawT = 0;   // Vínculo de sangue da Vampira
     this.vampFrac = 0;      // Vampira: fração do dano que vira cura durante uma técnica
     this.iceSkinT = 0;      // Pele de Gelo do Viking do Gelo
-    this.riposteT = 0;      // Contra-ataque do Duelista
     this.omenT = 0;         // Presságio da Oráculo: esquiva o próximo dano
     this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
@@ -8604,7 +8637,7 @@ class Hero extends Unit {
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
       const mate = this.bondWith;
@@ -8637,11 +8670,6 @@ class Hero extends Unit {
     if (this.wallT > 0) n *= 0.5;
     if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
-    if (this.riposteT > 0) {
-      popText(this.pos, 'Aparou!', 'block');
-      if (melee) { heroHit(this, owner, this.dmg * this.skillPower * (this.riposteBy || 1.4)); FX.bladeCut(owner, this, 0); }
-      return 0;
-    }
     if (this.iceSkinT > 0) {
       n *= 0.7;
       if (melee) { owner.slowT = Math.max(owner.slowT || 0, scaleBranchEffect(this, 'control', 2)); owner.takeDamage(this.dmg * this.skillPower * (this.iceSkinBy || 0.4), null, this); }
@@ -9013,7 +9041,7 @@ const SKILL_ANIMS = {
     { clip: 'Dualwield_Melee_Attack_Slice', f: 0.45, arc: 'slash', kick: 0.6 },
     { clip: 'Dualwield_Melee_Attack_Stab', hold: 'Blocking', f: 0.5, arc: 'thrust', kick: 1.4, lean: 0.25 },
     { clip: '2H_Melee_Attack_Spinning', f: 0.5, arc: 'ring', spin: 3, hop: 0.3 },
-    { clip: 'Block', hold: 'Blocking', f: 0.4, arc: 'slash', kick: -0.5, lean: -0.1 },
+    { clip: 'Dualwield_Melee_Attack_Chop', f: 0.5, arc: 'chop', kick: 0.9, lean: 0.2 },   // golpe seco que desarma o inimigo
   ],
   ninja: [
     { clip: 'Throw', f: 0.45, lean: 0.15, hop: 0.25 },
@@ -9933,6 +9961,9 @@ class Skeleton extends Unit {
     this.tauntT = 0;
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
+    this.disarmT = 0; this.disarmCut = 0;   // Desarmar do Duelista: dano menor
+    this.blindT = 0; this.blindMiss = 0;    // Ofuscar do Ilusionista: erra golpes
+    this.panicT = 0; this.panicVictim = null; this.panicLook = 0;   // Pânico do Ilusionista: ataca o vizinho
     this.sheepT = 0;      // Grande transmutação: ovelha que não ataca
     this.stars = new THREE.Group();
     for (let i = 0; i < 3; i++) {
@@ -10037,6 +10068,7 @@ class Skeleton extends Unit {
     this.markT = Math.max(0, this.markT - dt);
     if (this.markT <= 0) this.markBonus = 0;
     this.sheepT = Math.max(0, this.sheepT - dt);
+    this.disarmT -= dt; this.blindT -= dt; this.panicT -= dt;
     if (this.stunT > 0 || this.sheepT > 0) { this.pendingHit = null; if (this.stunT > 0) this.vel.set(0, 0, 0); }
     this.updateCommon(dt);
     this.stars.visible = !this.dead && this.stunT > 0;

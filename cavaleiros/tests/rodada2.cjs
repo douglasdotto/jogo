@@ -1192,9 +1192,10 @@ test('segundas técnicas: juramento divide dano, contra-ataque apara, presságio
   assert.equal(ally.oathBy,paladin,'Juramento vincula o aliado mais ferido');
   let before=ally.hp,pb=paladin.hp;ally.takeDamage(20,null,e);
   assert.ok(before-ally.hp<20&&paladin.hp<pb,'o Paladino assume parte do dano');
-  clear();const duelist=new t.Hero(cfg('duelist'));duelist.pos.set(0,0,0);const d=foe(1,0);cast(duelist,3,d);
-  before=duelist.hp;const dh=d.hp;duelist.takeDamage(30,d.pos,d);
-  assert.equal(duelist.hp,before,'Contra-ataque apara o golpe');assert.ok(d.hp<dh,'e devolve um corte');
+  clear();const duelist=new t.Hero(cfg('duelist'));duelist.pos.set(0,0,0);const d=foe(1,0);const dh=d.hp;cast(duelist,3,d);
+  assert.ok(d.hp<dh,'Desarmar golpeia o inimigo');assert.ok(d.disarmT>3.5&&d.disarmCut===0.5,'e corta o dano dele pela metade');
+  before=duelist.hp;duelist.takeDamage(30,d.pos,d);
+  assert.ok(Math.abs((before-duelist.hp)-15*duelist.damageTaken)<0.5,'o golpe do desarmado causa 50% menos dano');
   clear();const oracle=new t.Hero(cfg('oracle')),friend=new t.Hero(cfg('guardian'));oracle.pos.set(0,0,0);friend.pos.set(2,0,0);foe(3,0);cast(oracle,3,null);
   before=friend.hp;friend.takeDamage(40,null,null);assert.equal(friend.hp,before,'Presságio esquiva o primeiro dano');
   friend.takeDamage(40,null,null);assert.ok(friend.hp<before,'só o primeiro');

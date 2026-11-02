@@ -76,7 +76,7 @@ const EXTRA_SKILLS = {
   duelist: [
     { name: 'Corte em X', description: 'Avança em linha reta e corta em X todos os inimigos no caminho; contra um inimigo isolado, causa 25% mais dano.', effect: 'cross-dash', cooldown: 19, radius: 6.5, range: 6.5, power: 1.6, color: 0xc9d4e2 },
     { name: 'Dança de Lâminas', description: 'Gira por alguns segundos cortando todos ao redor e desviando de parte dos golpes.', effect: 'blade-dance', cooldown: 62, radius: 3.5, power: 2.6, duration: 3, color: 0xc9d4e2 },
-    { name: 'Contra-ataque', description: 'Assume a guarda: apara todos os golpes por instantes e devolve um corte a cada ataque corpo a corpo.', effect: 'riposte', cooldown: 18, radius: 3, duration: 2.5, power: 1.4, color: 0xc9d4e2 },
+    { name: 'Desarmar', description: 'Golpeia um inimigo: por 4 s os ataques dele causam 50% menos dano (chefe, 25%).', effect: 'disarm', targeting: 'enemy', control: 'Enfraquece', cooldown: 17, range: 5, power: 1, duration: 4, color: 0xc9d4e2 },
   ],
   necro: [
     { name: 'Escudo Ósseo', description: 'Reveste o grupo com uma barreira de ossos.', effect: 'ward', cooldown: 24, duration: 6, color: 0x73d97e },
