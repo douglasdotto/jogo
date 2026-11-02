@@ -1875,7 +1875,7 @@ function evolutionGain(hero, id) {
 
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
-  const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
+  const controlEffects = new Set(['shield-ricochet', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
     'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
@@ -2121,7 +2121,7 @@ let skillItems = [], skillHeroes = [];
 const skillParty = [], skillRoster = [];
 const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F'], ['Z', 'X', 'V', 'B']];   // linha = slot, coluna = herói (C fica para o controle direto)
 const SKILL_GLYPHS = {
-  paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '⚑', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
+  paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '◉', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
   berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
   pyro: ['♨', '♨', '☄', '☲'], arcane: ['⚡', '✺', '✷', '⊛'], cryo: ['❄', '⛨', '❆', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
@@ -2142,6 +2142,7 @@ const SKILL_GLYPHS = {
   illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
+const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
 
 function buildSkillBar(party) {
@@ -2907,6 +2908,7 @@ class Unit {
     if (this.dead || game.over || this.untargetable) return;   // dragãozinho voando: fora do alcance de golpes e áreas
     // golpe corpo a corpo não alcança quem está em outro nível (os vikings arremessam o machado)
     if (owner && !owner.ranged && !['viking', 'iceviking'].includes(owner.cfg?.id) && Math.abs(owner.pos.y - this.pos.y) >= 0.85) return;
+    if (owner?.weakT > 0 && this.team !== 'skeleton') n *= 1 - SHIELD_WEAK;   // Escudo Ricochete: o inimigo marcado bate mais fraco contra aliados
     if (this.ward) { n = absorbWard(this, n); if (!(n > 0)) return; }   // escudo de ossos do xamã
     if (this.kind?.hurt) { n = this.kind.hurt(this, n, from, owner); if (!(n > 0)) return; }   // escudos dos monstros
     if (this.team === 'hero') {
@@ -6312,6 +6314,22 @@ Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, 
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
+// Guardião: o escudo (disco achatado de 0,9 m, sem brilho aditivo) voa de inimigo em inimigo e um anel marca cada acerto
+const shieldDiscGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.09, 14);
+FX.shieldRicochet = (hero, path) => {
+  const HOP = 0.12, disc = new THREE.Mesh(shieldDiscGeo, glow(0x9fcfff, 0.95, false));
+  addFx(disc, HOP * path.length, (e, dt) => {
+    const leg = Math.min(path.length - 1, Math.floor(e.t / HOP)), k = Math.min(1, e.t / HOP - leg);
+    const a = leg ? path[leg - 1].pos : hero.pos, b = path[leg].pos;
+    disc.position.set(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k + 1.1 + Math.sin(k * Math.PI) * 0.3, a.z + (b.z - a.z) * k);
+    disc.rotation.y += dt * 30;
+    disc.rotation.x = 0.4;
+  });
+  path.forEach((s, i) => {
+    wave(s.pos, 0x9fcfff, 0.2, 0.9, 0.35, { delay: i * HOP, opacity: 0.55 });
+    burst(s.pos.clone().setY(s.pos.y + 1), [0x9fcfff, 0xffffff], fewer(5), 3, { delay: i * HOP });
+  });
+};
 Object.assign(FX, { lanceThrust, lanceStance });   // Lanceiro
 
 class Hero extends Unit {
@@ -6967,7 +6985,7 @@ class Hero extends Unit {
     const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
-    const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
+    const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
@@ -7000,7 +7018,7 @@ class Hero extends Unit {
         column(enemy.pos, color, 0.35, 2.2, 0.55, { follow: enemy });
       }
       if (skill.control === 'push') enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, this.pos).setY(0).normalize().multiplyScalar(5));
-      if (skill.effect === 'taunt' || skill.effect === 'bastion') { enemy.taunt = this; enemy.tauntT = skill.duration * power; enemy.pendingHit = null; }
+      if (skill.effect === 'bastion') { enemy.taunt = this; enemy.tauntT = skill.duration * power; enemy.pendingHit = null; }
     };
     const healFriends = (amount, reach = radius) => {
       const healed = [];
@@ -7194,10 +7212,29 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'taunt':
-        if (!enemies.length) return false;
-        effect = () => { const stance = scaleBranchEffect(this, 'control', skill.duration) * power; this.guardT = Math.max(this.guardT, stance); this.stanceT = Math.max(this.stanceT, stance); for (const enemy of enemies) control(enemy); FX.dome(this, radius); burst(this.pos, color, 16, 3); };
+      case 'shield-ricochet': {
+        // Escudo Ricochete: quica por até 3 inimigos (o mais perigoso primeiro, depois o mais perto do anterior); cada um leva dano leve e fica 2 s com −25% de dano contra aliados
+        const first = target && enemies.includes(target) ? target : highestPriorityHeroTarget(this, enemies);
+        if (!first || (!force && enemies.length < 2)) return false;
+        target = first;
+        effect = () => {
+          const path = [], hit = new Set();
+          let from = first;
+          while (from && path.length < (skill.hops || 3)) {
+            path.push(from); hit.add(from);
+            let next = null, best = 5.5;
+            for (const s of enemies) if (!hit.has(s) && !s.dead) { const d = s.pos.distanceTo(from.pos); if (d < best) { best = d; next = s; } }
+            from = next;
+          }
+          FX.shieldRicochet(this, path);
+          for (const enemy of path) {
+            if (enemy.dead) continue;
+            damageOne(enemy);
+            enemy.weakT = Math.max(enemy.weakT || 0, scaleBranchEffect(this, 'control', skill.duration || 2) * power);
+          }
+        };
         break;
+      }
       case 'holy-nova': {
         const heal = scaleBranchEffect(this, 'support', 28 + level * 5) * power;
         if (!enemies.length && !wounded.length) return false;
@@ -8946,7 +8983,7 @@ const SKILL_ANIMS = {
   ],
   guardian: [
     { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: -1 },
-    { clip: '1H_Melee_Attack_Stab', f: 0.45, arc: 'thrust', kick: 1.4 },
+    { clip: 'Throw', f: 0.45, lean: 0.2, kick: -0.3 },   // arremessa o escudo
     { clip: 'Cheer', hold: 'Blocking', f: 0.35, arc: 'ring', lean: -0.15, hop: 0.25 },
     { clip: 'Dodge_Forward', hold: 'Blocking', f: 0.55, arc: 'slash', kick: 1.8 },
   ],
@@ -9824,6 +9861,7 @@ class Skeleton extends Unit {
     this.burnTick = 0;
     this.burnDmg = 0;
     this.burnOwner = null;
+    this.weakT = 0;       // Escudo Ricochete: causa −25% de dano em aliados enquanto durar
     this.tauntT = 0;
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
@@ -9921,6 +9959,7 @@ class Skeleton extends Unit {
     this.slowT = Math.max(0, this.slowT - dt);
     this.controlWindowT = Math.max(0, (this.controlWindowT || 0) - dt);
     this.burnT = Math.max(0, this.burnT - dt);
+    this.weakT = Math.max(0, this.weakT - dt);
     this.burnTick -= dt;
     if (this.burnT > 0 && this.burnTick <= 0 && this.burnOwner && !this.dead) {
       this.takeDamage(this.burnDmg, this.pos, this.burnOwner);

@@ -1442,6 +1442,24 @@ test('Invocador: fada, golem e dragãozinho duram, agem, renovam sem duplicar e 
   assert.ok(golem.dead,'o golem some marcado como morto para soltar a provocação');
   clear();
 });
+test('Guardião: Escudo Ricochete quica por até 3 inimigos, fere de leve e enfraquece o golpe contra aliados; a IA pede 2+ a até 8 m',()=>{
+  const foe=(x,z,kind='Warrior')=>{const e=new t.Skeleton(kind,1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
+  clear();const g=new t.Hero(cfg('guardian')),ally=new t.Hero(cfg('champion'));g.pos.set(0,0,0);ally.pos.set(0,0,-2);
+  assert.equal(t.skillSetFor(cfg('guardian'))[1].name,'Escudo Ricochete');
+  g.skillTimers.fill(0);const a=foe(0,3);
+  assert.equal(g.useSkill(null,false,false,1),false,'um inimigo só: a IA guarda o escudo');
+  const b=foe(3,4),c=foe(6,5),d=foe(9,6),far=foe(0,12);
+  assert.equal(g.useSkill(null,false,false,1),true,'dois ou mais a até 8 m: a IA arremessa');g.pendingHit.effect();g.pendingHit=null;
+  const hit=[a,b,c,d,far].filter(e=>e.hp<e.maxHp);
+  assert.equal(hit.length,3,'o escudo quica por 3 inimigos');assert.ok(d.hp===d.maxHp&&far.hp===far.maxHp,'o quarto e o distante ficam de fora');
+  assert.ok(hit.every(e=>e.weakT>1.5&&e.weakT<=2.2),'cada um fica cerca de 2 s enfraquecido');
+  assert.ok(hit.every(e=>e.maxHp-e.hp<g.dmg*g.skillPower*0.9),'dano leve');
+  const loss=owner=>{const before=ally.hp;ally.takeDamage(40,null,owner,false,true);return before-ally.hp;};
+  const weak=loss(a),normal=loss(d);
+  assert.ok(Math.abs(weak/normal-0.75)<0.02,'−25% de dano contra aliados: '+(weak/normal));
+  a.update(2.5);assert.equal(a.weakT,0,'o efeito acaba');assert.ok(Math.abs(loss(a)-normal)<0.01,'depois de 2 s o golpe volta ao normal');
+  clear();
+});
 test('4ª habilidade: Muralha do Brutamontes segura dano e bloqueia projéteis; Fúria do Bestiário acelera as criaturas',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
   const fly=n=>{for(let i=0;i<n&&t.enemyBolts.length;i++)t.updateEnemyBolts(0.05);};

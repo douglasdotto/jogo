@@ -9,7 +9,7 @@ const EXTRA_SKILLS = {
     { name: 'Juramento', description: 'Jura proteger o aliado mais ferido: assume parte do dano que ele recebe e o cura um pouco.', effect: 'oath-link', cooldown: 18, range: 9, duration: 6, share: 0.4, color: 0xfff0a8 },
   ],
   guardian: [
-    { name: 'Marca de Provocação', description: 'Atrai inimigos próximos e interrompe seus golpes.', effect: 'taunt', cooldown: 19, radius: 6, duration: 5 },
+    { name: 'Escudo Ricochete', description: 'Arremessa o escudo: quica por até 3 inimigos, fere de leve e deixa cada um 2 s com −25% de dano contra aliados.', effect: 'shield-ricochet', cooldown: 19, range: 8, power: 0.6, duration: 2, hops: 3, color: 0x9fcfff },
     { name: 'Fortaleza', description: 'Cria uma proteção reforçada e chama os inimigos para si.', effect: 'bastion', cooldown: 66, radius: 7, duration: 7 },
     { name: 'Investida de Escudo', description: 'Avança de escudo erguido até um inimigo, atordoa e empurra quem estiver perto do impacto.', effect: 'shield-rush', targeting: 'enemy', cooldown: 17, range: 7, radius: 2.2, power: 1.2, control: 'stun', color: 0x9fcfff },
   ],
