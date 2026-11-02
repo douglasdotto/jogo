@@ -7607,7 +7607,7 @@ class Hero extends Unit {
         // Juramento: o Paladino assume parte do dano do aliado mais ferido
         const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 9));
         const ward = allies.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
-        if (!force && (!ward || ward.hp / ward.maxHp > 0.7)) return false;
+        if (!force && (!ward || ward.hp / ward.maxHp > 0.9)) return false;
         const ally = ward || this;
         target = ally;
         effect = () => {
@@ -7764,7 +7764,7 @@ class Hero extends Unit {
       case 'bloodthirst': {
         // Sede de sangue: por alguns segundos os golpes devolvem vida
         const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= 3.5);
-        if (!force && (!close.length || this.hp > this.maxHp * 0.85)) return false;
+        if (!force && (!close.length || this.hp > this.maxHp * 0.97)) return false;
         effect = () => {
           this.leechT = scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power);
           this.leech = skill.leech || 0.3;
@@ -7785,8 +7785,13 @@ class Hero extends Unit {
         target = spot;
         const at = spot.pos.clone(), area = (skill.radius || 2.2) * (0.9 + 0.1 * power);
         effect = () => {
+          if (!ground) {   // a rocha cai onde o grupo está agora, não onde estava ao começar o arremesso (os inimigos andam)
+            const near = skeletonsAlive().filter((s) => !s.spawning && s.pos.distanceTo(at) <= area + 3);
+            const moved = densest(near, area).center;
+            if (moved) at.copy(moved.pos);
+          }
           const mesh = groundMark(at, area, 0x6b4a2a, 0.3);
-          flames.push({ mesh, radius: area, owner: this, wait: 0.5, t: 0.05, tick: 0, every: 1, dmg: this.dmg * power * (skill.power || 1.5), onTick: (f) => {
+          flames.push({ mesh, radius: area, owner: this, wait: 0.3, t: 0.05, tick: 0, every: 1, dmg: this.dmg * power * (skill.power || 1.5), onTick: (f) => {
             for (const s of skeletonsAlive()) if (!s.dead && !s.spawning && s.pos.distanceTo(f.mesh.position) <= f.radius + 0.4 * (s.size - 1)) {
               s.stunT = Math.max(s.stunT || 0, scaleBranchEffect(this, 'control', 1) * power);
               s.pendingHit = null;
@@ -8138,7 +8143,7 @@ class Hero extends Unit {
         // Chi compartilhado: o Monge doa vida ao aliado mais ferido, que recebe o dobro
         const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= (skill.range || 8));
         const ally = allies.reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
-        if (!force && (!ally || ally.hp / ally.maxHp > 0.55 || this.hp < this.maxHp * 0.5)) return false;
+        if (!force && (!ally || ally.hp / ally.maxHp > 0.8 || this.hp < this.maxHp * 0.5)) return false;
         const receiver = ally || this;
         target = receiver;
         effect = () => {
