@@ -1586,3 +1586,8 @@
 .arena-pickbar .arena-btn.go { padding: 6px 20px 8px; font-size: 22px; background: linear-gradient(#fff2a6, #ffd23f 42%, #f0a018); }
 .arena-pickbar .arena-btn:disabled { opacity: .45; cursor: default; filter: grayscale(.6); }
 #hud .arena-hud { font-size: 17px; }
+
+/* passiva do herói: ícone + nome; a descrição fica na dica */
+.hero-passive { display: flex; align-items: center; gap: 7px; width: 100%; box-sizing: border-box; padding: 5px 10px; border-radius: 10px; background: rgba(255, 212, 74, .1); border: 1px solid rgba(255, 212, 74, .28); color: #ffe9a6; font: 600 13px/1.2 "Fredoka", sans-serif; cursor: help; }
+.hero-passive i { font-style: normal; font-size: 16px; color: #ffd44a; }
+.hero-passive strong { font-weight: 600; }

@@ -1,5 +1,6 @@
 // Estatísticas de cada herói na partida, o cartão que abre ao clicar nele e o resumo do fim de jogo.
 import { heroInfo } from './class-info.js';
+import { passiveHTML } from './passives.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
 import { aimSpec } from './skill-targeting.js';
 import { SYNERGIES } from './synergies.js';
@@ -86,6 +87,7 @@ function renderHeroPanel(full = false) {
         </div>
       </div>
       <div class="hero-guide hero-role"><h4>${info.name} · ${info.role}</h4><p data-tip="${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}" aria-label="${c.ranged ? 'Combate à distância' : 'Combate corpo a corpo'}">${c.ranged ? '➶' : '⚔'}</p></div>
+      ${passiveHTML(c.id)}
       <div class="ability skill-list">${skills.map((skill) => {
         const slot = skill.slot, timer = h.skillTimers?.[slot] ?? (slot === 0 ? h.skillTimer : 0);
         const automatic = h.autoSkills?.[slot] ?? (slot === 0 ? h.auto : true);

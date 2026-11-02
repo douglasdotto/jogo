@@ -91,6 +91,7 @@ vm.runInContext(part(recipes,'export const CHARACTERS','// arquivos').replace('e
 vm.runInContext(campaign.replaceAll('export ',''),context);
 vm.runInContext(classInfo.replaceAll('export ',''),context);
 vm.runInContext(skillbook.replace(/^import .*$/gm,'').replaceAll('export ',''),context);
+vm.runInContext(fs.readFileSync(path.join(dir, 'passives.js'), 'utf8').replaceAll('export ', ''), context);
 vm.runInContext(fs.readFileSync(path.join(dir, 'hero-anims.js'), 'utf8').replace(/^export /gm, ''), context);   // HERO_IDLES, HERO_HITS...
 vm.runInContext(skillTargeting.replace(/^import .*$/gm,'').replaceAll('export ',''),context);
 vm.runInContext(synergies.replaceAll('export ',''),context);
@@ -4819,5 +4820,31 @@ test('Ultimates dos guerreiros: Julgamento atordoa todos, Cataclismo fere duas v
   assert.ok(foes.every((f)=>f.stunT>0||f.hp<f.maxHp),'Estouro da Matilha pisoteia três comuns');
   clear();foes=[newFoe(0,2),newFoe(2,2),newFoe(-2,3)];fire(run('viking'));
   assert.ok(foes[0].maxHp-foes[0].hp>0,'Tempestade acerta o alvo');
+  clear();
+});
+
+test('passivas: registro, Colheita de Ossos do Necromante, só heróis e linha na ficha e no painel',()=>{
+  const P=vm.runInContext('PASSIVES',context),ready=vm.runInContext('passiveReady',context),html=vm.runInContext('passiveHTML',context);
+  assert.ok(P.necro&&P.necro.name&&P.necro.icon&&P.necro.desc.length<=90,'registro com nome, ícone e descrição curta');
+  for(const [id,p] of Object.entries(P)){assert.ok(cfg(id),'passiva de herói que existe: '+id);assert.ok(p.desc.length<=90)}
+  const h={};assert.ok(ready(h,'k',2)&&!ready(h,'k',2),'recarga interna arma e bloqueia');
+  clear();const necro=new t.Hero(cfg('necro')),king=new t.Hero(cfg('king'));necro.pos.set(0,0,0);king.pos.set(0,0,2);
+  const foe=(x,z,boss=false)=>{const e=new t.Skeleton(boss?'Warrior':'Minion',1,boss);e.spawning=false;e.busy=99;e.pos.set(x,0,z);return e;};
+  const skulls=()=>t.units.filter(u=>u.summoner===necro&&u.skull&&!u.dead);
+  const kill=e=>{e.lastHit=king;e.takeDamage(1e6,null,king)};
+  kill(foe(3,0));assert.equal(skulls().length,1,'inimigo comum morto perto ergue 1 caveira');
+  assert.ok(skulls()[0].life<=6&&skulls()[0].dmg<9,'caveira curta e fraca');
+  kill(foe(3,1));assert.equal(skulls().length,1,'recarga interna de 2 s');
+  necro.update(2.1);kill(foe(40,0));assert.equal(skulls().length,1,'longe (>9 m) não conta');
+  kill(foe(3,0,true));assert.equal(skulls().length,1,'chefe não conta');
+  for(let i=0;i<8;i++){necro.update(2.1);kill(foe(2,i%3));}
+  assert.ok(skulls().length<=4,'teto de 4 caveiras');
+  clear();const k3=new t.Hero(cfg('king'));k3.pos.set(0,0,0);foe(1,0).takeDamage(1e6,null,k3);
+  assert.equal(t.units.filter(u=>u.skull).length,0,'outros heróis não têm a passiva do Necromante');
+  assert.ok(html('necro').includes('Colheita de Ossos')&&html('necro').includes('data-tip'),'linha com nome e dica');
+  assert.equal(html('king'),'','herói sem passiva não mostra linha');
+  t.showPick('','');const at=id=>t.pick.options.findIndex(v=>v.id===id);
+  t.selectCard(at('necro'));assert.ok(pickText().includes('hero-passive')&&pickText().includes('Colheita de Ossos'),'ficha mostra a passiva');
+  assert.ok(fs.readFileSync(path.join(dir,'stats.js'),'utf8').includes('passiveHTML(c.id)'),'painel de batalha mostra a passiva');
   clear();
 });
