@@ -19,7 +19,7 @@ const EXTRA_SKILLS = {
     { name: 'Desafio do Campeão', description: 'Desafia o inimigo mais forte: ele só ataca o Campeão, que ganha dano e defesa durante o duelo.', effect: 'duel-challenge', targeting: 'enemy', cooldown: 18, range: 8, duration: 5, bonus: 0.3, color: 0xffe59b },
   ],
   king: [
-    { name: 'Ordem Real', description: 'Aumenta o dano dos heróis por vários segundos.', effect: 'rally', cooldown: 22, duration: 8, bonus: 0.25 },
+    { name: 'Decreto de Marcha', description: 'O grupo anda 20% mais rápido e as recargas das habilidades correm 30% mais depressa por 6 s.', effect: 'march-decree', cooldown: 22, duration: 6, color: 0xffd84a },
     { name: 'Julgamento Dourado', description: 'Uma onda dourada atinge todos os inimigos próximos.', effect: 'storm', cooldown: 64, radius: 7, power: 2.7, color: 0xffd84a },
     { name: 'Édito Real', description: 'Ordena que os inimigos próximos se ajoelhem: comuns ficam atordoados e chefes, lentos.', effect: 'royal-edict', cooldown: 18, radius: 6.5, power: 0.6, duration: 3, color: 0xffd84a },
   ],

@@ -2327,16 +2327,42 @@ test('Druida não gasta habilidade manual sem aliado ferido ou inimigo ao alcanc
 test('Rei e Necromante guardam skills automáticas sem inimigos mesmo com aliado crítico',()=>{
   clear();const king=new t.Hero(cfg('king')),necromancer=new t.Hero(cfg('necro')),ally=new t.Hero(cfg('berserker'));
   king.pos.set(0,0,0);necromancer.pos.set(1,0,0);ally.pos.set(0,0,1);ally.hp=ally.maxHp*.4;
+  for(const h of [king,necromancer,ally])h.post.copy(h.pos);t.game.phaseAt=-99;
   king.skillTimers.fill(0);necromancer.skillTimers.fill(0);
-  assert.equal(king.useSkill(null,false,false,1),false,'Ordem Real não gasta a recarga sem inimigos para receber o bônus');
+  assert.equal(king.useSkill(null,false,false,1),false,'o Decreto de Marcha não gasta a recarga sem onda começando, sem ninguém longe do posto e sem inimigos');
   assert.equal(king.skillTimers[1],0,'a skill guardada não entra em recarga');
   assert.equal(necromancer.useSkill(null,false,false,2),false,'Exército dos Mortos espera aparecer uma ameaça');
   assert.equal(necromancer.skillTimers[2],0,'a ultimate guardada não entra em recarga');
   const enemy=new t.Skeleton('Warrior',1);enemy.pos.set(0,0,3);enemy.spawning=false;
-  assert.equal(king.useSkill(null,false,false,1),true,'a Ordem Real pode ser usada quando há inimigo próximo');
+  assert.equal(king.useSkill(null,false,false,1),false,'só inimigo por perto não basta: o Decreto espera a onda ou o grupo longe do posto');
+  t.game.state='fight';t.game.phaseAt=t.game.runTime;
+  assert.equal(king.useSkill(null,false,false,1),true,'o Decreto de Marcha é usado no começo da onda');t.game.phaseAt=-99;
   assert.ok(king.skillTimers[1]>0);
   assert.equal(necromancer.useSkill(null,false,false,2),true,'a invocação ofensiva pode ser usada quando começa o combate');
   assert.ok(necromancer.skillTimers[2]>0);clear();
+});
+test('Rei: Decreto de Marcha acelera o grupo e as recargas por 6 s; a IA usa no começo da onda ou com alguém longe do posto',()=>{
+  clear();const king=new t.Hero(cfg('king')),ally=new t.Hero(cfg('berserker'));
+  assert.equal(t.skillSetFor(cfg('king'))[1].name,'Decreto de Marcha');
+  king.pos.set(0,0,0);ally.pos.set(0,0,2);for(const h of [king,ally])h.post.copy(h.pos);
+  t.game.state='fight';t.game.phaseAt=-99;king.skillTimers.fill(0);
+  assert.equal(king.useSkill(null,false,false,1),false,'sem onda nova nem alguém longe do posto, sem inimigos: guarda');
+  t.game.phaseAt=t.game.runTime;
+  assert.equal(king.useSkill(null,false,false,1),true,'começo da onda: a IA decreta a marcha');king.pendingHit.effect();king.pendingHit=null;
+  for(const h of [king,ally])assert.ok(h.marchT>5&&h.marchT<=6.6,'o grupo todo marcha por cerca de 6 s');
+  const timer=ally.skillTimers[0]=10;ally.update(1);assert.ok(Math.abs(timer-ally.skillTimers[0]-1.3)<0.01,'a recarga avança 30% mais rápido');
+  assert.ok(Math.abs(ally.speed*1.2-ally.speed*(ally.marchT>0?1.2:1))<1e-9);
+  const marchT=ally.marchT;clear();const solo=new t.Hero(cfg('berserker'));solo.pos.set(0,0,5);solo.marchT=marchT;
+  const goal=new Vector3(300,0,5),run=()=>{solo.pos.set(0,0,5);solo.vel.set(0,0,0);for(let i=0;i<60;i++){solo.moveTo(goal,1/30);solo.pos.addScaledVector(solo.vel,1/30);}};
+  run();const fast=solo.vel.length();solo.marchT=0;run();
+  assert.ok(Math.abs(fast/solo.vel.length()-1.2)<0.03,'+20% de velocidade de movimento: '+fast/solo.vel.length());
+  solo.marchT=0.5;solo.update(1);assert.ok(solo.marchT<=0,'acaba');
+  clear();const king2=new t.Hero(cfg('king')),ally2=new t.Hero(cfg('berserker'));king2.pos.set(0,0,0);ally2.pos.set(0,0,2);for(const h of [king2,ally2])h.post.copy(h.pos);
+  ally.marchT=0;
+  t.game.state='fight';t.game.phaseAt=-99;king2.skillTimers.fill(0);
+  assert.equal(king2.useSkill(null,false,false,1),false,'todos no posto: guarda');ally2.post.set(0,0,-12);
+  assert.equal(king2.useSkill(null,false,false,1),true,'alguém a mais de 8 m do posto: a IA usa de novo');
+  clear();
 });
 test('Rei e Bardo esperam o alcance de combate antes de gastar buffs automáticos',()=>{
   for(const id of ['king','bard']){

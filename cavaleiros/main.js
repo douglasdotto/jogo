@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['shield-ricochet', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+    'march-decree', 'oath-link', 'blessing', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-night', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2126,7 +2126,7 @@ const SKILL_GLYPHS = {
   pyro: ['♨', '♨', '☄', '☲'], arcane: ['⚡', '✺', '✷', '⊛'], cryo: ['❄', '⛨', '❆', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
   duelist: ['⚔', '✕', '✺', '⤺'],
-  king: ['♛', '✦', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '♟', '☥', '⚱'],
+  king: ['♛', '⇉', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '♟', '☥', '⚱'],
   druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '⚡', '◷', '⟲'],
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
@@ -2143,6 +2143,7 @@ const SKILL_GLYPHS = {
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
+const MARCH_SPEED = 0.2, MARCH_HASTE = 0.3;   // Decreto de Marcha: +20% de velocidade e recargas 30% mais rápidas
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
 
 function buildSkillBar(party) {
@@ -2765,7 +2766,7 @@ class Unit {
   }
 
   // anda até o alvo desviando dos obstáculos que estão na frente
-  moveTo(target, dt, moveSpeed = this.speed) {
+  moveTo(target, dt, moveSpeed = this.speed * (this.marchT > 0 ? 1 + MARCH_SPEED : 1)) {
     const goal = target;   // posição de uma unidade (alvo, protegido, invocador): essa não se contorna
     const watch = this.moveProgress || (this.moveProgress = {
       goalX: target.x, goalZ: target.z, lastDistance: Infinity, lastX: null, lastZ: null, targetX: null, targetZ: null, stalled: 0, side: 1,
@@ -6314,6 +6315,11 @@ Object.assign(FX, { rays, rainMark, arrowVolley, hunterShot, huntMark, palmHit, 
 FX.illusionSmoke = (at, n = 3) => puffs(new THREE.Vector3(at.x, at.y + 0.5, at.z), n, 'shadow', { spread: 0.45, size: 0.8, rise: 0.8, life: 0.9, opacity: 0.55 });
 Object.assign(FX, { pactCall, fairyPulse, fairyTrail, golemStep, golemRise, golemSlam, dragonBreath, summonFade });   // Invocador
 FX.brokenArrow = brokenArrow;   // besteiro esqueleto
+// Rei: um anel dourado fino sobe do chão de cada herói e o segue enquanto a marcha dura (sem brilho aditivo)
+FX.marchDecree = (king, party, duration) => {
+  wave(king.pos, 0xffd84a, 0.3, 3, 0.5, { dust: true, opacity: 0.6 });
+  for (const h of party) if (!h.dead) column(h.pos, 0xffd84a, 0.55, 1.6, Math.min(1.2, duration), { follow: h, opacity: 0.2 });
+};
 // Guardião: o escudo (disco achatado de 0,9 m, sem brilho aditivo) voa de inimigo em inimigo e um anel marca cada acerto
 const shieldDiscGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.09, 14);
 FX.shieldRicochet = (hero, path) => {
@@ -6346,6 +6352,7 @@ class Hero extends Unit {
     this.damageTaken = 1;
     this.royalT = 0;
     this.royalBonus = 0;
+    this.marchT = 0;   // Decreto de Marcha: mais veloz e com recargas mais rápidas
     this.songT = 0;
     this.songHaste = 1;
     this.formation = POSTS[Math.min(3, heroes().length - 1)];
@@ -6984,6 +6991,9 @@ class Hero extends Unit {
     if (skill.effect === 'meteor' && !target) target = highestPriorityHeroTarget(this, targetPool);
     const meteorImpactAt = skill.effect === 'meteor' ? target?.pos?.clone() || this.pos.clone() : null;
 
+    // Decreto de Marcha: vale no começo da onda ou quando alguém está longe do posto, com ou sem inimigos por perto
+    const marchWanted = skill.effect === 'march-decree' && game.state === 'fight' && !(this.marchT > 1)
+      && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
@@ -6991,14 +7001,14 @@ class Hero extends Unit {
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
     if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
-      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !(skill.effect === 'alpha-beast' && ownBeast)) return false;
+      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !(skill.effect === 'alpha-beast' && ownBeast) && !marchWanted) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
     const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
     const canRestoreAllies = SKILLS_USEFUL_WITHOUT_ENEMIES.has(skill.effect)
       && (missingHp > 0 || this.hp < this.maxHp || fallenAlly);
-    if (!force && !enemies.length && !canRestoreAllies) return false;
+    if (!force && !enemies.length && !canRestoreAllies && !marchWanted) return false;
     if (areaEffects.includes(skill.effect) && !enemies.length && !(supportSkill && (criticalAlly || missingHp > this.maxHp * 0.35))) return false;
 
     const damageOne = (enemy, multiplier = 1) => {
@@ -7239,6 +7249,17 @@ class Hero extends Unit {
         const heal = scaleBranchEffect(this, 'support', 28 + level * 5) * power;
         if (!enemies.length && !wounded.length) return false;
         effect = () => { const healed = healFriends(heal, Math.max(radius, 6.5)); damageAreaNow(0.8); FX.holyLight(this, healed, radius); wave(this.pos, color, 0.2, radius, 0.75); burst(this.pos, color, 28, 5); };
+        break;
+      }
+      case 'march-decree': {
+        // Decreto de Marcha: o grupo todo anda mais depressa e as recargas correm mais rápido por alguns segundos
+        if (!force && !marchWanted) return false;
+        effect = () => {
+          const duration = scaleBranchEffect(this, 'support', skill.duration || 6) * power;
+          for (const h of party) if (!h.dead) h.marchT = Math.max(h.marchT, duration);
+          popText(this.pos, 'Marcha!', 'evolve');
+          FX.marchDecree(this, party, duration);
+        };
         break;
       }
       case 'rally': {
@@ -8778,7 +8799,7 @@ class Hero extends Unit {
   update(dt) {
     if (dt <= 0) return;
     for (let slot = 0; slot < this.skillTimers.length; slot++) {
-      this.skillTimers[slot] -= dt;
+      this.skillTimers[slot] -= dt * (this.marchT > 0 ? 1 + MARCH_HASTE : 1);
       this.skillRequests[slot] -= dt;
       if (this.skillRequests[slot] <= 0) { this.skillTargets[slot] = null; this.skillManuals[slot] = false; }
     }
@@ -8786,6 +8807,7 @@ class Hero extends Unit {
     this.guardT -= dt;
     this.stanceT -= dt;
     this.royalT -= dt;
+    this.marchT -= dt;
     if (this.royalT <= 0) this.royalBonus = 0;
     this.songT -= dt;
     if (this.songT <= 0) this.songHaste = 1;
@@ -11121,6 +11143,7 @@ const partyCap = (cap) => Math.round(cap * Math.min(PARTY_SCALE.cap, partyCount(
 function startPhase() {
   if (game.mission) game.partyScale = partyScale(game.mission, heroes(), game.phase);
   game.state = 'fight';
+  game.phaseAt = game.runTime;   // Decreto de Marcha: a IA usa no começo da onda
   syncDirectControlUI();
   if (game.arena) {   // modo Teste: primeira onda; as seguintes vêm de arenaTick
     for (const h of heroes()) h.kiteT = 0;
