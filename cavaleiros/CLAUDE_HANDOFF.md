@@ -12,6 +12,21 @@ Atualizado em 2026-11-01. Tudo está commitado na `main` local; **nada foi publi
 - **Visual:** cenário mais rico (acampamentos, tochas com halos, ruínas, árvores secas), efeitos de habilidade com menos brilho e no raio real, dragão do Invocador 1,9× e a 4,4 m, ultimate do Necromante (Exército dos Mortos), chapéu do Besteiro e presas da Vampira, tela de vitória enxuta com heróis comemorando.
 - **Modo Teste:** botão no menu ao lado de Batalhar; arena com ondas crescentes, horda/chefe extras, resumo por herói; não grava nada.
 
+## Parado em 2026-11-01 (3 agentes interrompidos a pedido do usuário; nada perdido, só incompleto)
+
+Já na main e testado: 9 habilidades novas dos Magos, Slime Saltitante (Invocador), correção da ponte (muro do rio, rota pela ponte, destravador), reforço do Bardo, chapéu de caçador do Besteiro, defesa do Santuário, alcance dos totens do Xamã, correções de uso de Guerreiros/Bárbaros/Ladinos, Torta quente maior. `npm run test:rapido` 41/41.
+
+**Interrompidos** (trabalho parcial, possivelmente incompleto, em `worktree-agent-*` dentro de `.claude/worktrees/`):
+- Suporte (`worktree-agent-adfd70776542ad9ab`): Voto de Proteção (Clériga), Veneno Aderente (Alquimista), Eclipse Rubro (Vampira), Prato do Dia (Cozinheira), Espírito Acompanhante (Xamã). Estava atualizando o teste do Alquimista.
+- Guerreiros/Bárbaros (`worktree-agent-a697a311fd529ffaf`): Escudo Ricochete (Guardião), Decreto de Marcha (Rei), Berro de Guerra (Brutamontes), Caçada em Matilha (Domador). Havia 1 falha no teste rápido ainda não investigada.
+- Ladinos (`worktree-agent-a0581eb99f907f5d4`): Desarmar (Duelista), Pânico e Ofuscar (Ilusionista) e ultimates de área dos ladinos só com 3 ou mais inimigos. Estava ajustando skillbook.js.
+
+Para retomar: listar as branches `worktree-agent-*`, ver `git log main..<branch>` e o `git status` dentro de cada worktree; se estiver bom, `git merge --no-ff <branch>` (conflitos de lista: manter as duas partes); senão, reaproveitar o texto acima como especificação.
+
+Descartadas de propósito (não reimplementar): Brasa Contagiosa, Orbe Arcano, Maré de Ossos, Ninhada, Vínculo do Bestiário, Hora Congelada, Casulo de Espinhos, Hera Perseguidora, Sentença Luminosa, Névoa Rosa, Sede Compartilhada, Mordida Venenosa, Selo do Grupo, Segunda Chance, Pisão Sísmico, Rondó de Aço, Virotes Incendiários.
+
+Também pendente: auditar Geomante e Lanceiro; confirmar a ponte no jogo real; testar a tela de evolução pré-missão, o Repetir e a prisioneira; **push** para o `origin` (GitHub douglasdotto/jogo, main ~60 commits à frente): confirmar com o usuário antes, pode disparar deploy do Pages.
+
 ## Pendências (nada disso foi visto no jogo, só nos testes)
 
 1. **Testar do zero no navegador** (o usuário pediu para esperar os ajustes; usar uma aba/origem sem o progresso dele, nunca limpar o `localStorage` da aba dele). Conferir: visual dos 6 heróis novos, tela de evolução antes da missão, modo Teste, efeitos de habilidade, cenário em batalha, tela de vitória.
