@@ -2141,6 +2141,7 @@ const SKILL_GLYPHS = {
   shaman: ['♣', '☘', '☥', '✺'],
   illusionist: ['☻', '⇄', '❢', '◐'],
 };
+const LADINO_ULTS = new Map([['blade-dance', 'area'], ['shadow-storm', 'area'], ['arrow-rain', 'area'], ['sentry-overcharge', 'area'], ['panic', 'area'], ['execute', 'single'], ['hunter-mark', 'single']]);
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
 
@@ -6997,6 +6998,10 @@ class Hero extends Unit {
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'taunt', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+    if (!force && slot === 2 && LADINO_ULTS.has(skill.effect)) {   // ultimates dos Ladinos: área exige 3 inimigos juntos ou chefe/elite; alvo único, chefe/elite (ou 4 por perto)
+      const big = enemies.some((s) => s.boss || s.elite || s.kind?.priority);
+      if (!big && (LADINO_ULTS.get(skill.effect) === 'area' ? densest(enemies, radius).count < 3 : enemies.length < 4)) return false;
+    }
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
