@@ -21,6 +21,11 @@ Atualizado em 2026-11-02. Tudo está commitado na `main` local. **Nada foi publi
 7. Ideias de herói ainda não pedidas: Escudeiro (Cavaleiro), Xamã de guerra (Bárbaro), Bruxo (Mago), Artífice, segundo Domador. Descartadas: Caçador de recompensas (cópia da Arqueira) e Mago de raios (repete o Arcano).
 8. Código morto da antiga Fúria do Bestiário (`frenzyT`/`frenzyHaste`, aura de fúria, `fairyTrail(fury)`) e ramo `frost-ward` dentro do `case 'ward'`.
 
+## Passivas dos heróis (em andamento, parado a pedido do usuário)
+
+A base já está na main: `cavaleiros/passives.js` (registro `PASSIVES`, gatilhos, `passiveReady`, helpers em `PASSIVE_CTX` no main.js) e a linha de passiva na ficha de escolha e no painel de batalha. Só o Necromante tem passiva ('Colheita de Ossos': caveira a cada inimigo que morre perto). O usuário quer passivas PEQUENAS e TEMÁTICAS nos 36 heróis (gatilhos variados, sem cópia), com texto flutuante.
+Os 4 agentes que preenchiam as passivas dos outros 35 foram **interrompidos** (trabalho parcial, possivelmente incompleto, em `.claude/worktrees/`): Guerreiros/Bárbaros (`worktree-agent-a1d2858097e4508bb`), Magos (`worktree-agent-a4eea63da0924e454`), Ladinos (`worktree-agent-afefd8ee9606701c7`), Suporte (`worktree-agent-af4c54307dcead4a7`). Para retomar: ver `git log main..<branch>` e `git status` de cada worktree; se estiver bom, `git merge --no-ff` (conflitos no `passives.js`: manter todos os blocos; cada agente usa um cabeçalho de comentário por classe). Heróis de Magos/Ladinos/Suporte/Guerreiros/Bárbaros sem passiva simplesmente não mostram a linha.
+
 ## Como integrar trabalho de agentes
 
 Branches `worktree-agent-*` (dezenas, antigas, já integradas; usar `git branch --list "worktree-agent-*"` e `git log main..<branch>` para ver se há algo novo). Mesclar com `git merge --no-ff <branch>` e resolver conflitos mantendo as duas partes nas listas aditivas. Os arquivos são CRLF: editar com script node ou a ferramenta de edição, nunca `sed -i`. Contagens de heróis nos testes são derivadas de `t.VARIANTS.length`; `LOOK_PREVIEW` segue a ordem de `VARIANTS`. Testes carregam só trechos de `main.js`: não repetir `const` no mesmo escopo e manter a lógica de herói fora da região de FX. `tests/run-terrain.mjs` fatia o texto de `moveTo`: não mudar a assinatura.
