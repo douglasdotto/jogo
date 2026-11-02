@@ -1877,7 +1877,7 @@ function evolutionGain(hero, id) {
 function evolutionAffinity(hero) {
   const controlEffects = new Set(['shield-ricochet', 'march-decree', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
-  const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
+  const supportEffects = new Set(['holy-nova', 'light-legion', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
     'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'follow-spirit']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
@@ -2121,7 +2121,7 @@ let skillItems = [], skillHeroes = [];
 const skillParty = [], skillRoster = [];
 const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F'], ['Z', 'X', 'V', 'B']];   // linha = slot, coluna = herói (C fica para o controle direto)
 const SKILL_GLYPHS = {
-  paladin: ['✚', '⬟', '☼', '⚭'], guardian: ['⛨', '◉', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
+  paladin: ['✚', '⬟', '⚜', '⚭'], guardian: ['⛨', '◉', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
   berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
   pyro: ['♨', '✸', '☄', '☲'], arcane: ['⚡', '✺', '◎', '❋'], cryo: ['❄', '✥', '❅', '⟡'],
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
@@ -5575,6 +5575,17 @@ function legion(h, army, radius) {
   }
 }
 
+// Legião de Luz: círculo sagrado no raio real e brilho dourado discreto sob cada mini-paladino que brota
+function knights(h, army, radius) {
+  const p = h.pos, gold = 0xffe27a;
+  shaderDisc('rune', 'holy', p, radius, 1.4, { y: 0.08, opacity: 0.7 });
+  wave(p, gold, 0.4, radius, 0.55, { opacity: 0.55 });
+  for (const u of army) {
+    column(u.pos, gold, 0.35, 2.2, 0.7, { opacity: 0.5 });
+    burst(u.pos.clone().setY(u.pos.y + 0.3), [gold, 0xffffff], fewer(5), 2.5, { up: 0.5, life: 0.5, size: 0.8 });
+  }
+}
+
 function beastCall(h, beast) {
   const at = beast.pos.clone();
   wave(at, 0xcbb36f, 0.25, 2.1, 0.6);
@@ -6539,7 +6550,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -7288,7 +7299,7 @@ class Hero extends Unit {
     const marchWanted = skill.effect === 'march-decree' && game.state === 'fight' && !(this.marchT > 1)
       && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
-    const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
+    const supportSkill = ['ward', 'holy-nova', 'light-legion', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && LADINO_ULTS.has(skill.effect)) {   // ultimates dos Ladinos: área exige 3 inimigos juntos ou chefe/elite; alvo único, chefe/elite (ou 4 por perto)
       const big = enemies.some((s) => s.boss || s.elite || s.kind?.priority);
@@ -7300,6 +7311,7 @@ class Hero extends Unit {
     if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
       && !(skill.effect === 'sentry-overcharge' && ownSentry) && !marchWanted) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
+    if (!force && skill.effect === 'light-legion' && (units.some((u) => u.lightKnight && u.summoner === this && !u.dead) || enemies.length < 3 && !friends.some((h) => h.hp < h.maxHp * 0.5))) return false;
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
     const areaEffects = ['burst', 'storm', 'blizzard', 'meteor', 'volley-storm', 'arrow-rain', 'shadow-storm', 'holy-nova', 'nature-storm', 'roots-heal'];
@@ -8869,6 +8881,26 @@ class Hero extends Unit {
           FX.legion(this, army, radius);
         };
         break;
+      case 'light-legion':
+        effect = () => {
+          // Legião de Luz: mini-paladinos brotam em círculo em volta do grupo, seguram a linha e provocam de leve
+          for (const unit of units.filter((unit) => unit.lightKnight && unit.summoner === this)) { poof(unit.pos); unit.remove(); }
+          const army = [];
+          for (let i = 0; i < LIGHT_KNIGHTS; i++) {
+            const a = (i / LIGHT_KNIGHTS) * Math.PI * 2 + 0.3;
+            let r = radius * 0.7;
+            const at = new THREE.Vector3();
+            for (; r > 0.8; r -= 0.5) {
+              at.set(this.pos.x + Math.cos(a) * r, this.pos.y, this.pos.z + Math.sin(a) * r);
+              if (world.canStep(this.pos, at)) break;
+            }
+            if (r <= 0.8) at.set(this.pos.x + Math.cos(a) * 0.9, this.pos.y, this.pos.z + Math.sin(a) * 0.9);
+            army.push(new LightKnight(this, at, i, scaleBranchEffect(this, 'support', skill.duration || 12)));
+          }
+          FX.knights(this, army, radius);
+          popText(this.pos, 'Legião!', 'evolve');
+        };
+        break;
       default: return false;
     }
 
@@ -9459,7 +9491,7 @@ const SKILL_ANIMS = {
   paladin: [
     { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, lean: -0.12, kick: -0.8 },
     { clip: 'Block_Attack', hold: 'Blocking', f: 0.45, arc: 'slash', kick: 1 },
-    { clip: '1H_Melee_Attack_Jump_Chop', hold: 'Spellcasting', f: 0.62, arc: 'chop', hop: 0.2 },   // salta e crava a espada (clipe do pacote 1.1)
+    { clip: '1H_Melee_Attack_Jump_Chop', hold: 'Blocking', f: 0.62, arc: 'ring', hop: 0.2 },   // salta e crava a espada: a legião brota do impacto
     { clip: 'Cheer', hold: 'Blocking', f: 0.4, lean: -0.08 },
   ],
   guardian: [
@@ -9787,6 +9819,68 @@ class Minion extends Unit {
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) this.attack(target, '1H_Melee_Attack_Chop');
     } else if (this.pos.distanceTo(this.summoner.pos) > 1.5) this.moveTo(this.summoner.pos, dt);
     if (this.busy <= 0) this.locomote('Walking_D_Skeletons', 'Walking_D_Skeletons', 'Idle_Combat');
+  }
+}
+
+// Legião de Luz do Paladino: o corpo do herói em escala menor, armadura clara e dourada. Seguram a linha perto dos aliados
+// mais feridos, provocam de leve quem está perto e batem fraco; somem em fumaça ao morrer ou no fim.
+const LIGHT_KNIGHTS = 5, LIGHT_RISE = 0.5, LIGHT_SCALE = 0.55, LIGHT_TINT = new THREE.Color(0xf6e7b0);
+class LightKnight extends Unit {
+  constructor(summoner, at, index, life) {
+    super(summoner.cfg.built, { hp: summoner.maxHp * 0.4, dmg: summoner.dmg * 0.25, range: 1.4, speed: 3.8, cooldown: 1.4 }, 'ally');
+    this.summoner = summoner;
+    this.cfg = { id: 'light_knight' };
+    this.lightKnight = true;
+    this.index = index;
+    this.level = summoner.level;
+    this.life = life;
+    this.size = LIGHT_SCALE;
+    this.root.scale.setScalar(LIGHT_SCALE);
+    this.pos.copy(at);
+    this.riseT = LIGHT_RISE + 0.07 * index;
+    this.lift = -1.2;
+    this.root.visible = false;
+    this.tauntAt = 0;
+    this.bar.classList.add('ally');
+    for (const m of this.mats) m.color?.multiply(LIGHT_TINT);
+    this.loop(summoner.cfg.idle);
+  }
+
+  update(dt) {
+    if (dt <= 0) return;
+    if (this.riseT > 0) {
+      this.riseT -= dt;
+      const k = Math.min(1, Math.max(0, this.riseT) / LIGHT_RISE);
+      if (!this.root.visible && k < 1) this.root.visible = true;
+      this.lift = -1.2 * k * k;
+      this.updateCommon(dt);
+      if (this.riseT <= 0) this.lift = 0;
+      return;
+    }
+    this.updateCommon(dt);
+    if (game.over) return;
+    this.life -= dt;
+    if (this.dead || this.life <= 0 || this.summoner.dead) { poof(this.pos, 0.7); this.remove(); return; }
+    if (this.busy > 0) return;
+    const foes = activeTargetContext?.attackableSkeletons ?? skeletonsAlive().filter((s) => !s.spawning);
+    this.tauntAt -= dt;
+    if (this.tauntAt <= 0 && game.state === 'fight') {   // provocação leve: só quem está solto e perto; chefe pela resistência de controle
+      this.tauntAt = 0.4;
+      for (const enemy of foes) if (!enemy.dead && enemy.tauntT <= 0.35 && enemy.pos.distanceTo(this.pos) <= 3.5) illusionTaunt(enemy, this, 0.7, false);
+    }
+    // âncora: o aliado mais ferido; cada mini ocupa um ponto diferente ao redor dele
+    let anchor = this.summoner;
+    for (const h of heroes()) if (!h.dead && h.hp / h.maxHp < anchor.hp / anchor.maxHp) anchor = h;
+    const target = nearest(this.pos, foes);
+    if (target && game.state === 'fight' && target.pos.distanceTo(anchor.pos) < 7) {
+      if (!this.inReach(target, target.pos.distanceTo(this.pos))) this.moveTo(target.pos, dt);
+      else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) this.attack(target, this.summoner.cfg.attacks[0]);
+    } else {
+      const a = this.index / LIGHT_KNIGHTS * Math.PI * 2;
+      const spot = new THREE.Vector3(anchor.pos.x + Math.cos(a) * 1.7, anchor.pos.y, anchor.pos.z + Math.sin(a) * 1.7);
+      if (spot.distanceTo(this.pos) > 0.6) this.moveTo(spot, dt);
+    }
+    if (this.busy <= 0) this.locomote(this.summoner.cfg.run || 'Running_A', this.summoner.cfg.run || 'Running_A', this.summoner.cfg.idle);
   }
 }
 

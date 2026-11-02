@@ -121,7 +121,7 @@ context.addEventListener=(type,handler,options)=>{
 vm.runInContext(part(source,'class Hero','// ---------- fases'),context);
 context.addEventListener=addEventListenerBeforeHeroSlice;
 vm.runInContext(part(source,'// ---------- fases',"addEventListener('resize'"),context);
-vm.runInContext('globalThis.t={reapStuckEnemies,spiritTotems,removeSpiritTotem,Hero,Skeleton,Minion,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
+vm.runInContext('globalThis.t={reapStuckEnemies,spiritTotems,removeSpiritTotem,Hero,Skeleton,Minion,LightKnight,BeastCompanion,Unit,rememberUnitEmissive,HEROES,CLASSES,VARIANTS,PICK_GROUPS,pickGroupId,CHARACTERS,units,heroes,game,pick,evolutions,EVOLUTION_BRANCHES,autoUpgrade,chooseAutoEvolution,showPick,selectCard,moveGrid,confirmPick,showEvolution,confirmEvolution,arrangeParty,SKILL_MOVES,loadAuto,loadAutoSlot,saveAuto,skillSetFor,cooldownForSkill,aimSpec,validAim,damageArea,damageCleave,startGame,confirmMode,DIFFICULTIES,nightmareTeamIds,nightmareTeamPlanIds,nextNightmareTeamId,difficultyTeamRecommendation,showDifficulty,setDifficulty:i=>{difficulty=DIFFICULTIES[i]},getDifficulty:()=>difficulty,startPhase,spawnSkeleton,updateGame,updateBars,endGame,frame,frameTargetContext,makeTargetContext,MISSIONS,UNLOCKS,STARTERS,totalStars,variantOpen,starsToUnlock,showMenu,Villager,Totem,skeletonsAlive,starsOf,unlocked,saveMissionRecord,missionRecords,setMission:m=>{game.mission=m},MONSTER_TYPES,updateMonsterFx,clearMonsterFx,dangerAt,pickMonster,waveLeader,campaignThreats,separate,UNIT_SEPARATION_FACTOR,UNIT_COMBAT_SEPARATION_FACTOR,chooseHeroTarget,heroTargetScore,prioritizedHeroTargets,highestPriorityHeroTarget,bestSkillTarget,skillTargetScore,teamCoverage,missionRoleNeeds,fireBolt,updateBolts,bolts,sentries,removeSentry,deploySentry,updateSentries,SKILL_ANIMS,pressForward,rescueRunnerFor,enemyBolts,fireEnemyBolt,updateEnemyBolts};',context);
 vm.runInContext('t.world=world;',context);
 vm.runInContext('t.Shrine=Shrine;t.Gate=Gate;t.Illusion=Illusion;',context);
 vm.runInContext('t.makeElite=makeElite;',context);
@@ -4760,5 +4760,24 @@ test('inimigo que foge sem se aproximar some e volta pela fila; quem apanha ou c
   const closing=foe('Minion',60,0);closing.spawning=false;
   for(let i=0;i<40;i++){closing.pos.x=60-i*1.2;t.reapStuckEnemies(1,[closing],party);}   // vem em direção ao herói: fica
   assert.ok(!closing.dead,'quem se aproxima não é removido');
+  clear();
+});
+test('Legião de Luz do Paladino: 5 mini-paladinos provocam, somem; IA usa',()=>{
+  clear();const h=hero('paladin',0,0),ally=hero('guardian',2,0);t.game.state='fight';
+  const e1=foe('Minion',3,0),e2=foe('Minion',3,1),e3=foe('Minion',3,-1),boss=foe('Warrior',4,0,true);
+  [e1,e2,e3,boss].forEach(e=>{e.busy=0;e.hp=e.maxHp=100000;});
+  assert.equal(t.skillSetFor(h.cfg)[2].effect,'light-legion');
+  ally.hp=ally.maxHp*.4;h.skillTimers[2]=0;
+  assert.equal(h.useSkill(e1,false,false,2),true,'IA usa com 3 inimigos e aliado ferido');
+  h.pendingHit.effect();h.pendingHit=null;
+  const ks=t.units.filter(u=>u.lightKnight);
+  assert.equal(ks.length,5);assert.ok(ks.every(k=>k.maxHp<h.maxHp*.5&&k.dmg<h.dmg*.5));
+  assert.equal(h.useSkill(e1,false,false,2),false,'não repete com a legião de pé');
+  for(let i=0;i<14;i++)ks.forEach(k=>k.update(.1));
+  assert.ok([e1,e2,e3].some(e=>e.taunt?.lightKnight&&e.tauntT>0),'inimigos mirando um mini');
+  ks.forEach(k=>{k.life=0.01;});
+  ks.forEach(k=>k.update(.1));
+  assert.equal(t.units.filter(u=>u.lightKnight).length,0,'somem ao fim');
+  assert.equal(t.heroes().length,2,'não contam como herói');
   clear();
 });
