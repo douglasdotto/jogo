@@ -44,6 +44,7 @@ const RANGED_INTERCEPTORS = 2;
 const TWIN_BOSS_INTERCEPT = 16; // dois heróis podem pressionar o chefe móvel sem arrastar a equipe
 const TWIN_BOSS_INTERCEPTORS = 2;
 const CASTLE_BOSS_INTERCEPT = 31; // diagonal do salão: todos perseguem dentro da arena, sem sair pelo mapa
+const SHRINE_CLOSE = 8;   // santuário: inimigo a esta distância do cristal ganha prioridade extra
 const DEFENSE_CLEANUP_INTERCEPT = 22; // depois do cronômetro, a âncora pode limpar os inimigos que sobraram
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
 
@@ -1958,7 +1959,7 @@ function arrangeParty() {
   const melee = party.filter((h) => !h.ranged);
   // escolta/resgate: o guarda do protegido fica no posto de trás, colado no aldeão
   const goal = game.mission?.goal.type;
-  const guard = goal === 'escort' || goal === 'rescue' ? escortGuardOf(party) : null;
+  const guard = goal === 'escort' || goal === 'rescue' || goal === 'defend' ? escortGuardOf(party) : null;
   const order = [...party.filter((h) => h.ranged), ...melee.filter((h) => h.cfg.frontline), ...melee.filter((h) => !h.cfg.frontline)];
   if (guard) { guard.formation = POSTS[3]; guard.setAnchor(game.guideS); slots.pop(); }
   for (const h of order) {
@@ -3167,14 +3168,18 @@ function makeTargetContext(reuse = null) {
   context.rangedHeroes = rangedHeroes;
   context.friends = friends;
   context.villager = villager;
+  // santuário: o guarda (curandeiro/tanque) é a âncora da defesa; sozinho, o único herói vivo segue como âncora comum
+  const shrineGuard = goal?.type === 'defend' && villager ? escortGuardOf(party) : null;
   context.defenseAnchor = goal?.type === 'defend' || goal?.type === 'breach'
-    ? party.find((hero) => !hero.dead) || null : null;
-  // escolta/resgate: um herói fica de guarda junto ao protegido; os demais caçam livremente
-  context.escortGuard = villager?.team === 'villager' && !villager.structure && (goal?.type === 'escort' || goal?.type === 'rescue')
+    ? shrineGuard || party.find((hero) => !hero.dead) || null : null;
+  // escolta/resgate/santuário: um herói fica de guarda junto ao protegido; os demais caçam livremente
+  context.escortGuard = villager?.team === 'villager' && (!villager.structure && (goal?.type === 'escort' || goal?.type === 'rescue') || goal?.type === 'defend')
     ? escortGuardOf(party) : null;
   context.arenaCenter = world.pointAt(game.guideS);
-  // com protegido, a caça fica a ESCORT_HUNT_LIMIT dele; se não resta inimigo dentro do limite, a trava abre para não emperrar a fase
-  context.huntLimited = !!context.escortGuard && attackableSkeletons.some((enemy) => tacticalDistance(villager.pos, enemy.pos) <= ESCORT_HUNT_LIMIT);
+  // com protegido, a caça fica a ESCORT_HUNT_LIMIT dele; se não resta inimigo dentro do limite, a trava abre para não emperrar a fase.
+  // santuário com <35% de vida: todos ficam na defesa mesmo sem inimigo por perto
+  context.guardThreat = !!context.escortGuard && attackableSkeletons.some((enemy) => tacticalDistance(villager.pos, enemy.pos) <= ESCORT_HUNT_LIMIT);
+  context.huntLimited = context.guardThreat || (!!context.escortGuard && goal.type === 'defend' && villager.hp < villager.maxHp * 0.35);
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
   const destructionGoal = goal?.type === 'totems' || goal?.type === 'tower';
@@ -3360,7 +3365,7 @@ const fixedDefenseGoal = (goal) => goal?.type === 'defend' || goal?.type === 'br
 function defenseAnchor(context) {
   if (!fixedDefenseGoal(context.goal)) return null;
   if (context.defenseAnchor && !context.defenseAnchor.dead) return context.defenseAnchor;
-  context.defenseAnchor = context.party.find((hero) => !hero.dead) || null;
+  context.defenseAnchor = (context.goal.type === 'defend' && context.villager ? escortGuardOf(context.party) : null) || context.party.find((hero) => !hero.dead) || null;
   return context.defenseAnchor;
 }
 
@@ -3423,7 +3428,7 @@ function stillEngaged(hero, target, context = targetContext()) {
       && hero.lastDefenderThreatTarget === target
       && fromPost <= LEASH + hero.range + 5
       && context.party.every((ally) => ally === hero || ally.dead);
-    return canCoverFromPost || !!objectiveAttack || lastDefenderKeepsThreat;
+    return canCoverFromPost || escortGuardReach(hero, target, context) || !!objectiveAttack || lastDefenderKeepsThreat;
   }
   return fromPost <= LEASH + hero.range + ENGAGE_SLACK || escortGuardReach(hero, target, context) || inHuntArena(hero, target, context, ENGAGE_SLACK);
 }
@@ -3499,7 +3504,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (goal.type === 'defend' && game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
     // A âncora luta do próprio posto. Só abandona a linha se o alvo já prepara
     // um golpe no objetivo e nenhum outro herói vivo consegue interceptá-lo.
-    if (fromPost <= hero.range + 0.5) return true;
+    if (fromPost <= hero.range + 0.5 || escortGuardReach(hero, target, context)) return true;
     const objectiveAttack = villager && target.pendingHit?.target === villager
       && fromPost <= LEASH + hero.range + 5
       && !anotherDefenseHeroCanIntercept(hero, target, context);
@@ -3600,6 +3605,11 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
     const toVillager = distanceToVillager;
     if (target.pendingHit?.target === villager) score -= 11;
     else if (toVillager < 12) score -= (12 - toVillager) * 0.8;
+    // santuário: saqueador a caminho do cristal (ou já nele) e quem chega a SHRINE_CLOSE m dele vêm antes de tudo
+    if (goal?.type === 'defend') {
+      if (target.raider || target.target === villager) score -= 14;
+      if (toVillager < SHRINE_CLOSE) score -= 4;
+    }
   }
 
   // Evita gastar golpes em um alvo quase derrotado quando outro aliado já o
@@ -3792,7 +3802,7 @@ function prepareCastleBossUrgentPlan(context) {
 // Desiste de quem foge sem ser alcançado por HERO_CHASE_GIVEUP s (HERO_CHASE_SKIP s sem escolhê-lo): outro alvo ou volta à formação.
 const FREE_HERO_HUNT_WAIT = 2.5, FREE_HERO_HUNT_HOLD = 4, HERO_CHASE_GIVEUP = 7, HERO_CHASE_SKIP = 6;
 function heroFreeHunt(hero, target, context) {
-  if (!(hero.freeHuntT > 0) || game.state !== 'fight' || hero === context.escortGuard || target.team !== 'skeleton' || target.totem) return false;
+  if (!(hero.freeHuntT > 0) || game.state !== 'fight' || hero === context.escortGuard || context.guardThreat || target.team !== 'skeleton' || target.totem) return false;   // com ameaça ao protegido, ninguém sai caçando longe
   if (context.goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
   return !target.untargetable;
 }
