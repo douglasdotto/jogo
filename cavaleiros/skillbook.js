@@ -5,7 +5,7 @@ import { heroInfo, skillCooldown, skillLevel } from './class-info.js';
 const EXTRA_SKILLS = {
   paladin: [
     { name: 'Escudo da Luz', description: 'Protege os heróis próximos por alguns segundos.', effect: 'ward', cooldown: 20, duration: 4.5 },
-    { name: 'Renovação', description: 'Cura o grupo e explode em luz contra os inimigos ao redor.', effect: 'holy-nova', cooldown: 64, radius: 6.5, power: 2.2 },
+    { name: 'Legião de Luz', description: 'Cinco mini-paladinos cercam o grupo por 12 s: protegem os feridos, atraem golpes e atacam de leve.', effect: 'light-legion', cooldown: 64, radius: 4.2, duration: 12, color: 0xffe27a },
     { name: 'Juramento', description: 'Jura proteger o aliado mais ferido: assume parte do dano que ele recebe e o cura um pouco.', effect: 'oath-link', cooldown: 18, range: 9, duration: 6, share: 0.4, color: 0xfff0a8 },
   ],
   guardian: [
