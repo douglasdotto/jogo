@@ -2768,12 +2768,21 @@ class Unit {
     const goal = target;   // posição de uma unidade (alvo, protegido, invocador): essa não se contorna
     const watch = this.moveProgress || (this.moveProgress = {
       goalX: target.x, goalZ: target.z, lastDistance: Infinity, lastX: null, lastZ: null, targetX: null, targetZ: null, stalled: 0, side: 1,
-      recovering: false, recoveryX: 0, recoveryZ: 0, waypoint: new THREE.Vector3(),
+      recovering: false, recoveryX: 0, recoveryZ: 0, waypoint: new THREE.Vector3(), winT: 0, winX: this.pos.x, winZ: this.pos.z, stuckWindows: 0,
     });
     if (Math.hypot(target.x - watch.goalX, target.z - watch.goalZ) > 2) {
       watch.stalled = 0; watch.lastDistance = Infinity; watch.recovering = false; this.pathing = null;
     }
     watch.goalX = target.x; watch.goalZ = target.z;
+    // Destrave genérico: quem pede movimento e quase não sai do lugar por 2 s (cercado por aliados parados, quina, ponte estreita)
+    // ganha 1,5 s de "empurrão": segue reto ao destino e os vizinhos cedem lugar (pushT em separatePair).
+    if ((watch.winT += dt) >= 1) {
+      const moved = Math.hypot(this.pos.x - watch.winX, this.pos.z - watch.winZ);
+      if (moved < 0.3 && moveSpeed > 0.05 && Math.hypot(goal.x - this.pos.x, goal.z - this.pos.z) > 1.2) {
+        if (++watch.stuckWindows >= 2) { this.pushT = 1.5; watch.stuckWindows = 0; watch.stalled = 0; this.pathing = null; }
+      } else watch.stuckWindows = 0;
+      watch.winT = 0; watch.winX = this.pos.x; watch.winZ = this.pos.z;
+    }
     if (watch.stalled >= 0.55) {
       const dx = goal.x - this.pos.x, dz = goal.z - this.pos.z, distance = Math.hypot(dx, dz);
       if (distance > 0.05 && moveSpeed > 0.05) {
@@ -2825,8 +2834,8 @@ class Unit {
     const preferredX = dir.x / preferredLength, preferredZ = dir.z / preferredLength;
     // Contorna quem está parado e aliados em rota de colisão antes que a separação os empurre.
     // A partir de 24 unidades, só olha as da grade do último separate() em volta (antes era O(n²) por quadro).
-    const nearby = !this.phasing && units.length >= 24 ? gatherUnitGrid(this.pos.x, this.pos.z, MOVE_AVOID_RADIUS, moveAvoidNear) : null;
-    const avoidCount = this.phasing ? 0 : nearby ? nearby.length : units.length;
+    const nearby = !this.phasing && !(this.pushT > 0) && units.length >= 24 ? gatherUnitGrid(this.pos.x, this.pos.z, MOVE_AVOID_RADIUS, moveAvoidNear) : null;
+    const avoidCount = this.phasing || this.pushT > 0 ? 0 : nearby ? nearby.length : units.length;
     for (let n = 0; n < avoidCount; n++) {
       const u = nearby ? separationAlive[nearby[n]] : units[n];
       if (u === this || u.dead || u.phasing || u.pos === goal) continue;
@@ -3028,6 +3037,7 @@ class Unit {
     if (!animationCulling || unitMayBeSeen(this)) { this.mixer.update(this.animLag); this.animLag = 0; }
     this.attackTimer -= dt * (this.summoner ? synergySummonHaste(this.summoner) : 1);   // canção do Bardo acelera as invocações
     this.busy -= dt;
+    if (this.pushT > 0) this.pushT -= dt;
     // inércia: quem não está andando vai freando; a velocidade (e o recuo) move a unidade
     if (!this.moving) this.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
     this.moving = false;
@@ -10136,6 +10146,7 @@ function collisionMove(unit, dx, dz) {
 }
 
 const PLANTED_SEPARATION_WEIGHT = 0.15;
+const PUSHING_SEPARATION_WEIGHT = 0.04;   // quem abre caminho à força (destrave em moveTo) quase não cede; os vizinhos é que saem
 // mesmo limiar de locomote(): abaixo dele a unidade está parada (idle) ou golpeando
 const isPlanted = (u) => u.busy > 0 || u.vel.x * u.vel.x + u.vel.z * u.vel.z < 0.0625;
 
@@ -10156,7 +10167,8 @@ function separatePair(a, b, ia, ib) {
 
   // Quem está plantado (parado ou no meio do golpe) quase não cede: quem chega é que contorna.
   // Sem isso a fila que anda empurra o da frente para dentro do alvo, e o grupo inteiro treme.
-  const weightA = isPlanted(a) ? PLANTED_SEPARATION_WEIGHT : 1, weightB = isPlanted(b) ? PLANTED_SEPARATION_WEIGHT : 1;
+  const weightA = a.pushT > 0 ? PUSHING_SEPARATION_WEIGHT : isPlanted(a) ? PLANTED_SEPARATION_WEIGHT : 1;
+  const weightB = b.pushT > 0 ? PUSHING_SEPARATION_WEIGHT : isPlanted(b) ? PLANTED_SEPARATION_WEIGHT : 1;
   const overlap = min - distance, shareA = overlap * weightA / (weightA + weightB), shareB = overlap - shareA;
   let movedA = movableA ? collisionMove(a, -dx * shareA, -dz * shareA) : 0;
   let movedB = movableB ? collisionMove(b, dx * shareB, dz * shareB) : 0;

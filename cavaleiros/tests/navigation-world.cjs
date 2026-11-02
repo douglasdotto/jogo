@@ -85,10 +85,48 @@ function createNavigationWorld({ THREE, Vector3, seed = 11, phases = 12, castleI
   const isInsideGround = (x, z, padding = 0) => Number.isFinite(x) && Number.isFinite(z)
     && x >= -90 + padding && x <= 90 - padding
     && z >= Math.min(groundTop, groundBottom) + padding && z <= Math.max(groundTop, groundBottom) - padding;
-  const world = vm.runInNewContext(source.slice(zoneStart, zoneEnd) + ';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles})', {
+  const world = vm.runInNewContext(source.slice(zoneStart, zoneEnd) + ';({zoneOf,groundHeight,isShallow,nextWaypoint,canStep,obstacles,setBridgeNav})', {
     THREE, pointAt, tangentAt, sideOf, along, anchorS, interiorArenaS, castleInterior, obstacles,
   });
-  return { ...world, pointAt, tangentAt, sideOf, along, anchorS, isInsideGround, L, obstacles };
+  return addRiverObstacles({ ...world, pointAt, tangentAt, sideOf, along, anchorS, isInsideGround, L, obstacles }, Vector3);
+}
+
+// Rio e ponte de world.js: a estrada cruza o rio entre as fases 3 e 4; as margens fora da ponte bloqueiam a passagem.
+function addRiverObstacles(world, Vector3) {
+  const crossS = (world.anchorS(3) + world.anchorS(4)) / 2;
+  const cp = world.pointAt(crossS), ct = world.tangentAt(crossS), cn = world.sideOf(ct);
+  const ctl = [];
+  for (let k = -90; k <= 90; k += 10) {
+    const wiggle = Math.abs(k) < 12 ? 0 : Math.sin(k * 0.09) * 7;
+    ctl.push(cp.clone().addScaledVector(cn, k).addScaledVector(ct, wiggle));
+  }
+  const dense = [];   // Catmull-Rom uniforme, reamostrada em 301 pontos igualmente espaçados (como getSpacedPoints(300))
+  for (let i = 0; i < ctl.length - 1; i++) {
+    const p0 = ctl[Math.max(0, i - 1)], p1 = ctl[i], p2 = ctl[i + 1], p3 = ctl[Math.min(ctl.length - 1, i + 2)];
+    for (let n = 0; n < 40; n++) {
+      const u = n / 40, u2 = u * u, u3 = u2 * u;
+      const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (-a + 3 * b - 3 * c + d) * u3);
+      dense.push(new Vector3(f(p0.x, p1.x, p2.x, p3.x), 0, f(p0.z, p1.z, p2.z, p3.z)));
+    }
+  }
+  dense.push(ctl.at(-1));
+  const cum = [0];
+  for (let i = 1; i < dense.length; i++) cum.push(cum[i - 1] + dense[i].distanceTo(dense[i - 1]));
+  const pts = [];
+  for (let i = 0, j = 1; i <= 300; i++) {
+    const want = cum.at(-1) * i / 300;
+    while (j < dense.length - 1 && cum[j] < want) j++;
+    pts.push(dense[j - 1].clone().lerp(dense[j], (want - cum[j - 1]) / Math.max(1e-8, cum[j] - cum[j - 1])));
+  }
+  const BW = 3.6;   // metade da largura da ponte (world.js)
+  for (const p of pts) {
+    const off = new Vector3(p.x - cp.x, 0, p.z - cp.z);
+    const lateral = Math.abs(off.dot(cn));
+    if (lateral > BW + 0.8) world.obstacles.push({ x: p.x, z: p.z, r: Math.min(2.6, lateral - BW - 0.15) });
+  }
+  world.setBridgeNav(cp, ct);
+  world.bridge = { s: crossS, cp, ct, cn, half: BW };
+  return world;
 }
 
 function seedRoadObstacles(world, seed, phases = 12) {
