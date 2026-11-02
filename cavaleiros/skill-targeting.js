@@ -9,10 +9,10 @@ export function aimSpec(h) {
     radius: id === 'iceviking' ? (1.3 + (level - 1) * 0.25) * power : 0.65,
   };
   if (['pyro', 'cryo', 'crossbow', 'ninja', 'crusher', 'angel', 'archer', 'alchemist', 'engineer', 'cook', 'shaman'].includes(id)) return {
-    mode: 'ground', range: id === 'crusher' ? 2.2 * power : id === 'ninja' ? 7 : id === 'archer' ? 11 : id === 'alchemist' || id === 'cook' ? h.range + 1 : id === 'engineer' ? 8 : id === 'shaman' ? 6 : h.range,
+    mode: 'ground', range: id === 'crusher' ? 2.2 * power : id === 'ninja' ? 7 : id === 'archer' ? 11 : id === 'alchemist' || id === 'cook' ? h.range + 1 : id === 'engineer' ? 8 : id === 'shaman' ? 8 : h.range,
     radius: id === 'pyro' ? (1.1 + (level - 1) * 0.2) * power
       : id === 'cryo' ? (1.3 + (level - 1) * 0.25) * power : id === 'angel' ? (3 + (level - 1) * 0.5) * power
-      : id === 'alchemist' || id === 'cook' ? (1.6 + (level - 1) * 0.2) * power : id === 'shaman' ? 3.2 * power : 0,
+      : id === 'alchemist' || id === 'cook' ? (1.6 + (level - 1) * 0.2) * power : id === 'shaman' ? 4.5 * power : 0,
   };
   return null;
 }

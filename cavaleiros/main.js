@@ -4153,6 +4153,7 @@ function updateSentries(dt) {
 
 // ---------- Totens do Xamã: aliados fixos no chão (no máximo 2 por Xamã; o mais antigo some) ----------
 const spiritTotems = [], SPIRIT_TOTEM_MAX = 2;
+const TOTEM_PLANT_RANGE = 8, HEAL_TOTEM_RADIUS = 4.5;   // alcance de plantio e raio do totem de cura (cobre a formação em movimento)
 const TOTEM_LOOKS = {   // madeira, faixa, cor da marca no chão, intervalo do pulso (s)
   heal: { wood: 0x8a5a34, band: 0x3fe0b0, mark: 0x7ad8a0, every: 1 },
   root: { wood: 0x6a4a2a, band: 0xc8a050, mark: 0x8a6a34, every: 0.5 },
@@ -4212,7 +4213,7 @@ function spiritTotemPulse(t) {
     for (const s of context.skeletons?.length ? context.skeletons : skeletonsAlive()) if (!s.dead && !s.spawning && s.pos.distanceTo(at) <= t.radius + 0.4 * (s.size - 1))
       controlEnemy(s, 'slowT', 0.9 * owner.skillPower);
   } else {
-    const amount = scaleBranchEffect(owner, 'support', (5 + owner.level * 2) * (t.kind === 'ancestral' ? 1.6 : 1)) * owner.skillPower;
+    const amount = scaleBranchEffect(owner, 'support', (5 + owner.level * 2) * (t.kind === 'ancestral' ? 1.6 : 0.85)) * owner.skillPower;   // totem de cura 15% mais fraco por pulso: o raio maior cobre mais heróis
     for (const h of heroes()) if (!h.dead && h.pos.distanceTo(at) <= t.radius + 0.3) {
       const heal = Math.min(h.maxHp - h.hp, amount);
       if (heal < 1) continue;
@@ -6488,7 +6489,7 @@ class Hero extends Unit {
     } else if (id === 'shaman') {
       // totem de cura: no meio do grupo ferido (ou onde o jogador mirou)
       if (!force && game.state !== 'fight') return false;
-      const reach = this.range, party = partyNow().filter((h) => !h.dead);
+      const reach = TOTEM_PLANT_RANGE, party = partyNow().filter((h) => !h.dead);
       let placement;
       if (manual && target?.groundTarget) placement = target.pos.clone();
       else {
@@ -6503,7 +6504,7 @@ class Hero extends Unit {
         if (offset.length() > reach) placement.copy(this.pos).add(offset.setLength(reach));
         if (!force && spiritTotems.some((t) => t.owner === this && t.kind === 'heal' && t.life > 3 && t.root.position.distanceTo(placement) < 2.2)) return false;
       }
-      const duration = (7 + level) * power, area = 3.2 * power;
+      const duration = (7 + level) * power, area = HEAL_TOTEM_RADIUS * power;
       effect = () => {
         plantSpiritTotem(this, placement, 'heal', duration, area);
         popText(placement, 'Totem!', 'evolve');
@@ -7122,7 +7123,7 @@ class Hero extends Unit {
         const mine = spiritTotems.filter((t) => t.owner === this);
         if (!mine.length && !force) return false;
         effect = () => {
-          if (!mine.length) plantSpiritTotem(this, this.pos, 'heal', 6 * power, 3.2 * power);   // sem totens: finca um de cura aos pés
+          if (!mine.length) plantSpiritTotem(this, this.pos, 'heal', 6 * power, HEAL_TOTEM_RADIUS * power);   // sem totens: finca um de cura aos pés
           for (const t of mine) if (spiritTotems.includes(t)) { t.life += skill.duration || 3; spiritTotemPulse(t); }
           popText(this.pos, 'Totens!', 'evolve');
         };
