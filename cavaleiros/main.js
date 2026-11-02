@@ -2915,7 +2915,7 @@ class Unit {
       if (!dot && this.cfg.id === 'assassin' && this.dodgeTimer <= 0) {
         this.dodgeTimer = (7 - skillLevel(this.level)) * this.skillRate;
         this.busy = this.once(HERO_DODGES[Math.floor(Math.random() * HERO_DODGES.length)], 1.5);   // esquerda, direita ou rolamento para trás
-        this.pendingHit = null;
+        if (!this.pendingHit?.effect) this.pendingHit = null;   // só o golpe comum é cancelado: a habilidade em preparo continua
         popText(this.pos, 'Esquiva!', 'dodge');
         this.stats.esquivas++;
         return;
@@ -6718,7 +6718,8 @@ class Hero extends Unit {
         && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));
       if (!target) return false;
       effect = () => {
-        if (target.dead) return;
+        if (target.dead) target = nearest(this.pos, attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) < 7 && Math.abs(s.pos.y - this.pos.y) < 0.85));   // o alvo caiu durante o preparo: salta no mais próximo
+        if (!target) return;
         const from = this.pos.clone(), dir = tmp.subVectors(target.pos, this.pos).setY(0).normalize();
         const behind = target.pos.clone().addScaledVector(dir, 0.6 + 0.4 * target.size);
         const dest = world.canStep(target.pos, behind) ? behind : target.pos.clone().addScaledVector(dir, -(0.6 + 0.4 * target.size));
@@ -7221,7 +7222,8 @@ class Hero extends Unit {
       case 'charge': case 'shadow': case 'execute': {
         if (!target) return false;
         effect = () => {
-          if (target.dead) return;
+          if (target.dead && skill.effect !== 'charge') target = nearest(this.pos, targetPool.filter((s) => !s.dead && !s.spawning));   // alvo caiu durante o preparo: o mais próximo
+          if (!target || target.dead) return;
           const from = this.pos.clone();
           if (skill.effect === 'shadow' || skill.effect === 'execute') {
             const dir = tmp.subVectors(target.pos, this.pos).setY(0).normalize();

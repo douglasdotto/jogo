@@ -64,7 +64,7 @@ const EXTRA_SKILLS = {
     { name: 'Lâmina Envenenada', description: 'Arremessa uma adaga envenenada: o veneno corrói o alvo por vários segundos.', effect: 'poison-blade', targeting: 'enemy', cooldown: 17, range: 7, power: 0.8, duration: 6, color: 0x9cff5a },
   ],
   crossbow: [
-    { name: 'Rajada Perfurante', description: 'Dispara uma sequência rápida de virotes.', effect: 'volley', cooldown: 20, power: 1.2, shots: 4 },
+    { name: 'Rajada Perfurante', description: 'Dispara uma sequência rápida de virotes.', effect: 'volley', range: 9, cooldown: 20, power: 1.2, shots: 4 },
     { name: 'Chuva de Virotes', description: 'Uma salva atinge os inimigos espalhados pela área.', effect: 'arrow-rain', cooldown: 64, radius: 8, power: 1.9, shots: 6 },
     { name: 'Virote Arpão', description: 'Fisga um inimigo distante, puxa-o para perto da linha de frente e o prende no lugar.', effect: 'harpoon', targeting: 'enemy', cooldown: 17, range: 9, minRange: 3, power: 1.2, duration: 1.6, control: 'root', color: 0xc9eaa4 },
   ],
