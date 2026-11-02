@@ -28,10 +28,10 @@ export const SYNERGIES = [
     attackers: ['crossbow', 'ninja'], states: ['markT'],
     sources: ['archer'], payoff: ['crossbow', 'ninja'],
     effect: 'Besteiro e Ninja: +20% no alvo marcado pela Arqueira.' },
-  { id: 'song-summons', icon: '♫', name: 'Ritmo das crias', haste: 1.3,
+  { id: 'song-summons', icon: '♫', name: 'Mão de paus', haste: 1.3,
     summoners: ['necro', 'engineer', 'beast_tamer'],
     sources: ['bard'], payoff: ['necro', 'engineer', 'beast_tamer'],
-    effect: 'Canção do Bardo: lacaios, torreta e fera atacam 30% mais rápido.' },
+    effect: 'Paus do Apostador: lacaios, torreta e fera atacam 30% mais rápido.' },
   { id: 'sacred-wall', icon: '☩', name: 'Muralha sagrada', heal: 0.3,
     healers: ['paladin', 'cleric'],
     sources: ['paladin', 'cleric'], payoff: ['guardian'],
@@ -70,7 +70,7 @@ export function synergyHealMultiplier(healerId, target) {
   return synergy.healers.includes(healerId) && target && !target.dead && inGuardianStance(target) ? 1 + synergy.heal : 1;
 }
 
-/** Invocações atacam mais rápido enquanto quem as chamou está sob a canção do Bardo. */
+/** Invocações atacam mais rápido enquanto quem as chamou está sob o naipe de paus do Apostador. */
 export function synergySummonHaste(summoner) {
   const synergy = synergyById('song-summons');
   return summoner && summoner.songT > 0 && synergy.summoners.includes(summoner.cfg?.id) ? synergy.haste : 1;

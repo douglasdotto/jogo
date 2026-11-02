@@ -461,7 +461,7 @@ test('todas as habilidades têm corpo próprio em SKILL_ANIMS com clipes existen
   assert.equal(new Set(allNames).size,total,'os nomes das habilidades não se repetem entre heróis');
   const sharedPrimaryClips=[...primaryClips.reduce((counts,item)=>counts.set(item.clip,[...(counts.get(item.clip)||[]),item.hero]),new Map())]
     .filter(([,heroes])=>heroes.length>1).map(([clip,heroes])=>[clip,heroes.sort()]).sort(([a],[b])=>a.localeCompare(b));
-  assert.deepEqual(sharedPrimaryClips,[['Throw',['cook','iceviking','ninja','viking']]],
+  assert.deepEqual(sharedPrimaryClips,[['Throw',['bard','cook','iceviking','ninja','viking']]],
     'clipes básicos só se repetem quando a habilidade pede o mesmo gesto de arremesso');
   const choreographySignatures=allChoreographies.map(item=>item.signature);
   assert.equal(new Set(choreographySignatures).size,total,
@@ -495,16 +495,16 @@ test('mira no chão reduz amostras e ainda encontra o primeiro cruzamento na ram
 });
 test('arquétipos de combate preservam os atributos enquanto o seletor mostra as categorias próprias',()=>{
   assert.equal(t.HEROES.length,5);assert.equal(t.CLASSES.length,5);
-  for(const [id,classId] of [['cleric',4],['bard',4],['angel',4],['druid',4],['chronist',2]])assert.equal(cfg(id).classId,classId,id);
+  for(const [id,classId] of [['cleric',4],['bard',3],['angel',4],['druid',4],['chronist',2]])assert.equal(cfg(id).classId,classId,id);
   assert.equal(t.pickGroupId(cfg('druid')),'suporte');assert.equal(t.pickGroupId(cfg('cleric')),'suporte');
   assert.equal(t.pickGroupId(cfg('monk')),'barbaros');assert.equal(t.pickGroupId(cfg('chronist')),'magos');
   const d=cfg('druid'),c=cfg('chronist');
   assert.deepEqual([d.hp,d.dmg,d.range,d.speed,d.cooldown],[180,21,6,3,1]);
   assert.deepEqual([c.hp,c.dmg,c.range,c.speed,c.cooldown,c.splash],[165,21,6,3.5,1.05,0]);
   assert.equal(cfg('cleric').recipe.base,'Mage');assert.ok(cfg('cleric').recipe.add.some(a=>a.part==='2H_Staff'));
-  assert.equal(cfg('bard').recipe.base,'Rogue');assert.ok(cfg('bard').recipe.extras.some(e=>e.type==='lute'));
+  assert.equal(cfg('bard').recipe.base,'Rogue');assert.ok(cfg('bard').recipe.extras.some(e=>e.type==='cardFan'));assert.equal(t.pickGroupId(cfg('bard')),'ladinos');assert.equal(cfg('bard').name,'Apostador');assert.equal(cfg('bard').maxHp??cfg('bard').hp,190);
   assert.equal(cfg('bard').ranged,true);assert.equal(cfg('bard').range,5);assert.equal(cfg('bard').idle,'Idle');
-  assert.ok(t.SKILL_ANIMS.bard.every(a=>!a.clip.includes('Melee')),'Bardo não usa animações de combate corpo a corpo nas skills');
+  assert.ok(t.SKILL_ANIMS.bard.every(a=>!a.clip.includes('Melee')),'Apostador não usa animações de combate corpo a corpo nas skills');
 });
 test('composição equilibrada mostra cobertura e papéis que ainda faltam',()=>{
   const balanced=t.teamCoverage(['paladin','guardian','pyro','cleric'].map(cfg));
@@ -619,8 +619,9 @@ test('seletor agrupa os heróis em 5 abas temáticas sem alterar os arquétipos 
   const rowFor=name=>t.pick.classRows[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.deepEqual(Array.from(rowFor('Guerreiros').children,card=>card.attributes['data-hero-id']),['paladin','guardian','champion','king','brute','lancer']);
   assert.deepEqual(Array.from(rowFor('Bárbaros').children,card=>card.attributes['data-hero-id']),['berserker','crusher','viking','iceviking','monk','beast_tamer']);
-  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','bard','angel','alchemist','vampire','cook','shaman','runic']);
-  for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=9,'cada aba tem de 5 a 9 heróis');
+  assert.deepEqual(Array.from(rowFor('Suporte').children,card=>card.attributes['data-hero-id']),['druid','cleric','angel','alchemist','vampire','cook','shaman','runic']);
+  assert.deepEqual(Array.from(rowFor('Ladinos').children,card=>card.attributes['data-hero-id']),['assassin','duelist','ninja','crossbow','archer','engineer','illusionist','bard']);
+  for(const row of t.pick.classRows)assert.ok(row.children.length>=5&&row.children.length<=8,'cada aba tem de 5 a 8 heróis');
   assert.equal(t.pick.classRows.reduce((sum,row)=>sum+row.children.length,0),t.VARIANTS.length,'todo herói está em exatamente uma aba');
   const filterFor=name=>t.pick.classFilters[t.PICK_GROUPS.findIndex(group=>group.name===name)];
   assert.match(filterFor('Magos').innerHTML,/pick-filter-count[^>]*>1</,'a aba mostra quantos do grupo já estão nela');
@@ -1242,7 +1243,7 @@ test('habilidades principais dos quatro novos heróis têm efeitos funcionais',(
   for(const h of [cleric,bard,angel,chronist])h.pos.set(0,0,0);
   const enemy=new t.Skeleton('Minion',1);enemy.spawning=false;enemy.busy=99;enemy.pos.set(0,0,2);enemy.hp=enemy.maxHp=10000;
   cleric.hp-=45;assert.equal(cleric.useSkill(enemy,false,true),true);cleric.pendingHit.effect();assert.ok(cleric.hp>cleric.maxHp-45);assert.ok(cleric.guardT>0);
-  assert.equal(bard.useSkill(enemy,false,true),true);bard.pendingHit.effect();assert.ok(bard.songT>0);assert.ok(bard.songHaste<1);
+  assert.equal(bard.useSkill(enemy,false,true),true);const M=vm.runInContext('Math',context),rn=M.random;M.random=()=>.9;try{bard.pendingHit.effect()}finally{M.random=rn}assert.ok(bard.songT>0);assert.ok(bard.songHaste<1,'naipe de paus acelera o grupo');assert.ok(enemy.hp<enemy.maxHp,'a carta fere');
   const before=enemy.hp;assert.equal(angel.useSkill(enemy,false,true),true);angel.pendingHit.effect();assert.ok(enemy.hp<before);
   assert.equal(t.aimSpec(angel).mode,'ground');assert.equal(t.validAim(angel,enemy),true);
   assert.equal(chronist.useSkill(enemy,false,true),true);chronist.pendingHit.effect();assert.ok(enemy.rootT>0);
@@ -3729,14 +3730,37 @@ test('primário do Necromante não desfaz o Exército dos Mortos',()=>{
   cast(2);assert.equal(mine().length,6);cast(0);assert.equal(mine().length,8);
   cast(0);assert.equal(mine().length,8);assert.equal(mine().filter(u=>u.ultimate).length,6);clear();
 });
-test('brado do Rei não reduz o Hino do Bardo e o bônus zera ao expirar',()=>{
+test('brado do Rei não reduz Dados Viciados e o bônus zera ao expirar',()=>{
   clear();const king=hero('king',0,0),bard=hero('bard',1,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
-  assert.equal(bard.useSkill(e,false,true,2),true);bard.pendingHit.effect();bard.pendingHit=null;
-  const song=bard.royalT;assert.equal(bard.royalBonus,.35);
+  const rn=cMath.random;cMath.random=()=>.99;   // dado 6
+  try{assert.equal(bard.useSkill(e,false,true,1),true);bard.pendingHit.effect();bard.pendingHit=null;}finally{cMath.random=rn}
+  const dice=bard.royalT;assert.ok(Math.abs(bard.royalBonus-.34)<1e-9);assert.ok(bard.runeHp>0,'escudo junto do bônus');
   assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;
-  assert.equal(bard.royalBonus,.35);assert.equal(bard.royalT,song);
-  bard.update(song+1);assert.ok(bard.royalT<=0);assert.equal(bard.royalBonus,0);
+  assert.ok(Math.abs(bard.royalBonus-.34)<1e-9);assert.equal(bard.royalT,dice);
+  bard.update(dice+1);assert.ok(bard.royalT<=0);assert.equal(bard.royalBonus,0);
   assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;assert.equal(bard.royalBonus,.2);clear();
+});
+test('Apostador: naipes, dado mínimo útil, All-in com Royal Flush e Blefe que nunca piora',()=>{
+  clear();const bard=hero('bard',0,0),ally=hero('paladin',1,0),e=foe('Warrior',0,3);e.hp=e.maxHp=100000;
+  const rn=cMath.random,cast=(slot,r)=>{cMath.random=()=>r;try{bard.skillTimers.fill(0);assert.equal(bard.useSkill(e,false,true,slot),true);bard.pendingHit.effect();bard.pendingHit=null}finally{cMath.random=rn}};
+  // ♥ (0.1): cura o mais ferido; ♠ (0.3): dano extra; ♦ (0.6): lentidão; ♣ (0.9): velocidade
+  ally.hp-=60;const hp0=ally.hp;cast(0,.1);assert.ok(ally.hp>hp0,'copas cura');
+  let before=e.hp;cast(0,.3);const spade=before-e.hp;before=e.hp;cast(0,.6);const diamond=before-e.hp;assert.ok(spade>diamond,'espadas fere mais');assert.ok(e.slowT>0,'ouros atrasa');
+  ally.songT=0;cast(0,.9);assert.ok(ally.songT>0&&ally.songHaste<1,'paus acelera aliados');
+  // o azar nunca fere o grupo
+  const hpA=ally.hp,hpB=bard.hp;for(const r of [0,.2,.45,.7,.99])cast(0,r);assert.ok(ally.hp>=hpA&&bard.hp>=hpB);
+  // dado: mínimo útil no 1
+  ally.royalT=0;ally.royalBonus=0;ally.runeHp=0;cast(1,0);assert.ok(ally.royalBonus>=.14-1e-9&&ally.royalT>5&&ally.runeHp>0);
+  // All-in: dano em área + cura + lentidão; Royal Flush dobra
+  const run=r=>{clear();const b=hero('bard',0,0),a=hero('paladin',1,0);a.hp-=100;const f1=foe('Minion',0,4),f2=foe('Minion',1,4),f3=foe('Minion',-1,4);for(const f of [f1,f2,f3])f.hp=f.maxHp=100000;
+    cMath.random=()=>r;try{b.skillTimers.fill(0);assert.equal(b.useSkill(f1,false,true,2),true);b.pendingHit.effect();b.pendingHit=null}finally{cMath.random=rn}
+    const heal=a.hp-(a.maxHp-100);t.tick?.(0);return{heal,slow:f1.slowT,flames:context.flames.length&&context.flames[context.flames.length-1].dmg};};
+  const normal=run(.5),flush=run(.1);assert.ok(normal.heal>0&&normal.slow>0&&normal.flames>0);assert.ok(flush.flames>normal.flames*1.9,'Royal Flush dobra o dano');assert.ok(flush.heal>normal.heal*1.5,'e a cura');
+  // Blefe: nenhuma recarga piora e a menor fica pronta
+  clear();const b2=hero('bard',0,0),a1=hero('paladin',1,0),a2=hero('guardian',-1,0),f=foe('Minion',0,4);
+  a1.skillTimers[1]=14;a1.skillTimers[3]=9;a2.skillTimers[0]=6;a2.skillTimers[1]=20;const old=[...a1.skillTimers,...a2.skillTimers];
+  b2.skillTimers.fill(0);assert.equal(b2.useSkill(f,false,true,3),true);b2.pendingHit.effect();b2.pendingHit=null;
+  const now=[...a1.skillTimers,...a2.skillTimers];assert.ok(now.every((v,i)=>v<=old[i]+1e-9),'nunca piora');assert.ok(now.some((v,i)=>old[i]>0&&v===0),'a mais próxima fica pronta');clear();
 });
 test('pausa do jogador, reinício com confirmação e cartões de menu focáveis',()=>{
   clear();const $=id=>context.document.getElementById(id);for(const id of ['resume','pause','restart','restartNo'])$(id).focus=noop;

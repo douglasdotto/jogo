@@ -443,7 +443,7 @@ export const LOOK_PREVIEW = [
   { id: 'necro', name: 'Necromante', model: 'Skeleton_Mage', recipe: 'necromante' },
   { id: 'druid', name: 'Druida', model: 'Rogue', recipe: 'druida' },
   { id: 'cleric', name: 'Clériga', model: 'Mage', recipe: 'cleric' },
-  { id: 'bard', name: 'Bardo', model: 'Rogue', recipe: 'bard' },
+  { id: 'bard', name: 'Apostador', model: 'Rogue', recipe: 'bard' },
   { id: 'angel', name: 'Anjo', model: 'Mage', recipe: 'angel' },
   { id: 'chronist', name: 'Cronomante', model: 'Rogue', recipe: 'chronist' },
   { id: 'archer', name: 'Arqueira', model: 'Rogue_Hooded', use: [] },

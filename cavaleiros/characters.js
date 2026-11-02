@@ -94,18 +94,16 @@ export const CHARACTERS = [
     ],
   },
   {
-    id: 'bard', name: 'Bardo', desc: 'Cantor de guerra que inspira os aliados.', color: ['#f4c6ff', '#875ac7'],
+    id: 'bard', name: 'Apostador', desc: 'Jogador de cartas e dados que sorteia a sorte do grupo.', color: ['#ff6a7a', '#a01e32'],
     base: 'Rogue',
     shape: silhouette('Rogue', { torso: 0.92, arms: 0.93, legs: 0.98, height: 1.05, depth: 0.91 }),
     hide: ['Rogue_Cape', 'Knife', 'Knife_Offhand', '1H_Crossbow', '2H_Crossbow', 'Throwable'],
-    add: [{ from: 'Barbarian', part: 'Barbarian_Cape' }],
-    paint: {   // roupa de trovador em blocos: gibão amarelo, mangas vermelhas, gola e calça roxas
-      ...rogueOutfit({ cloth: '#f0c028', trim: '#8a3ac8', sleeves: '#e0303c', leather: '#7a4a24', pants: '#7a34b0', boots: '#b02a2a', gloves: '#f0c028', metal: '#ffd84a' }),
-      Barbarian_Cape: { tint: '#d8283a', amount: 0.85 },
-      Rogue_Head: { face: { skin: '#f0c8a8', hair: '#f0b040' } },   // cachos loiros
+    paint: {   // carteador: casaco marfim com mangas carmesim, calça grafite
+      ...rogueOutfit({ cloth: '#ece2c4', trim: '#2a1a14', sleeves: '#c02a3e', leather: '#2a1a14', pants: '#3a3f52', boots: '#1e1a1a', gloves: '#2a1a14', metal: '#ffd84a' }),
+      Rogue_Head: { face: { skin: '#f0c8a8', hair: '#8a4a1c' } },   // cabelo ruivo penteado para trás
     },
     extras: [
-      { type: 'lute', bone: 'chest', back: true }, { type: 'travelHat', bone: 'head', color: 0x7a34b0, band: 0xf0c028 }, { type: 'feather', bone: 'head', color: 0xff3a3a, y: 1.2 }, { type: 'luteStrap', bone: 'chest', color: 0x8a3ac8 },
+      { type: 'cardFan', bone: 'chest', back: true }, { type: 'cardVisor', bone: 'head' }, { type: 'chipPouch', bone: 'chest' },
     ],
   },
   {
@@ -687,24 +685,23 @@ const ACCESSORIES = {
     g.add(f);
     return g;
   },
-  // pequena lira feita de formas simples, presa à mão do bardo
-  lute({ back = false } = {}) {
-    const g = new THREE.Group(), wood = lambert(0x9a5738), goldMat = lambert(0xffd676), string = lambert(0xfff0c2);
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), wood);
-    body.scale.set(0.95, 1.05, 0.46); body.position.y = -0.02; g.add(body);
-    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.075), wood); neck.position.set(0, 0.27, 0); neck.rotation.z = -0.2; g.add(neck);
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.035, 0.035), goldMat); bridge.position.set(0, 0.01, 0.09); g.add(bridge);
-    const soundHole = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 5, 12), goldMat);
-    soundHole.position.set(0, -0.11, 0.09); g.add(soundHole);
-    for (let i = -2; i <= 2; i++) {
-      const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.37, 4), string);
-      wire.position.set(i * 0.025, 0.14, 0.075); g.add(wire);
-      const peg = new THREE.Mesh(new THREE.SphereGeometry(0.025, 5, 4), goldMat);
-      peg.position.set(i % 2 ? -0.07 : 0.07, 0.44 + Math.floor(i / 2) * 0.025, 0);
-      g.add(peg);
+  // leque de cartas (e um dado) preso à mão; nas costas, aberto como um pavão
+  cardFan({ back = false } = {}) {
+    const g = new THREE.Group(), cream = lambert(0xf6efdc), red = lambert(0xd8404a), dark = lambert(0x22232e);
+    for (let i = 0; i < 5; i++) {
+      const card = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.012), i % 2 ? red : cream);
+      const a = (i - 2) * 0.28;
+      card.position.set(Math.sin(a) * 0.2, 0.15 + Math.cos(a) * 0.12, i * 0.004);
+      card.rotation.z = -a;
+      g.add(card);
     }
-    g.position.set(0.05, 0.05, 0.06); g.rotation.z = -0.15;
-    if (back) { g.scale.setScalar(1.35); g.position.set(0.06, 0.02, -0.4); g.rotation.set(0, Math.PI, 0.65); }   // nas costas, cordas para fora
+    const die = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), cream);
+    die.position.set(0.22, -0.02, 0.02); die.rotation.set(0.5, 0.6, 0);
+    g.add(die);
+    const pip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.03), dark);
+    pip.position.set(0.22, 0.03, 0.07); g.add(pip);
+    g.position.set(0.05, 0.05, 0.06);
+    if (back) { g.scale.setScalar(1.7); g.position.set(0, -0.1, -0.4); g.rotation.set(0, Math.PI, 0); }
     return g;
   },
   // asas em três camadas de penas (rêmiges longas atrás, secundárias e coberteiras na frente),
@@ -860,20 +857,36 @@ const ACCESSORIES = {
     g.add(vertical, horizontal);
     return g;
   },
-  // bandoleira e bolsa de instrumento, para dar ao bardo um perfil de viajante
-  luteStrap({ color = 0x633a2a, buckle = 0xe2bd63 } = {}) {
+  // bandoleira com fichas de cassino e bolsinha de dados
+  chipPouch({ color = 0x2a1a14, buckle = 0xe2bd63 } = {}) {
     const g = new THREE.Group(), leather = lambert(color), metal = lambert(buckle);
-    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.82, 0.035), leather);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.82, 0.035), leather);
     strap.position.set(0.03, 0.02, 0.29);
     strap.rotation.z = -0.45;
     g.add(strap);
-    const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.13), leather);
+    [0xd8404a, 0xf6efdc, 0x2a6ad8].forEach((c, i) => {
+      const chip = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.03, 10), lambert(c));
+      chip.rotation.x = Math.PI / 2;
+      chip.position.set(0.14 - i * 0.14, 0.2 - i * 0.2 + 0.1, 0.325);
+      g.add(chip);
+    });
+    const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.2, 0.12), leather);
     pouch.position.set(-0.31, -0.23, 0.2);
-    pouch.rotation.z = -0.1;
     g.add(pouch);
-    const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.055, 0.025), metal);
-    clasp.position.set(-0.31, -0.2, 0.275);
+    const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.025), metal);
+    clasp.position.set(-0.31, -0.2, 0.265);
     g.add(clasp);
+    return g;
+  },
+  // viseira verde de carteador, de aba curta e faixa elástica
+  cardVisor({ color = 0x2f8a52, band = 0xf0e8d0 } = {}) {
+    const g = new THREE.Group(), shade = lambert(color), strap = lambert(band);
+    const peak = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.5), shade);
+    peak.position.set(0, 0.62, 0.5); peak.rotation.x = 0.15;
+    g.add(peak);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.53, 0.53, 0.09, 12, 1, true), strap);
+    ring.position.y = 0.66;
+    g.add(ring);
     return g;
   },
   // colar de dentes em volta do pescoço

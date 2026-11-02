@@ -99,8 +99,8 @@ const VARIANTS = [
     recipe: CHARACTERS[0], classId: 4, pickGroup: 'druida', hp: 180, speed: 3, ranged: true, range: 6, dmg: 21, cooldown: 1, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 3, Rapidez: 3, Alcance: 4 } },
   { id: 'cleric', names: ['Clériga', 'Sacerdotisa', 'Santa Guardiã'], desc: 'Orações curam e fortalecem quem está na linha de frente.', ability: 'Oração restauradora', color: CHARACTERS[4].color,
     recipe: CHARACTERS[4], classId: 4, pickGroup: 'cleric', hp: 225, dmg: 27, range: 5, cooldown: 1.2, ranged: true, attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 3, Rapidez: 3, Alcance: 4 } },
-  { id: 'bard', names: ['Bardo', 'Mestre das Canções', 'Lenda Errante'], desc: 'Sua música acelera os ataques de todo o grupo.', ability: 'Acorde heroico', color: CHARACTERS[5].color,
-    recipe: CHARACTERS[5], classId: 4, pickGroup: 'bard', hp: 220, dmg: 22, range: 5, speed: 3, cooldown: 1.15, ranged: true, idle: 'Idle', attacks: ['Spellcast_Shoot'], stats: { Vida: 4, Força: 2, Rapidez: 4, Alcance: 4 } },
+  { id: 'bard', names: ['Apostador', 'Jogador de Cartas', 'Rei do Blefe'], desc: 'Lança cartas e dados: o naipe sorteado cura, fere, atrasa ou acelera.', ability: 'Carta Marcada', color: CHARACTERS[5].color,
+    recipe: CHARACTERS[5], classId: 3, hp: 190, dmg: 15, range: 5, speed: 3.4, cooldown: 1.05, ranged: true, idle: 'Idle', attacks: ['Spellcast_Shoot'], stats: { Vida: 2, Força: 3, Rapidez: 4, Alcance: 4 } },
   { id: 'angel', names: ['Anjo', 'Arcanjo', 'Serafim'], desc: 'Paira acima da batalha e desce com impacto de luz para amparar o grupo.', ability: 'Descida celeste', color: CHARACTERS[6].color,
     recipe: CHARACTERS[6], classId: 4, pickGroup: 'angel', hp: 180, dmg: 20, range: 6.5, cooldown: 1.2, ranged: true, idle: 'Jump_Idle', splash: 0.6, attacks: ['Spellcast_Shoot'], stats: { Vida: 3, Força: 4, Rapidez: 3, Alcance: 5 } },
   { id: 'chronist', names: ['Cronomante', 'Tecelão do Tempo', 'Mestre do Instante'], desc: 'Dobra o tempo para deter uma ameaça e abrir espaço.', ability: 'Campo temporal', color: CHARACTERS[7].color,
@@ -153,8 +153,8 @@ const PICK_GROUPS = [
   { id: 'guerreiros', name: 'Guerreiros', icon: '♜', heroes: ['paladin', 'guardian', 'champion', 'king', 'brute', 'lancer'] },
   { id: 'barbaros', name: 'Bárbaros', icon: '⚒', heroes: ['berserker', 'crusher', 'viking', 'iceviking', 'monk', 'beast_tamer'] },
   { id: 'magos', name: 'Magos', icon: '✦', heroes: ['pyro', 'arcane', 'cryo', 'necro', 'chronist', 'oracle', 'summoner', 'geomancer'] },
-  { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer', 'illusionist'] },
-  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'bard', 'angel', 'alchemist', 'vampire', 'cook', 'shaman', 'runic'] },
+  { id: 'ladinos', name: 'Ladinos', icon: '☾', heroes: ['assassin', 'duelist', 'ninja', 'crossbow', 'archer', 'engineer', 'illusionist', 'bard'] },
+  { id: 'suporte', name: 'Suporte', icon: '✚', heroes: ['druid', 'cleric', 'angel', 'alchemist', 'vampire', 'cook', 'shaman', 'runic'] },
 ];
 const pickGroupId = (cfg) => PICK_GROUPS.find((group) => group.heroes.includes(cfg.id))?.id;
 const variantsInPickGroup = (groupId) => (PICK_GROUPS.find((group) => group.id === groupId)?.heroes || [])
@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['shield-ricochet', 'march-decree', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'light-legion', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'follow-spirit']);
+    'oath-link', 'protection-vow', 'loaded-dice', 'bluff', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'follow-spirit']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2127,7 +2127,7 @@ const SKILL_GLYPHS = {
   assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
   duelist: ['⚔', '✕', '✺', '⛓'],
   king: ['♛', '⇉', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '☩', '☥', '✠'],
-  druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♫', '♪', '♬', '♩'],
+  druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♠', '⚄', '♛', '♣'],
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '↻', '◷', '⟲'],
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◎', '☯', '◈'],
@@ -2141,7 +2141,7 @@ const SKILL_GLYPHS = {
   shaman: ['♣', '☘', '☥', '✺'],
   illusionist: ['☻', '⇄', '❢', '◐'],
 };
-const LADINO_ULTS = new Map([['blade-dance', 'area'], ['shadow-storm', 'area'], ['arrow-rain', 'area'], ['sentry-overcharge', 'area'], ['panic', 'area'], ['execute', 'single'], ['hunter-mark', 'single']]);
+const LADINO_ULTS = new Map([['blade-dance', 'area'], ['shadow-storm', 'area'], ['arrow-rain', 'area'], ['sentry-overcharge', 'area'], ['panic', 'area'], ['all-in', 'area'], ['execute', 'single'], ['hunter-mark', 'single']]);
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const isPriorityEnemy = (s) => !s.dead && !s.spawning && (s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || !!s.kind?.priority);   // alvo prioritário da Caçada em Matilha
 const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
@@ -3302,6 +3302,43 @@ const BLADE_DANCE_TICK = 0.3;   // intervalo entre as voltas da Dança de lâmin
 const MEDITATE_TICK = 0.5;      // intervalo entre as curas da Meditação
 const SPEAR_REACH = 1.4;   // Postura de lança do Lanceiro: multiplica o alcance do herói
 const STONE_SKIN = { taken: 0.4, reflect: 0.3, grow: 1.22 };   // Pele de pedra do Brutamontes: dano recebido, reflexo e escala
+
+// Apostador: o sorteio é a identidade, mas a sorte nunca fere o grupo (o azar só reduz o bônus)
+const BARD_SUITS = [
+  { mark: '♥', name: 'Copas', color: 0xff5a6e, face: 1 }, { mark: '♠', name: 'Espadas', color: 0xc9c2e8, face: 2 },
+  { mark: '♦', name: 'Ouros', color: 0xffb040, face: 1 }, { mark: '♣', name: 'Paus', color: 0x7fe08a, face: 2 },
+];
+const ROYAL_FLUSH_CHANCE = 0.2;
+// efeito de um naipe: 0 ♥ cura o aliado mais ferido (all: todos), 1 ♠ dano extra no alvo, 2 ♦ lentidão no alvo, 3 ♣ velocidade de ataque nos aliados próximos
+function bardSuit(hero, enemy, index, mult = 1, all = false) {
+  const level = skillLevel(hero.level), power = hero.skillPower * mult, suit = BARD_SUITS[index];
+  const party = partyNow().filter((h) => !h.dead);
+  if (index === 0) {
+    const hurt = party.filter((h) => h.hp < h.maxHp).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+    for (const h of all ? hurt : hurt.slice(0, 1)) {
+      const heal = Math.min(h.maxHp - h.hp, (all ? 10 + 5 * level : 14 + 4 * level) * power);
+      h.hp += heal; hero.stats.cura += heal; popText(h.pos, '+' + Math.round(heal), 'heal'); FX.suitMark(h.pos, suit.color, suit.face);
+    }
+    if (!hurt.length) runeShieldOn(party.reduce((a, h) => (h.hp < a.hp ? h : a), party[0] || hero), hero, 8 * power, 6);   // sem ferido, vira um escudo pequeno
+  } else if (index === 1) {
+    if (enemy && !enemy.dead) heroHit(hero, enemy, hero.dmg * 1.1 * power);
+  } else if (index === 2) {
+    if (enemy && !enemy.dead) controlEnemy(enemy, 'slowT', (2.5 + 0.3 * level) * power);
+  } else {
+    for (const h of party) if (h.pos.distanceTo(hero.pos) <= (all ? 14 : 8)) {
+      h.songT = Math.max(h.songT, 4 * power);
+      h.songHaste = Math.min(h.songHaste || 1, 1 - 0.22 * Math.min(1.5, mult));
+    }
+  }
+  if (index === 3) FX.suitMark(hero.pos, suit.color, suit.face);
+  else if (index !== 0 && enemy) FX.suitMark(enemy.pos, suit.color, suit.face);
+}
+// All-in: a chuva de cartas fere a área durante ~1,4 s (o dano total já inclui o Royal Flush)
+function cardStorm(owner, at, radius, total) {
+  const mesh = groundMark(at, radius, 0xd8404a, 0.25);
+  flames.push({ mesh, radius, owner, wait: 0.55, t: 1.4, tick: 0, every: 0.3, dmg: total / 5, onTick: (f) => FX.cardRain(f.mesh.position, f.radius) });
+  wave(at, 0xff6a7a, radius * 1.4, radius, 0.45, { geo: ringGeo, opacity: 0.7 });
+}
 
 function damageCleave(owner, primary) {
   const count = units.length;
@@ -4697,6 +4734,8 @@ const rockGeo = new THREE.DodecahedronGeometry(0.14, 0);
 const crackGeo = new THREE.BoxGeometry(1, 0.03, 0.1).translate(0.5, 0, 0);
 const slashGeo = new THREE.PlaneGeometry(2.4, 0.2);
 const arcGeo = new THREE.TorusGeometry(1, 0.07, 4, 20, Math.PI * 0.7);
+const cardGeo = new THREE.BoxGeometry(0.2, 0.3, 0.015);   // carta de baralho (Apostador)
+const CARD_MATS = [0xf6efdc, 0xd8404a, 0x22232e].map((color) => { const m = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }); m.userData.keep = true; return m; });
 const rootGeo = new THREE.ConeGeometry(0.1, 1.4, 5).translate(0, 0.7, 0);
 const leafGeo = new THREE.CircleGeometry(0.13, 3);
 const skullGeo = new THREE.IcosahedronGeometry(0.22, 0);
@@ -4731,6 +4770,7 @@ const BOLT_LOOKS = {
   necro: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x0f8a30, 0.4), 2.1]], orb: ['necro', 0.44], size: [1.7, 1.7], spin: true },
   druid: { geo: thornGeo, core: basic(0x9be05a), shells: [[glowMaterial(0x5fbf2a, 0.5), 1.3]], size: [1.9, 1.9], aim: true, roll: true },
   crossbow: { size: [1.4, 2] },
+  bard: { geo: cardGeo, core: CARD_MATS[0], shells: [], size: [2, 2.6], spin: true },
   archer: { size: [1.3, 2.2] },
   alchemist: { geo: boltGeo, core: hiddenCore, shells: [], orb: ['venom', 0.4], size: [1.3, 1.3], spin: true },
   oracle: { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0xc6b4ff, 0.52), 1.8]], orb: ['arcane', 0.34], size: [1.35, 2], spin: true },
@@ -4743,7 +4783,7 @@ for (const L of Object.values(BOLT_LOOKS)) for (const m of [L.core, ...(L.shells
 const steelMat = new THREE.MeshLambertMaterial({ color: 0x59627a, emissive: 0x1a2240 });
 const starGlowMat = glowMaterial(0x6f8cff, 0.55);
 for (const m of [eyeMat, barkMat, leafMat, steelMat, starGlowMat, flaskGlassMat, woolMat, sheepFaceMat]) m.userData.keep = true;   // compartilhados: não são descartados com o efeito
-const TRAIL = { cook: [0xffd27a, 0xe0603a], arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb], shaman: [0x6fe0a0, 0xe8ffd0] };
+const TRAIL = { cook: [0xffd27a, 0xe0603a], arcane: [0xb07cff, 0xffffff], necro: [0x40ff70, 0x0f8a30], druid: [0x8fe05a, 0xc8f07a], pyro: [0xffa040, 0xffe070], cryo: [0xbff6ff, 0x7fdcff], crossbow: [0xfff0a0, 0xffd84a], ninja: [0xc7d0ff, 0xffffff], viking: [0xe8f4ff, 0xb8dfe5], iceviking: [0x9fefff, 0xffffff], archer: [0x3fe0b0, 0xffffff], alchemist: [0x9cff3a, 0xe8ffb0], flask: [0x9cff3a, 0xe8ffb0], tonic: [0xff8ad8, 0xfff0fb], shaman: [0x6fe0a0, 0xe8ffd0], bard: [0xff6a7a, 0xf6efdc] };
 // Símbolo e paleta próprios aparecem enquanto cada habilidade é preparada.
 const SKILL_ART = {
   paladin:   { color: 0xffe27a, accent: 0x8af5a8, glyph: crystalGeo, scale: 1.2 },
@@ -4764,7 +4804,7 @@ const SKILL_ART = {
   necro:     { color: 0x22e050, accent: 0xd8ffe0, glyph: skullGeo, scale: 2.2 },
   druid:     { color: 0x5fbf2a, accent: 0xc8f07a, glyph: leafGeo, scale: 3.5 },
   cleric:    { color: 0xffe8a3, accent: 0xfffbeb, glyph: crystalGeo, scale: 1.3 },
-  bard:      { color: 0xe9a7ff, accent: 0xffe27a, glyph: arcGeo, scale: 0.8 },
+  bard:      { color: 0xff6a7a, accent: 0xf6efdc, glyph: cardGeo, scale: 1.4 },
   angel:     { color: 0xffe27a, accent: 0xffc6ed, glyph: crystalGeo, scale: 1.55 },
   chronist:  { color: 0x8feaff, accent: 0xb6a4ff, glyph: boltGeo, scale: 1.8 },
   archer:    { color: 0x3fe0b0, accent: 0xe8f6ee, glyph: shardGeo, scale: 1.8 },
@@ -4782,7 +4822,7 @@ const SKILL_ART = {
   geomancer: { color: 0xb8a888, accent: 0xe8dcc0, glyph: rockGeo, scale: 2.4 },
   illusionist: { color: 0xa88af0, accent: 0xf0e0ff, glyph: thinRingGeo, scale: 0.45 },
 };
-const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle']);
+const TARGETED_SKILLS = new Set(['assassin', 'duelist', 'monk', 'archer', 'alchemist', 'viking', 'iceviking', 'pyro', 'arcane', 'cryo', 'crossbow', 'ninja', 'angel', 'oracle', 'bard']);
 let shakeK = 0, stopT = 0, slowT = 0;
 const jolt = new THREE.Vector3();
 const calmMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');   // sistema pede menos movimento: sem tremida nem hit-stop
@@ -6266,17 +6306,46 @@ function royal(h, party) {
   }
 }
 
-// Bardo: pulsos violeta e pequenas notas luminosas percorrem o grupo.
-function song(h, party) {
-  for (let i = 0; i < 2; i++) wave(h.pos, i ? 0xffe27a : 0xe9a7ff, 0.35, 6, 0.9, { delay: i * 0.18, opacity: 0.4 });
-  for (const friend of party) {
-    column(friend.pos, 0xe9a7ff, 0.32, 2.6, 0.95, { follow: friend });
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * TAU + h.age;
-      const at = friend.pos.clone().add(V(Math.cos(a) * 0.55, 1.15 + i * 0.18, Math.sin(a) * 0.55));
-      particle(sparkGeo, i === 1 ? 0xffe27a : 0xf4c6ff, at, V(0, 1.6, 0), 0.8, { size: 1.2, delay: i * 0.08 });
-    }
+// Apostador: cartas voando e caindo (materiais opacos compartilhados, sem brilho aditivo)
+// cartas sobem em arco e giram em volta de um ponto; face 1 = vermelha (copas, ouros), 2 = escura (espadas, paus)
+function cardFlutter(at, n = 6, spread = 1, face = 0) {
+  for (let i = 0; i < fewer(n); i++) {
+    const m = new THREE.Mesh(cardGeo, CARD_MATS[face || i % 2]);
+    const a = Math.random() * TAU, r = Math.random() * spread;
+    const base = V(at.x + Math.cos(a) * r, at.y + 0.8, at.z + Math.sin(a) * r), v = V(rnd(1.4), 3 + Math.random() * 1.5, rnd(1.4));
+    m.scale.setScalar(2.2);
+    addFx(m, 0.9, (e, dt, k) => {
+      m.position.set(base.x + v.x * e.t, base.y + v.y * e.t - 4.5 * e.t * e.t, base.z + v.z * e.t);
+      m.rotation.x += dt * 9; m.rotation.y += dt * 7;
+      m.scale.setScalar(2.2 * (1 - Math.max(0, (k - 0.75) / 0.25)));
+    }, i * 0.03);
   }
+}
+// carta lançada do herói ao alvo (o dano é aplicado pela habilidade)
+function cardThrow(h, to, face = 0) {
+  const m = new THREE.Mesh(cardGeo, CARD_MATS[face || 0]), from = h.pos.clone().setY(h.pos.y + 1.3), end = to.clone().setY(to.y + 1);
+  m.scale.setScalar(2.4);
+  addFx(m, 0.22, (e, dt, k) => { m.position.lerpVectors(from, end, k); m.rotation.z += dt * 30; });
+}
+// chuva de cartas na área; cada carta vira e some ao cravar (All-in)
+function cardRain(at, radius) {
+  for (let i = 0; i < fewer(9); i++) {
+    const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * radius;
+    const land = V(at.x + Math.cos(a) * r, at.y + 0.1, at.z + Math.sin(a) * r), from = V(land.x - 1, land.y + 8, land.z - 0.5);
+    const m = new THREE.Mesh(cardGeo, CARD_MATS[i % 3]);
+    m.scale.setScalar(2.6);
+    addFx(m, 0.4, (e, dt, k) => {
+      m.position.lerpVectors(from, land, Math.min(1, k * 1.2));
+      m.rotation.x += dt * 14; m.rotation.y += dt * 9;
+      if (k >= 0.85 && !e.hit) { e.hit = true; puffs(land, 1, 'dust', { size: 0.5, rise: 0.5, life: 0.5, speed: 0.4 }); }
+      if (k > 0.85) m.scale.setScalar(2.6 * (1 - (k - 0.85) / 0.15));
+    }, i * 0.04);
+  }
+}
+// naipe sorteado: coluna de cor sobre o alvo e cartas ao redor
+function suitMark(at, color, face) {
+  column(at, color, 0.35, 2.4, 0.7);
+  cardFlutter(at, 4, 0.6, face);
 }
 
 // Druida: raízes saindo do chão em volta do inimigo preso
@@ -6493,14 +6562,9 @@ function element(h, skill, target, impactPoint = null) {
     for (let i = 0; i < fewer(n); i++) particle(sparkGeo, i % 2 ? 0xc8b8ff : 0xf0e8ff, spot(0.8), V(rnd(0.8), 1.2 + Math.random(), rnd(0.8)), 0.6, { size: 1, delay: Math.random() * 0.2 });
   } else if (id === 'chronist') {   // mostrador de relógio no chão, com os ponteiros voltando
     clockFace(at, reach + 0.6, ult ? 1.4 : 0.9);
-  } else if (id === 'bard') {   // ondas sonoras em pé saindo do bardo e notinhas
-    for (let i = 0; i < (ult ? 4 : 3); i++) {
-      const m = new THREE.Mesh(thinRingGeo, glow(i % 2 ? 0xffe27a : 0xe9a7ff, 0.8));
-      m.position.copy(h.pos).setY(h.pos.y + 1.2);
-      m.rotation.y = h.root.rotation.y;
-      addFx(m, 0.6, (e, dt, k) => { m.scale.setScalar(0.4 + k * 3.2); m.material.opacity = e.base * (1 - k); }, i * 0.1);
-    }
-    for (let i = 0; i < n; i++) particle(sparkGeo, i % 2 ? 0xf4c6ff : 0xffe27a, spot(1), V(rnd(1.2), 1.8, rnd(1.2)), 0.8, { size: 1.2, gravity: -0.5, delay: Math.random() * 0.3 });
+  } else if (id === 'bard') {   // cartas voando em volta do apostador
+    cardFlutter(h.pos, ult ? 10 : 5, 1.2);
+    wave(h.pos, 0xff6a7a, 0.2, ult ? 4 : 2.5, 0.5, { opacity: 0.35 });
   }
 }
 
@@ -6577,7 +6641,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, later, judgmentMark, judgmentStrike, furyPulse, quake, quakeAt, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, later, judgmentMark, judgmentStrike, furyPulse, quake, quakeAt, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, roots, cardFlutter, cardThrow, cardRain, suitMark, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -6921,19 +6985,16 @@ class Hero extends Unit {
         FX.dome(this, reach * 0.72);
       };
     } else if (id === 'bard') {
-      const party = partyNow().filter((h) => !h.dead);
-      if (!party.length || (!force && !target)) return false;
-      if (!manual && !force && target && !this.inReach(target, target.pos.distanceTo(this.pos) - 0.4 * ((target.size || 1) - 1))) return false;
+      // Carta Marcada: a carta fere o alvo e o naipe sorteado dá um efeito (♥ cura, ♠ dano extra, ♦ lentidão, ♣ velocidade de ataque)
+      if (!target || target.dead || target.groundTarget) return false;
+      if (!manual && !force && !this.inReach(target, target.pos.distanceTo(this.pos) - 0.4 * ((target.size || 1) - 1))) return false;
       effect = () => {
-        const duration = (7 + level * 0.5) * power;
-        for (const h of party) {
-          h.songT = Math.max(h.songT, duration);
-          h.songHaste = Math.min(h.songHaste || 1, 0.74);
-          popText(h.pos, 'Ritmo!', 'evolve');
-        }
-        wave(this.pos, 0xe9a7ff, 0.2, 6, 0.8, { opacity: 0.45 });
-        burst(this.pos, [0xf2c6ff, 0xffe27a], 16, 4.5);
-        FX.song(this, party);
+        if (target.dead) return;
+        const index = Math.floor(Math.random() * 4), suit = BARD_SUITS[index];
+        FX.cardThrow(this, target.pos, suit.face);
+        heroHit(this, target, this.dmg * 1.3 * power);
+        bardSuit(this, target, index);
+        popText(target.pos, `${suit.mark} ${suit.name}`, 'crit');
       };
     } else if (id === 'angel') {
       if (!target) return false;
@@ -7326,7 +7387,7 @@ class Hero extends Unit {
     const marchWanted = skill.effect === 'march-decree' && game.state === 'fight' && !(this.marchT > 1)
       && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
-    const supportSkill = ['ward', 'holy-nova', 'light-legion', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
+    const supportSkill = ['ward', 'holy-nova', 'light-legion', 'loaded-dice', 'bluff', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
       'sentry-overcharge', 'pack-roar', 'stone-skin', 'stone-golem', 'little-dragon', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && LADINO_ULTS.has(skill.effect)) {   // ultimates dos Ladinos: área exige 3 inimigos juntos ou chefe/elite; alvo único, chefe/elite (ou 4 por perto)
       const big = enemies.some((s) => s.boss || s.elite || s.kind?.priority);
@@ -8628,23 +8689,6 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'ballad': {
-        // Balada da coragem: encurta as recargas dos aliados próximos e os cura um pouco
-        const allies = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= radius);
-        const waiting = allies.reduce((sum, h) => sum + h.skillTimers.reduce((a, t) => a + Math.max(0, Math.min(t, 3)), 0), 0);
-        if (!force && waiting < 6) return false;
-        effect = () => {
-          for (const h of [...allies, this]) {
-            if (h !== this) for (let s = 0; s < h.skillTimers.length; s++) h.skillTimers[s] = Math.max(0, h.skillTimers[s] - 3 * power);
-            const heal = Math.min(h.maxHp - h.hp, scaleBranchEffect(this, 'support', h.maxHp * 0.06) * power);
-            if (heal > 0) { h.hp += heal; this.stats.cura += heal; popText(h.pos, '+' + Math.round(heal), 'heal'); }
-          }
-          popText(this.pos, 'Coragem!', 'evolve');
-          FX.song(this, allies);
-          wave(this.pos, color, 0.3, radius, 0.8);
-        };
-        break;
-      }
       case 'sky-lance': {
         // Lança celestial: luz concentrada no inimigo mais forte; ampara o aliado mais perto dele
         const pool = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 9));
@@ -9020,6 +9064,58 @@ class Hero extends Unit {
           popText(this.pos, 'Legião!', 'evolve');
         };
         break;
+      case 'loaded-dice': {
+        // Dados Viciados: o dado (1–6) define o bônus de dano e o escudo do grupo; o 1 ainda ajuda
+        if (!force && !party.some((h) => !(h.royalT > 2))) return false;
+        effect = () => {
+          const roll = 1 + Math.floor(Math.random() * 6), seconds = (skill.duration || 6) * (0.9 + 0.1 * power);
+          const bonus = 0.1 + 0.04 * roll, shield = scaleBranchEffect(this, 'support', 4 + 3 * roll) * power;
+          for (const h of party) {
+            h.royalT = Math.max(h.royalT, seconds);
+            h.royalBonus = Math.max(h.royalBonus, bonus);
+            runeShieldOn(h, this, shield, seconds);
+          }
+          popText(this.pos, roll === 6 ? 'Dados: 6!' : `Dados: ${roll}`, 'evolve');
+          FX.cardFlutter(this.pos, 6, 1.4);
+          wave(this.pos, color, 0.2, 4, 0.5, { opacity: 0.4 });
+        };
+        break;
+      }
+      case 'all-in': {
+        // All-in: chuva de cartas na área; os 4 naipes valem ao mesmo tempo e o Royal Flush (20%) dobra tudo
+        const { center } = densest(enemies, radius, force && enemies.includes(target) ? target : null);
+        if (!center) return false;
+        target = center;
+        const at = center.pos.clone(), base = this.dmg * power * (skill.power || 1);
+        effect = () => {
+          const flush = Math.random() < ROYAL_FLUSH_CHANCE, mult = flush ? 2 : 1;
+          bardSuit(this, null, 0, mult, true);
+          bardSuit(this, null, 3, mult, true);
+          for (const enemy of skeletonsAlive()) if (!enemy.spawning && enemy.pos.distanceTo(at) <= radius + 0.4 * (enemy.size - 1)) bardSuit(this, enemy, 2, mult);
+          cardStorm(this, at, radius, base * mult);
+          popText(at, flush ? 'ROYAL FLUSH!' : 'All-in! ♥♠♦♣', 'crit');
+          if (flush) { shake(0.25); burst(at.clone().setY(at.y + 1), [0xffd84a, 0xff6a7a], 16, 5); }
+        };
+        break;
+      }
+      case 'bluff': {
+        // Blefe: embaralha as recargas das técnicas dos aliados (nunca piora) e deixa pronta a que estava mais perto
+        const slots = party.filter((h) => h !== this && h.pos.distanceTo(this.pos) <= radius)
+          .flatMap((h) => h.skillTimers.map((t, i) => ({ h, i, t })).filter((x) => x.i !== 2 && x.t > 0.5));
+        if (!force && slots.reduce((sum, x) => sum + Math.min(x.t, 12), 0) < 12) return false;
+        effect = () => {
+          const live = slots.filter((x) => x.h.skillTimers[x.i] > 0);
+          const times = live.map((x) => x.h.skillTimers[x.i]);
+          for (let i = times.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [times[i], times[j]] = [times[j], times[i]]; }
+          live.forEach((x, i) => { x.h.skillTimers[x.i] = Math.min(x.h.skillTimers[x.i], times[i]); });
+          const soon = live.reduce((best, x) => (!best || x.h.skillTimers[x.i] < best.h.skillTimers[best.i] ? x : best), null);
+          if (soon) { soon.h.skillTimers[soon.i] = 0; popText(soon.h.pos, 'Pronto!', 'heal'); }
+          for (const x of live) FX.cardThrow(this, x.h.pos, 1);
+          popText(this.pos, 'Blefe!', 'evolve');
+          FX.cardFlutter(this.pos, 6, 1.4);
+        };
+        break;
+      }
       default: return false;
     }
 
@@ -9597,7 +9693,7 @@ const SKILL_MOVES = {
   necro: ['Spellcast_Long', 1.8, 0.5, 'summon'],
   druid: ['Spellcast_Raise', 1.6, 0.45, 'heal'],
   cleric: ['Spellcast_Long', 1.8, 0.45, 'heal'],
-  bard: ['Cheer', 1.6, 0.3, 'shout'],
+  bard: ['Throw', 1.5, 0.4, 'arrow'],
   angel: ['Spellcast_Raise', 1.8, 0.42, 'heal'],
   chronist: ['Spellcast_Raise', 1.6, 0.42, 'zap'],
   archer: ['Ranged_Bow_Release', 1.2, 0.3, 'arrow'],
@@ -9732,10 +9828,10 @@ const SKILL_ANIMS = {
     { clip: 'Cheer', f: 0.4, lean: -0.2, float: 0.15 },
   ],
   bard: [
-    { clip: 'Interact', f: 0.3, hop: 0.3 },
-    { clip: 'Spellcast_Shoot', f: 0.5, lean: 0.12, kick: -0.7 },
-    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1, float: 0.3 },
-    { clip: 'Cheer', f: 0.42, spin: 0.5, hop: 0.2 },
+    { clip: 'Throw', f: 0.4, lean: 0.15, kick: -0.5 },                                           // lança a carta com o pulso
+    { clip: 'Interact', f: 0.35, hop: 0.3, spin: 1 },                                            // sacode e rola os dados
+    { clip: 'Spellcast_Raise', hold: 'Spellcasting', f: 0.55, spin: 1.5, float: 0.5 },           // joga o monte inteiro para o alto
+    { clip: 'Cheer', f: 0.42, spin: 0.5, hop: 0.2 },                                             // floreio de blefe
   ],
   angel: [
     { clip: 'Jump_Full_Long', f: 0.6, hop: 0.6, lean: 0.15 },
