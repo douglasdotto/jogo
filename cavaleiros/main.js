@@ -2972,7 +2972,8 @@ class Unit {
       if (n <= 0) return;
       n = this.skillGuard(n, owner);
       if (n <= 0) return;
-    } else if (this.markT > 0) n *= 1 + this.markBonus;   // Flecha do caçador: o alvo marcado sofre mais de todos
+    } else if (this.sheepT > 0) n *= 1.35;   // ovelha da Grande transmutação: indefesa, sofre mais
+    else if (this.markT > 0) n *= 1 + this.markBonus;   // Flecha do caçador: o alvo marcado sofre mais de todos
     const real = Math.min(n, this.hp);   // conta só a vida que de fato saiu
     if (this.stats) this.stats.recebido += real;
     if (owner?.stats) { owner.stats.dano += real; if (critical) owner.stats.criticos++; }
@@ -7730,9 +7731,9 @@ class Hero extends Unit {
       case 'transmute': {
         // Grande transmutação: inimigos comuns viram ovelhas (não atacam, andam à toa); chefes e totens só ficam lentos
         const common = enemies.filter((s) => !s.boss && !s.totem);
-        if (!force && common.length < 3 && !urgentEnemy) return false;
+        if (!force && common.length < 4 && !urgentEnemy) return false;
         effect = () => {
-          const duration = scaleBranchEffect(this, 'control', skill.duration || 4) * power;
+          const duration = scaleBranchEffect(this, 'control', skill.duration || 6) * power;
           for (const enemy of enemies) {
             if (enemy.dead) continue;
             if (enemy.boss || enemy.totem) { controlEnemy(enemy, 'slowT', duration); continue; }
@@ -8814,7 +8815,15 @@ class Hero extends Unit {
       case 'rune-dome': {
         // Cúpula rúnica: ninguém dentro cai abaixo de 1 de vida e a cúpula afasta os inimigos que a tocam
         if (!force && !criticalAlly && enemies.length < 3 && !urgentEnemy) return false;
-        effect = () => raiseRuneDome(this, this.pos, radius, scaleBranchEffect(this, 'support', skill.duration || 5) * (0.9 + 0.1 * power));
+        effect = () => {
+          raiseRuneDome(this, this.pos, radius, scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power));
+          // ao erguer: aliados dentro ganham uma runa e os inimigos dentro são lançados para fora e atrasados
+          for (const h of party) if (!h.dead && h.pos.distanceTo(this.pos) <= radius) runeShieldOn(h, this, scaleBranchEffect(this, 'support', 14 + level * 3) * power, skill.duration || 6);
+          for (const enemy of enemies) if (!enemy.dead && enemy.pos.distanceTo(this.pos) <= radius + 0.4 * (enemy.size - 1)) {
+            runePushAway(enemy, this.pos, enemy.boss ? 3 : 14);
+            controlEnemy(enemy, 'slowT', 2 * power);
+          }
+        };
         break;
       }
       case 'rune-pulse': {

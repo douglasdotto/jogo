@@ -120,7 +120,7 @@ const EXTRA_SKILLS = {
   ],
   alchemist: [
     { name: 'Frasco Volátil', description: 'Um frasco explode no grupo de inimigos, empurra e deixa uma poça de veneno.', effect: 'volatile', cooldown: 19, radius: 2.6, range: 7.5, power: 1.4, color: 0x9cff3a },
-    { name: 'Grande Transmutação', description: 'Inimigos comuns próximos viram ovelhas por alguns segundos; chefes ficam lentos.', effect: 'transmute', cooldown: 70, radius: 6, duration: 4, control: 'sheep', color: 0xff8ad8 },
+    { name: 'Grande Transmutação', description: 'Inimigos comuns numa grande área viram ovelhas por 6 s: não atacam e sofrem 35% mais dano; chefes ficam lentos.', effect: 'transmute', cooldown: 70, radius: 8, duration: 6, control: 'sheep', color: 0xff8ad8 },
     { name: 'Elixir do Gigante', description: 'Lança um elixir no aliado da linha de frente: ele bate mais forte, aguenta mais e se cura.', effect: 'giant-elixir', cooldown: 18, range: 8, duration: 7, bonus: 0.3, color: 0xff8ad8 },
   ],
   engineer: [
@@ -135,7 +135,7 @@ const EXTRA_SKILLS = {
   ],
   runic: [
     { name: 'Runas de Grupo', description: 'Cada aliado próximo ganha uma runa fraca: absorve pouco dano, mas dura mais.', effect: 'rune-ward', cooldown: 20, radius: 6, duration: 12, color: 0x6fd8e0 },
-    { name: 'Cúpula Rúnica', description: 'Uma cúpula de runas por alguns segundos: quem está dentro não cai abaixo de 1 de vida e os inimigos que a tocam são afastados.', effect: 'rune-dome', cooldown: 72, radius: 4.5, duration: 5, control: 'push', color: 0x6fd8e0 },
+    { name: 'Cúpula Rúnica', description: 'Uma cúpula de runas por alguns segundos: quem está dentro ganha uma runa, não cai abaixo de 1 de vida e os inimigos são lançados para fora e afastados enquanto durar.', effect: 'rune-dome', cooldown: 72, radius: 6, duration: 6, control: 'push', color: 0x6fd8e0 },
     { name: 'Pulso Rúnico', description: 'Um pulso afasta e atrasa os inimigos colados e deixa uma runa pequena em quem o lançou.', effect: 'rune-pulse', cooldown: 16, radius: 3.4, duration: 1.5, control: 'push', color: 0x6fd8e0 },
   ],
   summoner: [
