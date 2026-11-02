@@ -6570,10 +6570,10 @@ class Hero extends Unit {
       if (!party.length || (!force && !target)) return false;
       if (!manual && !force && target && !this.inReach(target, target.pos.distanceTo(this.pos) - 0.4 * ((target.size || 1) - 1))) return false;
       effect = () => {
-        const duration = (6 + level * 0.5) * power;
+        const duration = (7 + level * 0.5) * power;
         for (const h of party) {
           h.songT = Math.max(h.songT, duration);
-          h.songHaste = Math.min(h.songHaste || 1, 0.78);
+          h.songHaste = Math.min(h.songHaste || 1, 0.74);
           popText(h.pos, 'Ritmo!', 'evolve');
         }
         wave(this.pos, 0xe9a7ff, 0.2, 6, 0.8, { opacity: 0.45 });

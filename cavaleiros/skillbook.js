@@ -95,8 +95,8 @@ const EXTRA_SKILLS = {
   ],
   bard: [
     { name: 'Refrão de Impacto', description: 'Uma batida sonora empurra os inimigos ao redor.', effect: 'burst', cooldown: 21, radius: 5, power: 1.45, control: 'push', color: 0xe9a7ff },
-    { name: 'Hino dos Campeões', description: 'Aumenta o dano de todo o grupo por vários segundos.', effect: 'rally', cooldown: 72, duration: 11, bonus: 0.3, color: 0xf2c6ff },
-    { name: 'Balada da Coragem', description: 'Uma balada encurta a recarga das habilidades dos aliados próximos e os cura um pouco.', effect: 'ballad', cooldown: 18, radius: 8, color: 0xe9a7ff },
+    { name: 'Hino dos Campeões', description: 'Aumenta o dano de todo o grupo por vários segundos.', effect: 'rally', cooldown: 60, duration: 12, bonus: 0.35, color: 0xf2c6ff },
+    { name: 'Balada da Coragem', description: 'Uma balada encurta a recarga das habilidades dos aliados próximos e os cura um pouco.', effect: 'ballad', cooldown: 16, radius: 8, color: 0xe9a7ff },
   ],
   angel: [
     { name: 'Asas Guardiãs', description: 'Uma barreira celeste protege os aliados próximos.', effect: 'ward', cooldown: 22, duration: 5, color: 0xffe27a },

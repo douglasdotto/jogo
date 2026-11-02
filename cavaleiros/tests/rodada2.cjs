@@ -3473,9 +3473,9 @@ test('primário do Necromante não desfaz o Exército dos Mortos',()=>{
 test('brado do Rei não reduz o Hino do Bardo e o bônus zera ao expirar',()=>{
   clear();const king=hero('king',0,0),bard=hero('bard',1,0);const e=foe('Warrior',0,2);e.hp=e.maxHp=10000;
   assert.equal(bard.useSkill(e,false,true,2),true);bard.pendingHit.effect();bard.pendingHit=null;
-  const song=bard.royalT;assert.equal(bard.royalBonus,.3);
+  const song=bard.royalT;assert.equal(bard.royalBonus,.35);
   assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;
-  assert.equal(bard.royalBonus,.3);assert.equal(bard.royalT,song);
+  assert.equal(bard.royalBonus,.35);assert.equal(bard.royalT,song);
   bard.update(song+1);assert.ok(bard.royalT<=0);assert.equal(bard.royalBonus,0);
   assert.equal(king.useSkill(e,false,true,0),true);king.pendingHit.effect();king.pendingHit=null;assert.equal(bard.royalBonus,.2);clear();
 });
