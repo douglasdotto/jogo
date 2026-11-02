@@ -83,7 +83,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   wave:noop,burst:noop,column:noop,addFx:noop,puffs:noop,shake:noop,ringGeo:{},crackGeo:{},fewer:n=>n,lowQuality:false,rnd:(a=1)=>a*0.5,V:(x,y,z)=>new Vector3(x,y,z),
   fireBolt:(from,target,kind)=>context.bolts.push({from,target,kind}),updateBolts:noop,
   // efeitos visuais, som e barra de habilidades ficam fora dos trechos carregados
-  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
+  FX:new Proxy({},{get:(_,k)=>k==='jolt'?()=>new Vector3():k==='timeScale'?()=>1:k==='later'?(_s,fn)=>fn():noop}),audio:new Proxy({},{get:()=>noop}),updateSkillBar:noop});
 context.loading={visible:false,show:()=>Promise.resolve(),progress:noop,hide:()=>Promise.resolve()};   // tela de carregamento (loading.js) fora dos trechos carregados
 context.queryObstacleCandidates=()=>context.world.obstacles;
 const part=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b));
@@ -1618,7 +1618,7 @@ test('Brutamontes: Berro de Guerra faz o golpe atordoar até 3 colados (1 vez ca
 test('Domador: Caçada em Matilha manda a fera atrás do alvo prioritário com +50% de velocidade e dano e deixa sangramento; a IA exige alvo prioritário',()=>{
   const foe=(x,z,kind='Minion',boss=false)=>{const e=new t.Skeleton(kind,1,boss);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
   clear();t.game.over=false;const tamer=new t.Hero(cfg('beast_tamer'));tamer.pos.set(0,0,0);tamer.skillTimers.fill(0);
-  assert.equal(t.skillSetFor(cfg('beast_tamer'))[2].name,'Caçada em Matilha');
+  assert.equal(t.skillSetFor(cfg('beast_tamer'))[2].name,'Estouro da Matilha');
   const grunt=foe(0,3);foe(2,4);
   assert.equal(tamer.useSkill(null,false,false,2),false,'só comuns: a IA guarda a Caçada');
   const boss=foe(5,6,'Warrior',true);
@@ -4760,5 +4760,22 @@ test('inimigo que foge sem se aproximar some e volta pela fila; quem apanha ou c
   const closing=foe('Minion',60,0);closing.spawning=false;
   for(let i=0;i<40;i++){closing.pos.x=60-i*1.2;t.reapStuckEnemies(1,[closing],party);}   // vem em direção ao herói: fica
   assert.ok(!closing.dead,'quem se aproxima não é removido');
+  clear();
+});
+
+test('Ultimates dos guerreiros: Julgamento atordoa todos, Cataclismo fere duas vezes, Fúria Titânica pulsa, Matilha pisoteia e Tempestade dá 3 saraivadas',()=>{
+  clear();t.game.over=false;const run=(id,slot=2)=>{const h=new t.Hero(cfg(id));h.pos.set(0,0,0);h.skillTimers.fill(0);return h;};
+  const fire=(h)=>{assert.equal(h.useSkill(null,false,false,2),true);h.pendingHit.effect();h.pendingHit=null;};
+  let foes=[newFoe(0,2),newFoe(2,2),newFoe(-2,3)];
+  fire(run('king'));for(const f of foes){assert.ok(f.hp<f.maxHp,'Julgamento fere cada marcado');assert.ok(f.stunT>0,'e atordoa');}
+  clear();foes=[newFoe(0,2),newFoe(2,2),newFoe(-2,3)];const k1=foes[0].maxHp;
+  fire(run('crusher'));assert.ok(foes[0].maxHp-foes[0].hp>0&&foes[0].stunT>0,'Cataclismo fere e atordoa');
+  const one=k1-foes[0].hp;assert.ok(one>0);
+  clear();foes=[newFoe(0,2),newFoe(2,2),newFoe(-2,3)];const bz=run('berserker');fire(bz);
+  assert.ok(bz.titanT>5,'Fúria Titânica dura cerca de 6 s');const before=foes[0].hp;bz.updateTitanFury(0.01);assert.ok(foes[0].hp<before,'o furacão fere a cada pulso');
+  clear();foes=[newFoe(0,2),newFoe(2,2),newFoe(-2,3)];const tamer=run('beast_tamer');fire(tamer);
+  assert.ok(foes.every((f)=>f.stunT>0||f.hp<f.maxHp),'Estouro da Matilha pisoteia três comuns');
+  clear();foes=[newFoe(0,2),newFoe(2,2),newFoe(-2,3)];fire(run('viking'));
+  assert.ok(foes[0].maxHp-foes[0].hp>0,'Tempestade acerta o alvo');
   clear();
 });
