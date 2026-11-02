@@ -130,7 +130,7 @@ const EXTRA_SKILLS = {
   ],
   beast_tamer: [
     { name: 'Rugido da Matilha', description: 'A fera provoca inimigos próximos e protege os aliados ao redor.', effect: 'pack-roar', cooldown: 21, radius: 6, duration: 4, color: 0xcbb36f },
-    { name: 'Alfa Ancestral', description: 'Fortalece a fera, recupera parte de sua vida e a faz golpear em uma onda de impacto.', effect: 'alpha-beast', cooldown: 70, radius: 5.5, duration: 8, power: 2.1, color: 0xe5ca75 },
+    { name: 'Caçada em Matilha', description: 'Por 8 s a fera persegue o inimigo mais perigoso com +50% de velocidade e dano; cada mordida o faz sangrar.', effect: 'pack-hunt', cooldown: 70, range: 10, duration: 8, bonus: 0.5, color: 0xe5ca75 },
     { name: 'Comando de Ataque', description: 'A fera salta no inimigo prioritário, morde e o faz sangrar; sem fera, o Domador lança uma rede.', effect: 'sic-em', targeting: 'enemy', cooldown: 17, range: 10, power: 1.4, duration: 4, color: 0xcbb36f },
   ],
   runic: [

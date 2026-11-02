@@ -2142,6 +2142,7 @@ const SKILL_GLYPHS = {
   illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
+const isPriorityEnemy = (s) => !s.dead && !s.spawning && (s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || !!s.kind?.priority);   // alvo prioritário da Caçada em Matilha
 const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
 const MARCH_SPEED = 0.2, MARCH_HASTE = 0.3;   // Decreto de Marcha: +20% de velocidade e recargas 30% mais rápidas
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'blessing', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
@@ -7004,12 +7005,12 @@ class Hero extends Unit {
       && (game.runTime - (game.phaseAt ?? -99) < 8 || party.some((h) => h.pos.distanceTo(h.post) > 8));
     const fallenAlly = skill.effect === 'ancestral-totem' && partySource.some((h) => h.dead && h !== this);
     const supportSkill = ['ward', 'holy-nova', 'bastion', 'rally', 'frost-ward', 'roots-heal', 'nature-storm', 'meditate',
-      'sentry-overcharge', 'pack-roar', 'alpha-beast', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
+      'sentry-overcharge', 'pack-roar', 'oracle-dodge', 'rewrite-fate', 'stone-skin', 'stone-golem', 'little-dragon', 'blood-night', 'feast', 'ancestral-totem', 'mirror-hall', 'mirror-swap', 'mirage'].includes(skill.effect);
     if (!force && slot === 2 && !urgentEnemy && enemies.length < (supportSkill ? 2 : 3) && !criticalAlly && !fallenAlly && missingHp < this.maxHp * 0.3) return false;
     const ownSentry = sentries.find((item) => item.owner === this);
     const ownBeast = units.find((unit) => unit.beastCompanion && unit.summoner === this && !unit.dead);
     if (!force && slot !== 2 && !enemies.length && !criticalAlly && missingHp < this.maxHp * 0.35
-      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !(skill.effect === 'alpha-beast' && ownBeast) && !marchWanted) return false;
+      && !(skill.effect === 'sentry-overcharge' && ownSentry) && !marchWanted) return false;
     if (!force && skill.effect === 'summon' && units.some((u) => u.summoner === this && !u.dead)) return false;
     const needsTarget = ['charge', 'volley', 'execute', 'shadow', 'chain', 'emp-pulse'].includes(skill.effect);
     if (needsTarget && !target) return false;
@@ -7105,25 +7106,20 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'alpha-beast': {
+      case 'pack-hunt': {
+        // Caçada em Matilha: por 8 s a fera persegue o inimigo mais perigoso com +50% de velocidade e dano, e cada mordida faz o alvo sangrar (ver BeastCompanion.update); sem fera, ela é chamada
+        if (!enemies.length || (!force && !enemies.some(isPriorityEnemy))) return false;
         effect = () => {
+          const fresh = !ownBeast;
           const companion = ownBeast || new BeastCompanion(this);
-          companion.life = Math.max(companion.life, skill.duration || 8);
-          companion.empowerT = Math.max(companion.empowerT || 0, skill.duration || 8);
-          companion.hp = Math.min(companion.maxHp, companion.hp + companion.maxHp * 0.4);
-          const center = companion.pos.clone();
-          for (const enemy of attackables) if (!enemy.dead && !enemy.spawning && enemy.pos.distanceTo(center) <= radius) {
-            heroHit(this, enemy, this.dmg * power * (skill.power || 1) * 0.45);
-            enemy.vel.add(new THREE.Vector3().subVectors(enemy.pos, center).setY(0).normalize().multiplyScalar(enemy.boss ? 1.8 : 4));
-          }
-          for (const ally of party) if (ally.pos.distanceTo(center) <= radius) {
-            const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', 8 + level * 2) * power);
-            ally.hp += heal;
-            if (heal) { this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
-          }
-          FX.beastCall(this, companion);
-          wave(center, color, 0.25, radius, 0.8);
-          burst(center.clone().setY(center.y + 0.8), [color, 0xffe6a1, 0xffffff], 30, 5);
+          const seconds = scaleBranchEffect(this, 'support', skill.duration || 8) * power;
+          companion.life = Math.max(companion.life, seconds);
+          companion.empowerT = Math.max(companion.empowerT || 0, seconds);
+          companion.huntBonus = 1 + (skill.bonus || 0.5);
+          companion.huntTarget = null;   // escolhe de novo o mais perigoso no próximo quadro
+          if (fresh) FX.beastCall(this, companion);
+          else { companion.howl(); burst(companion.pos.clone().setY(companion.pos.y + 0.8), [color, 0xffe6a1], fewer(10), 4); }
+          popText(companion.pos, 'Caçada!', 'evolve');
         };
         break;
       }
@@ -9339,7 +9335,9 @@ class BeastCompanion extends Unit {
     this.cfg = { id: 'beast_companion' };
     this.level = summoner.level;
     this.life = scaleBranchEffect(summoner, 'support', 13 + skillLevel(summoner.level)) * summoner.skillPower;
-    this.empowerT = 0;
+    this.empowerT = 0;   // Caçada em Matilha: tempo restante (também acende o brilho dourado da fera)
+    this.huntBonus = 1.5;
+    this.huntTarget = null;
     this.beastCompanion = true;
     this.threatScratch = [];
     this.size = 1.12;
@@ -9397,10 +9395,15 @@ class BeastCompanion extends Unit {
     for (const enemy of targets) {
       if (!enemy.dead && enemy.pendingHit?.target?.team === 'hero' && enemy.pendingHit.target.pos.distanceTo(this.pos) < 10) threats.push(enemy);
     }
-    const target = threats.length ? highestPriorityHeroTarget(this.summoner, threats, this.pos) : nearest(this.pos, targets);
+    const hunting = this.empowerT > 0;
+    if (hunting && (!this.huntTarget || this.huntTarget.dead || !units.includes(this.huntTarget))) {
+      const urgent = targets.filter(isPriorityEnemy);   // o mais perigoso: chefe, totem, sacerdote, bombardeiro ou prioritário
+      this.huntTarget = highestPriorityHeroTarget(this.summoner, urgent.length ? urgent : targets, this.pos);
+    } else if (!hunting) this.huntTarget = null;
+    const target = hunting && this.huntTarget ? this.huntTarget : threats.length ? highestPriorityHeroTarget(this.summoner, threats, this.pos) : nearest(this.pos, targets);
     if (target) {
       const distance = target.pos.distanceTo(this.pos);
-      if (!this.inReach(target, distance) || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt);
+      if (!this.inReach(target, distance) || Math.abs(target.pos.y - this.pos.y) >= 0.85) this.moveTo(target.pos, dt, this.speed * (hunting ? this.huntBonus : 1));
       else if (this.attackTimer <= 0 && this.face(target.pos, dt) < 0.5) {
         const duration = this.once('1H_Melee_Attack_Chop', 1.25);
         this.busy = duration * 0.9;
@@ -9409,9 +9412,17 @@ class BeastCompanion extends Unit {
         const enemy = target;
         this.pendingHit = { target: enemy, t: duration * 0.36, effect: () => {
           if (enemy.dead || !units.includes(enemy)) return;
-          heroHit(this.summoner, enemy, this.dmg * (this.empowerT > 0 ? 1.75 : 1), this.pos);
-          burst(enemy.pos.clone().setY(enemy.pos.y + 0.6), [0xcbb36f, 0xffe6a1], 7, 2.4);
-          if (this.empowerT > 0) controlEnemy(enemy, 'stunT', 0.45);
+          const hunt = this.empowerT > 0;   // Caçada em Matilha: mais dano e cada mordida faz sangrar
+          heroHit(this.summoner, enemy, this.dmg * (hunt ? this.huntBonus : 1), this.pos);
+          burst(enemy.pos.clone().setY(enemy.pos.y + 0.6), hunt ? [0xb0202a, 0xe5ca75] : [0xcbb36f, 0xffe6a1], 7, 2.4);
+          if (hunt) {
+            const owner = this.summoner;
+            if (!(enemy.burnT > 0)) popText(enemy.pos, 'Sangrando!', 'crit');
+            enemy.burnT = Math.max(enemy.burnT || 0, scaleBranchEffect(owner, 'control', 3));
+            enemy.burnTick = Math.min(enemy.burnTick || 0.5, 0.35);
+            enemy.burnDmg = Math.max(enemy.burnDmg || 0, owner.dmg * owner.skillPower * 0.2);
+            enemy.burnOwner = owner;
+          }
         } };
       }
       for (const enemy of threats) if (enemy.pos.distanceTo(this.pos) <= 2.8 && enemy.tauntT <= 0.35) {

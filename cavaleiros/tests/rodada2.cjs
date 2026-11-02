@@ -1484,6 +1484,32 @@ test('Brutamontes: Berro de Guerra faz o golpe atordoar até 3 colados (1 vez ca
   assert.equal(b3.useSkill(null,false,false,3),false,'um colado só: a IA guarda o Berro');
   clear();
 });
+test('Domador: Caçada em Matilha manda a fera atrás do alvo prioritário com +50% de velocidade e dano e deixa sangramento; a IA exige alvo prioritário',()=>{
+  const foe=(x,z,kind='Minion',boss=false)=>{const e=new t.Skeleton(kind,1,boss);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
+  clear();t.game.over=false;const tamer=new t.Hero(cfg('beast_tamer'));tamer.pos.set(0,0,0);tamer.skillTimers.fill(0);
+  assert.equal(t.skillSetFor(cfg('beast_tamer'))[2].name,'Caçada em Matilha');
+  const grunt=foe(0,3);foe(2,4);
+  assert.equal(tamer.useSkill(null,false,false,2),false,'só comuns: a IA guarda a Caçada');
+  const boss=foe(5,6,'Warrior',true);
+  assert.equal(tamer.useSkill(null,false,false,2),true,'com chefe à vista a IA caça');tamer.pendingHit.effect();tamer.pendingHit=null;
+  const beast=t.units.find(u=>u.beastCompanion&&u.summoner===tamer);assert.ok(beast,'sem fera, a Caçada a chama');
+  assert.ok(beast.empowerT>7&&beast.empowerT<=8.8,'dura cerca de 8 s');
+  beast.pos.set(0,0,0);beast.busy=0;beast.update(0.5);
+  assert.strictEqual(beast.huntTarget,boss,'persegue o chefe, não o comum mais perto');
+  const others=t.units.filter(u=>u.team==='skeleton'&&u!==boss);others.forEach(u=>{u.dead=true;});
+  const run=()=>{beast.pos.set(0,0,0);beast.vel.set(0,0,0);beast.busy=0;for(let i=0;i<15;i++)beast.update(1/30);return beast.pos.distanceTo(new Vector3(0,0,0));};
+  const fast=run();beast.empowerT=0;const slow=run();others.forEach(u=>{u.dead=false;});beast.empowerT=5;
+  assert.ok(fast/slow>1.35&&fast/slow<1.65,'corre atrás do alvo a +50% de velocidade: '+fast/slow);
+  // dano +50% e sangramento a cada mordida
+  beast.empowerT=5;beast.huntBonus=1.5;beast.huntTarget=grunt;beast.pos.set(0,0,2.4);beast.busy=0;beast.attackTimer=0;beast.face=()=>0;
+  const hp0=grunt.hp;beast.update(0.016);assert.ok(beast.pendingHit,'morde');beast.pendingHit.t=0;beast.pendingHit.effect();
+  const bite=hp0-grunt.hp;assert.ok(bite>=beast.dmg*1.5*0.95,'dano da mordida +50%: '+bite);
+  assert.ok(grunt.burnT>2&&grunt.burnOwner===tamer&&grunt.burnDmg>0,'a mordida deixa sangramento');
+  const hp1=grunt.hp;grunt.update(1);assert.ok(grunt.hp<hp1,'o sangramento fere ao longo do tempo');
+  beast.empowerT=0;const hp2=grunt.hp;grunt.burnT=0;beast.pendingHit=null;beast.attackTimer=0;beast.busy=0;beast.update(0.016);beast.pendingHit.t=0;beast.pendingHit.effect();
+  assert.ok(!(grunt.burnT>0)&&hp2-grunt.hp<bite,'fora da Caçada não sangra e o dano volta ao normal');
+  clear();
+});
 test('4ª habilidade: Fúria do Bestiário acelera as criaturas',()=>{
   const foe=(x,z)=>{const e=new t.Skeleton('Minion',1);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=10000;return e;};
   clear();
