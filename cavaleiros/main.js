@@ -4026,7 +4026,7 @@ function updateBolts(dt) {
           mesh.position.copy(b.target.pos).setY(b.target.pos.y + 0.06);
           mesh.scale.setScalar(radius);
           scene.add(mesh);
-          flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.15, t: (1.5 + b.level * 0.5) * b.power, tick: 0 });
+          flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.3, t: (1.5 + b.level * 0.5) * b.power, tick: 0, follow: b.target });   // as chamas acompanham o alvo em movimento
           FX.fireField(mesh, radius);
         }
         if (b.kind === 'cryo' || b.kind === 'iceviking') {
@@ -4052,6 +4052,7 @@ function updateBolts(dt) {
     const f = flames[i];
     if (f.wait > 0) { f.wait -= dt; continue; }   // aviso no chão antes do golpe (chuva de flechas, frasco no ar)
     f.t -= dt; f.tick -= dt;
+    if (f.follow && !f.follow.dead) f.mesh.position.set(f.follow.pos.x, f.follow.pos.y + 0.06, f.follow.pos.z);
     f.mesh.material.opacity = Math.min(0.45, f.t * 0.45);   // o fogo de FX.fireField segue esta opacidade
     if (f.tick <= 0 && dt > 0) {
       if (f.every) poolTick(f);   // áreas novas: dano/cura por pulso já no valor do pulso
@@ -6588,18 +6589,25 @@ class Hero extends Unit {
         FX.holyLight(this, healed, reach);
       };
     } else if (id === 'chronist') {
-      if (!nearby.length) return false;
+      // o campo abre sobre o alvo dentro do alcance (o Cronomante é atirador e quase nunca tem inimigo colado)
+      if (!manual || !target) target = bestSkillTarget(this, attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= this.range));
+      if (!target || target.pos.distanceTo(this.pos) > this.range) return false;
+      const fieldAt = target.pos.clone();
+      const caught = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(fieldAt) <= radius + 0.4 * (s.size - 1));
+      const urgent = caught.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
+        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      if (!force && caught.length < 2 && !urgent) return false;
       effect = () => {
         const duration = scaleBranchEffect(this, 'control', 2.3 + (level - 1) * 0.35) * power;
-        for (const enemy of nearby) if (!enemy.dead) {
+        for (const enemy of caught) if (!enemy.dead) {
           if (controlEnemy(enemy, 'rootT', duration)) enemy.pendingHit = null;
           enemy.vel.set(0, 0, 0);
           heroHit(this, enemy, this.dmg * 0.55 * power);
           FX.stasis(enemy);   // tempo parado, não raízes
         }
-        wave(this.pos, 0x8feaff, 0.2, radius, 0.8);
-        burst(this.pos, [0x8feaff, 0xb6a4ff, 0xffffff], 22, 3.5);
-        FX.zigzag(this.pos, target?.pos || this.pos, 0.15);
+        wave(fieldAt, 0x8feaff, 0.2, radius, 0.8);
+        burst(fieldAt, [0x8feaff, 0xb6a4ff, 0xffffff], 22, 3.5);
+        FX.zigzag(this.pos, fieldAt, 0.15);
       };
     } else if (id === 'brute') {
       // Pancada: onda curta em volta que atordoa por instantes e provoca quem foi atingido (chefe fica zonzo pela metade)
@@ -7231,7 +7239,7 @@ class Hero extends Unit {
           let at = this.pos, next = target; const hit = new Set();
           for (let i = 0; i < (skill.jumps || 4) + (this.extraTargets || 0) && next && !next.dead; i++) {
             FX.zigzag(at, next.pos, i * 0.06); hit.add(next); damageOne(next, 1 - i * 0.08); at = next.pos;
-            next = highestPriorityHeroTarget(this, enemies.filter((enemy) => !hit.has(enemy) && enemy.pos.distanceTo(at) < 5), at);
+            next = highestPriorityHeroTarget(this, targetPool.filter((enemy) => !hit.has(enemy) && enemy.pos.distanceTo(at) < 5), at);   // os saltos partem do alvo: o pool é o alcance de mira, não o raio curto em volta do mago
           }
           burst(target.pos, color, 12, 3);
         };
