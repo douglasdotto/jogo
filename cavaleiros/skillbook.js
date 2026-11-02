@@ -149,7 +149,7 @@ const EXTRA_SKILLS = {
     { name: 'Beijo Sombrio', description: 'Morde o inimigo mais perigoso à frente e devolve todo o dano como cura ao aliado mais ferido.', effect: 'blood-kiss', cooldown: 17, range: 6, power: 1.5, color: 0xc8465e },
   ],
   cook: [
-    { name: 'Marmita', description: 'Entrega uma marmita quentinha a um aliado: cura e ataque mais rápido por alguns segundos.', effect: 'lunchbox', cooldown: 18, range: 8, duration: 6, haste: 0.25, color: 0xffb347 },
+    { name: 'Prato do Dia', description: 'Serve um prato a um aliado que está lutando: ataque 25% mais rápido e um escudo curto por alguns segundos.', effect: 'daily-plate', cooldown: 16, range: 8, duration: 6, haste: 0.25, color: 0xffb347 },
     { name: 'Banquete', description: 'Uma mesa farta surge no chão: cura os aliados próximos aos poucos e agiliza as recargas das habilidades.', effect: 'feast', cooldown: 70, radius: 5.5, duration: 6, haste: 0.25, color: 0xffd27a },
     { name: 'Tempero Forte', description: 'Uma pitada de pimenta: aliados próximos batem mais forte por alguns segundos.', effect: 'spice', cooldown: 18, radius: 6, duration: 6, bonus: 0.15, color: 0xff6a3a },
   ],

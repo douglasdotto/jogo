@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'totem-surge']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2142,7 +2142,7 @@ const SKILL_GLYPHS = {
   illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
-const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'lunchbox', 'feast', 'ancestral-totem', 'totem-surge']);
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'feast', 'ancestral-totem', 'totem-surge']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -8186,21 +8186,21 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'lunchbox': {
-        // Marmita: cura o aliado mais ferido ao alcance e acelera o ataque dele por alguns segundos
-        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8))
+      case 'daily-plate': {
+        // Prato do Dia: o aliado que está em combate ganha ataque mais rápido e um escudo curto
+        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8) && h.engagedWith && !h.engagedWith.dead && !(h.songT > 1.5))
           .reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
-        if (!ally || (!force && ally.hp / ally.maxHp > 0.8)) return false;
-        target = ally;
+        if (!ally && !force) return false;
+        const served = ally || party.find((h) => h.pos.distanceTo(this.pos) <= (skill.range || 8)) || this;
+        target = served;
         effect = () => {
-          if (ally.dead) return;
-          const heal = Math.min(ally.maxHp - ally.hp, scaleBranchEffect(this, 'support', ally.maxHp * 0.2) * power);
-          if (heal > 0) { ally.hp += heal; this.stats.cura += heal; popText(ally.pos, '+' + Math.round(heal), 'heal'); }
-          ally.songT = Math.max(ally.songT, (skill.duration || 6) * (0.9 + 0.1 * power));
-          ally.songHaste = Math.min(ally.songHaste || 1, 1 / (1 + (skill.haste || 0.25)));
-          popText(ally.pos, 'Quentinho!', 'evolve');
-          FX.foodToss(this, ally.pos, 0.35);
-          FX.foodPop(ally.pos);
+          if (served.dead) return;
+          served.songT = Math.max(served.songT, (skill.duration || 6) * (0.9 + 0.1 * power));
+          served.songHaste = Math.min(served.songHaste || 1, 1 / (1 + (skill.haste || 0.25)));
+          served.guardT = Math.max(served.guardT, 3 * power);
+          popText(served.pos, 'Prato do dia!', 'evolve');
+          FX.foodToss(this, served.pos, 0.35);
+          FX.foodPop(served.pos);
         };
         break;
       }

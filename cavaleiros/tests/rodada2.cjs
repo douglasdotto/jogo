@@ -1732,7 +1732,7 @@ test('Alquimista: frasco de tônico cura na poça, veneno gruda no inimigo e fer
   assert.ok(herd.every(s=>s.sheepT===0),'a transmutação acaba');
   clear();
 });
-test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acelera um aliado, banquete cura o grupo e encurta recargas sem zerar',()=>{
+test('Cozinheira: torta cura e dá bônus de dano na área, prato do dia acelera e protege quem está lutando, banquete cura o grupo e encurta recargas sem zerar',()=>{
   clear();context.flames.length=0;
   const k=cfg('cook');assert.equal(k.classId,4);assert.equal(t.pickGroupId(k),'suporte');assert.ok(t.variantOpen('cook'));
   assert.ok(k.hp>=175&&k.hp<=200&&k.dmg<=14,'vida de suporte e dano baixo');
@@ -1744,10 +1744,14 @@ test('Cozinheira: torta cura e dá bônus de dano na área, marmita cura e acele
   runPools(2);assert.ok(ally.hp>hp0,'a poça cura');assert.equal(far.hp,far0,'fora da área não cura');
   assert.ok(ally.royalT>0&&ally.royalBonus>0&&ally.royalBonus<=0.12,'bônus pequeno de dano');
   runPools(6);assert.equal(context.flames.length,0,'a poça some');
-  // marmita: cura o mais ferido e acelera o ataque
-  clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-3);ally.hp=ally.maxHp*0.4;newFoe(0,-6);
-  assert.equal(c.useSkill(null,false,false,1),true);c.pendingHit.effect();
-  assert.ok(ally.hp>ally.maxHp*0.4,'marmita cura');assert.ok(ally.songT>0&&ally.songHaste<1,'ataque mais rápido');
+  // prato do dia: só vai para aliado em combate; acelera o ataque e dá escudo curto (sem cura)
+  clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(0,0,-3);const idle=new t.Hero(cfg('paladin'));idle.pos.set(2,0,0);const foe0=newFoe(0,-5);
+  assert.equal(c.useSkill(null,false,false,1),false,'sem aliado em combate a IA guarda o prato');
+  ally.engagedWith=foe0;ally.hp=ally.maxHp;const hp1=ally.hp;
+  assert.equal(c.useSkill(null,false,false,1),true,'aliado em combate, mesmo com vida cheia');c.pendingHit.effect();
+  assert.equal(ally.hp,hp1,'o prato não cura');assert.ok(ally.songT>5&&ally.songHaste<=1/1.25+1e-9,'ataque 25% mais rápido por ~6 s');assert.ok(ally.guardT>0,'escudo curto');
+  assert.ok(!(idle.songT>0),'quem não luta não recebe');
+  c.skillTimers[1]=0;c.busy=0;assert.equal(c.useSkill(null,false,false,1),false,'não repete no aliado que já tem o prato');
   // banquete: cura em pulsos e encurta recargas (modesto, nunca zera)
   clear();c=new t.Hero(k);c.pos.set(0,0,0);ally=new t.Hero(cfg('guardian'));ally.pos.set(1,0,0);ally.hp=ally.maxHp*0.4;far=new t.Hero(cfg('paladin'));far.pos.set(14,0,0);newFoe(0,-3);newFoe(1,-3);
   ally.skillTimers.fill(30);far.skillTimers.fill(30);
