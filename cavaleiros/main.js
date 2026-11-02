@@ -2767,7 +2767,8 @@ class Unit {
   }
 
   // anda até o alvo desviando dos obstáculos que estão na frente
-  moveTo(target, dt, moveSpeed = this.speed * (this.marchT > 0 ? 1 + MARCH_SPEED : 1)) {
+  moveTo(target, dt, moveSpeed = this.speed) {
+    if (this.marchT > 0 && moveSpeed === this.speed) moveSpeed *= 1 + MARCH_SPEED;   // Decreto de Marcha
     const goal = target;   // posição de uma unidade (alvo, protegido, invocador): essa não se contorna
     const watch = this.moveProgress || (this.moveProgress = {
       goalX: target.x, goalZ: target.z, lastDistance: Infinity, lastX: null, lastZ: null, targetX: null, targetZ: null, stalled: 0, side: 1,
