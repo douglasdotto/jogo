@@ -156,7 +156,7 @@ const EXTRA_SKILLS = {
   shaman: [
     { name: 'Totem de Raízes', description: 'Finca um totem que deixa os inimigos da área lentos e prende os comuns por um instante.', effect: 'root-totem', targeting: 'ground', cooldown: 18, range: 9, radius: 4, duration: 7, control: 'slow', color: 0xc8a050 },
     { name: 'Totem Ancestral', description: 'Traz de volta um herói caído; se ninguém caiu, cura bastante o grupo e dá um escudo.', effect: 'ancestral-totem', cooldown: 72, radius: 7, duration: 6, color: 0xffd866 },
-    { name: 'Chamado dos Totens', description: 'Todos os totens ativos pulsam agora e duram mais 3 s.', effect: 'totem-surge', cooldown: 16, duration: 3, color: 0x6fe0a0 },
+    { name: 'Espírito Acompanhante', description: 'Um espírito segue o aliado mais ferido por 6 s e o cura um pouco a cada segundo.', effect: 'follow-spirit', cooldown: 16, range: 10, duration: 6, color: 0x6fe0a0 },
   ],
   oracle: [
     { name: 'Passo Previsto', description: 'Durante os avisos de chefes, garante que os aliados tentem escapar das áreas anunciadas.', effect: 'oracle-dodge', cooldown: 22, radius: 12, color: 0xc6b4ff },

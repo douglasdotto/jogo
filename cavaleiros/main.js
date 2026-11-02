@@ -1878,7 +1878,7 @@ function evolutionAffinity(hero) {
   const controlEffects = new Set(['taunt', 'bastion', 'ward', 'frost-ward', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
     'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
-    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'totem-surge']);
+    'oath-link', 'protection-vow', 'ballad', 'rewind', 'giant-elixir', 'life-drain', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'follow-spirit']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
   const supportSignatures = new Set(['paladin', 'cleric', 'druid', 'angel', 'necro', 'monk', 'alchemist', 'summoner', 'vampire', 'cook', 'shaman']);
   const skills = skillSetFor(hero.cfg);
@@ -2142,7 +2142,7 @@ const SKILL_GLYPHS = {
   illusionist: ['☻', '⇄', '▦', '☁'],
 };
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
-const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'feast', 'ancestral-totem', 'totem-surge']);
+const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'feast', 'ancestral-totem']);
 
 function buildSkillBar(party) {
   const bar = $('skills');
@@ -4080,6 +4080,7 @@ function updateBolts(dt) {
   }
   updateSentries(dt);
   updateSpiritTotems(dt);
+  updateFollowSpirits(dt);
   updateRuneDomes(dt);
 }
 
@@ -4248,6 +4249,34 @@ function updateSpiritTotems(dt) {
     t.root.scale.setScalar(Math.max(0.01, t.big * Math.min(grow, fade)));
     t.tickT -= dt;
     if (t.tickT <= 0) { t.tickT += t.every; spiritTotemPulse(t); }
+  }
+}
+
+// Espírito Acompanhante do Xamã: um espírito por Xamã segue o aliado e o cura um pouco a cada segundo
+const followSpirits = [], SPIRIT_PULSE = 1;
+function callFollowSpirit(owner, ally, seconds) {
+  for (const old of followSpirits) if (old.owner === owner) old.life = 0;   // o novo substitui o antigo
+  const spirit = { owner, ally, life: seconds, tickT: SPIRIT_PULSE, pulses: 0 };
+  followSpirits.push(spirit);
+  FX.followSpirit(spirit);
+  popText(ally.pos, 'Espírito!', 'evolve');
+  return spirit;
+}
+function updateFollowSpirits(dt) {
+  for (let i = followSpirits.length - 1; i >= 0; i--) {
+    const sp = followSpirits[i];
+    sp.life -= dt;
+    if (sp.life <= 0 || sp.ally.dead || sp.owner.dead) { followSpirits.splice(i, 1); continue; }
+    sp.tickT -= dt;
+    if (sp.tickT > 0) continue;
+    sp.tickT += SPIRIT_PULSE;
+    sp.pulses++;
+    const heal = Math.min(sp.ally.maxHp - sp.ally.hp, scaleBranchEffect(sp.owner, 'support', 3 + sp.owner.level * 1.5) * sp.owner.skillPower);
+    if (heal < 1) continue;
+    sp.ally.hp += heal;
+    sp.owner.stats.cura += heal;
+    popText(sp.ally.pos, '+' + Math.round(heal), 'heal');
+    FX.spiritPulse(sp);
   }
 }
 
@@ -5941,6 +5970,24 @@ function bloodBurst(at, radius) {
   wave(at, 0xb0243c, 0.3, radius, 0.4, { opacity: 0.4 });
 }
 
+// Xamã (Espírito Acompanhante): esfera verde translúcida (sem aditivo) que gira em volta do aliado, deixando um rastro curto; o anel do pulso tem o raio da cura
+function followSpirit(sp) {
+  const m = new THREE.Mesh(shellGeo, glow(0x6fe0a0, 0.6, false));
+  m.scale.setScalar(1);
+  addFx(m, sp.life + 0.4, (e, dt) => {
+    if (!followSpirits.includes(sp)) { e.done = true; return; }
+    const a = e.t * 2.8, at = sp.ally.pos;
+    m.position.set(at.x + Math.cos(a) * 0.9, at.y + 1.5 + Math.sin(e.t * 4) * 0.12, at.z + Math.sin(a) * 0.9);
+    e.trail = (e.trail ?? 0) - dt;
+    if (e.trail <= 0) { e.trail = lowQuality ? 0.35 : 0.18; puffs(m.position, 1, 'nature', { spread: 0.05, size: 0.4, rise: 0.2, life: 0.5, opacity: 0.7 }); }
+  });
+}
+function spiritPulse(sp) {
+  const at = sp.ally.pos;
+  wave(at, 0x6fe0a0, 0.2, 1.2, 0.4, { opacity: 0.35 });
+  burst(at.clone().setY(at.y + 1.2), [0x6fe0a0, 0xe8ffd0], fewer(4), 2, { gravity: -1 });
+}
+
 // Alquimista (Grande transmutação): onda e runas rosadas; cada inimigo comum vira uma ovelha até a magia acabar
 function transmuteWave(at, radius) {
   shaderDisc('rune', 'tonic', at, radius, 1.2, { seed: 7 });
@@ -6297,7 +6344,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  venomHit, venomDrip, bloodBurst, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -7165,15 +7212,13 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'totem-surge': {
-        // Chamado dos totens: todos os totens ativos pulsam agora e duram mais
-        const mine = spiritTotems.filter((t) => t.owner === this);
-        if (!mine.length && !force) return false;
-        effect = () => {
-          if (!mine.length) plantSpiritTotem(this, this.pos, 'heal', 6 * power, HEAL_TOTEM_RADIUS * power);   // sem totens: finca um de cura aos pés
-          for (const t of mine) if (spiritTotems.includes(t)) { t.life += skill.duration || 3; spiritTotemPulse(t); }
-          popText(this.pos, 'Totens!', 'evolve');
-        };
+      case 'follow-spirit': {
+        // Espírito Acompanhante: segue o aliado mais ferido e pulsa uma cura pequena (nada fica parado no chão)
+        const ally = party.filter((h) => h.pos.distanceTo(this.pos) <= (skill.range || 10))
+          .reduce((best, h) => (!best || h.hp / h.maxHp < best.hp / best.maxHp ? h : best), null);
+        if (!ally || (!force && ally.hp / ally.maxHp >= 0.7)) return false;
+        target = ally;
+        effect = () => { if (!ally.dead) callFollowSpirit(this, ally, scaleBranchEffect(this, 'support', skill.duration || 6) * (0.9 + 0.1 * power)); };
         break;
       }
       case 'stone-golem': case 'little-dragon':
@@ -11046,6 +11091,7 @@ function startGame(view = 'menu') {
   }
   while (sentries.length) removeSentry(sentries[0]);
   while (spiritTotems.length) removeSpiritTotem(spiritTotems[0]);
+  followSpirits.length = 0;
   clearFx();
   FX.clear();
   audio.stopMusic();

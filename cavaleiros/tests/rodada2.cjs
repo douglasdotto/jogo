@@ -1671,8 +1671,17 @@ test('Xamã: totem de cura pulsa vida, no máximo 2 totens, raízes deixam lento
   assert.equal(t.spiritTotems.length,2,'no máximo 2 totens');assert.ok(!t.spiritTotems.includes(first),'o mais antigo some');
   const root=t.spiritTotems.find(x=>x.kind==='root');assert.ok(root);
   foe.slowT=0;for(let i=0;i<4;i++)t.updateBolts(.1);assert.ok(foe.slowT>0,'o totem de raízes deixa o inimigo lento');
-  // chamado: pulsa e prolonga
-  const life=root.life;sh.skillTimers[3]=0;assert.equal(sh.useSkill(null,false,true,3),true);sh.pendingHit.effect();assert.ok(root.life>life+2);
+  // espírito acompanhante: segue o mais ferido, pulsa cura pequena a cada ~1 s e não fica parado
+  while(t.spiritTotems.length)t.removeSpiritTotem(t.spiritTotems[0]);
+  ally.hp=ally.maxHp*0.5;ally.pos.set(1,0,0);sh.skillTimers[3]=0;sh.busy=0;
+  assert.equal(sh.useSkill(null,false,false,3),true,'a IA usa com aliado abaixo de 70%');const hpS=ally.hp;sh.pendingHit.effect();sh.pendingHit=null;
+  assert.equal(vm.runInContext('followSpirits.length',context),1);assert.equal(vm.runInContext('followSpirits[0].ally',context),ally,'segue o aliado mais ferido');
+  for(let i=0;i<25;i++)t.updateBolts(.1);
+  const pulses=vm.runInContext('followSpirits[0].pulses',context);assert.ok(pulses>=2&&pulses<=3,'pulsa a cada ~1 s ('+pulses+')');assert.ok(ally.hp>hpS,'cura um pouco');assert.ok(ally.hp-hpS<ally.maxHp*0.2,'cura pequena');
+  ally.pos.set(7,0,5);for(let i=0;i<12;i++)t.updateBolts(.1);assert.ok(vm.runInContext('followSpirits[0].ally',context)===ally,'continua com o aliado que se move');
+  for(let i=0;i<40;i++)t.updateBolts(.1);assert.equal(vm.runInContext('followSpirits.length',context),0,'some depois de 6 s');
+  ally.hp=ally.maxHp*0.9;sh.skillTimers[3]=0;sh.busy=0;assert.equal(sh.useSkill(null,false,false,3),false,'sem ferido abaixo de 70% a IA guarda');
+  ally.pos.set(-3,0,0);
   // ultimate com herói caído: ele volta
   const fallen=new t.Hero(cfg('berserker'));fallen.pos.set(2,0,2);fallen.die();assert.equal(fallen.dead,true);
   sh.skillTimers[2]=0;assert.equal(sh.useSkill(null,false,false,2),true,'a IA usa a ultimate com herói caído');sh.pendingHit.effect();
