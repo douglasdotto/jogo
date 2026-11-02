@@ -176,7 +176,7 @@ const EXTRA_SKILLS = {
   brute: [
     { name: 'Arremesso', description: 'Agarra o inimigo comum mais perto e o arremessa no grupo mais denso; a queda fere todos em volta.', effect: 'grab-throw', cooldown: 16, radius: 2.4, range: 8, splash: 2.6, power: 1, color: 0xc9bba2 },
     { name: 'Pele de Pedra', description: 'Cresce por 8 s: recebe 60% menos dano, devolve 30% dos golpes corpo a corpo e provoca quem está em volta.', effect: 'stone-skin', cooldown: 64, radius: 6, duration: 8, color: 0xb8a88a },
-    { name: 'Muralha', description: 'Finca-se no chão por 3 s: fica imóvel, recebe metade do dano e bloqueia os projéteis que passam por ele.', effect: 'stone-wall', cooldown: 18, radius: 1.4, range: 9, duration: 3, color: 0xc9bba2 },
+    { name: 'Berro de Guerra', description: 'Por 5 s, o golpe do Brutamontes atordoa 1 s os inimigos colados (até 3 por golpe, cada um 1 vez a cada 3 s). Chefes só desaceleram.', effect: 'war-roar', cooldown: 18, radius: 3.5, duration: 5, color: 0xe0b070 },
   ],
   lancer: [
     { name: 'Postura de Lança', description: 'Por 5 s a lança alcança mais longe; quem chega perto leva dano e fica lento.', effect: 'spear-stance', cooldown: 18, radius: 5, duration: 5, power: 0.3, color: 0xbcd0ff },

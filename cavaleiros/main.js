@@ -2131,7 +2131,7 @@ const SKILL_GLYPHS = {
   angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '⚡', '◷', '⟲'],
   archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
   engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◉', '☯', '◈'],
-  brute: ['⛰', '⤴', '⬢', '▥'],
+  brute: ['⛰', '⤴', '⬢', '❢'],
   lancer: ['↟', '⇈', '♞', '⇥'],
   geomancer: ['⛰', '▤', '≋', '▲'],
   runic: ['◈', '⬡', '◍', '✺'],
@@ -3089,6 +3089,7 @@ class Unit {
           const hit = !target.dead && inMeleeArc(this, target);
           damageCleave(this, target);
           if (hit) FX.meleeHit(target, false);
+          if (hit && this.roarT > 0 && this.team !== 'skeleton') roarStun(this, target);   // Berro de Guerra do Brutamontes (o golpe dele é em arco)
         }
         else if (!target.dead && Math.abs(target.pos.y - this.pos.y) < 0.85 && target.pos.distanceTo(this.pos) <= this.range + 0.6 * target.size) {
           if (this.team !== 'skeleton') FX.meleeHit(target, heroHit(this, target, this.dmg));
@@ -3309,6 +3310,21 @@ function controlEnemy(enemy, key, duration) {
   }
   enemy[key] = Math.max(enemy[key] || 0, duration);
   return duration;
+}
+
+// Berro de Guerra: o golpe do Brutamontes atordoa até 3 inimigos colados nele (o alvo primeiro), cada um no máximo 1 vez por 3 s; chefe só desacelera
+const ROAR = { reach: 3.5, max: 3, stun: 1, icd: 3 };
+function roarStun(hero, target) {
+  const near = skeletonsAlive().filter((s) => !s.spawning && !s.totem && s.pos.distanceTo(hero.pos) <= ROAR.reach + 0.4 * (s.size - 1) && !(game.runTime - (s.roarAt ?? -99) < ROAR.icd));
+  near.sort((a, b) => (a === target ? -1 : b === target ? 1 : a.pos.distanceTo(hero.pos) - b.pos.distanceTo(hero.pos)));
+  let n = 0;
+  for (const s of near) {
+    if (n++ >= ROAR.max) break;
+    s.roarAt = game.runTime;
+    if (s.boss) controlEnemy(s, 'slowT', ROAR.stun);
+    else if (controlEnemy(s, 'stunT', ROAR.stun)) s.pendingHit = null;
+  }
+  if (n) FX.roarPulse(hero, ROAR.reach);
 }
 
 function damageArea(center, radius, dmg, owner = null) {
@@ -4435,32 +4451,15 @@ function fireEnemyBolt(from, target) {
   scene.add(mesh);
   enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
 }
-// Muralha do Brutamontes: um projétil que passa rente a ele (rumo a outro alvo) bate na pedra e some
-function wallBlocking(b, walls) {
-  for (const h of walls) {
-    if (!(h.wallT > 0) || h.dead || h === b.target) continue;
-    const dx = b.mesh.position.x - h.pos.x, dz = b.mesh.position.z - h.pos.z;
-    if (dx * dx + dz * dz <= 1.4 * 1.4 * h.size * h.size) return h;
-  }
-  return null;
-}
 const enemyBoltGoal = new THREE.Vector3(), enemyBoltDir = new THREE.Vector3(), enemyBoltUp = new THREE.Vector3(0, 1, 0);
-const enemyBoltWalls = [];   // reaproveitada a cada quadro: sem array novo enquanto há flechas no ar
 function updateEnemyBolts(dt) {
   if (dt <= 0) return;
-  const walls = enemyBoltWalls;
-  walls.length = 0;
-  if (enemyBolts.length) for (const u of units) if (u.wallT > 0 && u.team === 'hero') walls.push(u);
   for (let i = enemyBolts.length - 1; i >= 0; i--) {
     const b = enemyBolts[i], goal = enemyBoltGoal.copy(b.target.pos);
     goal.y += 1.1;
     b.life -= dt;
     const d = b.mesh.position.distanceTo(goal);
-    const wall = walls.length && !b.target.dead ? wallBlocking(b, walls) : null;
-    if (wall) {
-      popText(wall.pos, 'Bloqueado!', 'block'); burst(b.mesh.position, [0xc9bba2, 0xffffff], 6, 2); b.life = 0;
-      if (b.from.enemyKind === 'Crossbow') FX.brokenArrow(b.mesh.position, wall.pos);
-    } else if (!b.target.dead) {
+    if (!b.target.dead) {
       b.mesh.quaternion.setFromUnitVectors(enemyBoltUp, enemyBoltDir.subVectors(goal, b.mesh.position).normalize());
       b.mesh.position.lerp(goal, Math.min(1, 12 * dt / Math.max(d, 0.001)));
       if (d < 12 * dt + 0.2) {
@@ -6320,6 +6319,15 @@ FX.marchDecree = (king, party, duration) => {
   wave(king.pos, 0xffd84a, 0.3, 3, 0.5, { dust: true, opacity: 0.6 });
   for (const h of party) if (!h.dead) column(h.pos, 0xffd84a, 0.55, 1.6, Math.min(1.2, duration), { follow: h, opacity: 0.2 });
 };
+// Brutamontes: anel de poeira no chão com o raio real do atordoamento a cada golpe que o dispara (só desenha; sem brilho aditivo)
+FX.roarPulse = (hero, reach) => {
+  wave(hero.pos, 0xe0b070, 0.4, reach, 0.35, { dust: true, opacity: 0.4 });
+  burst(hero.pos.clone().setY(hero.pos.y + 0.3), [0xe0b070, 0xc9bba2], fewer(6), 3, { up: 0.4 });
+};
+FX.roarStart = (hero, seconds) => {
+  wave(hero.pos, 0xe0b070, 0.3, ROAR.reach, 0.6, { dust: true, opacity: 0.55 });
+  column(hero.pos, 0xe0b070, 0.9, 2.4, seconds, { follow: hero, opacity: 0.14 });
+};
 // Guardião: o escudo (disco achatado de 0,9 m, sem brilho aditivo) voa de inimigo em inimigo e um anel marca cada acerto
 const shieldDiscGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.09, 14);
 FX.shieldRicochet = (hero, path) => {
@@ -7572,20 +7580,14 @@ class Hero extends Unit {
         break;
       }
       // ---------- segundas técnicas (slot 3): um comportamento próprio por herói ----------
-      case 'stone-wall': {
-        // Muralha: o Brutamontes finca os pés; segura metade do dano e engole os projéteis que passam por ele
-        const threats = enemyBolts.filter((b) => b.target !== this && !b.target.dead).length;
-        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= 3.5).length;
-        if (!force && !threats && close < 3 && !urgentEnemy) return false;
+      case 'war-roar': {
+        // Berro de Guerra: por 5 s o golpe comum do Brutamontes atordoa quem está colado (ver roarStun); ele segue andando e batendo
+        const close = enemies.filter((s) => s.pos.distanceTo(this.pos) <= ROAR.reach + 0.4 * (s.size - 1)).length;
+        if (!force && (close < 2 || this.roarT > 1)) return false;
         effect = () => {
-          this.wallT = (skill.duration || 3) * (0.9 + 0.1 * power);
-          this.busy = this.wallT;
-          this.pendingHit = null;
-          this.vel.set(0, 0, 0);
-          this.loop('Blocking');
-          popText(this.pos, 'Muralha!', 'evolve');
-          FX.quake(this, 1.2);
-          column(this.pos, color, 0.9, 2.4, this.wallT, { follow: this, opacity: 0.18 });
+          this.roarT = scaleBranchEffect(this, 'control', skill.duration || 5) * (0.9 + 0.1 * power);
+          popText(this.pos, 'Berro!', 'evolve');
+          FX.roarStart(this, this.roarT);
         };
         break;
       }
@@ -8634,7 +8636,7 @@ class Hero extends Unit {
     this.mirageT = 0;       // Miragem do Ilusionista: esquiva o próximo dano
     this.blessT = 0; this.blessBy = null; this.blessHeal = 0;  // Bênção Duradoura da Clériga
     this.leechT = 0; this.leech = 0;   // Sede de Sangue do Berserker
-    this.wallT = 0;         // Muralha do Brutamontes: imóvel, metade do dano, bloqueia projéteis
+    this.roarT = 0;         // Berro de Guerra do Brutamontes: o golpe atordoa quem está colado
     if (this.spearOn) this.range /= SPEAR_REACH;
     this.spearOn = false; this.spearT = 0; this.chargeBack = null;   // Lanceiro: postura de lança (alcance maior) e volta da carga
     this.runeHp = 0; this.runeMax = 0; this.runeT = 0; this.runeHeal = 0; this.runePush = false; this.runeBy = null;   // runa-escudo da Rúnica
@@ -8669,7 +8671,7 @@ class Hero extends Unit {
   updateSkillStates(dt) {
     if (this.spearT > 0 || this.spearOn || this.chargeBack) this.updateSpear(dt);
     if (this.runeT > 0 && (this.runeT -= dt) <= 0) this.runeHp = 0;
-    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.wallT -= dt;
+    this.oathT -= dt; this.iceSkinT -= dt; this.riposteT -= dt; this.omenT -= dt; this.mirageT -= dt; this.leechT -= dt; this.roarT -= dt;
     if (this.bondT > 0) {   // fio escuro entre os dois ligados (desenhado só por quem lidera o vínculo)
       this.bondT -= dt;
       const mate = this.bondWith;
@@ -8699,7 +8701,6 @@ class Hero extends Unit {
   skillGuard(n, owner) {
     if (this.omenT > 0) { this.omenT = 0; popText(this.pos, 'Previsto!', 'dodge'); this.stats.esquivas++; return 0; }
     if (this.mirageT > 0) { this.mirageT = 0; popText(this.pos, 'Miragem!', 'dodge'); this.stats.esquivas++; return 0; }
-    if (this.wallT > 0) n *= 0.5;
     if (this.runeHp > 0) { n = runicSoak(this, n); if (n <= 0) return 0; }   // runa-escudo da Rúnica
     const melee = owner?.team === 'skeleton' && !owner.dead && !owner.ranged && owner.pos.distanceTo(this.pos) < 3.5;
     if (this.riposteT > 0) {
@@ -9163,7 +9164,7 @@ const SKILL_ANIMS = {
     { clip: 'Brute_Smash', f: 0.3, arc: 'ring', hop: 0.2, lean: 0.1 },   // ergue os dois punhos e esmaga o chão
     { clip: 'Throw', hold: 'Brute_Idle', f: 0.5, lean: 0.25, kick: 0.6 },
     { clip: 'Cheer', hold: 'Block', f: 0.4, lean: -0.2, hop: 0.25 },
-    { clip: 'Block', hold: 'Blocking', f: 0.42, hop: 0.35, lean: 0.12, kick: -0.25 },   // salta e crava os pés: vira muralha
+    { clip: 'Spellcast_Raise', hold: 'Brute_Idle', f: 0.5, lean: -0.28, hop: 0.15 },   // ergue os braços e ruge
   ],
   lancer: [
     { clip: '1H_Melee_Attack_Stab', hold: '2H_Melee_Idle', f: 0.45, arc: 'thrust', lean: 0.15, kick: 1 },   // estocada reta
