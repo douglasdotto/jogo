@@ -317,13 +317,27 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     }
     return route.end;
   }
+  // O rio só se atravessa pela ponte: quem está numa margem e vai para a outra passa antes pelas cabeceiras
+  // (sem isso o desvio por círculos contorna o muro do rio para sempre e a unidade fica presa nele).
+  let bridgeNav = null;
+  const riverStep = new THREE.Vector3();
+  const setBridgeNav = (cp, ct) => { bridgeNav = { x: cp.x, z: cp.z, tx: ct.x, tz: ct.z }; };
+  function riverWaypoint(from, to) {
+    if (!bridgeNav) return to;
+    const b = bridgeNav, HEAD = 7.5, BANK = 9.5;   // a margem começa além da cabeceira (o rio serpenteia até ~7 m)
+    const af = (from.x - b.x) * b.tx + (from.z - b.z) * b.tz, at = (to.x - b.x) * b.tx + (to.z - b.z) * b.tz;
+    if (Math.abs(at) < BANK || af * at >= 0) return to;
+    const head = Math.abs(af) >= BANK ? Math.sign(af) : Math.sign(at);
+    return riverStep.set(b.x + b.tx * head * HEAD, to.y, b.z + b.tz * head * HEAD);
+  }
   function nextWaypoint(from, to, navigation = null, queryObstacles = null) {
-    return obstacleWaypoint(from, terrainWaypoint(from, to), navigation, queryObstacles);
+    return obstacleWaypoint(from, terrainWaypoint(from, riverWaypoint(from, to)), navigation, queryObstacles);
   }
 
   // ---------- rio, cruzando a estrada entre as fases 3 e 4 ----------
   const crossS = (anchorS(3) + anchorS(4)) / 2;
   const cp = pointAt(crossS), ct = tangentAt(crossS), cn = sideOf(ct);
+  setBridgeNav(cp, ct);
   const riverCtl = [];
   for (let k = -90; k <= 90; k += 10) {
     const wiggle = Math.abs(k) < 12 ? 0 : Math.sin(k * 0.09) * 7;
@@ -525,7 +539,9 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   // o rio só se atravessa pela ponte: as margens fora dela bloqueiam a passagem
   for (const p of riverPts) {
     const off = new THREE.Vector3(p.x - cp.x, 0, p.z - cp.z);
-    if (Math.abs(off.dot(cn)) > BW + 0.8) obstacles.push({ x: p.x, z: p.z, r: 2.6 });
+    // perto da ponte o raio afunila: a borda do bloqueio fica fora dos corrimãos (largura útil da ponte inteira, sem prender heróis grandes)
+    const lateral = Math.abs(off.dot(cn));
+    if (lateral > BW + 0.8) obstacles.push({ x: p.x, z: p.z, r: Math.min(2.6, lateral - BW - 0.15) });
   }
 
 
