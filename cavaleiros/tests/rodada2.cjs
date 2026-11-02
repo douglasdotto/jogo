@@ -1667,7 +1667,7 @@ test('Xamã: totem de cura pulsa vida, no máximo 2 totens, raízes deixam lento
   while(t.spiritTotems.length)t.removeSpiritTotem(t.spiritTotems[0]);
   clear();
 });
-test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo, frasco volátil explode e a transmutação vira ovelhas até acabar',()=>{
+test('Alquimista: frasco de tônico cura na poça, veneno gruda no inimigo e fere ao longo do tempo, frasco volátil explode e a transmutação vira ovelhas até acabar',()=>{
   clear();t.bolts.length=0;context.flames.length=0;t.frameTargetContext.skeletons.length=0;
   assert.equal(cfg('alchemist').classId,4);
   let al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);
@@ -1683,9 +1683,17 @@ test('Alquimista: frasco de tônico cura na poça, veneno fere ao longo do tempo
   clear();t.bolts.length=0;al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);const target=newFoe(0,-4);
   assert.equal(al.useSkill(null),true);al.pendingHit.effect();assert.equal(t.bolts.at(-1).kind,'flask');
   for(let i=0;i<30;i++)t.updateBolts(.05);
-  const first=target.hp;runPools(1);const mid=target.hp;runPools(1);
-  assert.ok(first>mid&&mid>target.hp,'o veneno continua ferindo a cada pulso');
-  runPools(6);context.flames.length=0;
+  assert.equal(context.flames.length,0,'veneno não deixa poça no chão');assert.ok(target.poisonT>0,'o veneno gruda no inimigo');
+  const total=3.5*al.skillPower+0.5*al.skillPower,tick=al.dmg*0.14;   // nível 1: 4 s de veneno, mesmo total da antiga poça
+  const first=target.hp;for(let i=0;i<10;i++)target.update(.1);const mid=target.hp;for(let i=0;i<10;i++)target.update(.1);
+  assert.ok(first>mid&&mid>target.hp,'o veneno continua ferindo a cada tique');
+  for(let i=0;i<60;i++)target.update(.1);const done=target.hp;for(let i=0;i<20;i++)target.update(.1);
+  assert.equal(target.hp,done,'o veneno acaba');
+  assert.ok(Math.abs((target.maxHp-done)-tick*Math.floor(total/0.5))<tick*1.5,'dano total concentrado no alvo = pulsos da antiga poça');
+  // o alvo se move e o veneno vai junto: nada fica no chão
+  const walker=target;al.skillTimers[0]=0;al.busy=0;t.bolts.length=0;assert.equal(al.useSkill(null),true);al.pendingHit.effect();for(let i=0;i<30;i++)t.updateBolts(.05);
+  const w0=walker.hp;walker.pos.set(8,0,8);for(let i=0;i<10;i++)walker.update(.1);assert.ok(walker.hp<w0,'o veneno segue o alvo');
+  context.flames.length=0;
   // técnica: explode no grupo depois do voo, empurra e deixa veneno
   clear();t.bolts.length=0;al=new t.Hero(cfg('alchemist'));al.pos.set(0,0,0);
   const pack=[newFoe(0,-5),newFoe(0.8,-5.4),newFoe(-0.6,-5.2)];

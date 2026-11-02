@@ -316,6 +316,19 @@ const vmMath = vm.runInContext('Math', context);
 const popWanted = (process.env.SIM_POP || '').split(',').filter(Boolean), popCounts = {};
 if (popWanted.length) context.popText = (at, text) => { const k = String(text); if (popWanted.includes(k)) popCounts[k] = (popCounts[k] || 0) + 1; };
 let simPlays = 0;
+// SIM_VENENO=1: aplicações do Veneno Aderente e dano de veneno (dot) em inimigos, por partida
+const simVenom = { applied: 0, ticks: 0, damage: 0 };
+if (process.env.SIM_VENENO) {
+  context.simVenom = simVenom;
+  vm.runInContext('venomStick = ((f) => function (...a) { simVenom.applied++; return f.apply(this, a); })(venomStick);', context);
+  const UnitClass = vm.runInContext('Unit', context), td = UnitClass.prototype.takeDamage;
+  UnitClass.prototype.takeDamage = function (n, from, owner, critical, dot) {
+    const before = this.hp, wasAlive = !this.dead;
+    const r = td.call(this, n, from, owner, critical, dot);
+    if (dot && this.team === 'skeleton' && wasAlive) { simVenom.ticks++; simVenom.damage += before - Math.max(0, this.hp); }
+    return r;
+  };
+}
 // Métricas das técnicas extras: usos por herói/slot; SIM_SEM_SLOT=3 (ou 3:paladin,cleric) desliga o slot para medir o impacto
 const HeroClass = vm.runInContext('Hero', context);
 const extraUses = {};
@@ -373,5 +386,6 @@ if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): da
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
 if (!campaignMode) for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
   console.log(`  ${id.padEnd(10)} ${String(Math.round(mean(list, 0))).padStart(6)} · ${mean(list, 1).toFixed(1).padStart(5)}/s · cura ${String(Math.round(mean(list, 2))).padStart(5)} · vit ${Math.round(mean(list, 3) * 100)}% · usos ${(extraUses[id] || [0, 0, 0, 0]).slice(1).map((n) => (n / list.length).toFixed(1)).join('/')} (${list.length})`);
+if (process.env.SIM_VENENO) console.log(`Veneno por partida (${simPlays} partidas): aplicações ${(simVenom.applied / simPlays).toFixed(1)} · tiques ${(simVenom.ticks / simPlays).toFixed(1)} · dano ${(simVenom.damage / simPlays).toFixed(0)}`);
 if (popWanted.length) console.log(`Efeitos por partida (${simPlays} partidas): ${popWanted.map((k) => `${k} ${((popCounts[k] || 0) / simPlays).toFixed(1)}`).join(' · ')}`);
 if (JSON.stringify(t.progress.snapshot()) !== progressAtStart) throw new Error('A simulação não pode acumular progressão entre partidas');

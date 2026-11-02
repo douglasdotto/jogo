@@ -4021,7 +4021,7 @@ function updateBolts(dt) {
       const d = goal.distanceTo(at);
       at.lerp(goal, Math.min(1, 14 * dt / Math.max(d, 0.001)));
       if (b.base) b.mesh.position.copy(at).setY(at.y + Math.sin(Math.PI * THREE.MathUtils.clamp(1 - d / b.dist0, 0, 1)) * b.arc);
-      if (d <= 14 * dt + 0.25 && (b.kind === 'flask' || b.kind === 'tonic')) { alchemyPool(b.owner, b.target.pos, b.kind === 'tonic'); b.life = 0; }
+      if (d <= 14 * dt + 0.25 && (b.kind === 'flask' || b.kind === 'tonic')) { if (b.kind === 'tonic') alchemyPool(b.owner, b.target.pos, true); else venomStick(b.owner, b.target); b.life = 0; }
       else if (d <= 14 * dt + 0.25) {
         const radius = b.kind === 'magic' ? b.owner.cfg.splash || 0
           : b.kind === 'pyro' ? (1.1 + (b.level - 1) * 0.2) * b.power
@@ -4284,6 +4284,17 @@ function alchemyPool(owner, at, tonic, scale = 1) {
     dmg: tonic ? 0 : owner.dmg * 0.14,
     heal: tonic ? scaleBranchEffect(owner, 'support', 5 + skillLevel(owner.level) * 2) * owner.skillPower : 0 });
   FX.pool(mesh, radius, tonic);
+}
+
+// Alquimista (Veneno Aderente): o frasco estoura no inimigo e o envenena no corpo; o mesmo total da antiga poça, concentrado no alvo
+const VENOM_EVERY = 0.5;
+function venomStick(owner, enemy) {
+  if (!enemy || enemy.dead) return;
+  enemy.poisonT = Math.max(enemy.poisonT || 0, (3.5 + skillLevel(owner.level) * 0.5) * owner.skillPower);
+  enemy.poisonTick = Math.min(enemy.poisonTick || VENOM_EVERY, VENOM_EVERY);
+  enemy.poisonDmg = Math.max(enemy.poisonDmg || 0, owner.dmg * 0.14);
+  enemy.poisonOwner = owner;
+  FX.venomHit(enemy);
 }
 
 // Cozinheira: a torta voa em arco e deixa um ensopado que cura e dá um bônus pequeno de dano a quem está nele
@@ -5912,6 +5923,16 @@ function feastTable(base, radius, duration) {
   }, 0.5);
 }
 
+// Alquimista (Veneno Aderente): o frasco estoura no alvo; depois, uma bolha sobe do corpo a cada tique
+function venomHit(enemy) {
+  const at = enemy.pos.clone().setY(enemy.pos.y + 0.8);
+  puffs(at, 4, 'venom', { spread: 0.5, size: 0.9, rise: 1.2, life: 0.9 });
+  burst(at, [0x9cff3a, 0xe8ffb0], fewer(8), 4, { size: 1.1 });
+}
+function venomDrip(enemy) {
+  puffs(enemy.pos.clone().setY(enemy.pos.y + 0.9 * (enemy.size || 1)), 1, 'venom', { spread: 0.2, size: 0.45, rise: 1, life: 0.8, opacity: 0.8 });
+}
+
 // Alquimista (Grande transmutação): onda e runas rosadas; cada inimigo comum vira uma ovelha até a magia acabar
 function transmuteWave(at, radius) {
   shaderDisc('rune', 'tonic', at, radius, 1.2, { seed: 7 });
@@ -6268,7 +6289,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, whirl, fury, quake, quakeAt, impact, iceFan, zigzag, summon, legion, shadowStep, slashX, royal, song, roots, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -9821,6 +9842,10 @@ class Skeleton extends Unit {
     this.burnTick = 0;
     this.burnDmg = 0;
     this.burnOwner = null;
+    this.poisonT = 0;     // Veneno Aderente da Alquimista: dano ao longo do tempo no corpo
+    this.poisonTick = 0;
+    this.poisonDmg = 0;
+    this.poisonOwner = null;
     this.tauntT = 0;
     this.markT = 0;       // Flecha do caçador: recebe +markBonus de dano
     this.markBonus = 0;
@@ -9922,6 +9947,15 @@ class Skeleton extends Unit {
     if (this.burnT > 0 && this.burnTick <= 0 && this.burnOwner && !this.dead) {
       this.takeDamage(this.burnDmg, this.pos, this.burnOwner);
       this.burnTick = 0.65;
+    }
+    if (this.poisonT > 0) {
+      this.poisonT = Math.max(0, this.poisonT - dt);
+      this.poisonTick -= dt;
+      if (this.poisonTick <= 0 && this.poisonOwner && !this.dead) {
+        this.poisonTick += VENOM_EVERY;
+        this.takeDamage(this.poisonDmg, null, this.poisonOwner, false, true);
+        FX.venomDrip(this);
+      }
     }
     this.root.rotation.z = this.rootT > 0 && !this.dead ? Math.sin(this.rootT * 45) * 0.05 : 0;   // preso pelos galhos: treme tentando se soltar
     this.tauntT -= dt;
