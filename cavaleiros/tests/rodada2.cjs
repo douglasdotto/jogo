@@ -1259,9 +1259,112 @@ test('Engenheira, Domador e Oráculo têm habilidades principais próprias e efe
   assert.equal(t.aimSpec(oracle).mode,'enemy');
   assert.equal(oracle.useSkill(enemy,false,true),true);oracle.pendingHit.effect();t.frameTargetContext.skeletons.length=0;t.frameTargetContext.skeletons.push(enemy);t.updateBolts(1);
   assert.ok(enemy.stunT>0,'Q interrompe um golpe anunciado do chefe');
-  enemy.stunT=0;assert.equal(oracle.useSkill(enemy,false,true,1),true);oracle.pendingHit.effect();assert.equal(enemy.telegraph.dodge.get(oracle),true,'W garante a esquiva da aliada no aviso ativo');
+  enemy.stunT=0;assert.equal(oracle.useSkill(enemy,false,true,1),true);oracle.pendingHit.effect();assert.ok(oracle.critT>0&&oracle.critBonus===0.25,'W dá +25% de crítico aos aliados próximos');assert.ok(enemy.markT>0&&enemy.markBonus>=0.1,'W marca o inimigo mais frágil (+10% de dano)');
   assert.equal(oracle.useSkill(enemy,false,true,2),true);oracle.pendingHit.effect();assert.ok(enemy.stunT>0,'a ultimate reescreve e interrompe o aviso');
   clear();t.frameTargetContext.skeletons.length=0;
+});
+test('Magos: Combustão, Colapso Gravitacional, Eco Arcano, Tormenta Móvel e Eco Temporal fazem o efeito e a IA os usa',()=>{
+  const foe=(x,z,boss=false)=>{const e=new t.Skeleton(boss?'Warrior':'Minion',1,boss);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
+  const cast=(h,slot,target,force=true)=>{h.busy=0;h.skillTimers[slot]=0;assert.equal(h.useSkill(target,false,force,slot),true,h.cfg.id+' slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
+  const ai=(h,slot,target)=>{h.busy=0;h.skillTimers[slot]=0;const ok=h.useSkill(target,false,false,slot);if(ok)h.pendingHit=null;return ok;};
+  t.game.runTime=10;
+  // Combustão: detona a queimadura de quem está longe e incendeia os 3 mais próximos do alvo; IA com 3+ ao alcance
+  clear();let pyro=new t.Hero(cfg('pyro'));pyro.pos.set(0,0,0);
+  const far=foe(0,8),a=foe(0,2),b=foe(1,2),c=foe(-1,2),d=foe(3,3);
+  far.burnT=2;far.burnDmg=10;far.burnOwner=pyro;
+  assert.equal(ai(pyro,1,a),true,'IA usa com 3+ inimigos ao alcance de mira');
+  clear();pyro=new t.Hero(cfg('pyro'));pyro.pos.set(0,0,0);
+  const far2=foe(0,8),a2=foe(0,2),b2=foe(1,2),c2=foe(-1,2),d2=foe(3,3);
+  far2.burnT=2;far2.burnDmg=10;far2.burnOwner=pyro;
+  cast(pyro,1,a2);
+  assert.ok(far2.maxHp-far2.hp>=49&&far2.burnT===0,'Combustão detona o dano restante +25% e apaga a queimadura');
+  assert.ok([a2,b2,c2].every(e=>e.burnT>0)&&!(d2.burnT>0),'queima só os 3 mais próximos do alvo');
+  clear();pyro=new t.Hero(cfg('pyro'));pyro.pos.set(0,0,0);foe(0,2);foe(1,2);
+  assert.equal(ai(pyro,1,null),false,'IA espera 3 inimigos ao alcance');
+  // Colapso Gravitacional: puxa os do ALVO (não do mago), atordoa e fere; chefe só desacelera e não é puxado
+  clear();let arcane=new t.Hero(cfg('arcane'));arcane.pos.set(0,0,0);
+  const t0=foe(0,6),t1=foe(5,6),t2=foe(-5,6),outsider=foe(0,-5.5),boss=foe(2,8,true);
+  const dist=(p,q)=>Math.hypot(p.pos.x-q.pos.x,p.pos.z-q.pos.z);
+  const d1=dist(t1,t0),bossAt=boss.pos.clone();
+  cast(arcane,2,t0);
+  assert.ok(dist(t1,t0)<d1*0.4&&t1.stunT>0&&t1.hp<t1.maxHp&&t2.stunT>0,'inimigos agrupados são puxados, atordoados e feridos');
+  assert.ok(boss.pos.distanceTo(bossAt)<1e-6&&boss.stunT===0&&boss.slowT>0&&boss.hp<boss.maxHp,'chefe só fica lento e não é puxado');
+  assert.ok(outsider.stunT===0&&outsider.hp===outsider.maxHp,'quem está fora de 7 m do alvo não é afetado');
+  clear();arcane=new t.Hero(cfg('arcane'));arcane.pos.set(0,0,0);foe(0,6);foe(1,6);
+  assert.equal(ai(arcane,2,null),false,'IA espera 3 inimigos agrupados');
+  foe(-1,6);assert.equal(ai(arcane,2,null),true);
+  // Eco Arcano: arma só com a assinatura pronta; o próximo feitiço é repetido no mais distante
+  clear();arcane=new t.Hero(cfg('arcane'));arcane.pos.set(0,0,0);
+  const near=foe(0,2),distant=foe(0,8);
+  arcane.skillTimers[0]=5;arcane.skillTimers[3]=0;assert.equal(arcane.useSkill(near,false,false,3),false,'IA só arma o eco quando a assinatura vai sair');
+  arcane.skillTimers[0]=0;assert.equal(ai(arcane,3,near),true);
+  cast(arcane,3,near);assert.ok(arcane.echoT>5,'o eco fica armado');
+  assert.equal(ai(arcane,3,near),false,'não arma de novo enquanto o eco espera');
+  const before=distant.hp;cast(arcane,0,near);assert.equal(arcane.echoT,0,'o próximo feitiço gasta o eco');
+  assert.equal(distant.hp,before,'o eco chega depois de um instante');t.updateBolts(0.5);
+  assert.ok(distant.hp<before,'o eco repete o feitiço no inimigo mais distante');
+  // Tormenta Móvel: nuvem que segue o inimigo mais forte, deixa lento, prende por instantes e fere
+  clear();let cryo=new t.Hero(cfg('cryo'));cryo.pos.set(0,0,0);
+  const prey=foe(0,5);prey.hp=prey.maxHp=200000;foe(1,5);foe(-1,5);const flames0=context.flames.length;
+  assert.equal(ai(cryo,2,null),true,'IA usa com 3+ inimigos agrupados');
+  cast(cryo,2,prey);assert.equal(context.flames.length,flames0+1,'a nuvem nasce');
+  const cloud=context.flames.at(-1);prey.pos.set(6,0,7);const hp0=prey.hp;t.updateBolts(0.6);
+  assert.ok(Math.abs(cloud.mesh.position.x-6)<1e-6&&Math.abs(cloud.mesh.position.z-7)<1e-6,'a nuvem segue o inimigo');
+  assert.ok(prey.hp<hp0&&prey.slowT>0,'quem acompanha a nuvem sofre dano e lentidão');
+  for(let i=0;i<14;i++)t.updateBolts(0.5);assert.equal(context.flames.length,flames0,'a nuvem some depois de 5 s');
+  clear();cryo=new t.Hero(cfg('cryo'));cryo.pos.set(0,0,0);const lone=foe(0,6,true);assert.equal(ai(cryo,2,null),true,'IA também usa contra o chefe');
+  // Eco Temporal: o agressor recebe de volta o dano recente 1,5 s depois
+  clear();const chronist=new t.Hero(cfg('chronist')),tank=new t.Hero(cfg('guardian'));chronist.pos.set(0,0,0);tank.pos.set(2,0,0);
+  const bully=foe(3,0);assert.equal(ai(chronist,1,null),false,'IA espera alguém atacando um herói');
+  t.game.runTime=10;tank.takeDamage(30,null,bully);assert.ok(bully.echoDmg>0);const owed=bully.echoDmg,hpB=bully.hp;
+  cast(chronist,1,null);assert.equal(bully.hp,hpB,'o dano volta com atraso');
+  t.updateBolts(0.8);assert.equal(bully.hp,hpB);t.updateBolts(0.8);
+  assert.ok(hpB-bully.hp>=owed,'depois de 1,5 s o agressor recebe de volta o que causou');
+  clear();
+});
+test('Magos: Geada Cortante congela agressores, Pacto de Ossos vira escudo e esqueletos, Ceifa cura, Visão do Alvo dá crítico',()=>{
+  const foe=(x,z,boss=false)=>{const e=new t.Skeleton(boss?'Warrior':'Minion',1,boss);e.spawning=false;e.busy=99;e.pos.set(x,0,z);e.hp=e.maxHp=100000;return e;};
+  const cast=(h,slot,target)=>{h.busy=0;h.skillTimers[slot]=0;assert.equal(h.useSkill(target,false,true,slot),true,h.cfg.id+' slot '+slot);h.pendingHit.effect();h.pendingHit=null;};
+  const ai=(h,slot,target)=>{h.busy=0;h.skillTimers[slot]=0;const ok=h.useSkill(target,false,false,slot);if(ok)h.pendingHit=null;return ok;};
+  // Geada Cortante: o primeiro golpe corpo a corpo congela (1 s); só um por aliado a cada 6 s; chefe só fica lento
+  clear();const cryo=new t.Hero(cfg('cryo')),tank=new t.Hero(cfg('guardian'));cryo.pos.set(0,0,0);tank.pos.set(2,0,0);
+  const m1=foe(2.5,1),m2=foe(2.5,-1),big=foe(3.5,0,true);m1.target=tank;m2.target=tank;
+  assert.equal(ai(cryo,1,m1),true,'IA usa com 2+ inimigos corpo a corpo atacando heróis');
+  cast(cryo,1,null);assert.ok(tank.frostT>7&&tank.frostHits===4);
+  tank.takeDamage(10,null,m1);assert.ok(m1.stunT>=1,'o agressor congela por 1 s');
+  tank.takeDamage(10,null,m2);assert.equal(m2.stunT,0,'o mesmo aliado só congela um agressor a cada 6 s');
+  tank.frostGapT=0;tank.takeDamage(10,null,big);assert.ok(big.stunT===0&&big.slowT>0,'chefe só fica lento');
+  clear();const lone=new t.Hero(cfg('cryo'));lone.pos.set(0,0,0);foe(2,0);assert.equal(ai(lone,1,null),false,'IA espera 2 corpo a corpo');
+  // Pacto de Ossos: 30% do dano vira escudo e cada ferido ganha um esqueleto (respeitando o limite)
+  clear();const necro=new t.Hero(cfg('necro')),hurt=new t.Hero(cfg('guardian')),hurt2=new t.Hero(cfg('paladin')),hurt3=new t.Hero(cfg('berserker')),hurt4=new t.Hero(cfg('champion'));
+  necro.pos.set(0,0,0);hurt.pos.set(2,0,0);hurt2.pos.set(-2,0,1);hurt3.pos.set(1,0,2);hurt4.pos.set(-1,0,-2);const e=foe(3,3);
+  assert.equal(ai(necro,1,null),false,'IA espera um aliado abaixo de 60%');
+  for(const h of [hurt,hurt2,hurt3,hurt4])h.hp=h.maxHp*0.5;
+  assert.equal(ai(necro,1,null),true,'IA usa com aliado abaixo de 60%');
+  cast(necro,1,null);assert.ok(hurt.pactT>5);
+  const bones=()=>t.units.filter(u=>u.summoner===necro&&!u.dead&&!u.ultimate).length;
+  assert.ok(bones()>=1&&bones()<=4,'esqueletos temporários respeitam o limite do Necromante');
+  const hp0=hurt.hp;hurt.takeDamage(40,null,e);const lost=hp0-hurt.hp;assert.ok(hurt.pactShield>0,'parte do dano vira escudo');
+  hurt.pactShield=1000;const hp1=hurt.hp;hurt.takeDamage(40,null,e);assert.equal(hurt.hp,hp1,'o escudo absorve o golpe seguinte');assert.ok(lost>0);
+  // Ceifa: marca o mais ferido; ao morrer cura o grupo e encurta a recarga do slot 1
+  clear();const reaper=new t.Hero(cfg('necro')),ally=new t.Hero(cfg('guardian'));reaper.pos.set(0,0,0);ally.pos.set(2,0,0);
+  const healthy=foe(0,3),weak=foe(0,4);weak.hp=weak.maxHp*0.3;
+  assert.equal(ai(reaper,3,null),true,'IA usa com inimigo abaixo de 40%');
+  weak.maxHp=1000;weak.hp=300;healthy.hp=healthy.maxHp;ally.hp=ally.maxHp*0.3;reaper.skillTimers[1]=10;
+  cast(reaper,3,null);assert.ok(weak.reapT>5&&weak.reapBy===reaper&&!(healthy.reapT>0),'marca o mais ferido');
+  const allyHp=ally.hp;weak.takeDamage(99999,null,reaper);assert.equal(weak.dead,true);
+  assert.ok(ally.hp>allyHp,'o grupo se cura quando o marcado morre');assert.equal(reaper.skillTimers[1],7,'o slot 1 recarrega 3 s mais rápido');
+  clear();const r2=new t.Hero(cfg('necro'));r2.pos.set(0,0,0);foe(0,3);assert.equal(ai(r2,3,null),false,'IA não marca inimigo saudável');
+  // Visão do Alvo: crítico para os aliados e marca de +10% no mais frágil
+  clear();const oracle=new t.Hero(cfg('oracle')),friend=new t.Hero(cfg('pyro'));oracle.pos.set(0,0,0);friend.pos.set(3,0,0);
+  const sturdy=foe(0,4),fragile=foe(1,4);fragile.hp=50;foe(-1,4);
+  assert.equal(ai(oracle,1,null),true,'IA usa com 3+ inimigos');
+  cast(oracle,1,null);assert.ok(friend.critT>4&&friend.critBonus===0.25&&oracle.critT>4,'aliados em 10 m ganham crítico');
+  assert.ok(fragile.markT>4&&fragile.markBonus>=0.1&&!(sturdy.markT>0),'o inimigo mais frágil fica marcado');
+  const heroHit=vm.runInContext('heroHit',context);friend.critBonus=1;sturdy.hp=sturdy.maxHp;heroHit(friend,sturdy,10);
+  assert.ok(sturdy.maxHp-sturdy.hp>=19.9,'o crítico dobra o dano');
+  clear();const o2=new t.Hero(cfg('oracle'));o2.pos.set(0,0,0);foe(0,4);foe(1,4);assert.equal(ai(o2,1,null),false,'IA espera 3 inimigos');
+  clear();
 });
 test('Brutamontes: couraça contra golpes pequenos, Pancada, Arremesso, Pele de Pedra e posto da frente',()=>{
   clear();
