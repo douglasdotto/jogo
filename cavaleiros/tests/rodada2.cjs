@@ -1635,7 +1635,7 @@ test('Xamã: totem de cura pulsa vida, no máximo 2 totens, raízes deixam lento
   const ally=new t.Hero(cfg('guardian'));ally.pos.set(1,0,0);ally.hp=ally.maxHp*0.4;
   // auto: precisa de ferido (ou horda) e finca o totem no meio do ferido
   assert.equal(sh.useSkill(null,false,false,0),true);sh.pendingHit.effect();
-  assert.equal(t.spiritTotems.length,1);assert.equal(t.spiritTotems[0].kind,'heal');
+  assert.equal(t.spiritTotems.length,1);assert.equal(t.spiritTotems[0].kind,'heal');assert.ok(Math.abs(t.spiritTotems[0].radius-4.5*sh.skillPower)<1e-6,'totem de cura com raio 4,5');
   const before=ally.hp;for(let i=0;i<30;i++)t.updateBolts(.1);
   assert.ok(ally.hp>before+10,'o totem cura quem está perto');
   // máximo de 2 totens: o mais antigo some

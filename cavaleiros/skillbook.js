@@ -154,7 +154,7 @@ const EXTRA_SKILLS = {
     { name: 'Tempero Forte', description: 'Uma pitada de pimenta: aliados próximos batem mais forte por alguns segundos.', effect: 'spice', cooldown: 18, radius: 6, duration: 6, bonus: 0.15, color: 0xff6a3a },
   ],
   shaman: [
-    { name: 'Totem de Raízes', description: 'Finca um totem que deixa os inimigos da área lentos e prende os comuns por um instante.', effect: 'root-totem', targeting: 'ground', cooldown: 18, range: 8, radius: 3, duration: 7, control: 'slow', color: 0xc8a050 },
+    { name: 'Totem de Raízes', description: 'Finca um totem que deixa os inimigos da área lentos e prende os comuns por um instante.', effect: 'root-totem', targeting: 'ground', cooldown: 18, range: 9, radius: 4, duration: 7, control: 'slow', color: 0xc8a050 },
     { name: 'Totem Ancestral', description: 'Traz de volta um herói caído; se ninguém caiu, cura bastante o grupo e dá um escudo.', effect: 'ancestral-totem', cooldown: 72, radius: 7, duration: 6, color: 0xffd866 },
     { name: 'Chamado dos Totens', description: 'Todos os totens ativos pulsam agora e duram mais 3 s.', effect: 'totem-surge', cooldown: 16, duration: 3, color: 0x6fe0a0 },
   ],
