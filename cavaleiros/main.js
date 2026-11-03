@@ -36,17 +36,21 @@ const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
 const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
+const BREACH_INTERCEPT_RADIUS = 12; // intercepta ameaças junto à ponte sem afastar a equipe do portão
+const DEFEND_INTERCEPT_RADIUS = 12; // mantém os defensores perto do objetivo
 const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
 const ESCORT_GUARD_REACH = 10;   // escolta/resgate: o guarda ataca quem chega a esta distância do protegido
 const ESCORT_HUNT_LIMIT = 16;    // escolta/resgate: os demais heróis não caçam além desta distância do protegido
-const HERO_HUNT_RADIUS = 18; // arena visível em volta do ponto do grupo: herói ocioso caça qualquer inimigo dentro dela
-const RANGED_INTERCEPT = 20; // cobre o surgimento à frente e a largura da formação, sem perseguição pelo mapa
+const HERO_HUNT_RADIUS = 12; // arena visível em volta do grupo: caça curta sem arrastar a equipe
+const RANGED_INTERCEPT = 26; // alcança atiradores estáticos no extremo do surgimento, sem perseguição pelo mapa
 const RANGED_INTERCEPTORS = 2;
-const TWIN_BOSS_INTERCEPT = 16; // dois heróis podem pressionar o chefe móvel sem arrastar a equipe
-const TWIN_BOSS_INTERCEPTORS = 2;
+const PHASE_CLEANUP_INTERCEPT = 30; // até dois heróis limpam os últimos inimigos da onda antes da próxima fase
+const PHASE_CLEANUP_INTERCEPTORS = 2;
+const TWIN_BOSS_INTERCEPT = 16; // a equipe pressiona o chefe móvel dentro do alcance sem persegui-lo pelo mapa
 const CASTLE_BOSS_INTERCEPT = 31; // diagonal do salão: todos perseguem dentro da arena, sem sair pelo mapa
 const SHRINE_CLOSE = 8;   // santuário: inimigo a esta distância do cristal ganha prioridade extra
-const DEFENSE_CLEANUP_INTERCEPT = 22; // depois do cronômetro, a âncora pode limpar os inimigos que sobraram
+const DEFENSE_CLEANUP_INTERCEPT = 27; // depois do cronômetro, a equipe limpa fugitivos ainda no alcance da arena
+const SHRINE_ENEMY_CAP = 5; // limita a pressão contínua contra uma equipe inicial de dois heróis
 const MARCH = 2.4;          // velocidade do grupo andando pela estrada entre as fases
 
 // A classe fornece os atributos básicos; os postos são distribuídos ao entrar.
@@ -89,7 +93,7 @@ const VARIANTS = [
   { id: 'ninja', names: ['Ninja', 'Vento Noturno', 'Lua Silenciosa'], desc: 'Lança três adagas em leque.', ability: 'Leque de adagas', color: ['#b6c5f4', '#768ac6'],
     use: ['Knife', 'Throwable'], stats: { Vida: 3, Força: 3, Rapidez: 5, Alcance: 4 }, hp: 200, model: 'Rogue_Hooded', classId: 3 },
   { id: 'duelist', names: ['Duelista', 'Lâmina Dupla', 'Mestre das Lâminas'], desc: 'Duas espadas curtas em cortes velozes.', ability: 'Rajada de lâminas', color: ['#dfe6ee', '#8394aa'],
-    use: ['1H_Sword', '1H_Sword_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, hp: 200, dmg: 18, cooldown: 0.5, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 3 },
+    use: ['1H_Sword', '1H_Sword_Offhand'], stats: { Vida: 3, Força: 4, Rapidez: 5, Alcance: 1 }, hp: 200, dmg: 19, cooldown: 0.48, attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Chop'], classId: 3 },
   { id: 'king', names: ['Rei Dourado', 'Rei Radiante', 'Imperador Solar'], desc: 'Seu brado fortalece todo o grupo.', ability: 'Brado real', color: CHARACTERS[2].color,
     recipe: CHARACTERS[2], classId: 0, dmg: 28, idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Slice', '2H_Melee_Attack_Stab'], stats: { Vida: 5, Força: 3, Rapidez: 3, Alcance: 1 } },
   { id: 'iceviking', names: ['Viking do Gelo', 'Jarl Glacial', 'Rei das Geleiras'], desc: 'Seu machado congela uma área.', ability: 'Machado glacial', color: CHARACTERS[3].color,
@@ -209,21 +213,25 @@ const DIFFICULTIES = [
     hp: 1.18, dmg: 1.14, count: 1.25, interval: 0.86, boss: 1.15, heal: 0.15, revive: 0.25, reviveDelay: 1, behind: 0.45, behindFrom: 2, shooters: 0.15 },
 ];
 const DIFFICULTY_PICK_HINT = '';   // ← → · Enter · Esc seguem valendo, sem rodapé fixo
-const nightmareTeamIds = (mission) => {
+const nightmareTeamIds = (mission, partySize = mission?.heroes) => {
   const goal = mission?.goal?.type;
-  if (mission?.heroes === 1) return ['paladin'];
-  if (mission?.heroes === 2) {
+  if (partySize === 1) return ['paladin'];
+  if (partySize === 2) {
     if (goal === 'breach') return ['paladin', 'viking'];
     if (['defend', 'escort', 'rescue'].includes(goal)) return ['paladin', 'guardian'];
     if (goal === 'boss') return ['paladin', 'viking'];
     return ['paladin', 'pyro'];
   }
-  if (mission?.heroes === 3) {
+  if (partySize === 3) {
     if (goal === 'hunt') return ['paladin', 'guardian', 'viking'];
     if (goal === 'totems') return ['paladin', 'pyro', 'cleric'];
     if (goal === 'rescue') return ['paladin', 'guardian', 'angel'];
     return ['paladin', 'guardian', 'pyro'];
   }
+  if (goal === 'breach') return ['paladin', 'guardian', 'viking', 'cleric'];
+  if (goal === 'rescue') return ['paladin', 'guardian', 'angel', 'pyro'];
+  if (goal === 'totems') return ['paladin', 'pyro', 'cleric', 'guardian'];
+  if (['defend', 'escort'].includes(goal)) return ['paladin', 'guardian', 'pyro', 'cleric'];
   if (goal === 'elite') return ['paladin', 'guardian', 'pyro', 'viking'];
   if (goal === 'twin' || mission?.id === 'castelo' || mission?.boss?.kind === 'BoneDragon') return ['paladin', 'guardian', 'archer', 'cleric'];   // o dragão voa: só ataque à distância o alcança
   if (goal === 'hunt') return ['paladin', 'guardian', 'viking', 'cleric'];
@@ -231,14 +239,14 @@ const nightmareTeamIds = (mission) => {
   return ['paladin', 'guardian', 'pyro', 'cleric'];
 };
 // Mantém uma sugestão para as escolhas iniciais e indica quem completar depois nas missões longas.
-const nightmareTeamPlanIds = (mission) => {
-  const initial = nightmareTeamIds(mission);
-  if (!mission || mission.heroes === 1 || initial.length >= MAX_PARTY
+const nightmareTeamPlanIds = (mission, partySize = mission?.heroes) => {
+  const initial = nightmareTeamIds(mission, partySize);
+  if (!mission || partySize === 1 || initial.length >= MAX_PARTY
     || (mission.from != null && mission.to != null && mission.from === mission.to)) return initial;
   const goal = mission.goal?.type;
-  const reserves = mission.heroes === 2
+  const reserves = partySize === 2
     ? goal === 'boss' ? ['guardian', 'cleric'] : ['cleric', 'pyro']
-    : goal === 'rescue' ? ['pyro']
+    : partySize === 3 && goal === 'rescue' ? ['pyro']
       : goal === 'hunt' ? ['cleric']
         : goal === 'totems' ? ['guardian']
           : ['cleric'];
@@ -246,18 +254,18 @@ const nightmareTeamPlanIds = (mission) => {
 };
 const nextNightmareTeamId = (mission) => {
   const selected = new Set(heroes().map((hero) => hero.cfg.id));
-  return nightmareTeamPlanIds(mission).find((id) => !selected.has(id)) || null;
+  return nightmareTeamPlanIds(mission, missionPartySize(mission)).find((id) => !selected.has(id)) || null;
 };
 const TEAM_RECOMMENDATION_GOALS = new Set(['boss', 'duel', 'twin', 'bosses', 'totems', 'defend', 'breach', 'nofall', 'endless']);
 const shouldRecommendMissionTeam = (mission, difficultyId = difficulty.id) => difficultyId === 'pesadelo'
   || Boolean(mission && TEAM_RECOMMENDATION_GOALS.has(mission.goal?.type));
-const difficultyTeamRecommendation = (option, mission) => {
+const difficultyTeamRecommendation = (option, mission, partySize = mission?.heroes) => {
   if (!shouldRecommendMissionTeam(mission, option.id)) return '';
   const nightmare = option.id === 'pesadelo';
   const labels = { paladin: 'Paladino (cura)', guardian: 'Guardião (proteção)', pyro: 'Piromante (dano em área)', viking: 'Viking (dano a chefe)', archer: 'Arqueira (dano à distância)', cleric: 'Clériga (suporte/cura)', angel: 'Anjo (dano e cura)' };
   if (mission?.goal?.type === 'breach') labels.viking = 'Viking (machado à distância)';
-  const initial = nightmareTeamIds(mission).map((id) => labels[id]);
-  const plan = nightmareTeamPlanIds(mission).map((id) => labels[id]);
+  const initial = nightmareTeamIds(mission, partySize).map((id) => labels[id]);
+  const plan = nightmareTeamPlanIds(mission, partySize).map((id) => labels[id]);
   const list = (team) => team.length === 1 ? team[0]
     : team.length === 2 ? `${team[0]} e ${team[1]}`
     : team.length === 3 ? `${team[0]}, ${team[1]} e ${team[2]}`
@@ -1226,7 +1234,8 @@ function showCampaign(autoPlay = null, keepDifficulty = false) {
     next();
   };
   renderCampaign(root, play, (m) => m.id === 'coracao-do-castelo' ? 'Interior do castelo' : m.biome || biomeForSeed(mapSeeds.get(m.id)), (m) => campaignThreats(m.from, m.to, m.goal, m), progressStorageWarning(), (m) =>
-    difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m), mountCampaignMap3D);
+    difficultyTeamRecommendation(DIFFICULTIES.find((option) => option.id === 'normal'), m, m.goal.type === 'duel' ? 1 : MAX_PARTY), mountCampaignMap3D,
+    (m) => m.goal.type === 'duel' ? 1 : MAX_PARTY);
   const back = document.createElement('button');
   back.className = 'camp-back';
   back.textContent = '← Menu';
@@ -1280,7 +1289,7 @@ function showDifficulty() {
   // cartão: ícone e nome; a descrição da dificuldade vai para a dica
   pick.cards = DIFFICULTIES.map((d, i) => {
     const spoken = m ? `Fases ${m.from}–${m.to}.` : `Fases 1–${PHASES}.`;
-    const recommendation = difficultyTeamRecommendation(d, m);
+    const recommendation = difficultyTeamRecommendation(d, m, m ? missionPartySize(m) : undefined);
     const tip = [d.desc, recommendation].filter(Boolean).join(' ');
     const b = document.createElement('div');
     b.className = 'card diff';
@@ -1461,13 +1470,13 @@ function selectCard(i) {
   if (pick.mode === 'hero') {
     setPickClass(pickGroupIndex(pick.options[pick.sel]));
     const recommendation = game.mission && shouldRecommendMissionTeam(game.mission)
-      ? `${difficulty.id === 'pesadelo' ? 'Sugestão Pesadelo' : 'Equipe recomendada'}: ${nightmareTeamPlanIds(game.mission).map((id) => VARIANTS.find((cfg) => cfg.id === id)?.name || id).join(' + ')}`
+      ? `${difficulty.id === 'pesadelo' ? 'Sugestão Pesadelo' : 'Equipe recomendada'}: ${nightmareTeamPlanIds(game.mission, missionPartySize(game.mission)).map((id) => VARIANTS.find((cfg) => cfg.id === id)?.name || id).join(' + ')}`
       : '';
     $('pickHint').textContent = recommendation || PICK_HERO_HINT;
     renderInfo(pick.options[pick.sel]);
   } else if (pick.mode === 'difficulty') {
     const selected = pick.options[pick.sel];
-    const recommendation = difficultyTeamRecommendation(selected, game.mission);
+    const recommendation = difficultyTeamRecommendation(selected, game.mission, game.mission ? missionPartySize(game.mission) : undefined);
     $('pickHint').textContent = recommendation || DIFFICULTY_PICK_HINT;
   }
 }
@@ -1878,7 +1887,7 @@ function evolutionGain(hero, id) {
 // quanto o kit do herói aproveita controle e apoio (mesma conta da escolha automática)
 function evolutionAffinity(hero) {
   const controlEffects = new Set(['shield-ricochet', 'march-decree', 'bastion', 'ward', 'frost-ward', 'frost-guard', 'storm-cloud', 'gravity-collapse', 'blizzard', 'roots-heal', 'nature-storm', 'wind-palm',
-    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
+    'shield-rush', 'royal-edict', 'war-cry', 'snare-trap', 'thorn-vines', 'magnet-pull', 'harpoon', 'boulder', 'seismic-grab', 'omen', 'root-totem', 'geo-wall', 'mirror-swap', 'mirror-hall', 'mirage']);
   const supportEffects = new Set(['holy-nova', 'light-legion', 'roots-heal', 'nature-storm', 'summon', 'meditate', 'volatile',
     'oath-link', 'protection-vow', 'loaded-dice', 'bluff', 'rewind', 'giant-elixir', 'life-drain', 'bone-pact', 'reap-mark', 'blood-bond', 'blood-eclipse', 'blood-kiss', 'daily-plate', 'feast', 'ancestral-totem', 'follow-spirit']);
   const controlSignatures = new Set(['guardian', 'crusher', 'iceviking', 'pyro', 'cryo', 'druid', 'cleric', 'chronist', 'monk', 'alchemist', 'geomancer', 'illusionist']);
@@ -2651,14 +2660,17 @@ class Unit {
     mergeSkeletonLimbs(gltf.scene);
     this.root = SkeletonUtils.clone(gltf.scene);
     this.mats = [];   // materiais próprios para piscar ao levar golpe sem afetar os outros
-    const skinned = [];
+    const skinned = [], enemyShadowMeshes = [];
     const materialCopies = new Map();
     this.root.traverse((o) => {
       if (!o.isMesh) return;
       if (o.material.userData?.vfx) { o.castShadow = o.frustumCulled = false; return; }   // chama em shader: material compartilhado, sem sombra
       o.castShadow = !/_Eyes$/.test(o.name);   // olhos ficam dentro da cabeça: a sombra seria a mesma, com uma chamada a mais
       o.frustumCulled = true;
-      if (o.isSkinnedMesh) skinned.push(o);
+      if (o.isSkinnedMesh) {
+        skinned.push(o);
+        if (team === 'skeleton') enemyShadowMeshes.push(o);
+      }
       const sourceMaterial = o.material;
       let unitMaterial = materialCopies.get(sourceMaterial);
       if (!unitMaterial) {
@@ -2669,6 +2681,17 @@ class Unit {
       }
       o.material = unitMaterial;
     });
+    // Modelos animados têm várias peças com o mesmo contorno; uma sombra da malha
+    // principal basta e evita centenas de chamadas extras quando a horda se agrupa.
+    if (enemyShadowMeshes.length > 1) {
+      let shadowCaster = enemyShadowMeshes[0];
+      for (const mesh of enemyShadowMeshes) {
+        const size = mesh.geometry?.attributes?.position?.count || 0;
+        const currentSize = shadowCaster.geometry?.attributes?.position?.count || 0;
+        if (size > currentSize) shadowCaster = mesh;
+      }
+      for (const mesh of enemyShadowMeshes) mesh.castShadow = mesh === shadowCaster;
+    }
     fitCullingSphere(skinned);
     this.vel = new THREE.Vector3();   // velocidade atual: acelera e freia aos poucos
     this.moving = false;
@@ -2683,6 +2706,9 @@ class Unit {
     this.attackTimer = Math.random() * 0.5;
     this.busy = 0;          // tempo travado em ataque/golpe/surgimento
     this.pendingHit = null;
+    this.knockupT = 0;
+    this.knockupDuration = 0;
+    this.knockupHeight = 0;
     this.dead = false;
     this.synergyNoticeT = 0;
     this.bar = document.createElement('div');
@@ -2701,7 +2727,11 @@ class Unit {
   get pos() { return this.root.position; }
 
   action(name) {
-    if (!this.actions[name]) this.actions[name] = this.mixer.clipAction(THREE.AnimationClip.findByName(this.clips, name));
+    if (!this.actions[name]) {
+      const clip = THREE.AnimationClip.findByName(this.clips, name);
+      if (!clip) return null;
+      this.actions[name] = this.mixer.clipAction(clip);
+    }
     return this.actions[name];
   }
 
@@ -2712,6 +2742,7 @@ class Unit {
 
   loop(name) {
     const a = this.action(name);
+    if (!a) return;
     if (this.current === a) return;
     this.flushAnimation();
     a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
@@ -2721,6 +2752,7 @@ class Unit {
 
   once(name, timeScale = 1, fade = 0.1) {
     const a = this.action(name);
+    if (!a) return 0;
     this.flushAnimation();
     a.reset().setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
@@ -2902,6 +2934,7 @@ class Unit {
     const v = this.vel.length();
     if (v < 0.25) return this.loop(idle);
     const a = this.action(v > this.speed * 0.55 ? run : walk);
+    if (!a) return this.loop(idle);
     this.loop(a.getClip().name);
     a.timeScale = THREE.MathUtils.clamp(0.55 + 0.55 * (v / this.speed), 0.6, 1.3);
   }
@@ -3011,7 +3044,12 @@ class Unit {
     this.dead = true;
     this.hp = 0;
     this.pendingHit = null;
-    this.once(this.team === 'hero' ? HERO_DEATHS[(this.deathCount = (this.deathCount || 0) + 1) % HERO_DEATHS.length] : 'Death_C_Skeletons');   // herói alterna as duas quedas
+    const preferredDeath = this.team === 'hero'
+      ? HERO_DEATHS[(this.deathCount = (this.deathCount || 0) + 1) % HERO_DEATHS.length]
+      : 'Death_C_Skeletons';
+    const deathClip = [preferredDeath, ...(this.team === 'hero' ? [] : HERO_DEATHS)]
+      .find((name) => THREE.AnimationClip.findByName(this.clips, name));
+    if (deathClip) this.once(deathClip);   // aliados invocados usam modelos de herói; nem todos têm o clipe dos esqueletos
     this.deadTime = 0;
     this.bar.style.display = 'none';
     if (this.team === 'hero') {
@@ -3057,6 +3095,13 @@ class Unit {
     this.attackTimer -= dt * (this.summoner ? synergySummonHaste(this.summoner) : 1);   // canção do Bardo acelera as invocações
     this.busy -= dt;
     if (this.pushT > 0) this.pushT -= dt;
+    let knockupLift = 0;
+    if (this.knockupT > 0) {
+      this.knockupT = Math.max(0, this.knockupT - dt);
+      const progress = 1 - this.knockupT / Math.max(0.01, this.knockupDuration || 0.55);
+      knockupLift = Math.sin(Math.PI * progress) * this.knockupHeight;
+      if (this.knockupT <= 0) this.knockupHeight = this.knockupDuration = 0;
+    }
     // inércia: quem não está andando vai freando; a velocidade (e o recuo) move a unidade
     if (!this.moving) this.vel.multiplyScalar(Math.max(0, 1 - dt * 9));
     this.moving = false;
@@ -3064,7 +3109,7 @@ class Unit {
       const next = stepNext.copy(this.pos).addScaledVector(this.vel, dt);
       if (this.phasing || world.canStep(this.pos, next)) this.pos.copy(next);   // fantasmas atravessam obstáculos
       else this.vel.set(0, 0, 0);
-      this.pos.y = world.groundHeight(this.pos.x, this.pos.z) + (this.hover || 0) + (this.lift || 0);   // lift: salto/levitação visual das habilidades
+      this.pos.y = world.groundHeight(this.pos.x, this.pos.z) + (this.hover || 0) + (this.lift || 0) + knockupLift;   // lift: salto/levitação visual das habilidades
       if (world.isShallow(this.pos.x, this.pos.z) && this.vel.lengthSq() > 0.1) {
         this.rippleT = (this.rippleT || 0) - dt;
         if (this.rippleT <= 0) { waterSplash(this.pos); this.rippleT = 0.45; }
@@ -3139,7 +3184,7 @@ const enemyTargetAllies = () => {
     : list;
 };
 let activeTargetContext = null;
-const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], rescueThreats: [], defenseAnchor: null, twinFocusChecked: false, twinFocus: null, twinFocusWaiting: false, castleUrgentChecked: false, castleUrgentTarget: null, castleUrgentHero: null };
+const frameTargetContext = { party: [], rangedHeroes: [], friends: [], skeletons: [], attackableSkeletons: [], alliedUnits: [], livingAllies: [], rescueThreats: [], defenseAnchor: null, objectiveTarget: null, objectiveRunners: [], phaseBossAlive: false, twinFocusChecked: false, twinFocus: null, twinFocusWaiting: false, bossUrgentChecked: false, bossUrgentTarget: null, bossUrgentHero: null, castleUrgentChecked: false, castleUrgentTarget: null, castleUrgentHero: null };
 
 function makeTargetContext(reuse = null) {
   const goal = game.mission?.goal;
@@ -3190,9 +3235,15 @@ function makeTargetContext(reuse = null) {
   context.twinFocusChecked = false;
   context.twinFocus = null;
   context.twinFocusWaiting = false;
+  context.bossUrgentChecked = false;
+  context.bossUrgentTarget = null;
+  context.bossUrgentHero = null;
   context.castleUrgentChecked = false;
   context.castleUrgentTarget = null;
   context.castleUrgentHero = null;
+  context.objectiveTarget = null;
+  context.objectiveRunners = reuse ? reuse.objectiveRunners : [];
+  context.objectiveRunners.length = 0;
   context.goal = goal;
   context.party = party;
   context.rangedHeroes = rangedHeroes;
@@ -3209,14 +3260,24 @@ function makeTargetContext(reuse = null) {
   // com protegido, a caça fica a ESCORT_HUNT_LIMIT dele; se não resta inimigo dentro do limite, a trava abre para não emperrar a fase.
   // santuário com <35% de vida: todos ficam na defesa mesmo sem inimigo por perto
   context.guardThreat = !!context.escortGuard && attackableSkeletons.some((enemy) => tacticalDistance(villager.pos, enemy.pos) <= ESCORT_HUNT_LIMIT);
-  context.huntLimited = context.guardThreat || (!!context.escortGuard && goal.type === 'defend' && villager.hp < villager.maxHp * 0.35);
+  context.huntLimited = (goal?.type === 'defend' && game.surviveT > 0)
+    || (goal?.type === 'defend' && villager && villager.hp < villager.maxHp * 0.35)
+    || (goal?.type === 'breach' && game.surviveT > 0) || context.guardThreat;
   context.skeletons = skeletons;
   context.attackableSkeletons = attackableSkeletons;
+  context.phaseBossAlive = false;
+  for (const enemy of attackableSkeletons) if (enemy.phaseBoss) { context.phaseBossAlive = true; break; }
   const destructionGoal = goal?.type === 'totems' || goal?.type === 'tower';
   const destructionWavePending = destructionGoal && game.state === 'fight' && game.toSpawn > 0;
-  context.hasNonTotemTarget = attackableSkeletons.some((enemy) => !enemy.totem)
-    || (destructionGoal && skeletons.some((enemy) => enemy.spawning && !enemy.totem))
-    || destructionWavePending;
+  let nonTotemCount = 0;
+  for (const enemy of attackableSkeletons) if (!enemy.totem) nonTotemCount++;
+  if (destructionGoal) {
+    for (const enemy of skeletons) if (enemy.spawning && !enemy.totem) nonTotemCount++;
+    if (destructionWavePending) nonTotemCount += game.toSpawn;
+  }
+  context.nonTotemCount = nonTotemCount;
+  context.hasNonTotemTarget = nonTotemCount > 0;
+  planDestructionObjective(context);
   if (goal?.type === 'rescue' && game.villager && !game.villager.dead && !game.villager.rescued) {
     for (const enemy of skeletons) if (tacticalDistance(enemy.pos, game.villager.pos) <= RESCUE_CLEAR_RADIUS) rescueThreats.push(enemy);
   }
@@ -3483,6 +3544,23 @@ function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
   return hero === first || (slots > 1 && hero === second);
 }
 
+function hasBreachInterceptSlot(hero, target, context) {
+  const { party, villager } = context;
+  if (!villager || tacticalDistance(villager.pos, target.pos) > BREACH_INTERCEPT_RADIUS) return false;
+  let first = null, second = null, firstDistance = Infinity, secondDistance = Infinity;
+  for (const candidate of party) {
+    if (candidate.dead || candidate.busy > 0 || candidate.kiteT > 0) continue;
+    const distance = tacticalDistance(candidate.post, target.pos);
+    if (interceptorRanksBefore(candidate, distance, first, firstDistance)) {
+      second = first; secondDistance = firstDistance;
+      first = candidate; firstDistance = distance;
+    } else if (interceptorRanksBefore(candidate, distance, second, secondDistance)) {
+      second = candidate; secondDistance = distance;
+    }
+  }
+  return hero === first || hero === second;
+}
+
 function anotherDefenseHeroCanIntercept(hero, target, context) {
   const { party, villager } = context;
   for (const ally of party) {
@@ -3503,6 +3581,23 @@ function stillEngaged(hero, target, context = targetContext()) {
   if (hero.engagedWith !== target) return false;
   const { villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
+  if (context.goal?.type === 'defend' && villager) {
+    if (game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
+    if (hero === defenseAnchor(context)) {
+      const onlyDefender = context.party.every((ally) => ally === hero || ally.dead);
+      const objectiveAttack = target.pendingHit?.target === villager
+        && fromPost <= LEASH + hero.range + 5
+        && !anotherDefenseHeroCanIntercept(hero, target, context);
+      return fromPost <= hero.range + ENGAGE_SLACK || objectiveAttack
+        || onlyDefender && tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
+    }
+    return tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
+  }
+  const shrineCleanup = context.goal?.type === 'defend' && hero === defenseAnchor(context)
+    && game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT;
+  if (context.goal?.type === 'defend' && villager
+    && tacticalDistance(villager.pos, target.pos) > DEFEND_INTERCEPT_RADIUS
+    && target.pendingHit?.target !== villager && !shrineCleanup) return false;
   if (hero === defenseAnchor(context)) {
     const canCoverFromPost = fromPost <= hero.range + 0.5;
     const objectiveAttack = villager && target.pendingHit?.target === villager
@@ -3562,6 +3657,37 @@ function kiteSkeletonFrom(shooter, target, dt) {
 }
 
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
+function planDestructionObjective(context) {
+  if (!hasDestructionGoal(context.goal)) return;
+  const { party, attackableSkeletons, objectiveRunners } = context;
+  let target = null, targetDistance = Infinity;
+  for (const objective of attackableSkeletons) {
+    if (!objective.totem) continue;
+    let nearestPost = Infinity;
+    for (const hero of party) if (!hero.dead) nearestPost = Math.min(nearestPost, tacticalDistance(hero.post, objective.pos));
+    if (nearestPost < targetDistance) { target = objective; targetDistance = nearestPost; }
+  }
+  context.objectiveTarget = target;
+  if (!target || !context.hasNonTotemTarget) return;
+
+  // Mantém metade do grupo pressionando o objetivo enquanto a outra metade segura a onda.
+  let alive = 0;
+  for (const hero of party) if (!hero.dead) alive++;
+  const maxRunners = Math.min(2, Math.floor(alive / 2));
+  const slots = context.hasNonTotemTarget ? maxRunners : 0;
+  for (let slot = 0; slot < slots; slot++) {
+    let runner = null, runnerDistance = Infinity;
+    for (const hero of party) {
+      if (hero.dead || objectiveRunners.includes(hero)) continue;
+      const distance = tacticalDistance(hero.post, target.pos);
+      if (interceptorRanksBefore(hero, distance, runner, runnerDistance)) {
+        runner = hero;
+        runnerDistance = distance;
+      }
+    }
+    if (runner) objectiveRunners.push(runner);
+  }
+}
 // objetivos que terminam com o chefe da fase: chefe, duelo e o par Lich + Carrasco
 const bossGoal = (goal) => goal?.type === 'boss' || goal?.type === 'duel' || goal?.type === 'twin' || goal?.type === 'bosses';
 const groupedBossGoal = (goal) => goal?.type === 'twin' || goal?.type === 'bosses';
@@ -3580,6 +3706,25 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   const { goal, party, villager } = context;
   if (goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
   const fromPost = tacticalDistance(hero.post, target.pos);
+  const breachThreat = goal?.type === 'breach' && villager
+    && tacticalDistance(villager.pos, target.pos) <= BREACH_INTERCEPT_RADIUS;
+  // Na ponte os dois heróis podem abandonar a formação para eliminar ameaças
+  // dentro da zona do portão, antes que cheguem ao raio de vazamento.
+  if (breachThreat) return hasBreachInterceptSlot(hero, target, context);
+  if (goal?.type === 'defend' && villager) {
+    // Depois do cronômetro, todo o grupo limpa sobreviventes próximos sem voltar à caça pelo mapa.
+    if (game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
+    const nearShrine = tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
+    if (hero === defenseAnchor(context)) {
+      if (fromPost <= hero.range + 0.5) return true;
+      if (nearShrine && context.party.every((ally) => ally === hero || ally.dead)) return true;
+      return !!villager && target.pendingHit?.target === villager
+        && fromPost <= LEASH + hero.range + 5
+        && !anotherDefenseHeroCanIntercept(hero, target, context);
+    }
+    if (nearShrine) return true;
+    return false;
+  }
   // No resgate, o corredor precisa alcançar guardas junto ao prisioneiro mesmo fora do leash do grupo.
   if (goal?.type === 'rescue' && hero === game.rescueRunner && context.rescueThreats?.includes(target)) return true;
   if (fixedDefenseGoal(goal) && hero === defenseAnchor(context)) {
@@ -3598,6 +3743,10 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (lastDefenderThreat) hero.lastDefenderThreatTarget = target;
     return !!objectiveAttack || lastDefenderThreat;
   }
+  if (hasDestructionGoal(goal) && target.totem) {
+    if (!context.hasNonTotemTarget) return true;
+    return target === context.objectiveTarget && context.objectiveRunners?.includes(hero);
+  }
   const postReach = fromPost <= LEASH + hero.range;
   const nearTarget = tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
   const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
@@ -3605,14 +3754,22 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (fromPost > HUNT_PURSUIT_LIMIT) return false;
     return hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS);
   }
-  // No Trono, dois heróis interceptam o chefe móvel. No Coração, a equipe inteira
-  // avança pelo salão fechado para não deixar parte do grupo presa no posto central.
+  // No Trono, o grupo inteiro pode pressionar o chefe móvel dentro do alcance curto.
+  // No Coração, o salão fechado também permite que toda a equipe avance.
   if (groupedBossGoal(goal) && target.phaseBoss && !postReach) {
     if (goal.type === 'bosses') return fromPost <= CASTLE_BOSS_INTERCEPT;
-    if (fromPost > TWIN_BOSS_INTERCEPT) return false;
-    return hasTacticalInterceptSlot(hero, target, context, TWIN_BOSS_INTERCEPT, TWIN_BOSS_INTERCEPTORS);
+    return fromPost <= TWIN_BOSS_INTERCEPT;
   }
   if (postReach || nearTarget || escortGuardReach(hero, target, context) || inHuntArena(hero, target, context)) return true;
+
+  // Evita que os últimos inimigos móveis, já além da formação, travem a fase.
+  // Só dois heróis avançam, e apenas quando a onda acabou e restam até dois alvos comuns.
+  if (hasDestructionGoal(goal) && !context.objectiveTarget && game.state === 'fight' && game.toSpawn <= 0
+    && context.nonTotemCount > 0 && context.nonTotemCount <= PHASE_CLEANUP_INTERCEPTORS
+    && !target.totem && !target.phaseBoss && target.team === 'skeleton' && fromPost <= PHASE_CLEANUP_INTERCEPT) {
+    if (!context.phaseBossAlive
+      && hasTacticalInterceptSlot(hero, target, context, PHASE_CLEANUP_INTERCEPT, PHASE_CLEANUP_INTERCEPTORS)) return true;
+  }
 
   // Besteiros e magos imóveis podem surgir até 17 m à frente; a equipe precisa
   // interceptá-los para não deixar um atirador inalcançável travar a próxima fase.
@@ -3638,11 +3795,7 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   }
   if (goal?.type === 'nofall' && fromPost <= interceptLimit && (threatenedHero || nearCriticalHero)) return true;
 
-  // Totens ficam fora da estrada e merecem uma perseguição controlada durante essa missão;
-  // sem inimigos comuns restantes, o grupo vai até o objetivo a qualquer distância.
-  const hasNonTotemTarget = context.hasNonTotemTarget ?? context.attackableSkeletons.some((s) => !s.totem);
-  if (hasDestructionGoal(goal) && target.totem && !hasNonTotemTarget) return true;
-  return hasDestructionGoal(goal) && target.totem && fromPost <= LEASH + hero.range + 5;
+  return false;
 }
 
 function heroTargetScore(hero, target, from = hero.pos, context = targetContext()) {
@@ -3660,7 +3813,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
 
   if (target.boss) score -= bossGoal(goal) ? 12 : 3.5;
   if (goal?.type === 'hunt' && target === game.huntMark && target.hunted) score -= 32;
-  if (target.totem) score -= hasDestructionGoal(goal) ? 12 : 1;
+  if (target.totem) score -= hasDestructionGoal(goal) ? 24 : 1;
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
   if (target.kind?.priority) score -= target.kind.priority; // xamã: derrubá-lo desfaz o escudo de ossos
   if (target.ward) score += 1.5; // protegido pelo escudo: melhor atacar quem o sustenta
@@ -3689,6 +3842,10 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
     const toVillager = distanceToVillager;
     if (target.pendingHit?.target === villager) score -= 11;
     else if (toVillager < 12) score -= (12 - toVillager) * 0.8;
+    if (goal?.type === 'breach' && distanceToVillager <= BREACH_INTERCEPT_RADIUS) {
+      score -= 20 + (BREACH_INTERCEPT_RADIUS - distanceToVillager) * 0.8;
+      if (target.raider || target.target === villager || target.pendingHit?.target === villager) score -= 12;
+    }
     // santuário: saqueador a caminho do cristal (ou já nele) e quem chega a SHRINE_CLOSE m dele vêm antes de tudo
     if (goal?.type === 'defend') {
       if (target.raider || target.target === villager) score -= 14;
@@ -3702,6 +3859,7 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   const healthRatio = target.maxHp > 0 ? Math.max(0, target.hp / target.maxHp) : 1;
   const urgentTarget = (goal?.type === 'hunt' && target === game.huntMark && target.hunted) || target.boss || target.totem || target.ranged
     || target.enemyKind === 'Priest' || target.enemyKind === 'Bomber' || target.kind?.priority || target.pendingHit
+    || (goal?.type === 'breach' && (target.raider || target.target === villager || distanceToVillager <= BREACH_INTERCEPT_RADIUS))
     || (villager && distanceToVillager < 12)
     || (goal?.type === 'nofall' && distanceToVulnerable < 6);
   if (!urgentTarget && healthRatio < 0.55) {
@@ -3839,10 +3997,10 @@ function twinBossFocus(context) {
 }
 
 function isUrgentBossThreat(target, context) {
+  // Missões de chefe mantêm o dano no objetivo. Um inimigo prioritário só tira
+  // o grupo do chefe quando já está prestes a acertar alguém.
   return target.pendingHit?.target?.team === 'hero' || target.pendingHit?.target?.team === 'villager'
-    || target.enemyKind === 'Priest' || !!target.kind?.priority
-    || (target.phaseBoss && target.telegraph?.alive && target.telegraph.interruptible && target.telegraph.t > 0.2)
-    || (target.enemyKind === 'Bomber' && context.friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, target.pos) < 7));
+    || (target.phaseBoss && target.telegraph?.alive && target.telegraph.interruptible && target.telegraph.t > 0.2);
 }
 
 function prepareCastleBossUrgentPlan(context) {
@@ -3881,14 +4039,36 @@ function prepareCastleBossUrgentPlan(context) {
   context.castleUrgentHero = hero;
 }
 
+function prepareBossUrgentPlan(context, target) {
+  if (context.bossUrgentChecked) return;
+  context.bossUrgentChecked = true;
+  context.bossUrgentTarget = target;
+  if (!target) return;
+  const victim = target.pendingHit?.target;
+  let hero = victim?.team === 'hero' && !victim.dead && victim.busy <= 0 && !(victim.kiteT > 0)
+    && (canHeroReachTarget(victim, target, context) || stillEngaged(victim, target, context)) ? victim : null;
+  let nearestDistance = Infinity;
+  if (!hero) for (const candidate of context.party) {
+    if (candidate.dead || candidate.busy > 0 || candidate.kiteT > 0
+      || !(canHeroReachTarget(candidate, target, context) || stillEngaged(candidate, target, context))) continue;
+    const distance = tacticalDistance(candidate.post, target.pos);
+    if (distance < nearestDistance || (distance === nearestDistance && String(candidate.cfg?.id || '') < String(hero?.cfg?.id || ''))) {
+      hero = candidate;
+      nearestDistance = distance;
+    }
+  }
+  context.bossUrgentHero = hero;
+}
+
 // Herói ocioso há FREE_HERO_HUNT_WAIT s com inimigo vivo fora do alcance tático (atirador móvel fora da arena, sobrevivente
 // atrás do grupo…) passa a caçá-lo por FREE_HERO_HUNT_HOLD s, em qualquer distância; o grupo não espera para sempre.
 // Desiste de quem foge sem ser alcançado por HERO_CHASE_GIVEUP s (HERO_CHASE_SKIP s sem escolhê-lo): outro alvo ou volta à formação.
-const FREE_HERO_HUNT_WAIT = 2.5, FREE_HERO_HUNT_HOLD = 4, HERO_CHASE_GIVEUP = 7, HERO_CHASE_SKIP = 6;
+const FREE_HERO_HUNT_RADIUS = 24;
+const FREE_HERO_HUNT_WAIT = 2.5, FREE_HERO_HUNT_HOLD = 4, HERO_CHASE_GIVEUP = 3.5, HERO_CHASE_SKIP = 5;
 function heroFreeHunt(hero, target, context) {
-  if (!(hero.freeHuntT > 0) || game.state !== 'fight' || hero === context.escortGuard || context.guardThreat || target.team !== 'skeleton' || target.totem) return false;   // com ameaça ao protegido, ninguém sai caçando longe
+  if (!(hero.freeHuntT > 0) || game.state !== 'fight' || hero === context.escortGuard || context.huntLimited || target.team !== 'skeleton' || target.totem) return false;   // defesa de objetivo não abre caça livre pelo mapa
   if (context.goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
-  return !target.untargetable;
+  return !target.untargetable && tacticalDistance(hero.post, target.pos) <= FREE_HERO_HUNT_RADIUS;
 }
 const heroCanTarget = (hero, target, context) => canHeroReachTarget(hero, target, context) || stillEngaged(hero, target, context);
 
@@ -3938,8 +4118,11 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
       best = directThreat;
       bestScore = directThreatScore;
     } else if (urgentBossTarget && !urgentBossTarget.phaseBoss) {
-      best = urgentBossTarget;
-      bestScore = urgentBossScore;
+      prepareBossUrgentPlan(context, urgentBossTarget);
+      if (context.bossUrgentHero === hero) {
+        best = urgentBossTarget;
+        bestScore = urgentBossScore;
+      }
     } else {
       prepareCastleBossUrgentPlan(context);
       if (context.castleUrgentTarget && context.castleUrgentHero === hero
@@ -3949,8 +4132,11 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
       }
     }
   } else if (bossGoal(goal) && urgentBossTarget) {
-    best = urgentBossTarget;
-    bestScore = urgentBossScore;
+    prepareBossUrgentPlan(context, urgentBossTarget);
+    if (context.bossUrgentHero === hero) {
+      best = urgentBossTarget;
+      bestScore = urgentBossScore;
+    }
   }
   if (!best) {
     hero.targetFocus = null;
@@ -3979,6 +4165,8 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const urgentObjectiveTarget = (bossGoal(goal) && best.boss)
     || (hasDestructionGoal(goal) && best.totem)
     || (goal?.type === 'hunt' && best === game.huntMark && best.hunted)
+    || (goal?.type === 'breach' && (best.raider || best.target === villager || best.pendingHit?.target === villager
+      || villager && tacticalDistance(villager.pos, best.pos) <= BREACH_INTERCEPT_RADIUS))
     || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
   let criticalAllyNearFocus = false;
   if (focused && goal?.type === 'nofall') for (const ally of party) {
@@ -6780,7 +6968,6 @@ class Hero extends Unit {
     this.meditateT = 0;   // Monge: meditação em curso (cura o grupo)
     this.immuneT = 0;     // Monge: imune a dano
     this.stoneT = 0;      // Brutamontes: Pele de pedra ativa
-    this.hurl = null;     // Brutamontes: inimigo arremessado em voo
     this.size = this.heroSize();
     this.resetSkillStates();
     this.hpHistory = [];  // Rebobinar do Cronomante: vida a cada 0,5 s
@@ -7935,32 +8122,42 @@ class Hero extends Unit {
         };
         break;
       }
-      case 'grab-throw': {
-        // Arremesso: agarra o inimigo comum mais perto (nunca chefe) e o lança no grupo mais denso; o impacto fere em área
-        const grabbable = attackables.filter((s) => s instanceof Skeleton && !s.boss && !s.dead && !s.spawning
-          && s.pos.distanceTo(this.pos) <= radius + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85);
-        const victim = force && grabbable.includes(target) ? target : nearest(this.pos, grabbable);
-        if (!victim) return false;
-        const pool = attackables.filter((s) => s !== victim && !s.dead && !s.spawning && s.pos.distanceTo(this.pos) <= (skill.range || 8));
-        const { center, count } = densest(pool, skill.splash || 2.6);
-        if (!force && count < 2 && !urgentEnemy) return false;
-        target = victim;
+      case 'seismic-grab': {
+        // Agarrão Sísmico: reúne os inimigos em volta do Brutamontes e os lança para cima.
+        const caught = enemies.filter((s) => !s.totem);
+        if (!force && caught.length < 2 && !urgentEnemy) return false;
         effect = () => {
-          if (victim.dead || !units.includes(victim)) return;
-          let to = center && !center.dead ? center.pos.clone() : null;
-          if (!to) {   // ninguém para acertar: joga para a frente, se o chão deixar
-            const dir = new THREE.Vector3().subVectors(victim.pos, this.pos).setY(0);
-            if (dir.lengthSq() < 0.01) dir.copy(this.fwd);
-            to = victim.pos.clone().addScaledVector(dir.normalize(), 4);
-            if (!world.canStep(victim.pos, to)) to.copy(victim.pos);
+          const center = this.pos.clone();
+          const normalAir = scaleBranchEffect(this, 'control', skill.duration || 0.58) * (0.9 + 0.1 * power);
+          for (let i = 0; i < caught.length; i++) {
+            const enemy = caught[i];
+            if (enemy.dead || enemy.spawning) continue;
+            damageOne(enemy);
+            if (enemy.dead) continue;
+            const boss = !!enemy.boss;
+            const angle = this.root.rotation.y + (i / Math.max(1, caught.length)) * Math.PI * 2;
+            const landingRadius = boss ? 3.1 : 1.6 + (i % 3) * 0.32;
+            const x = center.x + Math.sin(angle) * landingRadius;
+            const z = center.z + Math.cos(angle) * landingRadius;
+            const dest = new THREE.Vector3(x, world.groundHeight(x, z), z);
+            if (world.canStep(enemy.pos, dest)) {
+              enemy.pos.copy(dest);
+              enemy.vel.set(0, 0, 0);
+            } else {
+              const pull = new THREE.Vector3().subVectors(center, enemy.pos).setY(0).normalize();
+              enemy.vel.addScaledVector(pull, boss ? 2 : 6);
+            }
+            enemy.knockupT = Math.max(enemy.knockupT || 0, normalAir);
+            enemy.knockupDuration = Math.max(enemy.knockupDuration || 0, normalAir);
+            enemy.knockupHeight = Math.max(enemy.knockupHeight || 0, boss ? 0.45 : 1.05);
+            if (boss) controlEnemy(enemy, 'slowT', scaleBranchEffect(this, 'control', 1.1) * power);
+            else if (controlEnemy(enemy, 'stunT', normalAir) > 0) enemy.pendingHit = null;
+            FX.zigzag(center, enemy.pos);
           }
-          const flight = 0.35 + Math.min(8, victim.pos.distanceTo(to)) * 0.04;
-          victim.stunT = Math.max(victim.stunT || 0, flight + 0.5);
-          victim.pendingHit = null;
-          victim.vel.set(0, 0, 0);
-          this.hurl = { victim, from: victim.pos.clone(), to, t: 0, flight, height: 1.6 + victim.pos.distanceTo(to) * 0.12,
-            area: (skill.splash || 2.6) * (0.9 + 0.1 * power), dmg: this.dmg * power * (skill.power || 1) };
-          popText(victim.pos, 'Upa!', 'crit');
+          FX.quake(this, radius * 0.45);
+          wave(center, color, radius, 0.25, 0.5, { opacity: 0.55 });
+          burst(center.clone().setY(center.y + 0.5), [color, 0xffe5bd, 0xffffff], 22, 5);
+          popText(center, 'Agarrão sísmico!', 'crit');
         };
         break;
       }
@@ -9144,17 +9341,19 @@ class Hero extends Unit {
   // Toca o corpo da habilidade (SKILL_ANIMS) no mesmo tempo de antes: duração e impacto vêm do clipe de SKILL_MOVES.
   skillBody(slot, pace, ultimate = false) {
     const [base, , at] = SKILL_MOVES[this.cfg.id];
-    const busy = this.action(base).getClip().duration / pace, hit = busy * at;
+    const busy = (this.action(base)?.getClip().duration || 1) / pace, hit = busy * at;
     const e = SKILL_ANIMS[this.cfg.id]?.[slot] || { clip: base, f: at };
     this.endSkillBody();
     const lead = e.hold ? Math.min(0.3, hit * 0.5) : hit;   // com pose segurada, o golpe só começa perto do impacto
     if (e.hold) {
       const a = this.action(e.hold);
-      this.flushAnimation();
-      a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
-      a.timeScale = 1;
-      if (this.current && this.current !== a) a.crossFadeFrom(this.current, 0.15, false);
-      this.current = a;
+      if (a) {
+        this.flushAnimation();
+        a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+        a.timeScale = 1;
+        if (this.current && this.current !== a) a.crossFadeFrom(this.current, 0.15, false);
+        this.current = a;
+      } else this.fitSkillClip(e.clip, e.f ?? at, lead);
     } else this.fitSkillClip(e.clip, e.f ?? 0.5, lead);
     this.skillMove = { e, t: 0, busy, hit, lead, ultimate, spun: 0, released: !e.hold, fired: false, color: FX.skillColor(this) ?? 0xffffff };
     return busy;
@@ -9163,7 +9362,9 @@ class Hero extends Unit {
   // ajusta o timeScale para o impacto do clipe (fração f) cair no fim da janela; clipe longo pula o começo
   // em vez de correr demais (no máximo 1,6x até o impacto)
   fitSkillClip(name, f, window) {
-    const a = this.action(name), impact = f * a.getClip().duration, w = Math.max(0.05, window);
+    const a = this.action(name);
+    if (!a) return;
+    const impact = f * a.getClip().duration, w = Math.max(0.05, window);
     const start = Math.max(0, impact - w * 1.6);
     this.once(name, THREE.MathUtils.clamp((impact - start) / w, 0.35, 3), 0.15);
     a.time = start;
@@ -9223,27 +9424,7 @@ class Hero extends Unit {
     if (m.t >= Math.max(m.busy, m.hit + 0.35)) this.endSkillBody();
   }
 
-  // pedido do jogador (botão ou tecla): vale por um instante, até o golpe atual terminar
   // Dança de lâminas: a cada volta corta todos ao redor e desliza devagar para o meio dos inimigos
-  // Arremesso do Brutamontes: o inimigo voa em arco até o ponto e fere todos na queda
-  updateHurl(dt) {
-    const h = this.hurl, v = h.victim;
-    h.t += dt;
-    const k = Math.min(1, h.t / h.flight);
-    if (!v.dead && units.includes(v)) {
-      v.pos.x = h.from.x + (h.to.x - h.from.x) * k;
-      v.pos.z = h.from.z + (h.to.z - h.from.z) * k;
-      v.lift = k < 1 ? Math.sin(Math.PI * k) * h.height : 0;
-      v.vel.set(0, 0, 0);
-    } else v.lift = 0;   // morreu no ar: o corpo cai no chão
-    if (k < 1) return;
-    this.hurl = null;
-    damageArea(h.to, h.area, h.dmg, this);
-    wave(h.to, 0xc9bba2, 0.3, h.area, 0.5);
-    burst(h.to, [0x8a6f55, 0xc9bba2, 0xffffff], 16, 5);
-    FX.shake(0.3);
-  }
-
   updateBladeDance(dt) {
     this.bladeDanceT -= dt;
     if (this.dead || game.over) { this.bladeDanceT = 0; return; }
@@ -9567,7 +9748,6 @@ class Hero extends Unit {
     }
     this.halo.position.y = 2.5 + Math.sin(this.age * 3) * 0.08;
     if (this.bladeDanceT > 0) this.updateBladeDance(dt);
-    if (this.hurl) this.updateHurl(dt);
     this.immuneT -= dt;
     if (this.meditateT > 0) this.updateMeditation(dt);
     this.updateSkillStates(dt);
@@ -12137,9 +12317,10 @@ function startPhase() {
   game.bossPending = missionBossPhase(game.phase, game.mission?.boss);   // Rei (6), Carrasco (9) e Lich (12); a missão pode trocar (mission.boss)
   game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
-  const waveScale = ['duel', 'rescue', 'totems', 'tower', 'boss'].includes(goal?.type)
+  const waveScale = ['duel', 'rescue', 'totems', 'tower', 'boss', 'hunt', 'nofall', 'timer'].includes(goal?.type)
     ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // a escala reduz apenas a onda comum; chefes e guardas permanecem garantidos
   if (goal?.type === 'bosses') game.toSpawn = 1;   // na câmara final, a primeira e única entrada já é o trio de chefes
+  else if (goal?.type === 'endless') game.toSpawn = Math.min(4, Math.max(3, Math.round(3 * difficulty.count)));   // a horda escala com o relógio, não começa com a onda enorme da fase 10
   else if (waveScale) game.toSpawn = Math.max(3, Math.round(game.toSpawn * waveScale));
   if (goal?.type === 'elite') { game.eliteWave = 1; game.eliteSize = game.toSpawn; }
   if (goal?.type === 'totems') {   // espalha o que falta dos totens pelas fases que restam
@@ -12418,8 +12599,8 @@ function totemModel() {
 
 class Totem extends Unit {
   constructor(at, tower = false) {
-    const towerHealth = tower ? 420 : 240;
-    super(totemModel(), { hp: Math.round(towerHealth * difficulty.hp * (1 + (game.phase - 1) * 0.12)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
+    const towerHealth = tower ? 300 : 240;
+    super(totemModel(), { hp: Math.round(towerHealth * difficulty.hp * (1 + (game.phase - 1) * 0.1)), dmg: 0, range: 0, speed: 0, cooldown: 1 }, 'skeleton');
     this.totem = true;
     this.tower = tower;
     if (tower) this.size = 1.65;
@@ -12606,7 +12787,8 @@ function gateTick() {
 }
 
 // cripta: elite tem mais vida, bate mais forte, é um pouco maior e brilha dourado
-const ELITE_HP = 1.45, ELITE_DMG = 1.2, TWIN_HP = 0.6;
+const ELITE_HP = 1.45, ELITE_DMG = 1.2, TWIN_HP = 0.45;
+const TWIN_BOSS_HP = 0.58, TWIN_BOSS_DMG = 0.65;
 function makeElite(s) {
   s.elite = true;
   s.maxHp = s.hp = Math.round(s.hp * ELITE_HP);
@@ -12625,6 +12807,11 @@ function spawnTwinBoss(lich, position) {
   s.pos.copy(position);
   s.root.rotation.y = lich.root.rotation.y;
   return s;
+}
+function tuneTwinBoss(boss) {
+  boss.maxHp = boss.hp = Math.round(boss.maxHp * TWIN_BOSS_HP);
+  boss.dmg = Math.round(boss.dmg * TWIN_BOSS_DMG);
+  boss.emissiveDirty = true;
 }
 
 // Os guardiões mantêm atributos menores no Normal; Difícil e Pesadelo aumentam
@@ -12645,11 +12832,11 @@ function spawnCastleBosses(lich, formation) {
   const tuning = CASTLE_BOSS_DIFFICULTY[difficulty.id] || { lichHp: 1, lichDmg: 1, guardHp: 1, guardDmg: 1 };
   const faceCenter = (boss) => { boss.root.rotation.y = Math.atan2(anchor.x - boss.pos.x, anchor.z - boss.pos.z); };
   lich.pos.copy(formation[0]);
-  prepareCastleBoss(lich, 0.72, 0.82, 'Coração sombrio', tuning.lichHp, tuning.lichDmg);
+  prepareCastleBoss(lich, 0.42, 0.65, 'Coração sombrio', tuning.lichHp, tuning.lichDmg);
   faceCenter(lich);
   const guardians = [
-    { kind: 'Executioner', position: formation[1], hp: 0.42, dmg: 0.58, title: 'Carrasco do trono' },
-    { kind: 'DarkKnight', position: formation[2], hp: 0.46, dmg: 0.56, title: 'Cavaleiro do Eclipse' },
+    { kind: 'Executioner', position: formation[1], hp: 0.22, dmg: 0.38, title: 'Carrasco do trono' },
+    { kind: 'DarkKnight', position: formation[2], hp: 0.24, dmg: 0.38, title: 'Cavaleiro do Eclipse' },
   ];
   for (const entry of guardians) {
     const boss = new Skeleton(entry.kind, game.phase, true);
@@ -12660,7 +12847,7 @@ function spawnCastleBosses(lich, formation) {
 }
 
 // alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
-const HUNT_FLEE = 4.5, HUNT_EDGE = 20, HUNT_PURSUIT_LIMIT = 25, HUNT_INTERCEPTORS = 2;
+const HUNT_FLEE = 4.5, HUNT_EDGE = 12, HUNT_PURSUIT_LIMIT = 16, HUNT_INTERCEPTORS = 2;
 const huntDest = new THREE.Vector3();
 function huntThink(u, dt) {
   if (u.rootT > 0 || u.tauntT > 0) return false;   // preso ou provocado: luta onde está
@@ -12751,8 +12938,13 @@ function newGoalTick(goal, dt, skeletons) {
   if (goal.type === 'defend') {
     if (game.shrine?.dead) return 'O santuário caiu! Ele não pode ser destruído.';
     if (game.state === 'fight') {   // ondas sem parar até o tempo acabar
-      game.surviveT = Math.max(0, game.surviveT - dt);
-      if (game.surviveT > 0 && game.toSpawn === 0 && skeletons.length < partyCap(7)) game.toSpawn = Math.min(4, partyCap(7) - skeletons.length);
+      if ((game.surviveT = Math.max(0, game.surviveT - dt)) <= 0) {
+        closeMission();
+        showBanner('Santuário protegido!', 2.5);
+      } else {
+        const cap = partyCap(SHRINE_ENEMY_CAP);
+        if (game.toSpawn === 0 && skeletons.length < cap) game.toSpawn = Math.min(3, cap - skeletons.length);
+      }
     }
   } else if (goal.type === 'hunt' && game.state === 'fight' && !game.huntDown) {
     const mark = game.huntMark;
@@ -12787,8 +12979,8 @@ function newGoalTick(goal, dt, skeletons) {
     if (reached > game.endlessStars) { game.endlessStars = reached; showBanner(`${'★'.repeat(reached)} ${goal.marks[reached - 1]} s`, 2.5); }
     if (game.endlessT >= goal.dawn) { closeMission(); showBanner('Amanheceu!', 3); }
     else {   // a horda engrossa com o tempo: mais esqueletos ao mesmo tempo e reforços maiores
-      const cap = Math.min(22, 6 + Math.floor(game.endlessT / 20) * 2);
-      if (game.toSpawn === 0 && skeletons.length < cap) game.toSpawn = Math.min(cap - skeletons.length, 3 + Math.floor(game.endlessT / 30));
+      const cap = Math.min(12, 4 + Math.floor(game.endlessT / 60) * 2);
+      if (game.toSpawn === 0 && skeletons.length < cap) game.toSpawn = Math.min(cap - skeletons.length, 1 + Math.floor(game.endlessT / 60));
     }
   }
   return null;
@@ -13079,12 +13271,16 @@ function spawnSkeleton() {
   if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.3) s.raider = true;   // corredores vão direto à ponte
   if (game.mission?.goal.type === 'elite' && !lead) makeElite(s);
   if (lead && boss && game.mission?.boss?.phase === p && game.mission.boss.mod) applyBossMod(s, game.mission.boss.mod);   // Rei Espectral, Carrasco Afogado
-  if (twinMission) spawnTwinBoss(s, formation[1]);
+  if (twinMission) {
+    tuneTwinBoss(s);
+    tuneTwinBoss(spawnTwinBoss(s, formation[1]));
+  }
   if (castleBossMission) spawnCastleBosses(s, formation);
   if (game.mission?.goal.type === 'duel' && lead && boss) {   // o Rei do duelo é feito para um herói só
     s.maxHp = s.hp = Math.round(s.hp * game.mission.goal.bossHp);
     s.dmg = Math.round(s.dmg * game.mission.goal.bossDmg);
   }
+  if (boss) game.bossPending = false;   // qualquer reforço que repita a contagem não pode criar outro chefe
   return true;
 }
 

@@ -64,16 +64,16 @@ function render(stars, visuals = null) {
     : mission.id === 'coracao-do-castelo'
     ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (dano a chefe) e Clériga (suporte/cura).'
     : mission.id === 'ruinas'
-      ? 'Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'
+      ? 'Equipe recomendada para 4 heróis: Paladino (cura), Piromante (dano em área), Clériga (suporte/cura) e Guardião (proteção).'
       : mission.id === 'santuario'
-        ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).'
+        ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
       : mission.id === 'chamas'
-        ? 'Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).'
+        ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (machado à distância) e Clériga (suporte/cura).'
         : mission.id === 'lago-sombrio'
           ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
-          : mission.id === 'horda'
+      : mission.id === 'horda'
             ? 'Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'
-      : '');
+      : '', null, (mission) => mission.goal.type === 'duel' ? 1 : 4);
   return {
     map, info, focusState, data,
     campaignCosmetics: () => context.campaignCosmetics(),
@@ -124,16 +124,18 @@ assert.doesNotMatch(view.info.innerHTML, /Fases 13–13/, 'uma arena de uma fase
 assert.ok(!view.info.innerHTML.includes('camp-replay-button'));
 view.map.children[9].onclick();
 assert.ok(view.map.children[9].classList.contains('sel'), 'Ruínas Antigas continua selecionável após concluir a campanha');
-assert.ok(view.info.innerHTML.includes('Equipe recomendada para 3 heróis: Paladino (cura), Piromante (dano em área) e Clériga (suporte/cura). Reforço recomendado: Guardião (proteção).'),
-  'o resumo de Ruínas explica a composição de área e o reforço recomendado');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Paladino (cura), Piromante (dano em área), Clériga (suporte/cura) e Guardião (proteção).'),
+  'o resumo de Ruínas explica a composição de área para o grupo contínuo de quatro');
 view.map.children[1].onclick();
 assert.ok(view.map.children[1].classList.contains('sel'), 'O Santuário continua selecionável após concluir a campanha');
-assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Guardião (proteção).'),
-  'o resumo do Santuário não promete reforços numa missão de uma fase');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),
+  'o resumo do Santuário reflete o grupo contínuo de quatro heróis');
 view.map.children[3].onclick();
 assert.ok(view.map.children[3].classList.contains('sel'), 'Ponte em Chamas continua selecionável após concluir a campanha');
-assert.ok(view.info.innerHTML.includes('Equipe recomendada para 2 heróis: Paladino (cura) e Viking (machado à distância).'),
-  'o resumo da Ponte em Chamas mostra a dupla com melhor taxa de três estrelas');
+assert.match(view.info.innerHTML, /Arena 4 · Mapa aleatório · Fase 4 · 4 heróis no nível 2/,
+  'o detalhe do mapa descreve a equipe de quatro da campanha contínua');
+assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Viking (machado à distância) e Clériga (suporte/cura).'),
+  'o resumo da Ponte em Chamas inclui os quatro heróis da campanha e mantém o Viking para interceptar');
 view.map.children[11].onclick();
 assert.ok(view.map.children[11].classList.contains('sel'), 'Lago Sombrio continua selecionável após concluir a campanha');
 assert.ok(view.info.innerHTML.includes('Equipe recomendada para 4 heróis: Paladino (cura), Guardião (proteção), Piromante (dano em área) e Clériga (suporte/cura).'),

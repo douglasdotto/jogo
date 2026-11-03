@@ -174,7 +174,7 @@ const EXTRA_SKILLS = {
     { name: 'Ofuscar', description: 'Inimigos próximos erram 50% dos golpes por 4 s (chefe, 25%).', effect: 'dazzle', control: 'Cega', cooldown: 17, radius: 6, duration: 4, color: 0xa8b8ff },
   ],
   brute: [
-    { name: 'Arremesso', description: 'Agarra o inimigo comum mais perto e o arremessa no grupo mais denso; a queda fere todos em volta.', effect: 'grab-throw', cooldown: 16, radius: 2.4, range: 8, splash: 2.6, power: 1, color: 0xc9bba2 },
+    { name: 'Agarrão Sísmico', description: 'Puxa os inimigos próximos para junto do Brutamontes e os lança para cima; chefes são puxados com menos força.', effect: 'seismic-grab', cooldown: 24, radius: 6.5, power: 1.35, control: 'stun', color: 0xc9bba2 },
     { name: 'Pele de Pedra', description: 'Cresce por 8 s: recebe 60% menos dano, devolve 30% dos golpes corpo a corpo e provoca quem está em volta.', effect: 'stone-skin', cooldown: 64, radius: 6, duration: 8, color: 0xb8a88a },
     { name: 'Berro de Guerra', description: 'Por 5 s, o golpe do Brutamontes atordoa 1 s os inimigos colados (até 3 por golpe, cada um 1 vez a cada 3 s). Chefes só desaceleram.', effect: 'war-roar', cooldown: 18, radius: 3.5, duration: 5, color: 0xe0b070 },
   ],

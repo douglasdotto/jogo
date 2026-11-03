@@ -149,7 +149,7 @@ vm.runInContext(`
     const stars = __missionEndOriginal(won);
     const party = heroes();
     globalThis.__campaignOutcome = {
-      won: Boolean(won), stars, falls: game.falls,
+      won: Boolean(won), stars, falls: game.falls, leaks: game.leaks,
       shrineRatio: game.shrine ? Math.max(0, Math.min(1, game.shrine.hp / game.shrine.maxHp)) : null,
       hpRatio: game.missionHpRatio ?? party.reduce((sum, h) => sum + Math.max(0, h.hp), 0) / Math.max(1, party.reduce((sum, h) => sum + h.maxHp, 0)),
       villagerRatio,
@@ -246,14 +246,18 @@ function play(diff, profile, mission = null) {
   const diagnostic = mission ? {
     simulatedSeconds: Number(time.toFixed(1)), timeCap, phase: t.game.phase, state: t.game.state, timer: t.game.timer, missionT: t.game.missionT,
     surviveT: t.game.surviveT, toSpawn: t.game.toSpawn, spawnTimer: t.game.spawnTimer,
+    leaks: t.game.leaks, totemsDown: t.game.totemsDown, towersDown: t.game.towersDown,
+    bossSeen: t.game.bossSeen, bossDown: t.game.bossDown, bossPending: t.game.bossPending, missionGoal: t.game.mission?.goal,
+    gate: t.game.gate ? { pos: `${t.game.gate.pos.x.toFixed(1)},${t.game.gate.pos.z.toFixed(1)}` } : null,
     shrine: t.game.shrine ? { hp: Math.round(t.game.shrine.hp), maxHp: t.game.shrine.maxHp, dead: t.game.shrine.dead,
       pos: `${t.game.shrine.pos.x.toFixed(1)},${t.game.shrine.pos.z.toFixed(1)}` } : null,
     villager: t.game.villager ? { hp: Math.round(t.game.villager.hp), maxHp: t.game.villager.maxHp, dead: t.game.villager.dead,
       rescued: t.game.villager.rescued, captive: t.game.villager.captive } : null,
     skeletonCount: t.units.filter((u) => u.team === 'skeleton' && !u.dead).length,
     skeletons: t.units.filter((u) => u.team === 'skeleton' && !u.dead).slice(0, 40).map((u) => ({ kind: u.enemyKind || u.kind?.name || (u.totem ? 'Totem' : '?'),
-      pos: `${u.pos.x.toFixed(1)},${u.pos.z.toFixed(1)}`, raider: Boolean(u.raider), spawning: Boolean(u.spawning),
-      ranged: Boolean(u.ranged), mobile: Boolean(u.mobile), totem: Boolean(u.totem) })),
+      hp: Math.round(u.hp), maxHp: Math.round(u.maxHp), pos: `${u.pos.x.toFixed(1)},${u.pos.z.toFixed(1)}`, raider: Boolean(u.raider), spawning: Boolean(u.spawning),
+      ranged: Boolean(u.ranged), mobile: Boolean(u.mobile), totem: Boolean(u.totem), phaseBoss: Boolean(u.phaseBoss),
+      boss: Boolean(u.boss), summoned: Boolean(u.summoned), bossMod: u.bossMod || null })),
     heroes: t.heroes().map((h) => ({ id: h.cfg.id, dead: h.dead, hp: Math.round(h.hp),
       pos: `${h.pos.x.toFixed(1)},${h.pos.z.toFixed(1)}`, post: `${h.post.x.toFixed(1)},${h.post.z.toFixed(1)}`,
       range: h.range, ranged: Boolean(h.ranged), targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
@@ -414,7 +418,8 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
     const incomplete = res.filter((r) => r.timedOut).length;
     console.log(`${diff.name.padEnd(9)} vitórias ${res.filter((r) => r.won).length}/${runs} · estrelas 0★:${stars[0]} 1★:${stars[1]} 2★:${stars[2]} 3★:${stars[3]} · quedas ${avg((r) => r.falls)} · vida ${Math.round(avg((r) => r.hpRatio ?? 0) * 100)}% · tempo ${avg((r) => r.time)} s · aldeão médio ${villager}${incomplete ? ` · incompletas ${incomplete}` : ''}`);
     if (details) for (const [i, r] of res.entries()) {
-      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · santuário ${Number.isFinite(r.shrineRatio) ? `${Math.round(r.shrineRatio * 100)}%` : '—'} · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}`);
+      console.log(`  ${i + 1}: ${r.won ? 'vitória' : r.timedOut ? `incompleta na fase ${r.phase}` : `derrota na fase ${r.phase}`} · ${r.stars}★ · ${r.falls} quedas · vazamentos ${r.leaks ?? '—'} · santuário ${Number.isFinite(r.shrineRatio) ? `${Math.round(r.shrineRatio * 100)}%` : '—'} · aldeão ${Number.isFinite(r.villagerRatio) ? `${Math.round(r.villagerRatio * 100)}%` : '—'} · iniciais (${r.initialHeroes ?? '?'}): ${r.initialParty?.join(' + ') || '—'} · final: ${r.party.join(' + ')}`);
+      if (process.env.SIM_DIAG_SUCCESS === '1' && r.diagnostic && ['defend', 'breach'].includes(campaignMission.goal.type)) console.log(`    diagnóstico: ${JSON.stringify(r.diagnostic)}`);
       if (!r.won && r.diagnostic) console.log(`    diagnóstico: ${JSON.stringify(r.diagnostic)}`);
     }
   } else {

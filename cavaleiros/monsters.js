@@ -1265,17 +1265,25 @@ export const MONSTER_TYPES = {
         G.ring(s.pos, 2.5, 0xb36bff, 0.9);
         return true;
       }
-      if (s.cd.summon <= 0 && countAliveSkeletons() + mPendingSummons < 10) {
-        s.busy = s.once('Spellcast_Summon', 1.2);
-        s.cd.summon = fury ? 10 : 15;
-        const count = Math.min(Math.round((fury ? 2.6 : 1.8) * G.difficulty.count), Math.max(0, 10 - countAliveSkeletons() - mPendingSummons));
-        const reserved = [];
-        around(s.pos, count, 2.8, Math.random() * 6).forEach((p) => {
-          const at = warnSummon(s, 'Ghost', p, { retries: 1, avoid: reserved, canSpawn: () => countAliveSkeletons() + mPendingSummons <= 10,
-            onComplete: (success) => { if (!success) s.cd.summon = Math.min(s.cd.summon || 2, 2); } });
-          if (at) reserved.push(at);
-        });
-        return true;
+      if (s.cd.summon <= 0) {
+        const groupedBossFight = G.game.mission?.goal?.type === 'twin' || G.game.mission?.goal?.type === 'bosses';
+        const objectiveBossFight = G.game.mission?.goal?.type === 'boss' || G.game.mission?.goal?.type === 'duel';
+        const summonLimit = groupedBossFight ? 5 : objectiveBossFight ? 6 : 10;
+        const occupied = countAliveSkeletons() + mPendingSummons;
+        if (occupied < summonLimit) {
+          s.busy = s.once('Spellcast_Summon', 1.2);
+          s.cd.summon = groupedBossFight ? (fury ? 14 : 20) : fury ? 10 : 15;
+          const amount = groupedBossFight ? (fury ? 1.4 : 1) : (fury ? 2.6 : 1.8);
+          const count = Math.min(Math.round(amount * G.difficulty.count), Math.max(0, summonLimit - occupied));
+          const reserved = [];
+          around(s.pos, count, 2.8, Math.random() * 6).forEach((p) => {
+            const at = warnSummon(s, 'Ghost', p, { retries: 1, avoid: reserved, canSpawn: () => countAliveSkeletons() + mPendingSummons <= summonLimit,
+              onComplete: (success) => { if (!success) s.cd.summon = Math.min(s.cd.summon || 2, 2); } });
+            if (at) reserved.push(at);
+          });
+          return true;
+        }
+        s.cd.summon = groupedBossFight ? 4 : 2; // reavalia a capacidade em intervalos, sem varrer inimigos a cada quadro
       }
       if (s.cd.rain <= 0) {   // chuva de crânios nas áreas marcadas
         s.busy = s.once('Spellcast_Raise', 1.1);

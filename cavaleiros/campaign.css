@@ -416,7 +416,7 @@
 .camp-ident { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .camp-chapter-label { align-self: flex-start; max-width: 100%; overflow: hidden; color: #9fb8d0; font: 600 9px/1.15 'Fredoka', sans-serif; letter-spacing: .75px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .camp-arena-tag { align-self: flex-start; padding: 0; border: 0; border-radius: 0; color: #f1d28f; font: 700 10px/1 'Fredoka', sans-serif; letter-spacing: 1.35px; background: none; box-shadow: none; text-shadow: none; }
-.camp-name { overflow: hidden; color: #f8fbff; font: 600 24px/1.1 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; -webkit-text-stroke: 0; text-shadow: none; }
+.camp-name { min-width: 0; overflow: visible; color: #f8fbff; font: 600 24px/1.05 'Fredoka', sans-serif; text-overflow: clip; white-space: normal; -webkit-text-stroke: 0; text-shadow: none; }
 .camp-info .camp-desc { margin: 0; overflow: hidden; color: #b9cadb; font: 400 13px/1.3 'Fredoka', sans-serif; text-overflow: ellipsis; white-space: nowrap; text-shadow: none; }
 .camp-score { display: flex; align-items: center; gap: 12px; }
 .stars.big { flex: none; gap: 2px; }

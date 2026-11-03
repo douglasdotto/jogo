@@ -5,6 +5,7 @@ const path = require('path');
 
 const root = __dirname;
 const port = process.env.PORT || 8080;
+const host = process.env.HOST || '127.0.0.1';
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream', '.png': 'image/png', '.txt': 'text/plain' };
 
 http.createServer((req, res) => {
@@ -27,4 +28,4 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
-}).listen(port, () => console.log(`Age of Popozitos em http://localhost:${port}`));
+}).listen(port, host, () => console.log(`Age of Popozitos em http://localhost:${port}`));

@@ -54,8 +54,10 @@ async function run() {
     'Skeleton_Arrow.gltf', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Shield_Small_A.gltf'];
   assert.deepEqual(Array.from(vm.runInContext('BATTLE_ASSET_FILES', context)), required);
   for (const file of required) assert.ok(fs.existsSync(path.resolve(__dirname, '..', 'assets', file)), `${file} existe`);
-  for (const old of ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb'])
+  for (const old of ['Skeleton_Minion.glb', 'Skeleton_Warrior.glb', 'Skeleton_Rogue.glb']) {
     assert.ok(!required.includes(old), `${old} (versão antiga, ~4,8 MB com animações) não é mais baixado`);
+    assert.ok(!fs.existsSync(path.resolve(__dirname, '..', 'assets', old)), `${old} antigo foi removido do pacote`);
+  }
   for (const file of required) assert.ok(!heroLoadSource.includes(file), `${file} não deve atrasar o menu`);
   assert.ok(heroLoadSource.includes('Skeleton_Staff.gltf') && heroLoadSource.includes('Skeleton_Quiver.gltf'),
     'peças necessárias às prévias dos heróis são carregadas antes do menu');
