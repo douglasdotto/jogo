@@ -80,3 +80,12 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Em campanha isolada no host `127.0.0.1`, conferi visualmente as telas do tutorial de seleção, Auto na batalha, relíquia e avanço de fase. A bolha aparece junto ao controle certo e não tapa a seleção.
 - Cheguei à evolução durante a missão 2: Campeão → Campeão Real, números de vida/dano/DPS, três rotas e selo na rota sugerida ficaram legíveis, sem cortes.
 - `npm run test:rapido`: **41 passaram, 0 falharam**. `npm test`: **42 passaram, 0 falharam**, incluindo a bateria padrão de 50 simulações (466 s).
+
+### Comparação de composições no Pesadelo — 2026-11-04
+- Rodei **15 equipes × 5 missões × 2 sementes = 150 simulações** em Santuário (Nv1), Ponte em Chamas (Nv2), Ruínas Antigas, Noite sem Fim e Coroa de Cinzas (Nv3). Todas usaram quatro heróis e as mesmas sementes por missão; o Duelo não entrou nesta amostra. A progressão de XP e relíquias entre missões não foi simulada.
+- A equipe salva (Guardião, Campeão, Druida, Paladino) venceu **10/10** e fez **3★ em 5/10** no nível recomendado das missões. Repetida no Nv5, venceu **10/10 e fez 3★ em 9/10**, incluindo 3★ em Santuário e Ponte em Chamas nas duas sementes.
+- O perfil Equilibrado venceu **10/10 e fez 3★ em 8/10**. O perfil Invocador (Invocador, Guardião, Piromante, Clériga) fez **3★ em 10/10**; na Horda, chegou ao fim com média de 3,5 quedas e vida do grupo em 0%.
+- Lâminas (Campeão, Berserker, Assassino, Duelista), sem cura nem atirador, venceu **6/10**: perdeu as quatro tentativas de Ruínas e Coroa de Cinzas. Novos heróis e perfil Rúnico tiveram cada um uma falha em duas sementes na Coroa; não é evidência suficiente para declarar um herói individual fraco.
+- A Horda ainda concede estrelas somente pelos marcos de tempo. A equipe salva e outros grupos fizeram 3★ com quatro quedas e 0% de vida; isso mede o tempo sobrevivido mesmo quando o grupo cai.
+- A ordem de seleção também alterou um caso de Ruínas, mantendo equipe e semente: Ilusionista primeiro ficou incompleto no limite de 900 s, com três totens destruídos e um Mago vivo; Paladino primeiro venceu com 3★, sem quedas, em 148,7 s. A posição de formação deve ser considerada ao avaliar uma escalação.
+- Conclusão limitada à amostra: a equipe salva não domina com 3★ quando começa no nível recomendado; no Nv5, a maioria dos mapas amostrados fica muito fácil. Equipes sem papéis de cura e linha de frente são sensivelmente mais frágeis. O resultado não representa uma campanha contínua com XP/relíquias acumulados.
