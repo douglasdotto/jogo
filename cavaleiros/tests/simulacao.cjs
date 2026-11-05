@@ -101,14 +101,14 @@ vm.runInContext(battleReport.replaceAll('export ', ''), context);
 vm.runInContext(monsters.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
 vm.runInContext(progression.replaceAll('export ', ''), context);   // sem localStorage: progressão só na memória, zerada
 vm.runInContext(fxPool.replaceAll('export ', ''), context);
-vm.runInContext('const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 128), poofStarMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 256);', context);   // splash da água (lagos) usa o estoque de estrelas
+vm.runInContext('const poofStarMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 256);', context);   // splash da água (lagos) usa o estoque de estrelas
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'scene-perf.js'), 'utf8').replaceAll('export ', ''), context);   // disposeSkeletons
 vm.runInContext(part(source, 'const ROAD', '// ---------- cena'), context);
 vm.runInContext(part(source, 'const $', '// retrato de cada'), context);
 vm.runInContext(part(source, 'let skillItems', 'function pressSkill'), context);   // glifos das habilidades usados na ficha da escolha
 vm.runInContext(part(source, 'const units =', '// projéteis e áreas'), context);
-vm.runInContext(part(source, 'const boltMeshPools = new Map()', 'function ring(at, radius, color, life = 0.6)'), context);
-vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos'), context);
+vm.runInContext(part(source, 'const ringMaterials = materialPool(', 'function fireBolt'), context);
+vm.runInContext(part(source, 'function fireBolt', '// ---------- efeitos fofos'), context);
 vm.runInContext(part(source, 'function releaseFxMaterial(material) {', 'function clearFx()'), context);
 vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);

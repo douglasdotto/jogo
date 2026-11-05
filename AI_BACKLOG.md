@@ -57,8 +57,8 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 ## P3 — técnica e manutenção
 | # | Item | Área | Esf/Risco | Onde |
 |---|---|---|---|---|
-| 39 | Pools restantes: material da queimadura e FX da torreta; projéteis de heróis, orbes e flechas inimigos já reutilizam malhas com limites | Perf | M/B | main.js:2868,2927,3048,3137,3311 |
-| 40 | Alinhamento das sombras e pixel ratio ≤1.5 já entregues; repetir a linha de base de FPS no Chrome acelerado com carga constante | Perf | P/B | `?bench=15&perfil=1`; há amostra visível exploratória, mas falta estabilidade entre execuções |
+| 39 | Pools restantes: material da queimadura e FX da torreta; projéteis, anéis e feixes já reutilizam malhas com limites | Perf | M/B | main.js:2868,2927,3048,3137,4350 |
+| 40 | Alinhamento das sombras e pixel ratio ≤1.5 já entregues; medir FPS no Chrome acelerado com carga constante | Perf | P/B | `?bench=15&perfil=1`; arena de teste exibiu aviso de FPS baixo, mas sem uma linha comparável |
 | 41 | Remover CSS mobile morto e consolidar CSS inline no battle-hud.css | UI | M/M | index.html, battle-hud.css, campaign.css |
 | 42 | Extrair dados de heróis e física de main.js (ajustar marcadores dos testes) | Arquitetura | M/M | main.js, tests/* |
 | 43 | Extrair biblioteca de FX (~1400 linhas) | Arquitetura | G/M | main.js:3148-4554 |

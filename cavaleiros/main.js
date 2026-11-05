@@ -4341,22 +4341,39 @@ function releaseBoltMesh(mesh) {
 }
 
 function ring(at, radius, color, life = 0.6) {
-  const mesh = new THREE.Mesh(ringGeo, ringMaterials.take(color, 0.65));
+  const material = ringMaterials.take(color, 0.65);
+  const mesh = ringMeshes.pop() || new THREE.Mesh(ringGeo, material);
+  mesh.material = material;
+  mesh.visible = true;
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.copy(at).setY(at.y + 0.07);
   mesh.scale.setScalar(radius);
   scene.add(mesh);
-  blasts.push({ mesh, t: life, life });
+  blasts.push({ mesh, t: life, life, poolType: 'ring' });
 }
 
 function beam(start, end, color) {
-  const mesh = new THREE.Mesh(beamGeo, beamMaterials.take(color));
+  const material = beamMaterials.take(color);
+  const mesh = beamMeshes.pop() || new THREE.Mesh(beamGeo, material);
+  mesh.material = material;
+  mesh.visible = true;
   beamDirection.subVectors(end, start);
   mesh.position.copy(start).add(end).multiplyScalar(0.5).add(beamLift);
   mesh.scale.y = beamDirection.length();
   mesh.quaternion.setFromUnitVectors(beamUp, beamDirection.normalize());
   scene.add(mesh);
-  blasts.push({ mesh, t: 0.25, life: 0.25 });
+  blasts.push({ mesh, t: 0.25, life: 0.25, poolType: 'beam' });
+}
+
+const ringMeshes = [], beamMeshes = [], RING_MESH_POOL_LIMIT = 128, BEAM_MESH_POOL_LIMIT = 32;
+function releaseBlast(blast) {
+  const { mesh } = blast;
+  scene.remove(mesh);
+  releaseFxMaterial(mesh.material);
+  mesh.visible = false;
+  const pool = blast.poolType === 'ring' ? ringMeshes : blast.poolType === 'beam' ? beamMeshes : null;
+  const limit = blast.poolType === 'ring' ? RING_MESH_POOL_LIMIT : BEAM_MESH_POOL_LIMIT;
+  if (pool && pool.length < limit) pool.push(mesh);
 }
 
 function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
@@ -4475,7 +4492,7 @@ function updateBolts(dt) {
     bl.t -= dt;
     if (bl.ripple) bl.mesh.scale.addScalar(dt * 1.2);
     bl.mesh.material.opacity = Math.max(0, bl.t / bl.life) * 0.65;
-    if (bl.t <= 0) { scene.remove(bl.mesh); releaseFxMaterial(bl.mesh.material); blasts.splice(i, 1); }
+    if (bl.t <= 0) { releaseBlast(bl); blasts.splice(i, 1); }
   }
   for (let i = skillTasks.length - 1; i >= 0; i--) {
     const task = skillTasks[i];
@@ -12317,8 +12334,11 @@ function startGame(view = 'menu') {
   while (enemyBolts.length) scene.remove(enemyBolts.pop().mesh);
   for (const list of [bolts, blasts, flames]) while (list.length) {
     const effect = list.pop();
-    scene.remove(effect.mesh);
-    if (list !== bolts) releaseFxMaterial(effect.mesh.material);
+    if (list === blasts) releaseBlast(effect);
+    else {
+      scene.remove(effect.mesh);
+      if (list === flames) releaseFxMaterial(effect.mesh.material);
+    }
   }
   while (sentries.length) removeSentry(sentries[0]);
   while (spiritTotems.length) removeSpiritTotem(spiritTotems[0]);

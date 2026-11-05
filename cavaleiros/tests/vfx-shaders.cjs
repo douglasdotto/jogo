@@ -61,6 +61,9 @@ assert.throws(() => vfxMaterial('raio-laser', 'fire'), /desconhecido/);
 const runic = vfxMaterial('rune', 'runic').fragmentShader;
 assert.match(runic, /pulseRadius/, 'runas percorrem o círculo com um pulso luminoso');
 assert.match(runic, /outerMarks/, 'as runas têm marcas de leitura no anel externo');
+const rays = vfxMaterial('rays', 'holy').fragmentShader;
+assert.match(rays, /ringPulse/, 'feixes de habilidade têm faixas de luz que sobem');
+assert.match(rays, /spiral/, 'feixes de habilidade têm fios de energia em espiral');
 
 // todas as combinações montam um shader com main(); sprites usam o vértice voltado à câmera
 for (const kind of KINDS) for (const pal of Object.keys(PALETTES)) {

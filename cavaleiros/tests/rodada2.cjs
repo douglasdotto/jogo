@@ -73,7 +73,7 @@ const context=vm.createContext({THREE,document:{createElement:el,body:el(),getEl
   localStorage:{data:{},getItem(k){return this.data[k]??null},setItem(k,v){this.data[k]=String(v)}},
   SKY:[],HEMI:[],HEMI_GROUND:[],SUN:[],hemi:{color:{lerpColors:noop},groundColor:{lerpColors:noop}},
   SkeletonUtils:{clone:root}, scene:{add:noop,remove:noop,background:{lerpColors:noop},fog:{color:{copy:noop}}}, assets:{}, ringGeo:{},haloGeo:{},goldMat:{},starGeo:{},
-  boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
+  boltGeo:{},axeGeo:{},bladeGeo:{},handleGeo:{},flameGeo:{},groundGeo:{},beamGeo:{},boltMats:{viking:{},iceviking:{},arcane:{},pyro:{}},
   mountCampaignMap3D:noop,
   newStats:()=>({}),openHeroPanel:noop,closeHeroPanel:noop,panelHero:()=>null,tickHeroPanel:noop,summaryHTML:()=>'', LOOKS:{}, applyLook:noop, buildBeast:()=>({root:root(),flash:[],materials:[]}), animateBeast:noop,
   buildSummon:()=>{const o=()=>Object.assign(root(),{userData:{side:1},visible:false,getWorldPosition:v=>v});return {core:o(),head:o(),jaw:o(),tail:o(),mouth:o(),aura:o(),shell:o(),wings:[o(),o()],legs:[o(),o()],arms:[o(),o()],hover:1,shellR:1,auraR:1};},   // corpos das criaturas do Invocador (summon-models.js)
@@ -106,9 +106,8 @@ vm.runInContext(fs.readFileSync(path.join(__dirname,'..','scene-perf.js'),'utf8'
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
-vm.runInContext(part(source,'const boltMeshPools = new Map()','function ring(at, radius, color, life = 0.6)'),context);
+vm.runInContext(part(source,'const ringMaterials = materialPool(','function fireBolt'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos fofos'),context);
-vm.runInContext('groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 128);',context);
 vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 const directControlListeners=new Map();
@@ -246,47 +245,52 @@ let fxMaterialCreates=0,beamVectorCreates=0;
 class BeamVector3 extends Vector3 { constructor(...args){super(...args);beamVectorCreates++;} }
 const ringContext=vm.createContext({
   THREE:{DoubleSide:2,Vector3:BeamVector3,MeshBasicMaterial:class{constructor(options={}){fxMaterialCreates++;Object.assign(this,options);this.userData={};this.color={hex:0,setHex(hex){this.hex=hex}};this.opacity??=1;this.dispose=noop;}} ,
-    Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.rotation={x:0};this.position={x:0,y:0,z:0,
+    Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.visible=true;this.rotation={x:0,y:0,z:0};this.position={x:0,y:0,z:0,
       copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this;},add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this;},multiplyScalar(k){this.x*=k;this.y*=k;this.z*=k;return this;},
-      setY(y){this.y=y;return this;}};this.scale={y:1,setScalar:noop};this.quaternion={setFromUnitVectors:noop};}},
-  Vector3,RingGeometry:class{}},ringGeo:{},beamGeo:{},groundGeo:{},blasts:[],flames:[],scene:{add:noop},
+      setY(y){this.y=y;return this;}};this.scale={x:1,y:1,z:1,setScalar:noop};this.quaternion={setFromUnitVectors:noop};}},
+  Vector3,RingGeometry:class{}},ringGeo:{},beamGeo:{},groundGeo:{},blasts:[],flames:[],scene:{add:noop,remove:noop},
 });
 vm.runInContext(fxPool.replaceAll('export ',''),ringContext);
 vm.runInContext(part(source,'const ringMaterials = materialPool(','const colors ='),ringContext);
 vm.runInContext(part(source,'function ring(at, radius, color, life = 0.6) {','function fireBolt'),ringContext);
 vm.runInContext(part(source,'function groundMark(at, radius, color, opacity = 0.45) {','// um pulso da área'),ringContext);
 vm.runInContext(part(source,'function releaseFxMaterial(material) {','function clearFx()'),ringContext);
-vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,groundMark,groundMarkMaterials,releaseFxMaterial,blasts};',ringContext);
+vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,groundMark,groundMarkMaterials,releaseFxMaterial,releaseBlast,blasts};',ringContext);
 test('anéis de impacto reutilizam o material e restauram sua opacidade ao reaparecer',()=>{
-  const {ring,ringMaterials,blasts}=ringContext.ringApi,used=[];
+  const {ring,ringMaterials,releaseBlast,blasts}=ringContext.ringApi,used=[],usedMeshes=[];
   for(let i=0;i<100;i++){
     ring(new Vector3(i,0,0),1,0xff0000+i);
-    const active=blasts.at(-1).mesh.material;
+    const blast=blasts.at(-1),active=blast.mesh.material;
     assert.equal(active.opacity,.65,'a opacidade inicial é aplicada pelo estoque');
-    used.push(active);active.opacity=.03;
-    ringMaterials.give(active);blasts.pop();
+    used.push(active);usedMeshes.push(blast.mesh);active.opacity=.03;
+    releaseBlast(blast);blasts.pop();
   }
   assert.equal(new Set(used).size,1,'cem anéis sequenciais precisam de uma única alocação de material');
+  assert.equal(new Set(usedMeshes).size,1,'cem anéis sequenciais reutilizam uma única malha');
   ring(new Vector3(),1,0xff00ff);
   assert.strictEqual(blasts.at(-1).mesh.material,used[0],'o material reaparece do estoque');
+  assert.strictEqual(blasts.at(-1).mesh,usedMeshes[0],'a malha reaparece do estoque');
   assert.equal(blasts.at(-1).mesh.material.opacity,.65,'a opacidade visual volta ao valor correto');
   assert.equal(ringMaterials.free,0,'o anel ativo não fica contado como material livre');
+  releaseBlast(blasts.at(-1));blasts.pop();
 });
 test('raios curtos reutilizam material e vetores temporários',()=>{
-  const {beam,beamMaterials,releaseFxMaterial,blasts}=ringContext.ringApi;
-  const materialCount=fxMaterialCreates,vectorCount=beamVectorCreates,used=new Set();
+  const {beam,beamMaterials,releaseBlast,blasts}=ringContext.ringApi;
+  const materialCount=fxMaterialCreates,vectorCount=beamVectorCreates,used=new Set(),usedMeshes=new Set();
   for(let i=0;i<100;i++){
     beam(new Vector3(i,0,0),new Vector3(i+2,1,3),0x5ff2ff+i);
-    const material=blasts.at(-1).mesh.material;used.add(material);
+    const blast=blasts.at(-1),material=blast.mesh.material;used.add(material);usedMeshes.add(blast.mesh);
     assert.equal(material.opacity,1,'a opacidade do raio começa cheia após reutilização');
-    releaseFxMaterial(material);blasts.pop();
+    releaseBlast(blast);blasts.pop();
   }
   assert.equal(used.size,1,'cem raios sequenciais reutilizam um único material');
+  assert.equal(usedMeshes.size,1,'cem raios sequenciais reutilizam uma única malha');
   assert.equal(fxMaterialCreates-materialCount,1,'os raios deixam de criar e destruir um material por uso');
   assert.equal(beamVectorCreates,vectorCount,'as direções usam vetores de trabalho reaproveitados');
   beam(new Vector3(),new Vector3(0,0,4),0x6dff8c);
   assert.equal(blasts.at(-1).mesh.material.color.hex,0x6dff8c,'a cor muda corretamente quando o estoque reaproveita o material');
-  releaseFxMaterial(blasts.at(-1).mesh.material);blasts.pop();
+  assert.strictEqual(blasts.at(-1).mesh,[...usedMeshes][0],'o feixe reutiliza a malha do seu tipo');
+  releaseBlast(blasts.at(-1));blasts.pop();
 });
 test('marcas de fogo e poças reutilizam materiais sem manter opacidade ou cor antigas',()=>{
   const {groundMark,groundMarkMaterials,releaseFxMaterial}=ringContext.ringApi;

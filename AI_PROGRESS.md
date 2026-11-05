@@ -208,3 +208,9 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Campanha contínua, seed `20261106`, quatro combatentes corpo a corpo (Campeão/Berserker/Assassino/Duelista): venceu 4/24 missões e caiu em Fazendas, missão 5, após 7 quedas; os quatro caíram com 15 inimigos vivos. Esta equipe sem alcance e sem cura continua sendo uma composição de risco muito alto.
 - Campanha contínua, seed `20261107`, Lanceiro/Oráculo/Guardião/Geomante: derrota no Lago Sombrio, missão 12, fase 9, após 11/24 vitórias e 10 quedas; o Carrasco ainda tinha 492/1444 de vida. A amostra confirma que composições sem cura podem falhar em chefes longos.
 - Esses resultados não justificam reduzir a dificuldade global: a equipe protegida com dano misto concluiu a campanha na mesma seed com 62 estrelas e 8 quedas. Manter as derrotas sem cura como risco de composição enquanto ampliamos a amostra.
+
+### Reuso de impactos e detalhes das skills — 2026-11-05
+- Anéis de impacto e feixes curtos agora reciclam malhas em estoques limitados a 128 e 32. Os materiais continuam usando os pools existentes; efeitos antigos são liberados corretamente ao reiniciar.
+- O shader de raios de luz usado por curas, bênçãos e golpes santos ganhou faixas luminosas ascendentes e fios em espiral dentro da malha existente, sem draw calls adicionais.
+- `rodada2.cjs`: **252 verificações passaram**, incluindo 100 usos sequenciais que reaproveitam uma malha e um material por tipo. `simulacao-perfil.cjs` e `vfx-shaders.cjs` passaram; `npm run test:rapido`: **42 passaram, 0 falharam**.
+- A arena Normal foi aberta no browser em modo de teste (não salva); chegou à onda 3 e o Chrome exibiu o aviso interno de FPS baixo. Como o próprio aviso recomenda aceleração gráfica e a sessão não fornece FPS comparável, isso fica como observação do ambiente, não como medida de ganho ou regressão.

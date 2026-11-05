@@ -178,9 +178,12 @@ const FRAG = {
       float x = vUv.x * 18.0;
       float n = noise(vec2(x, uTime * 0.9 + uSeed)) * 0.7 + noise(vec2(x * 2.3, -uTime * 1.3)) * 0.3;
       float ray = smoothstep(0.35, 0.85, n);
+      float ringPhase = fract(vUv.y * 2.6 - uTime * 1.15 + uSeed * 0.13);
+      float ringPulse = 1.0 - smoothstep(0.0, 0.095, abs(ringPhase - 0.5));
+      float spiral = 1.0 - smoothstep(0.0, 0.28, abs(sin(vUv.x * 12.5664 - vUv.y * 18.0 + uTime * 2.5 + uSeed * 2.0)));
       float fade = pow(1.0 - vUv.y, 1.4) * smoothstep(0.0, 0.08, vUv.y);
-      vec3 c = mix(uMid, uCore, ray);
-      gl_FragColor = vec4(c, (0.1 + ray * 0.6) * fade * uOpacity);   // aditivo: contido para não estourar em branco
+      vec3 c = mix(uMid, uCore, max(ray, max(ringPulse * 0.75, spiral * 0.55)));
+      gl_FragColor = vec4(c, (0.08 + ray * 0.45 + ringPulse * 0.25 + spiral * 0.12) * fade * uOpacity);   // aditivo: contido para não estourar em branco
     }`,
   // gelo facetado: normal de cada face, borda clara (fresnel) e brilho que corre pelas faces
   ice: `
