@@ -126,3 +126,10 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Auditei os P0 1–9 e o item 19 contra o código atual e marquei as correções já entregues como concluídas.
 - `node tests/bench-timing.cjs`: passou, incluindo a regressão que distingue as unidades do perfil.
 - A medição exploratória de FPS foi feita com outra aba do jogo aberta; não serve como baseline comparável. Nova medição isolada segue pendente antes de decidir mudanças visuais de desempenho.
+
+### Sombras na horda — 2026-11-05
+- Cada inimigo esqueleto usa agora só a maior malha visível como caster de sombra; armas e acessórios mantêm aparência e animação, mas não abrem novas chamadas. Os heróis conservam as sombras de todas as peças.
+- `rodada2.cjs`: **249 verificações passaram**, incluindo a regressão de um caster por inimigo e sombras completas para heróis. `npm run test:rapido`: **41 passaram, 0 falharam**.
+- No perfil da fase 12 (40 inimigos-alvo, qualidade alta), `sombraDraws` caiu de **450,6 para 292 draws/quadro**; o painel marcou 12,6 ms antes e 2,95 ms depois. O total foi de **588 para 433 draws**.
+- A execução posterior teve rAF em **1 Hz** e cerca de três unidades vivas a menos; portanto não valida FPS comparável. A próxima medida precisa ocorrer com a aba realmente em primeiro plano e carga constante.
+- Fechei as abas temporárias do benchmark. O browser voltou à vitória de teste de Ponte em Chamas na aba original.

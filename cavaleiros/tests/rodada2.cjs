@@ -233,8 +233,11 @@ test('unidade clona cada material-fonte uma vez e mantém os bonecos isolados',(
     assert.strictEqual(scenes[0].meshes[0].material,scenes[0].meshes[1].material,'malhas que compartilham a fonte reutilizam o clone da unidade');
     assert.notStrictEqual(scenes[0].meshes[0].material,scenes[0].meshes[2].material,'fontes distintas continuam visualmente independentes');
     assert.notStrictEqual(scenes[0].meshes[0].material,scenes[1].meshes[0].material,'unidades diferentes nunca compartilham material mutável');
-    first.remove();second.remove();
-    assert.equal(disposed.length,4,'cada material próprio é descartado uma vez');
+    assert.equal(scenes[0].meshes.filter(mesh=>mesh.castShadow).length,1,'inimigo usa um único caster de sombra, mesmo com acessórios separados');
+    const hero=new t.Unit(gltf,stats,'hero');
+    assert.equal(scenes[2].meshes.filter(mesh=>mesh.castShadow).length,3,'herói mantém a sombra das peças e equipamentos');
+    first.remove();second.remove();hero.remove();
+    assert.equal(disposed.length,6,'cada material próprio é descartado uma vez, incluindo o herói usado na comparação');
   }finally{context.SkeletonUtils.clone=originalClone;clear();}
 });
 let fxMaterialCreates=0,beamVectorCreates=0;

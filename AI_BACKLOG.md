@@ -58,7 +58,7 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | # | Item | Área | Esf/Risco | Onde |
 |---|---|---|---|---|
 | 39 | Pools: `glow()`, `waterSplash`, material da queimadura, clones da torreta/`fireBolt` | Perf | M/B | main.js:2868,2927,3048,3137,3311 |
-| 40 | Sombra alinhada à grade de texels, pixel ratio ≤1.5; medir com `?bench=1` | Perf | P/B | main.js:226-230,7994 |
+| 40 | Alinhamento das sombras e pixel ratio ≤1.5 já entregues; fechar uma linha de base de FPS em benchmark sem throttling | Perf | P/B | `?bench=15&perfil=1`; redução de casters aplicada; FPS comparável pendente |
 | 41 | Remover CSS mobile morto e consolidar CSS inline no battle-hud.css | UI | M/M | index.html, battle-hud.css, campaign.css |
 | 42 | Extrair dados de heróis e física de main.js (ajustar marcadores dos testes) | Arquitetura | M/M | main.js, tests/* |
 | 43 | Extrair biblioteca de FX (~1400 linhas) | Arquitetura | G/M | main.js:3148-4554 |

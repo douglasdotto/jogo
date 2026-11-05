@@ -12,4 +12,4 @@
 | 2026-10-30 | 10adb93 | 23/23 (simulação 139 s) | menu carrega sem erro no console |
 
 ## Métricas de performance
-`?bench=1` registra draw calls, triângulos, memória e tempos do quadro. `?perfil=1` separa tempos em ms/quadro da contagem de draws de sombra por quadro. Ainda sem uma linha de base isolada: a medição exploratória de 2026-11-05 ocorreu enquanto outra aba do jogo estava aberta; repetir antes de concluir ganhos ou perdas.
+`?bench=1` registra draw calls, triângulos, memória e tempos do quadro. `?perfil=1` separa tempos em ms/quadro da contagem de draws de sombra por quadro. Amostra exploratória em 2026-11-05: após limitar cada inimigo a uma malha de sombra, o trecho da fase 12 caiu de 450,6 para 292 draws de sombra/quadro e de 12,6 para 2,95 ms de sombra/quadro. O teste posterior sofreu throttling de rAF a 1 Hz e tinha 3 unidades vivas a menos; não usar FPS nem esses tempos como comparação final. Falta repetir com o benchmark realmente em primeiro plano e a mesma carga.

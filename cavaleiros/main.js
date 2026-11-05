@@ -2628,11 +2628,12 @@ function skeletonModel(model) {
   return gltf;
 }
 
-// esqueletos inimigos: corpo, braços e pernas usam o mesmo material e o mesmo esqueleto, então viram uma
-// malha só no modelo-base (uma vez por modelo). Cada inimigo desenha 4 peças a menos, na câmera e na sombra.
-// A capa entra no corpo e a mandíbula na cabeça (ou crânio): a cabeça continua separada porque voa sozinha
-// (Enxame de Crânios); os olhos têm material próprio. userData.merged guarda os nomes para quem procura a peça
-// pelo nome (ex.: capa recolorida pinta o material compartilhado, o mesmo do corpo).
+// Esqueletos inimigos: corpo, braços e pernas usam o mesmo material e o mesmo esqueleto, então viram uma
+// malha só no modelo-base (uma vez por modelo). A sombra usa a maior malha do boneco; armas e detalhes ficam
+// visíveis no modelo, mas não abrem chamadas extras de sombra a cada inimigo. A capa entra no corpo e a
+// mandíbula na cabeça (ou crânio): a cabeça continua separada porque voa sozinha (Enxame de Crânios);
+// userData.merged guarda os nomes para quem procura a peça pelo nome (ex.: capa recolorida pinta o material
+// compartilhado, o mesmo do corpo).
 const mergedSkeletonModels = new WeakSet();
 const SKELETON_MERGE_GROUPS = [[/_(Body|ArmLeft|ArmRight|LegLeft|LegRight|Cloak)$/, /_Body$/], [/_(Head|Skull|Jaw)$/, /_(Head|Skull)$/]];
 function mergeSkeletonLimbs(model) {
@@ -2668,16 +2669,16 @@ class Unit {
     mergeSkeletonLimbs(gltf.scene);
     this.root = SkeletonUtils.clone(gltf.scene);
     this.mats = [];   // materiais próprios para piscar ao levar golpe sem afetar os outros
-    const skinned = [], enemyShadowMeshes = [];
+    const skinned = [], enemyShadowCandidates = [];
     const materialCopies = new Map();
     this.root.traverse((o) => {
       if (!o.isMesh) return;
       if (o.material.userData?.vfx) { o.castShadow = o.frustumCulled = false; return; }   // chama em shader: material compartilhado, sem sombra
       o.castShadow = !/_Eyes$/.test(o.name);   // olhos ficam dentro da cabeça: a sombra seria a mesma, com uma chamada a mais
+      if (team === 'skeleton' && o.castShadow) enemyShadowCandidates.push(o);
       o.frustumCulled = true;
       if (o.isSkinnedMesh) {
         skinned.push(o);
-        if (team === 'skeleton') enemyShadowMeshes.push(o);
       }
       const sourceMaterial = o.material;
       let unitMaterial = materialCopies.get(sourceMaterial);
@@ -2691,14 +2692,14 @@ class Unit {
     });
     // Modelos animados têm várias peças com o mesmo contorno; uma sombra da malha
     // principal basta e evita centenas de chamadas extras quando a horda se agrupa.
-    if (enemyShadowMeshes.length > 1) {
-      let shadowCaster = enemyShadowMeshes[0];
-      for (const mesh of enemyShadowMeshes) {
+    if (enemyShadowCandidates.length > 1) {
+      let shadowCaster = enemyShadowCandidates[0];
+      for (const mesh of enemyShadowCandidates) {
         const size = mesh.geometry?.attributes?.position?.count || 0;
         const currentSize = shadowCaster.geometry?.attributes?.position?.count || 0;
         if (size > currentSize) shadowCaster = mesh;
       }
-      for (const mesh of enemyShadowMeshes) mesh.castShadow = mesh === shadowCaster;
+      for (const mesh of enemyShadowCandidates) mesh.castShadow = mesh === shadowCaster;
     }
     fitCullingSphere(skinned);
     this.vel = new THREE.Vector3();   // velocidade atual: acelera e freia aos poucos
