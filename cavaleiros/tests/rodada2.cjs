@@ -10,6 +10,7 @@ const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
 const campaign = loadCampaignSource(dir);
 const classInfo = fs.readFileSync(path.join(dir, 'class-info.js'), 'utf8');
+const heroRoster = fs.readFileSync(path.join(dir, 'hero-roster.js'), 'utf8');
 const skillbook = fs.readFileSync(path.join(dir, 'skillbook.js'), 'utf8');
 const skillTargeting = fs.readFileSync(path.join(dir, 'skill-targeting.js'), 'utf8');
 const synergies = fs.readFileSync(path.join(dir, 'synergies.js'), 'utf8');
@@ -99,6 +100,7 @@ vm.runInContext(synergies.replaceAll('export ',''),context);
 vm.runInContext(upgradeBranches.replaceAll('export ',''),context);
 vm.runInContext(battleReport.replaceAll('export ',''),context);
 vm.runInContext(monsters.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
+vm.runInContext(heroRoster.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
 vm.runInContext(progression.replaceAll('export ',''),context);
 vm.runInContext(fxPool.replaceAll('export ',''),context);
 vm.runInContext(campaignAura.replaceAll('export ',''),context);
@@ -1214,6 +1216,12 @@ test('ultimate de área causa dano, anima o golpe e inicia uma recarga longa',()
   assert.equal(e.flashHeavy,true,'acerto da ultimate pisca branco no alvo');
   assert.equal(h.ultHit,false,'a marca de ultimate vale só durante o golpe');
   const after=e.hp;e.takeDamage(10,null,h);assert.ok(e.hp<after);assert.equal(e.flashHeavy,false,'golpe comum volta ao clarão vermelho');
+});
+test('reação ao dano não prende a IA do herói durante a animação inteira',()=>{
+  clear();const h=new t.Hero(cfg('pyro')),attacker=new t.Skeleton('Minion',1);h.busy=0;
+  h.takeDamage(10,attacker.pos,attacker);
+  assert.ok(h.busy>0&&h.busy<=0.32,'a reação visual deixa de bloquear ações por mais de 0,32 s');
+  clear();
 });
 test('técnicas, segundas técnicas e ultimates das variantes executam seus efeitos sem erro',()=>{
   for(const v of t.VARIANTS)for(const slot of [1,2,3]){
@@ -4838,6 +4846,14 @@ test('escolta com 4 heróis, aldeão e milícia: cada um na sua vaga, parados e 
     assert.ok(all().every(u=>u.vel.length()<0.25),'ociosos ficam parados na vaga');
     t.world.obstacles=saved;
   }
+  clear();
+});
+test('o destrave de movimento ainda desvia dos aliados em vez de empurrar a fila inteira',()=>{
+  clear();const pusher=new t.Hero(cfg('pyro')),ally=new t.Hero(cfg('guardian'));
+  pusher.pos.set(0,0,0);ally.pos.set(0,0,1.1);pusher.pushT=1.2;
+  pusher.moveTo(pusher.pos.clone().set(0,0,5),1/30);
+  assert.ok(Math.abs(pusher.vel.x)>0.05,'o herói em destrave ainda escolhe uma lateral livre');
+  assert.ok(pusher.vel.z>0,'o desvio preserva avanço rumo ao objetivo');
   clear();
 });
 test('heróis ociosos caçam o inimigo a ~10 m; um guarda fica com o aldeão e ninguém volta ao posto sem motivo',()=>{

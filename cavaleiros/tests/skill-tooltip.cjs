@@ -16,11 +16,12 @@ const slice = (from, to, extra = 0) => {
 };
 
 const recipes = read('characters.js');
+const roster = read('hero-roster.js');
 const charactersSource = recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '');
-const heroesSource = slice('const HEROES = [', '\nconst variantsOf');
+const heroesSource = roster.slice(roster.indexOf('export const HEROES ='), roster.indexOf('export const PICK_GROUPS')).replace(/^export /gm, '');
 const glyphSource = slice('const SKILL_GLYPHS = {', '\n};', 3);
 const tooltipSource = slice('const SKILL_KIND = [', "\nregisterTooltip('skill'");
-const levelsSource = slice('const XP_LEVELS', '\nconst SKELETONS');
+const levelsSource = slice('const XP_LEVELS', 'const DIFFICULTY_PICK_HINT');
 
 const context = vm.createContext({ Math, Object, Number, String, Array, onField: [] });
 vm.runInContext(`

@@ -15,12 +15,14 @@ const slice = (from, to) => {
   return main.slice(s, e);
 };
 const recipes = read('characters.js');
+const roster = read('hero-roster.js');
+const heroData = roster.slice(roster.indexOf('export const HEROES ='), roster.indexOf('export const PICK_GROUPS')).replace(/^export /gm, '');
 const context = vm.createContext({ Math, Object, Number, String, Array });
 vm.runInContext(`
   ${strip(read('class-info.js'))}
   ${strip(read('skillbook.js'))}
   ${recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '')}
-  ${slice('const HEROES = [', '\nconst variantsOf')}
+  ${heroData}
   this.api = { VARIANTS, skillSetFor, cooldownForSkill };
 `, context);
 const { VARIANTS, skillSetFor, cooldownForSkill } = context.api;

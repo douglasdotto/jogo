@@ -61,7 +61,7 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | 39 | Pool restante: FX da torreta | Perf | M/B | main.js:2868,2927,3048,3137,4304,4390,4780 |
 | 40 | Alinhamento das sombras e pixel ratio ≤1.5 já entregues; medir FPS no Chrome acelerado com carga constante | Perf | P/B | `?bench=15&perfil=1`; arena de teste exibiu aviso de FPS baixo, mas sem uma linha comparável |
 | 41 | Remover CSS mobile morto e consolidar CSS inline no battle-hud.css | UI | M/M | index.html, battle-hud.css, campaign.css |
-| 42 | Extrair dados de heróis e física de main.js (ajustar marcadores dos testes) | Arquitetura | M/M | main.js, tests/* |
+| 42 | ~~Extrair dados de heróis e física de main.js (ajustar marcadores dos testes)~~ | Arquitetura | M/M | `hero-roster.js`; dados movidos, harnesses ajustados e cerca de 150 linhas removidas de `main.js` |
 | 43 | Extrair biblioteca de FX (~1400 linhas) | Arquitetura | G/M | main.js:3148-4554 |
 | 44 | Centralizar `keydown` (Esc tratado em 3 lugares) | Arquitetura | M/M | main.js |
 | 45 | Testes: mira, skillTooltip, collisionMove | QA | M/B | tests/ |

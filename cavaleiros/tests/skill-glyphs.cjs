@@ -5,9 +5,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-const variantsStart = main.indexOf('const VARIANTS = [');
-assert.ok(variantsStart >= 0, 'main.js declara VARIANTS');
-const variantsBlock = main.slice(variantsStart, main.indexOf('\n]', variantsStart));
+const roster = fs.readFileSync(path.join(__dirname, '..', 'hero-roster.js'), 'utf8');
+const variantsStart = roster.indexOf('export const VARIANTS = [');
+assert.ok(variantsStart >= 0, 'hero-roster.js declara VARIANTS');
+const variantsBlock = roster.slice(variantsStart, roster.indexOf('\n].map', variantsStart));
 const ids = [...variantsBlock.matchAll(/^\s*\{ id: '([a-z_]+)'/gm)].map((match) => match[1]);
 assert.ok(ids.length >= 27, `esperava ao menos 27 variantes, achou ${ids.length}`);
 

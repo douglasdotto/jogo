@@ -239,3 +239,16 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Pesadelo, Ponte em Chamas, quatro heróis aleatórios, 10 sementes e sem XP acumulado: **10/10 vitórias**, com 4×3★, 3×2★ e 3×1★; média de 0,1 queda. A pior rodada teve quatro vazamentos, mas não perdeu a missão.
 - A primeira execução revelou que o mock de `Quaternion` do simulador não implementava `identity()`, chamado pelo disparo especial do Ninja. Completei o mock nos dois harnesses; era uma limitação dos testes, não um erro do jogo.
 - A aba real do jogo permaneceu em execução durante a conferência visual, sem abrir uma segunda sessão.
+
+### IA sob pressão, empurra-empurra e recuo inimigo — 2026-11-05
+- Reação de dano do herói continua visível, mas limita o bloqueio da IA a 0,32 s. Antes a janela de animação podia suspender movimento e seleção de alvo por mais de um segundo. Regressão em `rodada2.cjs`.
+- Durante o destrave de movimento, os heróis voltam a desviar parcialmente dos aliados; o solucionador físico também distribui melhor o deslocamento, evitando jogar quase toda a fila para o lado. Regressão de corredor em `rodada2.cjs`.
+- Atiradores e suportes inimigos recuam apenas uma vez por aproximação: passo de 0,9 m, até 0,8 s, e só armam nova fuga quando a equipe se afasta a 8,5 m. Sacerdote e Xamã usam a mesma lógica comum. `chapter7-monsters.cjs` cobre recuo, ataque, rearme e contato coincidente.
+- Extração de `HEROES`, `VARIANTS`, grupos, formações, esqueletos e dificuldades para `hero-roster.js`; os testes agora carregam os dados pelo módulo correto.
+- `rodada2.cjs`: **256 verificações passaram**. `npm run test:rapido`: **42 passaram, 0 falharam** após integrar as mudanças.
+- `npm test` iniciou, mas o runner ficou mais de cinco minutos sem saída no bloco de 50 simulações padrão; interrompi esse bloco. As campanhas contínuas Pesadelo acima e os testes rápidos foram executados separadamente.
+- Browser: a missão A Ponte do Rio começou no Pesadelo; após a primeira onda, a equipe estava agrupada junto ao aldeão, com **100% de vida**, sete abates e nenhum erro no console. A partida ficou aberta na aba lateral para continuar a inspeção.
+
+### Campanha Pesadelo com composições variadas — 2026-11-05
+- Composição sorteada Brute/Clériga/Anjo/Xamã, seed `20261105`: **24/24 vitórias, 63/72 estrelas e 7 quedas**. Ponte do Rio terminou com 3★; Ponte em Chamas, Duelo, Cemitério e Arauto das Asas ficaram com 1★; Noite sem Fim ficou com 2★.
+- Sem cura e só corpo a corpo (Campeão/Berserker/Assassino/Duelista), seed `20261106`: **4/24 missões**. Caiu em Fazendas, fase 6, após 7 quedas no total; o Rei ainda tinha 148/1363 de vida e três inimigos vivos. É uma falha de composição extrema, não uma trava da campanha para equipes variadas.

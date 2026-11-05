@@ -116,10 +116,10 @@ assert.ok(has('cook', 'chefHat', 'head') && has('cook', 'apron', 'hips') && has(
 
 // cada variante do jogo tem aparência própria (LOOKS ou receita de characters.js) e aparece na vitrine,
 // na mesma ordem de VARIANTS; antes Engenheira, Domador e Oráculo entravam como Mago/Bárbaro sem pintura
-const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-const variantBlock = main.slice(main.indexOf('const VARIANTS = ['), main.indexOf('].map((v) => ({ ...HEROES'));
+const roster = fs.readFileSync(path.join(__dirname, '..', 'hero-roster.js'), 'utf8');
+const variantBlock = roster.slice(roster.indexOf('export const VARIANTS = ['), roster.indexOf('].map((v) => ({ ...HEROES'));
 const variants = variantBlock.split(/\n  \{ id: '/).slice(1).map((body) => ({ id: body.slice(0, body.indexOf("'")), recipe: /recipe: CHARACTERS\[(\d+)\]/.exec(body)?.[1] }));
-assert.ok(variants.length > 0, 'VARIANTS lido de main.js');
+assert.ok(variants.length > 0, 'VARIANTS lido de hero-roster.js');
 assert.deepEqual(Array.from(LOOK_PREVIEW, (v) => v.id), variants.map((v) => v.id), 'LOOK_PREVIEW lista todas as variantes na ordem de VARIANTS');
 for (const v of variants) {
   const preview = LOOK_PREVIEW.find((p) => p.id === v.id);

@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const dir = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'synergies.js'), 'utf8');
 const main = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
+const roster = fs.readFileSync(path.join(dir, 'hero-roster.js'), 'utf8');
 const context = vm.createContext({});
 vm.runInContext(`${source.replaceAll('export ', '')}
 this.api = { SYNERGIES, damageSynergies, synergyDamageMultiplier, synergyDamageTakenMultiplier, synergyHealMultiplier, synergySummonHaste, activeSynergies };`, context);
@@ -18,8 +19,8 @@ const hero = (id, state = {}) => ({ cfg: { id }, dead: false, pos: pos(0), ...st
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
 
 // dados válidos: ids existem, ícone curto, efeito curto
-const heroIds = new Set([...main.matchAll(/\{ id: '([a-z_]+)', names: \[/g)].map((m) => m[1]));
-assert.ok(heroIds.size >= 27, 'lista de heróis lida do main.js');
+const heroIds = new Set([...roster.matchAll(/\{ id: '([a-z_]+)', names: \[/g)].map((m) => m[1]));
+assert.ok(heroIds.size >= 27, 'lista de heróis lida do hero-roster.js');
 assert.ok(s.SYNERGIES.length >= 7, 'pelo menos 4 sinergias novas além das 3 originais');
 assert.equal(new Set(s.SYNERGIES.map((x) => x.id)).size, s.SYNERGIES.length, 'ids únicos');
 for (const synergy of s.SYNERGIES) {

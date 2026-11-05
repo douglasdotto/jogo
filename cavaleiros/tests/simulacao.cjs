@@ -14,6 +14,7 @@ const { createNavigationWorld, seedRoadObstacles } = require('./navigation-world
 const loadCampaignSource = require('./campaign-source.cjs');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
+const heroRoster = fs.readFileSync(path.join(dir, 'hero-roster.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
 const campaign = loadCampaignSource(dir);
 const classInfo = fs.readFileSync(path.join(dir, 'class-info.js'), 'utf8');
@@ -100,6 +101,7 @@ vm.runInContext(synergies.replaceAll('export ', ''), context);
 vm.runInContext(upgradeBranches.replaceAll('export ', ''), context);
 vm.runInContext(battleReport.replaceAll('export ', ''), context);
 vm.runInContext(monsters.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
+vm.runInContext(heroRoster.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
 vm.runInContext(progression.replaceAll('export ', ''), context);   // sem localStorage: progressão só na memória, zerada
 vm.runInContext(fxPool.replaceAll('export ', ''), context);
 vm.runInContext('const poofStarMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 256);', context);   // splash da água (lagos) usa o estoque de estrelas

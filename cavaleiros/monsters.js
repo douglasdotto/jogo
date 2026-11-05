@@ -371,12 +371,33 @@ function giveWard(shaman, o) {
 }
 
 // atirador que fica a meia distância: aproxima, recua de quem encosta e atira
-const RANGED_KEEP_STEP = 1.5;
+const RANGED_KEEP_STEP = 0.9;
+const RANGED_RETREAT_TIME = 0.8;
+const RANGED_RETREAT_RESET = 8.5;
 function keepRange(s, dt, target) {
   const d = flat(s.pos, target.pos);
-  if (d > 7) s.moveTo(target.pos, dt);
-  else if (d < 4.5 && (s.mayRetreat?.(dt) ?? true)) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(RANGED_KEEP_STEP)), dt);
-  else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
+  if (d >= RANGED_RETREAT_RESET) { s.rangedRetreatUsed = false; s.rangedRetreatT = 0; }
+  if (d > 7) { s.rangedRetreatT = 0; s.moveTo(target.pos, dt); return true; }
+  if (s.rangedRetreatT > 0) {
+    s.rangedRetreatT = Math.max(0, s.rangedRetreatT - dt);
+    if (s.rangedRetreatT > 0 && s.rangedRetreatGoal && flat(s.pos, s.rangedRetreatGoal) > 0.18) {
+      s.moveTo(s.rangedRetreatGoal, dt);
+      return true;
+    }
+    s.rangedRetreatT = 0;
+  }
+  if (d < 4.5 && !s.rangedRetreatUsed) {
+    const away = mV.subVectors(s.pos, target.pos).setY(0);
+    if (away.lengthSq() > 0.001) {
+      s.rangedRetreatUsed = true;
+      s.rangedRetreatGoal ||= new THREE.Vector3();
+      s.rangedRetreatGoal.copy(s.pos).add(away.normalize().multiplyScalar(RANGED_KEEP_STEP));
+      s.rangedRetreatT = RANGED_RETREAT_TIME;
+      s.moveTo(s.rangedRetreatGoal, dt);
+      return true;
+    }
+  }
+  if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
   return true;
 }
 
@@ -700,11 +721,7 @@ export const MONSTER_TYPES = {
           return true;
         }
       }
-      const d = flat(s.pos, target.pos);
-      if (d > 7) s.moveTo(target.pos, dt);
-      else if (d < 4.5 && (s.mayRetreat?.(dt) ?? true)) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(RANGED_KEEP_STEP)), dt);
-      else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
-      return true;
+      return keepRange(s, dt, target);
     } },
 
   // translúcido, flutua, atravessa pedras e o grupo para pegar quem está atrás
@@ -834,11 +851,7 @@ export const MONSTER_TYPES = {
         }
         s.cd.ward = 1;
       }
-      const d = flat(s.pos, target.pos);
-      if (d > 7) s.moveTo(target.pos, dt);
-      else if (d < 4.5 && (s.mayRetreat?.(dt) ?? true)) s.moveTo(mAway.copy(s.pos).add(mV.subVectors(s.pos, target.pos).setY(0).normalize().multiplyScalar(RANGED_KEEP_STEP)), dt);
-      else if (s.face(target.pos, dt) < 0.5 && s.attackTimer <= 0) s.attack(target, s.attackAnim);
-      return true;
+      return keepRange(s, dt, target);
     } },
 
   // cavaleiro sombrio: marca uma linha no chão, investe com a lança e fica exausto alguns instantes

@@ -19,6 +19,7 @@ class Vector3 {
   subVectors(a, b) { return this.set(a.x - b.x, a.y - b.y, a.z - b.z); }
   addScaledVector(v, k) { this.x += v.x * k; this.y += v.y * k; this.z += v.z * k; return this; }
   multiplyScalar(k) { this.x *= k; this.y *= k; this.z *= k; return this; }
+  lengthSq() { return this.x * this.x + this.y * this.y + this.z * this.z; }
   length() { return Math.hypot(this.x, this.y, this.z); }
   normalize() { const l = this.length() || 1; return this.set(this.x / l, this.y / l, this.z / l); }
 }
@@ -53,7 +54,8 @@ function world() {
     root.traverse = () => {};
     const s = { team: 'skeleton', enemyKind: type, kind: TYPES[type], dead: false, stunT: 0, busy: 0, spawning: false, size: TYPES[type].size || 1,
       hp: 1000, maxHp: 1000, dmg: 10, speed: 1, cooldown: 2, attackTimer: 0, pos: new Vector3(), root, mats: [], boss: true, phaseBoss: true,
-      vel: new Vector3(), once() { return 1; }, loop() {}, action: () => ({ getClip: () => ({ duration: 1 }) }), ...extra };
+      vel: new Vector3(), moveCalls: [], attackCalls: 0, moveTo(goal) { this.moveCalls.push(goal.clone()); }, face() { return 0; }, attack() { this.attackCalls++; },
+      once() { return 1; }, loop() {}, action: () => ({ getClip: () => ({ duration: 1 }) }), ...extra };
     units.push(s);
     s.kind.dress?.(s);
     return s;
@@ -155,6 +157,32 @@ function world() {
   assert.ok(near.attackTimer < 0.6 && far.attackTimer === 1, 'só quem está dentro do anel ataca mais rápido');
   b.stunT = 1; near.attackTimer = 1; step(b, 0.5);
   assert.ok(!b.aura.visible && near.attackTimer === 1, 'atordoado, o estandarte para de inspirar');
+}
+
+// ---------- atiradores não puxam a equipe numa fuga contínua ----------
+{
+  const { hero, make } = world();
+  const h = hero(0, 0);
+  const s = make('Venomer', { boss: false, phaseBoss: false, pos: new Vector3(0, 0, 3) });
+  s.kind.think(s, 0.1, h);
+  assert.equal(s.moveCalls.length, 1, 'a curta distância, dá um único passo evasivo');
+  assert.ok(Math.abs(Math.hypot(s.rangedRetreatGoal.x - s.pos.x, s.rangedRetreatGoal.z - s.pos.z) - 0.9) < 1e-9, 'o passo evasivo tem menos de um metro');
+  for (let i = 0; i < 9; i++) s.kind.think(s, 0.1, h);
+  const afterStep = s.moveCalls.length;
+  assert.ok(afterStep > 1 && afterStep <= 9, 'termina o passo em menos de um segundo');
+  s.kind.think(s, 0.1, h);
+  assert.equal(s.moveCalls.length, afterStep, 'não volta a fugir enquanto o herói mantém a pressão');
+  assert.ok(s.attackCalls > 0, 'ataca o herói em vez de puxá-lo pelo mapa');
+  h.pos.set(0, 0, 12);
+  s.kind.think(s, 0.1, h);
+  assert.equal(s.rangedRetreatUsed, false, 'rearma o passo só quando o herói deixa a área');
+  const afterDisengage = s.moveCalls.length;
+  h.pos.set(0, 0, 2);
+  s.kind.think(s, 0.1, h);
+  assert.ok(s.moveCalls.length > afterDisengage && s.rangedRetreatUsed, 'um novo recuo só volta depois de o herói se afastar');
+  s.rangedRetreatT = 0; h.pos.copy(s.pos);
+  s.kind.think(s, 0.1, h);
+  assert.ok(s.attackCalls > 1, 'se o herói encosta, não trava tentando recuar no mesmo ponto');
 }
 
 // ---------- variações de chefe, ameaças e inimigos da missão ----------
