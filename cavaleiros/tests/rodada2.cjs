@@ -2648,7 +2648,8 @@ test('defesa fixa reserva uma âncora sem depender da ordem de atualização e t
     const anchor=goalType==='defend'?team.escortGuard:(vm.runInContext('escortGuardOf',context)(guards)||guards[0]);
     assert.strictEqual(team.defenseAnchor,anchor,goalType+': âncora é derivada da ordem estável da equipe, não da chamada');
     if(goalType==='defend')assert.equal(results.get(anchor),null,'santuário: a âncora conserva o posto enquanto os outros interceptam');
-    else assert.equal(results.get(anchor),null,goalType+': a âncora permanece junto à ponte enquanto os aliados interceptam');
+    else if(count===2)assert.ok(threats.includes(results.get(anchor)),goalType+': com só dois heróis a âncora ajuda a interceptar perto da ponte');
+    else assert.equal(results.get(anchor),null,goalType+': com equipe maior a âncora permanece junto à ponte');
     assert.ok([...results.values()].filter(Boolean).length<=(goalType==='breach'?2:count),goalType+': só a equipe local do objetivo entra no combate');
     assert.ok([...results.values()].some(Boolean),goalType+': os demais ainda podem interceptar');
   }
@@ -4476,6 +4477,12 @@ test('ponte: ambos os heróis interceptam e priorizam corredores antes do portã
     assert.ok(t.heroTargetScore(h,runner,h.pos,contextRef)<t.heroTargetScore(h,local,h.pos,contextRef),h.cfg.id+': corredor mais perto do portão tem prioridade sobre o Golem');
     assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),runner,h.cfg.id+': a dupla responde ao corredor que ameaça a ponte');
   }
+  const intruder=new t.Skeleton('Warrior',1);intruder.spawning=false;intruder.pos.set(0,0,10);
+  contextRef=t.makeTargetContext();
+  for(const h of guards){
+    assert.equal(t.canHeroReachTarget(h,intruder,contextRef),true,h.cfg.id+': ambos ajudam contra inimigo já dentro do perímetro da ponte');
+    assert.strictEqual(t.chooseHeroTarget(h,[local,intruder],.016,contextRef),intruder,h.cfg.id+': a ameaça local à ponte recebe foco');
+  }
   runner.pos.set(0,0,16);contextRef=t.makeTargetContext();
   for(const h of guards){
     if(h===contextRef.defenseAnchor){
@@ -4483,7 +4490,7 @@ test('ponte: ambos os heróis interceptam e priorizam corredores antes do portã
       assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),runner,h.cfg.id+': corredor recebe prioridade até o limite ampliado');
     }
   }
-  runner.raider=false;runner.target=null;runner.pos.set(0,0,16);
+  runner.raider=false;runner.target=null;runner.pos.set(0,0,18);
   for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);}
   local.pos.set(0,0,1);
   contextRef=t.makeTargetContext();
@@ -4767,6 +4774,25 @@ test('guarda é fraca, não segue o grupo e só ataca quem chega perto do proteg
   const item=report.find(r=>r.id==='militia');assert.ok(item,'relatório tem a guarda');assert.match(item.text,/123/);
   assert.equal(report.find(r=>r.id==='top-hero').text,'A','destaque continua sendo herói');
   clear();
+});
+test('na escolta, o último herói vivo assume a guarda e não abandona o aldeão para caçar longe',()=>{
+  clear();t.game.shrine=null;t.game.gate=null;
+  const m=t.MISSIONS.find(x=>x.id==='ponte'),saved=t.world.obstacles;t.world.obstacles=[];
+  Object.assign(t.game,{mission:m,start:m.from,phase:m.from,last:m.to,test:true,state:'advance',guideS:30});
+  try{
+    const survivor=new t.Hero(cfg('berserker'));
+    const villager=t.game.villager=new t.Villager();
+    t.arrangeParty();survivor.pos.copy(survivor.post);
+    let ctx=t.makeTargetContext();
+    assert.strictEqual(ctx.escortGuard,survivor,'um único herói vivo continua sendo o guarda');
+    assert.ok(survivor.post.distanceTo(villager.pos)<4,'o guarda ocupa a vaga junto ao aldeão');
+    t.game.state='fight';t.game.toSpawn=0;
+    const near=foe('Warrior',villager.pos.x,villager.pos.z+9);
+    const far=foe('Warrior',villager.pos.x,villager.pos.z+23);
+    ctx=t.makeTargetContext();
+    assert.equal(t.chooseHeroTarget(survivor,[near,far],.016,ctx),near,'o sobrevivente protege o aldeão da ameaça próxima');
+    assert.equal(t.canHeroReachTarget(survivor,far,ctx),false,'o sobrevivente não abandona o objetivo para caçar além do perímetro');
+  }finally{t.world.obstacles=saved;clear();}
 });
 test('escolta com 4 heróis, aldeão e milícia: cada um na sua vaga, parados e sem empurra-empurra',()=>{
   // Visto no jogo: na ponte os 4 heróis, o aldeão e os 4 guardas se amontoavam em volta do aldeão e se empurravam sem inimigos.

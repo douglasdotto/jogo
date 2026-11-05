@@ -193,9 +193,11 @@ const FRAG = {
       float rim = pow(1.0 - abs(dot(fn, eye)), 1.6);
       float facet = hash(floor(fn.xy * 4.0 + 10.0));
       float glint = smoothstep(0.92, 1.0, sin(dot(vWorld, vec3(2.0, 3.0, 1.5)) * 1.7 - uTime * 3.5 + uSeed));
+      float streakPhase = fract(vUv.x * 0.9 + vUv.y * 0.7 - uTime * 0.45 + uSeed * 0.17);
+      float facetStreak = (1.0 - smoothstep(0.0, 0.045, abs(streakPhase - 0.5))) * step(0.45, facet);
       vec3 c = mix(uEdge, uMid, step(0.35, facet * 0.6 + rim));
-      c = mix(c, uCore, step(0.62, rim + facet * 0.15) + glint);
-      gl_FragColor = vec4(c, (0.72 + rim * 0.28) * uOpacity);
+      c = mix(c, uCore, min(1.0, step(0.62, rim + facet * 0.15) + glint + facetStreak * 0.55));
+      gl_FragColor = vec4(c, (0.72 + rim * 0.25 + facetStreak * 0.03) * uOpacity);
     }`,
 };
 

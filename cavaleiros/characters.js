@@ -601,6 +601,39 @@ const ACCESSORIES = {
     if (studs.length) g.add(new THREE.Mesh(merged(studs), lambert(0xe8e0c8)));
     return g;
   },
+  // ombreira exclusiva do Campeão: placa arredondada, brasão esmaltado e rebites de bronze
+  suncrestPauldron({ color = 0x8a5030, trim = 0xe8b14a, enamel = 0xd13b3b, side = 1 } = {}) {
+    const x = side * 0.42;
+    const shell = piece(
+      new THREE.SphereGeometry(0.22, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+      [x, 0.2, 0], [0, 0, -side * 0.25], [1.08, 0.82, 1.08],
+    );
+
+    const shield = (width, height) => {
+      const shape = new THREE.Shape();
+      shape.moveTo(-width, height * 0.48);
+      shape.lineTo(width, height * 0.48);
+      shape.lineTo(width * 0.82, -height * 0.08);
+      shape.lineTo(0, -height * 0.52);
+      shape.lineTo(-width * 0.82, -height * 0.08);
+      shape.closePath();
+      return new THREE.ShapeGeometry(shape);
+    };
+    const goldwork = [
+      piece(new THREE.TorusGeometry(0.2, 0.026, 4, 12), [x, 0.2, 0], [Math.PI / 2, 0, -side * 0.25], [1.06, 1, 1.06]),
+      piece(shield(0.112, 0.19), [x, 0.31, 0.205]),
+      piece(shield(0.034, 0.058), [x, 0.31, 0.216]),
+    ];
+    for (const [dx, dy] of [[-0.13, 0.29], [0.13, 0.29], [-0.13, 0.12], [0.13, 0.12]]) {
+      goldwork.push(piece(new THREE.SphereGeometry(0.022, 6, 4), [x + dx, dy, 0.17]));
+    }
+    const inset = piece(shield(0.078, 0.135), [x, 0.31, 0.211]);
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged([shell]), lambert(color)));
+    g.add(new THREE.Mesh(merged(goldwork), lambert(trim)));
+    g.add(new THREE.Mesh(merged([inset]), lambert(enamel, { emissive: 0x5c1414, emissiveIntensity: 0.2 })));
+    return g;
+  },
   // pele grossa em volta dos ombros, usada para deixar o viking do gelo mais robusto
   furMantle({ color = 0xd9e4ed } = {}) {
     const g = new THREE.Group(), fur = lambert(color), shadow = lambert(0x8196a8);

@@ -1676,8 +1676,16 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     placeAt(o, p, range(0.7, 1.3)); return true;
   }, false, null, { names: FOREST.grass, fit: 1, lift: 0.02, tint: grassTint, wind: true });
 
-  // flores em canteiros (5 a 9 juntas), não espalhadas como confete
-  const flowerGeo = new THREE.IcosahedronGeometry(0.1, 0).translate(0, 0.25, 0);
+  // flores em canteiros (5 a 9 juntas), não espalhadas como confete. Pétalas
+  // angulares e um miolo dão leitura de flor sem criar novas chamadas de desenho.
+  const flowerGeo = mergeGeometries([
+    ...Array.from({ length: 5 }, (_, i) => {
+      const angle = i * Math.PI * 2 / 5;
+      return new THREE.IcosahedronGeometry(0.065, 0).scale(1.05, 0.42, 0.62)
+        .rotateY(angle).translate(Math.sin(angle) * 0.055, 0.17, Math.cos(angle) * 0.055).toNonIndexed();
+    }),
+    new THREE.IcosahedronGeometry(0.032, 0).translate(0, 0.19, 0).toNonIndexed(),
+  ]);
   let flowerBed = null, bedLeft = 0;
   instanced([flowerGeo, [0xe8414a, 0xf5d142, 0xffffff, 0xb46ad9, 0xff8c3a, 0xff9ec7]], 1600, (o) => {
     if (bedLeft <= 0) { flowerBed = rand() < 0.35 ? skirt(1, 1.5, 3, false) : spot(1, ROAD + 22, 1.8, false); bedLeft = 5 + Math.floor(rand() * 5); }

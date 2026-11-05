@@ -89,7 +89,7 @@ export const LOOKS = {
     },
     extras: [
       { type: 'beard', bone: 'head', color: 0x5a2a14 },
-      { type: 'pauldrons', bone: 'chest', color: 0x8a5030, trim: 0xe8b14a, size: 0.95, sides: [1] },
+      { type: 'suncrestPauldron', bone: 'chest', side: 1 },
     ],
   },
   lancer: {   // lanceiro: azul-marinho e dourado, elmo dourado com pena, capa curta, ombreiras e lança longa (Fantasy Weapons)

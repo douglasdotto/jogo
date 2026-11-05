@@ -3311,22 +3311,21 @@ function makeTargetContext(reuse = null) {
 
 const targetContext = () => activeTargetContext || makeTargetContext();
 
-// guarda do protegido: o curandeiro do grupo, senão o mais resistente; empates usam id estável; só com 2+ heróis vivos
+// guarda do protegido: o curandeiro do grupo, senão o mais resistente; o último vivo mantém a vaga; empates usam id estável
 const isSupportHero = (hero) => pickGroupId(hero.cfg) === 'suporte';
 const guardDurability = (hero) => (hero.maxHp || 0) + (hero.armor || 0) * 30;
 const stableHeroId = (hero) => String(hero.cfg?.id || '');
 function escortGuardOf(party) {
-  let best = null, alive = 0;
+  let best = null;
   for (const hero of party) {
     if (hero.dead) continue;
-    alive++;
     if (!best) { best = hero; continue; }
     const supportRank = Number(isSupportHero(hero)) - Number(isSupportHero(best));
     const durabilityRank = guardDurability(hero) - guardDurability(best);
     if (supportRank > 0 || (supportRank === 0
       && (durabilityRank > 0 || (durabilityRank === 0 && stableHeroId(hero).localeCompare(stableHeroId(best)) < 0)))) best = hero;
   }
-  return alive >= 2 ? best : null;
+  return best;
 }
 
 // regra 1: herói que não é guarda caça quem está na arena visível em volta do grupo, longe ou perto do posto
@@ -3341,6 +3340,7 @@ function inHuntArena(hero, target, context, slack = 0) {
 // o guarda do protegido ataca quem chega perto do protegido ou dele, mesmo fora do leash do posto
 function escortGuardReach(hero, target, context) {
   if (hero !== context.escortGuard || !context.villager) return false;
+  if (tacticalDistance(hero.post, target.pos) > LEASH + hero.range + 5) return false;
   return tacticalDistance(context.villager.pos, target.pos) <= ESCORT_GUARD_REACH
     || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
 }
@@ -3600,7 +3600,7 @@ function hasBreachInterceptSlot(hero, target, context) {
         && tacticalDistance(ally.post, target.pos) <= Math.max(radius, LEASH + ally.range)) anotherInterceptor = true;
     }
     return fromPost <= hero.range + 0.5 || distanceToObjective <= LEASH + hero.range
-      || living === 1 && distanceToObjective <= BREACH_INTERCEPT_RADIUS
+      || living <= 2 && distanceToObjective <= BREACH_INTERCEPT_RADIUS
       || living === 2 && isBreachRunner(target, villager) && distanceToObjective <= BREACH_RUNNER_INTERCEPT_RADIUS
       || !anotherInterceptor && isBreachRunner(target, villager);
   }

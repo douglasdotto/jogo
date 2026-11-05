@@ -64,6 +64,8 @@ assert.match(runic, /outerMarks/, 'as runas têm marcas de leitura no anel exter
 const rays = vfxMaterial('rays', 'holy').fragmentShader;
 assert.match(rays, /ringPulse/, 'feixes de habilidade têm faixas de luz que sobem');
 assert.match(rays, /spiral/, 'feixes de habilidade têm fios de energia em espiral');
+const ice = vfxMaterial('ice', 'frost').fragmentShader;
+assert.match(ice, /facetStreak/, 'cristais de gelo têm riscos luminosos que percorrem algumas faces');
 
 // todas as combinações montam um shader com main(); sprites usam o vértice voltado à câmera
 for (const kind of KINDS) for (const pal of Object.keys(PALETTES)) {

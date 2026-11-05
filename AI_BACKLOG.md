@@ -53,11 +53,12 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | 36 | Narrativa: antagonista "necromante" x Lich; tela curta por capítulo | Campanha | M/B | campaign.js |
 | 37 | ~~Mapa da campanha com posições geradas (hoje 18 fixas, missão 19 quebra)~~ | Campanha | M/B | Geometria isolada em `campaign-layout.js`; layout determinístico cobre 24, 25, 28 e 36 missões |
 | 38 | Farm de ouro repetindo a Vila | Economia | P/M | progression.js:123 |
+| 51 | Consolidar direção visual 3D mobile polida nos heróis, biomas, materiais, HUD e VFX | Visual | G/M | `characters.js`, `world.js`, `battle-hud.css`, `vfx-shaders.js` |
 
 ## P3 — técnica e manutenção
 | # | Item | Área | Esf/Risco | Onde |
 |---|---|---|---|---|
-| 39 | Pool restante: FX da torreta; projéteis, anéis, feixes e marcas de chão reutilizam malhas com limites | Perf | M/B | main.js:2868,2927,3048,3137,4304,4390,4780 |
+| 39 | Pool restante: FX da torreta | Perf | M/B | main.js:2868,2927,3048,3137,4304,4390,4780 |
 | 40 | Alinhamento das sombras e pixel ratio ≤1.5 já entregues; medir FPS no Chrome acelerado com carga constante | Perf | P/B | `?bench=15&perfil=1`; arena de teste exibiu aviso de FPS baixo, mas sem uma linha comparável |
 | 41 | Remover CSS mobile morto e consolidar CSS inline no battle-hud.css | UI | M/M | index.html, battle-hud.css, campaign.css |
 | 42 | Extrair dados de heróis e física de main.js (ajustar marcadores dos testes) | Arquitetura | M/M | main.js, tests/* |

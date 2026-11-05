@@ -33,6 +33,7 @@ class Vector3 {
   copy(v) { return this.set(v.x, v.y, v.z); }
   clone() { return new Vector3(this.x, this.y, this.z); }
   add(v) { this.x += v.x; this.y += v.y; this.z += v.z; return this; }
+  addScalar(k) { this.x += k; this.y += k; this.z += k; return this; }
   sub(v) { this.x -= v.x; this.y -= v.y; this.z -= v.z; return this; }
   subVectors(a, b) { return this.set(a.x - b.x, a.y - b.y, a.z - b.z); }
   addScaledVector(v, k) { this.x += v.x * k; this.y += v.y * k; this.z += v.z * k; return this; }
