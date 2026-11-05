@@ -58,6 +58,9 @@ assert.ok(fire.userData.vfx, 'material marcado como efeito (heróis não o clona
 assert.equal(fire.depthWrite, false);
 assert.throws(() => vfxMaterial('flame', 'xadrez'), /desconhecido/);
 assert.throws(() => vfxMaterial('raio-laser', 'fire'), /desconhecido/);
+const runic = vfxMaterial('rune', 'runic').fragmentShader;
+assert.match(runic, /pulseRadius/, 'runas percorrem o círculo com um pulso luminoso');
+assert.match(runic, /outerMarks/, 'as runas têm marcas de leitura no anel externo');
 
 // todas as combinações montam um shader com main(); sprites usam o vértice voltado à câmera
 for (const kind of KINDS) for (const pal of Object.keys(PALETTES)) {

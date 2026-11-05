@@ -144,9 +144,15 @@ const FRAG = {
       float star = 0.0;
       for (int i = 0; i < 3; i++) { float k = float(i) * 2.094; star += smoothstep(0.03, 0.0, abs(dot(q, vec2(cos(k), sin(k))) - 0.34)); }
       star *= step(r, 0.7);
+      float pulseRadius = mod(uTime * 0.18 + fract(uSeed * 0.37), 0.66);
+      float pulse = 1.0 - smoothstep(0.0, 0.022, abs(r - pulseRadius));
+      float sector = abs(fract(a / 6.2832 * 14.0 + 0.5) - 0.5);
+      float outerMarks = (1.0 - smoothstep(0.04, 0.09, sector))
+        * smoothstep(0.88, 0.92, r) * (1.0 - smoothstep(0.98, 1.0, r));
       float shimmer = fbm(p * 3.0 + vec2(uTime * 0.4, -uTime * 0.3));
-      float e = clamp(ring + min(g, 1.0) + star * 0.8, 0.0, 1.0);
+      float e = clamp(ring + min(g, 1.0) + star * 0.8 + pulse * 0.35 + outerMarks * 0.45, 0.0, 1.0);
       vec3 c = mix(uMid, uCore, step(0.7, shimmer + e * 0.3));
+      c = mix(c, uCore, pulse * 0.48 + outerMarks * 0.3);
       float glow = 0.12 * smoothstep(1.0, 0.2, r) * shimmer;
       gl_FragColor = vec4(c, (e * (0.6 + 0.4 * shimmer) + glow) * uOpacity * (1.0 - uProgress));
     }`,

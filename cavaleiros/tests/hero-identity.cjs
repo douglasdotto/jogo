@@ -31,6 +31,8 @@ assert.ok(LOOKS.ninja.extras.some((extra) => extra.type === 'shurikenBelt'), 'Ni
 
 // ---------- paletas: as 30 variantes (19 de looks.js + 11 receitas de characters.js) ----------
 const recipes = fs.readFileSync(path.join(__dirname, '..', 'characters.js'), 'utf8');
+assert.ok(LOOKS.champion.extras.some((extra) => extra.type === 'pauldrons' && extra.sides?.length === 1), 'Campeão recebe uma ombreira assimétrica com acabamento próprio');
+assert.ok(recipes.includes('  pauldrons('), 'a ombreira do Campeão usa um acessório já suportado pelo montador');
 const slice = recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '');
 vm.runInNewContext(`${slice}\nglobalThis.result = CHARACTERS;`, context);
 const heroes = [

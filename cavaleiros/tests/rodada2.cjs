@@ -101,13 +101,14 @@ vm.runInContext(battleReport.replaceAll('export ',''),context);
 vm.runInContext(monsters.replace(/^import .*$/gm,'').replace(/^export /gm,''),context);
 vm.runInContext(progression.replaceAll('export ',''),context);
 vm.runInContext(fxPool.replaceAll('export ',''),context);
-vm.runInContext('groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 128);',context);
 vm.runInContext(campaignAura.replaceAll('export ',''),context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'..','scene-perf.js'),'utf8').replaceAll('export ',''),context);   // disposeSkeletons
 vm.runInContext(part(source,'const ROAD','// ---------- cena'),context);
 vm.runInContext(part(source,'const $','// retrato de cada'),context);
 vm.runInContext(part(source,'const units =','// projéteis e áreas'),context);
+vm.runInContext(part(source,'const boltMeshPools = new Map()','function ring(at, radius, color, life = 0.6)'),context);
 vm.runInContext(part(source,'function fireBolt','// ---------- efeitos fofos'),context);
+vm.runInContext('groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial(), 128);',context);
 vm.runInContext(part(source,'const fx = [];','// texto que salta'),context);
 // Carrega heróis, inimigos e separação física até o bloco de fases.
 const directControlListeners=new Map();
@@ -1754,6 +1755,30 @@ test('criar projéteis só copia a direção que precisa persistir e não aloca 
     assert.equal(t.bolts.at(-1).hit,null,'tiros que não atravessam inimigos dispensam o conjunto não usado');
   } finally {
     Vector.prototype.clone=originalClone;context.THREE.Vector3=Vector;t.bolts.length=0;
+  }
+});
+test('projéteis dos heróis reutilizam malhas sem misturar aparências',()=>{
+  clear();t.bolts.length=0;
+  const shooter=new t.Hero(cfg('pyro')),target=new t.Skeleton('Minion',1);
+  shooter.pos.set(0,0,0);target.spawning=false;target.pos.set(0,0,3);target.hp=target.maxHp=1e6;
+  const shoot=(kind,skill=false)=>{
+    t.fireBolt(shooter,target,kind,0,skill);
+    const bolt=t.bolts.at(-1),mesh=bolt.mesh;
+    for(let i=0;i<80&&t.bolts.includes(bolt);i++)t.updateBolts(.05);
+    assert.equal(t.bolts.includes(bolt),false,'projétil sai da lista ao acertar ou expirar');
+    assert.equal(mesh.visible,false,'malha some antes de voltar ao estoque');
+    return mesh;
+  };
+  try{
+    const orb=shoot('magic');
+    assert.strictEqual(shoot('magic'),orb,'orbe reutiliza a malha do mesmo visual');
+    const arrow=shoot('crossbow');
+    assert.notStrictEqual(arrow,orb,'flecha não herda material ou acessórios do orbe');
+    assert.strictEqual(shoot('crossbow'),arrow,'flecha reutiliza sua própria malha');
+    assert.notStrictEqual(shoot('magic',true),orb,'tiro de habilidade mantém escala própria');
+  }finally{
+    for(const bolt of t.bolts)context.scene.remove(bolt.mesh);
+    t.bolts.length=0;clear();
   }
 });
 test('Duelista: rajada alterna as lâminas, Corte em X atravessa a fila e a Dança de lâminas corta todos ao redor',()=>{

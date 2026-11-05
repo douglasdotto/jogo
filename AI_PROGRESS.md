@@ -197,3 +197,14 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 ### Menos corrida do alvo da Caçada — 2026-11-05
 - O alvo marcado agora recua só até 5 m à frente da âncora (antes 6,5 m) e dá passos menores quando alguém se aproxima, reduzindo o tempo de perseguição sem remover sua mecânica de fuga.
 - `rodada2.cjs`: **251 verificações passaram**; `npm run test:rapido`: **42 passaram, 0 falharam**. A regressão cobre o novo limite e a parada antecipada do alvo.
+
+### Disparos reutilizados e detalhes visuais — 2026-11-05
+- Projéteis dos heróis agora reutilizam malhas por identidade visual (herói, tipo e habilidade), com até 8 por visual e teto global de 96. Os acessórios do projétil são montados uma vez para cada malha reutilizável.
+- O Campeão ganhou uma ombreira assimétrica de couro e bronze com friso dourado. O shader rúnico ganhou um pulso que percorre o círculo e 14 marcas externas, sem criar malhas ou chamadas de desenho.
+- Regressões cobrem reuso sem mistura entre orbe e flecha, escala própria do disparo de habilidade, identidade do Campeão e componentes do shader rúnico. `rodada2.cjs`: **252 verificações**; `npm run test:rapido`: **42 passaram, 0 falharam**.
+- A campanha contínua no Pesadelo, seed `20261106`, venceu **24/24** com Paladino/Guardião/Piromante/Arqueira, somou **62/72 estrelas** e teve 8 quedas. O mesmo resultado foi observado antes e depois do pool.
+
+### Composições sem cura no Pesadelo — 2026-11-05
+- Campanha contínua, seed `20261106`, quatro combatentes corpo a corpo (Campeão/Berserker/Assassino/Duelista): venceu 4/24 missões e caiu em Fazendas, missão 5, após 7 quedas; os quatro caíram com 15 inimigos vivos. Esta equipe sem alcance e sem cura continua sendo uma composição de risco muito alto.
+- Campanha contínua, seed `20261107`, Lanceiro/Oráculo/Guardião/Geomante: derrota no Lago Sombrio, missão 12, fase 9, após 11/24 vitórias e 10 quedas; o Carrasco ainda tinha 492/1444 de vida. A amostra confirma que composições sem cura podem falhar em chefes longos.
+- Esses resultados não justificam reduzir a dificuldade global: a equipe protegida com dano misto concluiu a campanha na mesma seed com 62 estrelas e 8 quedas. Manter as derrotas sem cura como risco de composição enquanto ampliamos a amostra.

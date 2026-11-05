@@ -4306,6 +4306,40 @@ const colors = { cook: 0xe0603a, pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999f
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
 const goldMat = new THREE.MeshBasicMaterial({ color: 0xffdf70 });
 
+const boltMeshPools = new Map(), BOLT_MESH_POOL_PER_LOOK = 8, BOLT_MESH_POOL_TOTAL = 96;
+let pooledBoltMeshCount = 0;
+function takeBoltMesh(from, kind, skill) {
+  const key = `${from.cfg.id}/${kind}/${skill ? 1 : 0}`;
+  let pool = boltMeshPools.get(key);
+  if (!pool) boltMeshPools.set(key, pool = []);
+  if (pool.length) {
+    pooledBoltMeshCount--;
+    const mesh = pool.pop();
+    mesh.visible = true;
+    return mesh;
+  }
+  const axe = kind === 'viking' || kind === 'iceviking';
+  const arrow = kind === 'crossbow' || kind === 'ninja' || from.cfg.id === 'archer';
+  const mesh = new THREE.Mesh(axe ? axeGeo : arrow ? bladeGeo : boltGeo, boltMats[kind] || boltMats[from.cfg.id] || boltMats.arcane);
+  if (axe) {
+    const handle = new THREE.Mesh(handleGeo, boltMats.viking);
+    handle.position.y = -0.25;
+    mesh.add(handle);
+  }
+  mesh.boltPoolKey = key;
+  return mesh;
+}
+
+function releaseBoltMesh(mesh) {
+  scene.remove(mesh);
+  mesh.visible = false;
+  const pool = boltMeshPools.get(mesh.boltPoolKey);
+  if (pool && pool.length < BOLT_MESH_POOL_PER_LOOK && pooledBoltMeshCount < BOLT_MESH_POOL_TOTAL) {
+    pool.push(mesh);
+    pooledBoltMeshCount++;
+  }
+}
+
 function ring(at, radius, color, life = 0.6) {
   const mesh = new THREE.Mesh(ringGeo, ringMaterials.take(color, 0.65));
   mesh.rotation.x = -Math.PI / 2;
@@ -4326,21 +4360,23 @@ function beam(start, end, color) {
 }
 
 function fireBolt(from, target, kind = 'magic', angle = 0, skill = false) {
-  const axe = kind === 'viking' || kind === 'iceviking';
-  const arrow = kind === 'crossbow' || kind === 'ninja' || from.cfg.id === 'archer';   // a flecha comum da Arqueira também é ponta fina
-  const mesh = new THREE.Mesh(axe ? axeGeo : arrow ? bladeGeo : boltGeo, boltMats[kind] || boltMats[from.cfg.id] || boltMats.arcane);
-  if (axe) {
-    const handle = new THREE.Mesh(handleGeo, boltMats.viking);
-    handle.position.y = -0.25;
-    mesh.add(handle);
-  }
+  const mesh = takeBoltMesh(from, kind, skill);
   mesh.position.copy(from.pos).setY(from.pos.y + 1.3);
+  mesh.rotation.set(0, 0, 0);
   const dir = fireBoltDirectionScratch.subVectors(target.pos, from.pos).normalize().applyAxisAngle(fireBoltAxis, angle);
   mesh.quaternion.setFromUnitVectors(fireBoltAxis, dir);
+  if (kind === 'ninja' && skill) mesh.quaternion.identity();
   scene.add(mesh);
   const piercing = kind === 'crossbow' || kind === 'ninja' || kind === 'archer';
   const bolt = { mesh, target, owner: from, kind, dir: piercing ? dir.clone() : null, hit: piercing ? new Set() : null, life: Math.max(1, from.range / 14 + 0.2), dmg: from.dmg, level: skillLevel(from.level), power: kind === 'magic' || !skill ? 1 : from.skillPower, skill };   // o tiro básico não escala
-  FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
+  if (mesh.boltVisual) {
+    bolt.look = mesh.boltVisual.look;
+    bolt.style = mesh.boltVisual.style;
+    bolt.age = 0;
+  } else {
+    FX.look(bolt, skill);   // cada atirador com seu projétil (fogo, raio, gelo, orbe, espinho, virote)
+    mesh.boltVisual = { look: bolt.look, style: bolt.style };
+  }
   if (skill && (kind === 'pyro' || kind === 'flask' || kind === 'tonic')) {   // a bola grande e os frascos fazem um arco no ar até o alvo
     bolt.base = mesh.position.clone();
     bolt.dist0 = Math.max(0.1, bolt.base.distanceTo(target.pos));
@@ -4418,7 +4454,7 @@ function updateBolts(dt) {
       }
     }
     if (b.kind === 'viking' || b.kind === 'iceviking') b.mesh.rotateZ(dt * 18);
-    if (b.life <= 0) { scene.remove(b.mesh); bolts.splice(i, 1); }
+    if (b.life <= 0) { releaseBoltMesh(b.mesh); bolts.splice(i, 1); }
   }
   if (geoWalls.length) updateGeoWalls(dt);
   for (let i = flames.length - 1; i >= 0; i--) {
