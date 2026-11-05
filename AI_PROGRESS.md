@@ -109,3 +109,8 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Heróis em movimento agora usam a folga compacta de combate entre si, tanto no desvio de rota quanto na resolução de colisões. A formação parada e o espaçamento entre outros aliados continuam com a folga maior.
 - `node cavaleiros/tests/run-all.cjs --rapido`: **41 passaram, 0 falharam**. `node cavaleiros/tests/empurra.cjs detalhe`: cinco equipes sem sobreposição persistente (0,0% overlaps).
 - Na repetição visual de Ponte em Chamas no Pesadelo, os heróis mantiveram posições distintas na ponte e no combate, sem bloqueio visível entre aliados.
+
+### Organização dos estilos e arquitetura — 2026-11-05
+- Os estilos gerais saíram do bloco inline de `index.html` para `base.css`, preservando a posição da folha na cascata. O HTML ficou dedicado à estrutura da página.
+- `AI_PDM.md` agora descreve o tamanho atual de `main.js` e as 24 missões da campanha.
+- A lógica do jogo não mudou nesta limpeza.
