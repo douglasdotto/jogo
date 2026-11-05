@@ -3695,8 +3695,8 @@ function kiteFrom(h, dt) {
   return h.kiteTo;
 }
 
-const SHOOTER_RETREAT_TRIGGER = 3.4, SHOOTER_RETREAT_STEP = 0.9;
-const SHOOTER_RETREAT_WINDOW = 0.55, SHOOTER_RETREAT_COOLDOWN = 7;
+const SHOOTER_RETREAT_TRIGGER = 3.2, SHOOTER_RETREAT_STEP = 0.6;
+const SHOOTER_RETREAT_WINDOW = 0.4, SHOOTER_RETREAT_COOLDOWN = 9;
 function kiteSkeletonFrom(shooter, target, dt) {
   shooter.retreatCooldown = Math.max(0, (shooter.retreatCooldown || 0) - dt);
   if (shooter.retreatMoveT > 0) {
@@ -12915,7 +12915,7 @@ function spawnCastleBosses(lich, formation) {
 }
 
 // alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
-const HUNT_FLEE = 4.5, HUNT_EDGE = 9, HUNT_PURSUIT_LIMIT = 13, HUNT_INTERCEPTORS = 2;
+const HUNT_FLEE = 3.8, HUNT_EDGE = 6.5, HUNT_PURSUIT_LIMIT = 13, HUNT_INTERCEPTORS = 2;
 const huntDest = new THREE.Vector3();
 function huntThink(u, dt) {
   if (u.rootT > 0 || u.tauntT > 0) return false;   // preso ou provocado: luta onde está

@@ -1,7 +1,8 @@
 // Medição de desempenho reprodutível: abra com ?bench=1 (só para teste; não conta recorde).
 // Parâmetros: bench=segundos por trecho (1 = 15 s), fases=10,11,12 (um trecho por fase),
 // inimigos=quantidade mantida viva (padrão 40), herois=paladin,crusher,pyro,crossbow,
-// auto=heróis que usam habilidades automaticamente (ou all), graficos=baixa|alta, sombra=1024|2048.
+// auto=heróis que usam habilidades automaticamente (ou all), graficos=baixa|alta, sombra=512|1024|2048,
+// pixelratio=1|1.25|1.5 (isola a resolução de renderização sem mudar os outros gráficos).
 // Mantém os heróis vivos (vida cheia) e repõe os inimigos para a carga ficar constante.
 // Tempo em renderer.render mede envio de comandos pela CPU, não conclusão do trabalho da GPU.
 // Resultado: console "BENCH {...}", window.__benchResult e um painel no canto da tela.
@@ -88,6 +89,7 @@ export async function runBench(api) {
   const original = {
     requestAnimationFrame: window.requestAnimationFrame,
     render: api.renderer.render,
+    pixelRatio: api.renderer.getPixelRatio?.(),
     worldUpdate: api.world?.update,
     updateBars: api.updateBars,
     random: Math.random,
@@ -105,16 +107,21 @@ export async function runBench(api) {
       }
     } finally {
       try {
-        if (Number.isFinite(originalShadowSize) && api.getShadowMapSize?.() !== originalShadowSize) {
-          api.setShadowMapSize?.(originalShadowSize);
-        }
+        if (Number.isFinite(original.pixelRatio) && typeof api.renderer.setPixelRatio === 'function'
+            && api.renderer.getPixelRatio?.() !== original.pixelRatio) api.renderer.setPixelRatio(original.pixelRatio);
       } finally {
-        window.requestAnimationFrame = original.requestAnimationFrame;
-        api.renderer.render = original.render;
-        if (typeof original.worldUpdate === 'function') api.world.update = original.worldUpdate;
-        if (typeof original.updateBars === 'function') api.updateBars = original.updateBars;
-        Math.random = original.random;
-        api.game.paused = true;
+        try {
+          if (Number.isFinite(originalShadowSize) && api.getShadowMapSize?.() !== originalShadowSize) {
+            api.setShadowMapSize?.(originalShadowSize);
+          }
+        } finally {
+          window.requestAnimationFrame = original.requestAnimationFrame;
+          api.renderer.render = original.render;
+          if (typeof original.worldUpdate === 'function') api.world.update = original.worldUpdate;
+          if (typeof original.updateBars === 'function') api.updateBars = original.updateBars;
+          Math.random = original.random;
+          api.game.paused = true;
+        }
       }
     }
   }
@@ -134,7 +141,9 @@ async function runBenchBody(api) {
   const quality = q.get('graficos');
   if (quality && api.isLowQuality() !== (quality === 'baixa')) document.getElementById('quality').click();
   const shadowSize = Number(q.get('sombra'));
-  if ([1024, 2048].includes(shadowSize)) api.setShadowMapSize(shadowSize);
+  if ([512, 1024, 2048].includes(shadowSize)) api.setShadowMapSize(shadowSize);
+  const pixelRatio = Number(q.get('pixelratio'));
+  if (Number.isFinite(pixelRatio) && pixelRatio > 0) renderer.setPixelRatio?.(pixelRatio);
 
   // monta a partida interna (fases 1–12, sem missão) sem passar pelos menus
   api.setupRun(phases[0]);

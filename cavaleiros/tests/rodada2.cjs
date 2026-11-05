@@ -2185,14 +2185,14 @@ test('atirador esqueleto dá um passo curto de recuo e não corre em direção m
   const kite=vm.runInContext('kiteSkeletonFrom',context);
   const goal=kite(mage,victim,.05),goalX=goal.x,goalZ=goal.z;
   assert.ok(goal,'ameaça próxima dispara um recuo');
-  assert.ok(Math.abs(Math.hypot(goalX-mage.pos.x,goalZ-mage.pos.z)-.9)<.01,'o destino fica a menos de 1 m');
+  assert.ok(Math.abs(Math.hypot(goalX-mage.pos.x,goalZ-mage.pos.z)-.6)<.01,'o destino fica a apenas 0,6 m');
   mage.pos.z=-.25;
   const continued=kite(mage,victim,.05);
   assert.equal(continued.z,goalZ,'o destino fica fixo enquanto o atirador anda');
   mage.pos.set(goalX,0,goalZ);
   assert.equal(kite(mage,victim,.05),null,'para ao concluir o passo');
   assert.equal(kite(mage,victim,.05),null,'não encadeia fuga durante a recarga');
-  assert.ok(Math.hypot(mage.pos.x,mage.pos.z)<=.91,'o deslocamento total permanece curto');
+  assert.ok(Math.hypot(mage.pos.x,mage.pos.z)<=.61,'o deslocamento total permanece curto');
 });
 test('heróis distribuem ataques contra alvos quase derrotados sem perder prioridades',()=>{
   clear();const focused=new t.Hero(cfg('berserker')),teammate=new t.Hero(cfg('paladin'));
@@ -4266,10 +4266,12 @@ test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abat
   assert.ok(mark&&mark.hunted&&mark.maxHp>=30*5,'alvo resistente e marcado');
   mark.spawning=false;mark.busy=0;const anchorS=t.world.anchorS(t.game.phase),anchor=t.world.pointAt(anchorS),fwd=t.world.tangentAt(anchorS);
   const ahead=p=>(p.x-anchor.x)*fwd.x+(p.z-anchor.z)*fwd.z;
-  mark.pos.copy(t.world.along(anchorS+7,0));
+  mark.pos.copy(t.world.along(anchorS+3,0));
   const h=t.heroes()[0];h.pos.copy(mark.pos).add(new Vector3(0,0,2));
   assert.equal(context.huntThink(mark,.1),true);assert.ok(mark.vel.z<0,'corre para a frente da estrada');
-  assert.ok(ahead(mark.pos)<=9.1,'a fuga para no limite curto, sem arrastar o grupo pelo mapa');
+  assert.ok(ahead({x:mark.moveProgress.goalX,z:mark.moveProgress.goalZ})<=6.6,'a fuga termina perto do grupo, sem arrastar a equipe pelo mapa');
+  mark.pos.copy(t.world.along(anchorS+6.1,0));
+  assert.equal(context.huntThink(mark,.1),false,'perto do novo limite, para de fugir e enfrenta o grupo');
   mark.pos.copy(t.world.along(anchorS+12.5,0));
   const huntContext=t.makeTargetContext(),interceptors=t.heroes().filter(hero=>t.canHeroReachTarget(hero,mark,huntContext));
   assert.ok(interceptors.length>0&&interceptors.length<=2,'só até dois heróis perseguem o alvo dentro do alcance curto');
@@ -4852,10 +4854,10 @@ test('unidades à distância abrem espaço de quem as ataca antes de levar golpe
   const heroGap=Math.hypot(mage.pos.x-attacker.pos.x,mage.pos.z-attacker.pos.z);
   assert.ok(heroGap>4,`o mago abre espaço antes de o inimigo encostar (${heroGap.toFixed(2)} m)`);
   clear();t.game.state='fight';
-  const melee=hero('paladin',0,3.2),archer=foe('Mage',0,0);archer.spawning=false;
+  const melee=hero('paladin',0,3),archer=foe('Mage',0,0);archer.spawning=false;
   for(let i=0;i<120;i++)archer.update(.05);
   const enemyGap=Math.hypot(melee.pos.x-archer.pos.x,melee.pos.z-archer.pos.z);
-  assert.ok(enemyGap>3.2&&enemyGap<4.5,`o mago dá um passo curto e para para lutar (${enemyGap.toFixed(2)} m)`);
+  assert.ok(enemyGap>3.05&&enemyGap<4.5,`o mago recua pouco e para para lutar (${enemyGap.toFixed(2)} m)`);
   clear();
 });
 test('chefe abaixo de metade da vida se enfurece e recupera parte dela uma vez só',()=>{

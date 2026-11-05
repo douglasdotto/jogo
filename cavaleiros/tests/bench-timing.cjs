@@ -27,6 +27,7 @@ function makeHarness(search, { failOnJump = false } = {}) {
   let perfCalls = 0;
   let lowQuality = false;
   let shadowSize = 1024;
+  let pixelRatio = 1.5;
   let renderCalls = 0;
   const originalRaf = (callback) => { rafQueue.push(callback); return rafQueue.length; };
   const originalRender = function () { renderCalls++; this.info.render.calls++; };
@@ -34,7 +35,7 @@ function makeHarness(search, { failOnJump = false } = {}) {
   const units = [];
   const document = {
     visibilityState: 'visible',
-    getElementById(id) { return id === 'quality' ? { click() { lowQuality = !lowQuality; } } : null; },
+    getElementById(id) { return id === 'quality' ? { click() { lowQuality = !lowQuality; pixelRatio = lowQuality ? 1 : 1.5; } } : null; },
     createElement() { return { style: {}, textContent: '' }; },
     getElementsByTagName() { return { length: 1 }; },
     body: { appendChild() {} },
@@ -43,7 +44,8 @@ function makeHarness(search, { failOnJump = false } = {}) {
   const renderer = {
     render: originalRender,
     info: { render: { calls: 0, triangles: 12 }, memory: { geometries: 4, textures: 2 }, programs: [] },
-    getPixelRatio() { return 1; },
+    getPixelRatio() { return pixelRatio; },
+    setPixelRatio(value) { pixelRatio = value; },
   };
   const api = {
     renderer, game, units, world: { update() {} }, updateBars() {}, scene: { traverse(callback) { callback({}); } },
@@ -91,12 +93,13 @@ function makeHarness(search, { failOnJump = false } = {}) {
     originalWorldUpdate: api.world.update, originalUpdateBars: api.updateBars,
     get lowQuality() { return lowQuality; },
     get shadowSize() { return shadowSize; },
+    get pixelRatio() { return pixelRatio; },
     get renderCalls() { return renderCalls; },
   };
 }
 
 async function main() {
-  const success = makeHarness('?bench=2&herois=paladin&graficos=baixa&sombra=2048');
+  const success = makeHarness('?bench=2&herois=paladin&graficos=baixa&sombra=512&pixelratio=1.25');
   vm.runInContext('this.originalRandom = Math.random', success.context);
   const result = await vm.runInContext('runBench(api)', success.context);
   const segment = result.segments[0];
@@ -117,9 +120,11 @@ async function main() {
   assert.ok(segment.callbackMs >= segment.keepMs + segment.cpuMs, 'tempo total inclui manutenção e callback do jogo');
   assert.equal(success.renderCalls, 6, 'o mock renderiza nos quadros de aquecimento e medição');
   assert.equal(result.lowQuality, true, 'resultado informa a qualidade usada na medição');
-  assert.equal(result.shadowMapSize, 2048, 'resultado informa o mapa de sombras usado na medição');
+  assert.equal(result.shadowMapSize, 512, 'resultado informa o mapa de sombras usado na medição');
+  assert.equal(result.pixelRatio, 1.25, 'resultado informa o pixel ratio da medição');
   assert.equal(success.lowQuality, false, 'restaura a qualidade original após sucesso');
   assert.equal(success.shadowSize, 1024, 'restaura o tamanho original das sombras após sucesso');
+  assert.equal(success.pixelRatio, 1.5, 'restaura o pixel ratio original após sucesso');
   assert.equal(success.window.requestAnimationFrame, success.originalRaf, 'restaura requestAnimationFrame após sucesso');
   assert.equal(success.renderer.render, success.originalRender, 'restaura renderer.render após sucesso');
   assert.equal(success.api.world.update, success.originalWorldUpdate, 'restaura world.update após sucesso');
@@ -132,6 +137,7 @@ async function main() {
   await assert.rejects(vm.runInContext('runBench(api)', failure.context), /falha ao avançar fase/);
   assert.equal(failure.lowQuality, false, 'restaura qualidade original após erro depois da medição');
   assert.equal(failure.shadowSize, 1024, 'restaura sombras originais após erro depois da medição');
+  assert.equal(failure.pixelRatio, 1.5, 'restaura o pixel ratio original após erro depois da medição');
   assert.equal(failure.window.requestAnimationFrame, failure.originalRaf, 'restaura RAF após erro depois da instrumentação');
   assert.equal(failure.renderer.render, failure.originalRender, 'restaura render após erro depois da instrumentação');
   assert.equal(failure.api.world.update, failure.originalWorldUpdate, 'restaura world.update após erro depois da instrumentação');

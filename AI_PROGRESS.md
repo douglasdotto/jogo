@@ -171,3 +171,14 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - O simulador agora mantém a equipe e usa XP e evoluções salvos entre missões, incluindo a escolha de um herói no Duelo. Cenários usam estrada, terreno e obstáculos; o armazenamento fica isolado na VM de teste.
 - Com Paladino, Guardião, Piromante e Clériga, uma campanha reproduzível venceu **24/24 missões**, somou **70/72 estrelas** e teve **4 quedas**. Apenas Ponte em Chamas e Noite sem Fim ficaram em 2★; as outras 22 missões ficaram em 3★.
 - Ao fim, a equipe terminou entre 3.079 e 3.206 XP por herói, com quatro evoluções em cada um. A missão Noite sem Fim concentrou as quatro quedas da campanha; não impediu a vitória.
+
+### Fuga menor dos inimigos — 2026-11-05
+- O alvo marcado agora começa a fugir quando um herói chega a 3,8 m e recua até cerca de 6 m à frente da âncora, em vez de correr até 9 m. Ao chegar nesse limite, para e enfrenta a equipe.
+- Atiradores agora recuam 0,6 m quando um herói chega a 3,2 m e esperam 9 s antes de outro passo (antes: 0,9 m, 3,4 m e 7 s).
+- `rodada2.cjs` verifica o destino máximo, a interrupção da fuga e o passo dos atiradores; `npm run test:rapido`: **42 passaram, 0 falharam**.
+- No Pesadelo, 10 equipes aleatórias venceram a Caçada **10/10 vezes, todas com 3★**, sem quedas; tempo médio de 15,3 s. A mudança não adicionou dano ou vida.
+
+### Controles de benchmark em primeiro plano — 2026-11-05
+- `bench.js` agora varia pixel ratio em 1, 1,25 ou 1,5 e tamanho de sombra em 512, 1024 ou 2048 px; restaura o renderer mesmo se o benchmark falhar.
+- O benchmark foi rodado visivelmente com uma fase, quatro heróis e carga de 40 inimigos. As amostras variaram de 16,9 a 21,7 FPS em alta qualidade, então não justificam mudar os padrões gráficos. A execução ainda não forma uma linha de base estável sem throttling.
+- `bench-timing.cjs` confere os valores e a restauração após sucesso e falha; incluído nos **42 testes rápidos aprovados**.
