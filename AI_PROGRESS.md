@@ -151,3 +151,9 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - A defesa agora reconhece ataque ativo de inimigos móveis e corpo a corpo, além dos atiradores imóveis. A âncora continua junto ao cristal e a interceptação remota continua limitada a dois heróis dentro de 26 m; inimigos sem alvo ativo seguem sem atrair a formação.
 - `rodada2.cjs`: 249 verificações passaram, incluindo atirador e perseguidor móveis que atacam heróis; `npm run test:rapido`: **42 passaram, 0 falharam**.
 - Pesadelo, Santuário isolado, 10 sementes por amostra com quatro heróis, sem XP entre fases: equipe recomendada mais dois heróis sorteados venceu **10/10**, com 7×3★, 3×2★ e 80% de vida média no cristal; equipe totalmente aleatória venceu **10/10**, com 8×3★, 1×2★, 1×1★ e 70% de vida média no cristal. Houve 0 vazamentos nas duas amostras.
+
+### Menos perseguição aos inimigos — 2026-11-05
+- Atiradores inimigos agora recuam por até 1,8 s, depois ficam 8 s parados para atacar; cada recuo percorre 1,5 m em vez de 3 m. Os três atiradores com comportamento próprio também recuam 1,5 m por vez.
+- Na Caçada, o alvo marcado só foge até 9 m adiante e a perseguição termina a 13 m do posto, mantendo dois interceptadores.
+- `rodada2.cjs`: **249 verificações**; `npm run test:rapido`: **42 passaram, 0 falharam**. A verificação mantém o recuo do herói à distância e limita a fuga do mago inimigo.
+- Pesadelo, missões isoladas e sem XP entre fases: Santuário, 10 equipes aleatórias de quatro heróis, **10/10 vitórias**, 5×3★, 3×2★, 2×1★, sem vazamentos; Caçada, 10 equipes aleatórias de três heróis, **10/10 vitórias e 3★ em todas**, sem quedas e com 90% de vida média no grupo.

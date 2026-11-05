@@ -2183,7 +2183,8 @@ test('atirador esqueleto recua só por um orçamento e depois para e atira',()=>
   clear();const mage=new t.Skeleton('Mage',1);
   let allowed=0;
   for(let i=0;i<600&&mage.mayRetreat(1/30);i++)allowed++;
-  assert.equal(allowed>100&&allowed<200,true,'recua ~4,5 s: '+allowed);
+  assert.equal(allowed>40&&allowed<70,true,'recua no máximo ~1,8 s: '+allowed);
+  assert.ok(Math.abs(mage.standT-8)<.04,'depois do recuo, fica parado para atacar por 8 s: '+mage.standT);
   assert.equal(mage.mayRetreat(1/30),false,'depois do orçamento não recua');
   mage.update(10);   // o tempo de parada passa e o orçamento volta
   assert.equal(mage.standT<=0,true);
@@ -2568,7 +2569,7 @@ test('interceptores priorizam alcance e aptidão sem depender da ordem de seleç
     const party=order.map(id=>new t.Hero(cfg(id)));
     for(const h of party){h.pos.set(0,0,0);h.post.set(0,0,0);}
     const target=new t.Skeleton(goalType==='hunt'?'Rogue':'Mage',1);
-    target.spawning=false;target.pos.set(4,0,goalType==='defend'?10.5:14.5);
+    target.spawning=false;target.pos.set(4,0,goalType==='defend'?10.5:12);
     if(goalType==='hunt'){target.hunted=true;t.game.huntMark=target;}
     else {target.ranged=true;target.mobile=false;}
     const context=t.makeTargetContext();
@@ -2642,7 +2643,7 @@ test('Caçada: dois heróis interceptam o alvo marcado dentro do limite e priori
   clear();
   const first=new t.Hero(cfg('paladin')),second=new t.Hero(cfg('berserker')),third=new t.Hero(cfg('assassin'));
   for(const h of [first,second,third]){h.pos.set(0,0,0);h.post.set(0,0,0);}
-  const mark=new t.Skeleton('Rogue',7);mark.spawning=false;mark.hunted=true;mark.pos.set(0,0,15);
+  const mark=new t.Skeleton('Rogue',7);mark.spawning=false;mark.hunted=true;mark.pos.set(0,0,12.5);
   const minion=new t.Skeleton('Minion',7);minion.spawning=false;minion.pos.set(0,0,1);
   t.game.huntMark=mark;t.game.mission={goal:{type:'hunt'}};
   let team=t.makeTargetContext();
@@ -2650,11 +2651,11 @@ test('Caçada: dois heróis interceptam o alvo marcado dentro do limite e priori
   assert.equal(t.chooseHeroTarget(first,[minion,mark],.016,team),mark);
   assert.equal(t.chooseHeroTarget(second,[minion,mark],.016,team),mark);
   assert.equal(t.chooseHeroTarget(third,[minion,mark],.016,team),minion,'um terceiro herói mantém a formação');
-  first.pos.set(0,0,25);mark.pos.set(0,0,26);
+  first.pos.set(0,0,25);mark.pos.set(0,0,13.1);
   assert.equal(t.canHeroReachTarget(first,mark,team),false,'a proximidade depois de iniciar a perseguição não permite ultrapassar o limite');
   assert.equal(t.canHeroReachTarget(second,mark,team),false,'o limite também vale para o segundo interceptador');
   const priest=new t.Skeleton('Priest',7);priest.spawning=false;priest.pos.set(0,0,.5);
-  mark.pos.set(0,0,15);
+  mark.pos.set(0,0,12.5);
   first.targetFocus=priest;first.targetFocusT=1;second.targetFocus=priest;second.targetFocusT=1;
   assert.equal(t.chooseHeroTarget(first,[priest,mark],.016,team),mark,'a marca vence um sacerdote próximo no limite da perseguição');
   assert.equal(t.chooseHeroTarget(second,[priest,mark],.016,team),mark,'dois interceptores mantêm a perseguição limitada');
@@ -4260,14 +4261,14 @@ test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abat
   assert.ok(mark&&mark.hunted&&mark.maxHp>=30*5,'alvo resistente e marcado');
   mark.spawning=false;mark.busy=0;const anchorS=t.world.anchorS(t.game.phase),anchor=t.world.pointAt(anchorS),fwd=t.world.tangentAt(anchorS);
   const ahead=p=>(p.x-anchor.x)*fwd.x+(p.z-anchor.z)*fwd.z;
-  mark.pos.copy(t.world.along(anchorS+10,0));
+  mark.pos.copy(t.world.along(anchorS+7,0));
   const h=t.heroes()[0];h.pos.copy(mark.pos).add(new Vector3(0,0,2));
   assert.equal(context.huntThink(mark,.1),true);assert.ok(mark.vel.z<0,'corre para a frente da estrada');
-  assert.ok(ahead(mark.pos)<=12.1,'a fuga para no limite curto, sem arrastar o grupo pelo mapa');
-  mark.pos.copy(t.world.along(anchorS+15,0));
+  assert.ok(ahead(mark.pos)<=9.1,'a fuga para no limite curto, sem arrastar o grupo pelo mapa');
+  mark.pos.copy(t.world.along(anchorS+12.5,0));
   const huntContext=t.makeTargetContext(),interceptors=t.heroes().filter(hero=>t.canHeroReachTarget(hero,mark,huntContext));
   assert.ok(interceptors.length>0&&interceptors.length<=2,'só até dois heróis perseguem o alvo dentro do alcance curto');
-  mark.pos.copy(t.world.along(anchorS+22,0));
+  mark.pos.copy(t.world.along(anchorS+14.5,0));
   assert.ok(t.heroes().every(hero=>!t.canHeroReachTarget(hero,mark,huntContext)),'o grupo não persegue além do limite tático');
   h.pos.set(50,0,50);for(const o of t.heroes())o.pos.set(50,0,50);assert.equal(context.huntThink(mark,.1),false,'sem perseguidor volta a lutar');
   const extra=foe('Warrior',0,-30);extra.hp=extra.maxHp=1000;
@@ -4847,9 +4848,9 @@ test('unidades à distância abrem espaço de quem as ataca antes de levar golpe
   assert.ok(heroGap>4,`o mago abre espaço antes de o inimigo encostar (${heroGap.toFixed(2)} m)`);
   clear();t.game.state='fight';
   const melee=hero('paladin',0,3.2),archer=foe('Mage',0,0);archer.spawning=false;
-  for(let i=0;i<16;i++)archer.update(.05);
+  for(let i=0;i<120;i++)archer.update(.05);
   const enemyGap=Math.hypot(melee.pos.x-archer.pos.x,melee.pos.z-archer.pos.z);
-  assert.ok(enemyGap>4,`o mago inimigo também recua do herói corpo a corpo (${enemyGap.toFixed(2)} m)`);
+  assert.ok(enemyGap>4&&enemyGap<9,`o mago recua pouco e para para lutar (${enemyGap.toFixed(2)} m)`);
   clear();
 });
 test('chefe abaixo de metade da vida se enfurece e recupera parte dela uma vez só',()=>{
