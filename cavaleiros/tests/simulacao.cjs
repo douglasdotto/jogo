@@ -19,6 +19,7 @@ const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
 const campaign = loadCampaignSource(dir);
 const classInfo = fs.readFileSync(path.join(dir, 'class-info.js'), 'utf8');
 const skillbook = fs.readFileSync(path.join(dir, 'skillbook.js'), 'utf8');
+const skillUi = fs.readFileSync(path.join(dir, 'skill-ui.js'), 'utf8');
 const skillTargeting = fs.readFileSync(path.join(dir, 'skill-targeting.js'), 'utf8');
 const synergies = fs.readFileSync(path.join(dir, 'synergies.js'), 'utf8');
 const upgradeBranches = fs.readFileSync(path.join(dir, 'upgrade-branches.js'), 'utf8');
@@ -94,6 +95,7 @@ vm.runInContext(part(recipes, 'export const CHARACTERS', '// arquivos').replace(
 vm.runInContext(campaign.replaceAll('export ', ''), context);
 vm.runInContext(classInfo.replaceAll('export ', ''), context);
 vm.runInContext(skillbook.replace(/^import .*$/gm, '').replaceAll('export ', ''), context);
+vm.runInContext(skillUi.replaceAll('export ', ''), context);
 vm.runInContext(fs.readFileSync(path.join(dir, 'passives.js'), 'utf8').replaceAll('export ', ''), context);
 vm.runInContext(fs.readFileSync(path.join(dir, 'hero-anims.js'), 'utf8').replace(/^export /gm, ''), context);   // HERO_IDLES, HERO_HITS...
 vm.runInContext(skillTargeting.replace(/^import .*$/gm, '').replaceAll('export ', ''), context);
@@ -207,8 +209,22 @@ function play(diff, profile, mission = null) {
   const timeCap = mission ? 900 : 3600; // a campanha acaba em poucas fases; o timeout detecta stalls sem fingir vitória
   const dt = 1 / 30;
   const frameUnits = [];
+  const breachLeaks = [];
   const die = t.Unit.prototype.die;
-  t.Unit.prototype.die = function () { if (this.team === 'hero') deaths++; return die.call(this); };
+  t.Unit.prototype.die = function () {
+    if (this.team === 'hero') deaths++;
+    if (process.env.SIM_BREACH_TRACE === '1' && this.team === 'skeleton' && this.exploded
+      && t.game.mission?.goal?.type === 'breach') {
+      const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+      breachLeaks.push({
+        time: Number(t.game.missionT.toFixed(1)), kind: this.enemyKind || this.kind?.name || '?',
+        raider: Boolean(this.raider), pos: `${this.pos.x.toFixed(1)},${this.pos.z.toFixed(1)}`,
+        heroes: t.heroes().map((hero) => ({ id: hero.cfg.id, dead: hero.dead,
+          distance: Number(distance(hero.pos, this.pos).toFixed(1)), focus: hero.targetFocus?.cfg?.id || hero.targetFocus?.enemyKind || null })),
+      });
+    }
+    return die.call(this);
+  };
   while (!t.game.over && time < timeCap) {
     if (t.pick.open) {
       if (continuousCampaignMode && mission && t.pick.mode === 'team') {
@@ -283,6 +299,7 @@ function play(diff, profile, mission = null) {
     heroes: t.heroes().map((h) => ({ id: h.cfg.id, dead: h.dead, hp: Math.round(h.hp),
       pos: `${h.pos.x.toFixed(1)},${h.pos.z.toFixed(1)}`, post: `${h.post.x.toFixed(1)},${h.post.z.toFixed(1)}`,
       range: h.range, ranged: Boolean(h.ranged), targetFocus: describeUnit(h.targetFocus), engagedWith: describeUnit(h.engagedWith) })),
+    ...(process.env.SIM_BREACH_TRACE === '1' && t.game.mission?.goal?.type === 'breach' ? { breachLeaks } : {}),
   } : null;
   return { won, timedOut: mission ? !t.game.over : false, initialHeroes, initialParty, falls: outcome?.falls ?? t.game.falls,
     villagerRatio, shrineRatio: outcome?.shrineRatio ?? null, phase: t.game.phase, deaths, kills: t.game.kills, time,
@@ -440,7 +457,11 @@ if (continuousCampaignMode) {
     wins += Number(result.won);
     stars += result.stars || 0;
     falls += result.falls || 0;
-    console.log(`  ${String(index + 1).padStart(2, '0')}. ${mission.name}: ${result.won ? `vitória ${result.stars}★` : result.timedOut ? `timeout na fase ${result.phase}` : `derrota na fase ${result.phase}`} · ${result.falls} quedas · ${result.time.toFixed(1)} s · ${result.party.join(' + ')}`);
+    const objectiveMetric = mission.goal?.type === 'breach' ? ` · vazamentos ${result.leaks ?? 0}` : '';
+    console.log(`  ${String(index + 1).padStart(2, '0')}. ${mission.name}: ${result.won ? `vitória ${result.stars}★` : result.timedOut ? `timeout na fase ${result.phase}` : `derrota na fase ${result.phase}`} · ${result.falls} quedas · ${result.time.toFixed(1)} s${objectiveMetric} · ${result.party.join(' + ')}`);
+    if (process.env.SIM_DIAG_SUCCESS === '1' && mission.goal?.type === 'breach' && result.diagnostic) {
+      console.log(`    diagnóstico: ${JSON.stringify(result.diagnostic)}`);
+    }
     if (!result.won) {
       stoppedAt = mission.name;
       if (result.diagnostic) console.log(`    diagnóstico: ${JSON.stringify(result.diagnostic)}`);

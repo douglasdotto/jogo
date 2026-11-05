@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+const skillUi = fs.readFileSync(path.join(__dirname, '..', 'skill-ui.js'), 'utf8');
 const roster = fs.readFileSync(path.join(__dirname, '..', 'hero-roster.js'), 'utf8');
 const variantsStart = roster.indexOf('export const VARIANTS = [');
 assert.ok(variantsStart >= 0, 'hero-roster.js declara VARIANTS');
@@ -12,9 +12,9 @@ const variantsBlock = roster.slice(variantsStart, roster.indexOf('\n].map', vari
 const ids = [...variantsBlock.matchAll(/^\s*\{ id: '([a-z_]+)'/gm)].map((match) => match[1]);
 assert.ok(ids.length >= 27, `esperava ao menos 27 variantes, achou ${ids.length}`);
 
-const glyphStart = main.indexOf('const SKILL_GLYPHS = {');
-assert.ok(glyphStart >= 0, 'main.js declara SKILL_GLYPHS');
-const glyphSource = main.slice(glyphStart, main.indexOf('\n};', glyphStart) + 3);
+const glyphStart = skillUi.indexOf('export const SKILL_GLYPHS = {');
+assert.ok(glyphStart >= 0, 'skill-ui.js declara SKILL_GLYPHS');
+const glyphSource = skillUi.slice(glyphStart, skillUi.indexOf('\n};', glyphStart) + 3).replace('export ', '');
 const context = {};
 vm.runInNewContext(`${glyphSource}\nglobalThis.result = SKILL_GLYPHS;`, context);
 const glyphs = context.result;

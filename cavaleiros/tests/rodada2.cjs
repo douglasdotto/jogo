@@ -12,6 +12,7 @@ const campaign = loadCampaignSource(dir);
 const classInfo = fs.readFileSync(path.join(dir, 'class-info.js'), 'utf8');
 const heroRoster = fs.readFileSync(path.join(dir, 'hero-roster.js'), 'utf8');
 const skillbook = fs.readFileSync(path.join(dir, 'skillbook.js'), 'utf8');
+const skillUi = fs.readFileSync(path.join(dir, 'skill-ui.js'), 'utf8');
 const skillTargeting = fs.readFileSync(path.join(dir, 'skill-targeting.js'), 'utf8');
 const synergies = fs.readFileSync(path.join(dir, 'synergies.js'), 'utf8');
 const upgradeBranches = fs.readFileSync(path.join(dir, 'upgrade-branches.js'), 'utf8');
@@ -164,6 +165,7 @@ const pickText=()=>t.pick.info.innerHTML+t.pick.team.innerHTML;
 // papéis que faltam viram ícones (class="wanted", nome em data-role); "priority" marca os pedidos pela missão
 const wantedRoles=(priority)=>[...t.pick.team.innerHTML.matchAll(/class="wanted( priority)?" data-role="([^"]+)"/g)].filter(m=>!!m[1]===priority).map(m=>m[2]);
 // barra de habilidades (glifos usados também na ficha da escolha)
+vm.runInContext(skillUi.replaceAll('export ', ''),context);
 vm.runInContext(part(source,'let skillItems','function pressSkill'),context);
 vm.runInContext(part(source,'function syncSkillControlKeys()','function syncDirectControlUI'),context);
 const skillBarUpdate=part(source,'function updateSkillBar','// dica rica das habilidades')
@@ -176,7 +178,7 @@ context.addEventListener=(type,handler,options)=>{
   if(type==='keydown'&&!(options===true||options?.capture))directControlLegacyListeners.push(handler);
   return addEventListenerBeforeLegacySkillHotkey(type,handler,options);
 };
-const legacyHotkeyStart=source.indexOf("addEventListener('keydown', (e) => {",source.indexOf('const SKILL_KEYS'));
+const legacyHotkeyStart=source.indexOf("addEventListener('keydown', (e) => {",source.indexOf('const SKILL_AI_ORDER'));
 const legacyHotkeyEnd=source.indexOf('// o navegador só libera o som',legacyHotkeyStart);
 vm.runInContext(source.slice(legacyHotkeyStart,legacyHotkeyEnd),context);
 context.addEventListener=addEventListenerBeforeLegacySkillHotkey;
@@ -2544,6 +2546,15 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
       assert.equal(remoteTargets[1],null,goalType+': o perseguidor mais veloz ocupa o segundo slot');
       assert.equal(remoteTargets[2],shooter,goalType+': a heroína à distância recebe prioridade de interceptação');
       assert.equal(remoteTargets[3],shooter,goalType+': o outro slot vai para o melhor perseguidor restante');
+      for(const h of guards){h.targetFocus=null;h.targetFocusT=0;h.engagedWith=null;h.targetEligible=null;}
+      shooter.pos.set(0,0,17);guards[3].pos.set(0,0,13.5);shooter.mobile=true;shooter.target=guards[3];
+      team=t.makeTargetContext();
+      const localSelfDefense=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+      assert.equal(localSelfDefense[0],null,'ponte: a âncora não abandona o portão por atacante local de outro herói');
+      assert.equal(localSelfDefense[3],shooter,'ponte: o herói atacado reage a quem já está em alcance local, mesmo fora do raio do portão');
+      assert.deepEqual(localSelfDefense.map((target,i)=>target?guards[i].cfg.id:null),[null,null,null,'assassin'],
+        'ponte: a autodefesa local fica só com o herói ameaçado');
+      shooter.target=null;shooter.mobile=false;for(const h of guards)h.pos.set(0,0,0);
     }
 
     // O pior ponto de surgimento do Santuário fica ~19,1 m do posto recuado.

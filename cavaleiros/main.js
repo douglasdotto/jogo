@@ -9,6 +9,7 @@ import { LOOKS } from './looks.js';
 import { HERO_ANIM_FILES, HERO_PROP_FILES, heroModelFile, attachHeroAnimations, HERO_HITS, HERO_DEATHS, HERO_DODGES } from './hero-anims.js';
 import { CLASSES, heroInfo, teamCoverage, missionRoleNeeds, skillLevel, SKILL_LEVEL_CAP } from './class-info.js';
 import { cooldownForSkill, skillSetFor } from './skillbook.js';
+import { SKILL_KEYS, SKILL_GLYPHS } from './skill-ui.js';
 import { aimSpec, validAim, findGroundAimHit } from './skill-targeting.js';
 import { activeSynergies, damageSynergies, synergyDamageMultiplier, synergyDamageTakenMultiplier, synergyHealMultiplier, synergySummonHaste } from './synergies.js';
 import { EVOLUTION_BRANCHES, applyEvolutionBranch, branchRankLimit, scaleBranchEffect } from './upgrade-branches.js';
@@ -39,6 +40,7 @@ const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
 const BREACH_INTERCEPT_RADIUS = 12; // ameaças comuns permanecem na zona próxima à ponte
 const BREACH_RUNNER_INTERCEPT_RADIUS = 16; // corredores marcados ganham tempo extra para serem interceptados
+const BREACH_SELF_DEFENSE_RADIUS = 4.5; // reação local sem puxar a formação para fora da ponte
 const DEFEND_INTERCEPT_RADIUS = 12; // mantém os defensores perto do objetivo
 const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
 const ESCORT_GUARD_REACH = 10;   // escolta/resgate: o guarda ataca quem chega a esta distância do protegido
@@ -2010,28 +2012,6 @@ async function pumpPortraits() {
 // ---------- barra de habilidades: três botões por herói, incluindo ultimate ----------
 let skillItems = [], skillHeroes = [];
 const skillParty = [], skillRoster = [];
-const SKILL_KEYS = [['1', '2', '3', '4'], ['Q', 'W', 'E', 'R'], ['A', 'S', 'D', 'F'], ['Z', 'X', 'V', 'B']];   // linha = slot, coluna = herói (C fica para o controle direto)
-const SKILL_GLYPHS = {
-  paladin: ['✚', '⬟', '⚜', '⚭'], guardian: ['⛨', '◉', '♜', '⛊'], champion: ['⚔', '➶', '✦', '⚜'],
-  berserker: ['♨', '⚔', '✹', '❣'], crusher: ['⬟', '✹', '☄', '◍'], viking: ['⚒', '➶', '✹', '♆'],
-  pyro: ['♨', '✸', '☄', '☲'], arcane: ['⚡', '✺', '◎', '❋'], cryo: ['❄', '✥', '❅', '⟡'],
-  assassin: ['✦', '⚔', '☠', '☣'], crossbow: ['➶', '⇶', '✹', '⇜'], ninja: ['✧', '☯', '✴', '✵'],
-  duelist: ['⚔', '✕', '✺', '⛓'],
-  king: ['♛', '⇉', '☀', '⚖'], iceviking: ['❄', '➶', '❆', '❅'], necro: ['☠', '☩', '☥', '✠'],
-  druid: ['❀', '❧', '☘', '❦'], cleric: ['✚', '⛨', '☼', '✙'], bard: ['♠', '⚄', '♛', '♣'],
-  angel: ['✧', '⛨', '☼', '↯'], chronist: ['⌛', '↻', '◷', '⟲'],
-  archer: ['➹', '⇊', '◎', '⌖'], monk: ['✊', '≋', '❂', '❖'], alchemist: ['⚗', '✸', '♈', '⊕'],
-  engineer: ['⚙', '⚡', '✹', '⊗'], beast_tamer: ['♞', '≋', '✪', '⤳'], oracle: ['☼', '◎', '☯', '◈'],
-  brute: ['⛰', '⤴', '⬢', '❢'],
-  lancer: ['↟', '⇈', '♞', '⇥'],
-  geomancer: ['⛰', '▤', '≋', '▲'],
-  runic: ['◈', '⬡', '◍', '✺'],
-  summoner: ['✿', '⬢', '♆', '◕'],
-  vampire: ['☾', '⚭', '♥', '☽'],
-  cook: ['◒', '▣', '♨', '✱'],
-  shaman: ['♣', '☘', '☥', '✺'],
-  illusionist: ['☻', '⇄', '❢', '◐'],
-};
 const LADINO_ULTS = new Map([['blade-dance', 'area'], ['shadow-storm', 'area'], ['arrow-rain', 'area'], ['sentry-overcharge', 'area'], ['panic', 'area'], ['all-in', 'area'], ['execute', 'single'], ['hunter-mark', 'single']]);
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
 const hasPriorityEnemyRole = (s) => !!(s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority);
@@ -3656,6 +3636,11 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   const fromPost = tacticalDistance(hero.post, target.pos);
   const breachThreat = goal?.type === 'breach' && villager
     && tacticalDistance(villager.pos, target.pos) <= breachTargetRadius(target, villager);
+  // Um defensor se protege se o inimigo já o escolheu e está em contato local,
+  // mesmo um pouco além do perímetro do portão. Isso não libera os outros heróis.
+  if (goal?.type === 'breach'
+    && (target.target === hero || target.pendingHit?.target === hero)
+    && tacticalDistance(hero.pos, target.pos) <= BREACH_SELF_DEFENSE_RADIUS) return true;
   // Na ponte, corredores são interceptados dentro de um raio limitado do portão.
   if (breachThreat) return hasBreachInterceptSlot(hero, target, context);
   if (goal?.type === 'defend' && villager) {

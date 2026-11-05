@@ -17,9 +17,12 @@ const slice = (from, to, extra = 0) => {
 
 const recipes = read('characters.js');
 const roster = read('hero-roster.js');
+const skillUi = read('skill-ui.js');
 const charactersSource = recipes.slice(recipes.indexOf('export const CHARACTERS'), recipes.indexOf('// arquivos')).replace('export ', '');
 const heroesSource = roster.slice(roster.indexOf('export const HEROES ='), roster.indexOf('export const PICK_GROUPS')).replace(/^export /gm, '');
-const glyphSource = slice('const SKILL_GLYPHS = {', '\n};', 3);
+const glyphStart = skillUi.indexOf('export const SKILL_GLYPHS = {');
+assert.ok(glyphStart >= 0, 'skill-ui.js declara SKILL_GLYPHS');
+const glyphSource = skillUi.slice(glyphStart, skillUi.indexOf('\n};', glyphStart) + 3).replace('export ', '');
 const tooltipSource = slice('const SKILL_KIND = [', "\nregisterTooltip('skill'");
 const levelsSource = slice('const XP_LEVELS', 'const DIFFICULTY_PICK_HINT');
 

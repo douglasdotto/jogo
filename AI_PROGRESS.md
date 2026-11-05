@@ -260,3 +260,8 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - `run-all.cjs` agora anuncia cada teste antes de iniciá-lo e imprime sua duração; a ordem e a cobertura não mudaram. A suíte padrão com 50 simulações ainda não foi repetida após a interrupção anterior.
 - Direção visual: roupas texturizadas com acabamento fosco; silhuetas Mage ampliadas em 8% no corpo/pernas e 12% nas mangas, sem malhas adicionais; moldura azul e dourada no HUD; Agarrão Sísmico com anel convergente, fragmentos e onda de impacto.
 - `npm run test:rapido`: **42 passaram, 0 falharam**. Aba lateral continua aberta na missão 3, fase 3/4, com a escolha de evolução aguardando e nenhum inimigo restante.
+
+### Extração dos metadados da barra de habilidades — 2026-11-05
+- `SKILL_KEYS` e `SKILL_GLYPHS` agora vivem em `cavaleiros/skill-ui.js`; `main.js` importa esses dados e fica com a montagem/renderização da barra. O módulo é puro e não altera gameplay.
+- `skill-glyphs.cjs` e `skill-tooltip.cjs` carregam o módulo; `simulacao.cjs` injeta os dados na VM, permitindo que `empurra.cjs`, `ponte-travessia.cjs` e `simulacao-perfil.cjs` reutilizem o runner; `rodada2.cjs` também os injeta. `skill-slot4.cjs` verifica as teclas no módulo novo.
+- Checks focados passaram: `skill-glyphs.cjs` (36 variantes), `skill-tooltip.cjs` (36 × 4 slots), `empurra.cjs`, `ponte-travessia.cjs`, `simulacao-perfil.cjs`, `skill-slot4.cjs` e `rodada2.cjs` (**257 verificações**). `npm run test:rapido`: **42 passaram, 0 falharam**.

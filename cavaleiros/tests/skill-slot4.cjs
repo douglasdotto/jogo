@@ -9,6 +9,7 @@ const dir = path.join(__dirname, '..');
 const read = (name) => fs.readFileSync(path.join(dir, name), 'utf8').replace(/\r\n/g, '\n');
 const strip = (code) => code.replace(/^import .*$/gm, '').replace(/^export /gm, '');
 const main = read('main.js');
+const skillUi = read('skill-ui.js');
 const slice = (from, to) => {
   const s = main.indexOf(from), e = main.indexOf(to, s);
   assert.ok(s >= 0 && e > s, `trecho de main.js não encontrado: ${from}`);
@@ -30,7 +31,7 @@ assert.ok(VARIANTS.length >= 27, `esperava ao menos 27 variantes, achou ${VARIAN
 
 // a IA percorre os quatro slots e as teclas cobrem o 4º
 assert.match(main, /const SKILL_AI_ORDER = \[2, 1, 3, 0\];/, 'a IA tenta ultimate, técnica, segunda técnica e assinatura');
-assert.match(main, /\['Z', 'X', 'V', 'B'\]/, 'teclas do slot 3: Z X V B');
+assert.match(skillUi, /\['Z', 'X', 'V', 'B'\]/, 'skill-ui.js define teclas do slot 3: Z X V B');
 assert.match(main, /const DIRECT_SKILL_SLOTS = \{ q: 0, w: 1, e: 2, r: 3 \};/, 'controle direto usa R no slot 3');
 
 const generic = new Set(['storm', 'ward', 'burst', 'primary']);
