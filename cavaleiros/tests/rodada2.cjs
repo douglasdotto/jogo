@@ -2257,6 +2257,17 @@ test('heróis distribuem ataques contra alvos quase derrotados sem perder priori
   priest.hp=priest.maxHp*.1;focused.targetFocus=priest;
   assert.equal(t.chooseHeroTarget(teammate,[alternative,nearby,priest],.016,team),priest);
 });
+test('herói interrompe o foco antigo quando um inimigo já o escolheu como alvo',()=>{
+  clear();const hero=new t.Hero(cfg('paladin'));
+  hero.pos.set(0,0,0);hero.post.copy(hero.pos);
+  const focused=new t.Skeleton('Minion',1),attacker=new t.Skeleton('Warrior',1);
+  focused.spawning=attacker.spawning=false;focused.pos.set(0,0,3);attacker.pos.set(0,0,4.2);
+  hero.targetFocus=focused;hero.targetFocusT=1;attacker.target=hero;
+  const team=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(hero,[focused,attacker],.016,team),attacker,
+    'a ameaça ativa não espera o primeiro golpe acertar para sair da histerese de foco');
+  clear();
+});
 test('Trono de Ossos concentra no chefe com menos vida relativa sem filtrar lista temporária',()=>{
   clear();
   const first=new t.Hero(cfg('paladin')),second=new t.Hero(cfg('berserker'));

@@ -3786,6 +3786,8 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
     const missingHealth = 1 - Math.max(0, threatenedAlly.hp) / threatenedAlly.maxHp;
     score -= 3 + missingHealth * 2 + (goal?.type === 'nofall' ? 4 : 0);
   }
+  // Se o inimigo já escolheu este herói, interrompe o foco antigo antes de o golpe acertar.
+  if (target.target === hero || target.engagedWith === hero) score -= 4.5;
   if (goal?.type === 'nofall') {
     for (const ally of party) if (!ally.dead && ally.hp / ally.maxHp <= 0.45) {
       distanceToVulnerable = Math.min(distanceToVulnerable, tacticalDistance(ally.pos, target.pos));
@@ -4158,7 +4160,8 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   if (goal?.type === 'nofall' && !urgentNoFallTarget) for (const ally of party) {
     if (!ally.dead && ally.hp / ally.maxHp <= 0.45 && tacticalDistance(ally.pos, best.pos) <= 4.5) { urgentNoFallTarget = true; break; }
   }
-  const urgentAllyThreat = best.pendingHit?.target?.team === 'hero' || best.pendingHit?.target?.team === 'villager';
+  const urgentAllyThreat = best.pendingHit?.target?.team === 'hero' || best.pendingHit?.target?.team === 'villager'
+    || best.target === hero || best.engagedWith === hero;
   const urgentPriest = best.enemyKind === 'Priest' || !!best.kind?.priority;
   const urgentBomber = best.enemyKind === 'Bomber'
     && friends.some((friend) => !friend.dead && tacticalDistance(friend.pos, best.pos) < 7);
@@ -5773,6 +5776,29 @@ function quakeAt(at, reach, tremor = 0.55) {
   shake(tremor);
 }
 
+// Brutamontes (Agarrão Sísmico): puxa a poeira e as pedras para o centro,
+// depois solta uma onda curta que marca o levantamento dos inimigos.
+function seismicPull(at, radius, color = 0xc9bba2) {
+  const center = at.clone();
+  wave(center, color, radius, 0.22, 0.38, { opacity: 0.62, dust: true, spin: 1.4 });
+  wave(center, 0xfff0d0, 0.2, radius * 0.72, 0.42, { opacity: 0.48, delay: 0.18 });
+  const count = fewer(8);
+  for (let i = 0; i < count; i++) {
+    const angle = i / count * TAU;
+    const shard = new THREE.Mesh(rockGeo, glow(i % 2 ? color : 0xffe5bd, 0.82));
+    addFx(shard, 0.42, (e, dt, k) => {
+      const pull = 1 - (1 - k) ** 2;
+      const a = angle + k * 1.8;
+      const r = radius * (1 - pull);
+      shard.position.set(center.x + Math.cos(a) * r, center.y + 0.18 + Math.sin(Math.PI * k) * 0.62, center.z + Math.sin(a) * r);
+      shard.rotation.set(e.t * 8, e.t * 11 + angle, e.t * 6);
+      shard.scale.setScalar(2.8 * (0.75 + Math.sin(Math.PI * k) * 0.45) * (1 - k * 0.45));
+      shard.material.opacity = 0.82 * (1 - k);
+    });
+  }
+  burst(center.clone().setY(center.y + 0.45), [color, 0xffe5bd, 0xffffff], fewer(12), 5, { up: 0.7, life: 0.55 });
+}
+
 // impacto dos tiros de habilidade (e de cada inimigo atravessado pelos perfurantes)
 function impact(kind, at, radius, lookId) {
   at = at.clone();
@@ -6920,7 +6946,7 @@ function brokenArrow(at, from) {
 const FX = { look, update(dt) { updateSkillFx(dt); updateSparks(dt); }, clear: clearSkillFx, jolt: cameraJolt, shake, hitStop, slowMo, timeScale, meleeHit, heroFall, heroRise, bossDown,element, stasis, charge, release, dome,
   holyLight: (h, friends, reach) => { cleanseAround(h.pos, reach); holyLight(h, friends, reach); },   // cura em área também tira o veneno
   leaves: (h, reach) => { cleanseAround(h.pos, reach); leaves(h, reach); },   // Druida
-  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, later, judgmentMark, judgmentStrike, furyPulse, quake, quakeAt, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, roots, cardFlutter, cardThrow, cardRain, suitMark, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
+  venomHit, venomDrip, bloodBurst, followSpirit, spiritPulse, whirl, fury, later, judgmentMark, judgmentStrike, furyPulse, quake, quakeAt, seismicPull, impact, iceFan, zigzag, summon, legion, knights, shadowStep, slashX, royal, roots, cardFlutter, cardThrow, cardRain, suitMark, dress, trail, column, swing, fireField, skillColor: (h) => SKILL_ART[h.cfg.id]?.color };
 
 // Rúnica: projétil, selo e visuais (lógica em runeShieldOn, runicSoak e raiseRuneDome)
 BOLT_LOOKS.runic = { geo: boltGeo, core: hiddenCore, shells: [[glowMaterial(0x6fd8e0, 0.35), 1.7]], orb: ['runic', 0.38], size: [1.3, 1.3], spin: true };
@@ -8234,8 +8260,7 @@ class Hero extends Unit {
             FX.zigzag(center, enemy.pos);
           }
           FX.quake(this, radius * 0.45);
-          wave(center, color, radius, 0.25, 0.5, { opacity: 0.55 });
-          burst(center.clone().setY(center.y + 0.5), [color, 0xffe5bd, 0xffffff], 22, 5);
+          FX.seismicPull(center, radius, color);
           popText(center, 'Agarrão sísmico!', 'crit');
         };
         break;
@@ -11329,8 +11354,9 @@ function separatePair(a, b, ia, ib) {
     : sameFaction ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR;
   const min = factor * (a.size + b.size);
   let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
-  let distance = Math.hypot(dx, dz);
-  if (distance >= min) return false;
+  const distanceSq = dx * dx + dz * dz;
+  if (distanceSq >= min * min) return false;
+  let distance = Math.sqrt(distanceSq);
   if (distance < 0.001) {
     // Give perfectly coincident units a stable direction instead of skipping them.
     const angle = (ia * 0.754877666 + ib * 0.569840291) * Math.PI * 2;

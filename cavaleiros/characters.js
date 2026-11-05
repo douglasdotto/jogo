@@ -197,10 +197,15 @@ export const CHARACTERS = [
 
 // proporções leves nas malhas de corpo, braços e pernas; mantém os ossos livres para as animações
 function silhouette(model, { torso = 1, arms = 1, legs = 1, height = 1, depth = 1 } = {}) {
+  // Mangas e peitorais de mago mais largos dão às túnicas uma leitura robusta de miniatura,
+  // sem criar acessórios ou chamadas de desenho adicionais.
+  const robe = model === 'Mage';
+  const width = robe ? 1.08 : 1;
+  const sleeve = robe ? 1.12 : 1;
   return {
-    [`${model}_Body`]: [torso, height, depth],
-    [`${model}_ArmLeft`]: [arms, height, depth], [`${model}_ArmRight`]: [arms, height, depth],
-    [`${model}_LegLeft`]: [legs, height, depth], [`${model}_LegRight`]: [legs, height, depth],
+    [`${model}_Body`]: [torso * width, height, depth * width],
+    [`${model}_ArmLeft`]: [arms * sleeve, height, depth * sleeve], [`${model}_ArmRight`]: [arms * sleeve, height, depth * sleeve],
+    [`${model}_LegLeft`]: [legs * width, height, depth * width], [`${model}_LegRight`]: [legs * width, height, depth * width],
   };
 }
 
@@ -280,6 +285,12 @@ export function applyLook(root, assets, r) {
       if (!o.isMesh || !o.material.map) return;
       o.material = o.material.clone();
       o.material.map = recolor(o.material.map, op);
+      // A roupa texturizada fica mais legível com luz ampla e suave: menos brilho plástico,
+      // mantendo metais e acessórios rígidos com o acabamento original.
+      if (o.isSkinnedMesh && o.material.isMeshStandardMaterial) {
+        o.material.roughness = Math.max(o.material.roughness ?? 0, 0.76);
+        o.material.metalness = Math.min(o.material.metalness ?? 0, 0.08);
+      }
     });
   }
 

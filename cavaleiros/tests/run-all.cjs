@@ -15,6 +15,7 @@ let passaram = 0;
 let falharam = 0;
 
 for (const nome of arquivos) {
+  process.stdout.write(`▶ ${nome} — iniciando\n`);
   const inicio = Date.now();
   const resultado = spawnSync(process.execPath, [path.join(__dirname, nome)], {
     cwd: pasta,
@@ -23,7 +24,7 @@ for (const nome of arquivos) {
   const segundos = ((Date.now() - inicio) / 1000).toFixed(2);
   const passou = resultado.status === 0 && !resultado.error;
 
-  console.log(`${passou ? '✓' : '✗'} ${nome} (${segundos}s)`);
+  process.stdout.write(`${passou ? '✓' : '✗'} ${nome} (${segundos}s)\n`);
   if (passou) {
     passaram++;
   } else {

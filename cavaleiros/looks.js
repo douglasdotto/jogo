@@ -38,10 +38,15 @@ function face(model, colors, head = `${model}_Head`) {
 
 // ajusta o volume por classe nas malhas skinned, sem mexer em ossos usados pelas animações
 function silhouette(model, { torso = 1, arms = 1, legs = 1, height = 1, depth = 1 } = {}) {
+  // Mangas e peitorais de mago mais largos dão às túnicas uma leitura robusta de miniatura,
+  // sem criar acessórios ou chamadas de desenho adicionais.
+  const robe = model === 'Mage';
+  const width = robe ? 1.08 : 1;
+  const sleeve = robe ? 1.12 : 1;
   return {
-    [`${model}_Body`]: [torso, height, depth],
-    [`${model}_ArmLeft`]: [arms, height, depth], [`${model}_ArmRight`]: [arms, height, depth],
-    [`${model}_LegLeft`]: [legs, height, depth], [`${model}_LegRight`]: [legs, height, depth],
+    [`${model}_Body`]: [torso * width, height, depth * width],
+    [`${model}_ArmLeft`]: [arms * sleeve, height, depth * sleeve], [`${model}_ArmRight`]: [arms * sleeve, height, depth * sleeve],
+    [`${model}_LegLeft`]: [legs * width, height, depth * width], [`${model}_LegRight`]: [legs * width, height, depth * width],
   };
 }
 

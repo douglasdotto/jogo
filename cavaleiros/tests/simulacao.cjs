@@ -206,6 +206,7 @@ function play(diff, profile, mission = null) {
   let time = 0, deaths = 0;
   const timeCap = mission ? 900 : 3600; // a campanha acaba em poucas fases; o timeout detecta stalls sem fingir vitória
   const dt = 1 / 30;
+  const frameUnits = [];
   const die = t.Unit.prototype.die;
   t.Unit.prototype.die = function () { if (this.team === 'hero') deaths++; return die.call(this); };
   while (!t.game.over && time < timeCap) {
@@ -238,7 +239,10 @@ function play(diff, profile, mission = null) {
     // O jogo captura um contexto tático por quadro antes de atualizar os heróis.
     // Compartilhá-lo aqui evita que a simulação tome decisões com listas diferentes por unidade.
     t.setFrameTargetContext();
-    for (const u of [...t.units]) u.update(dt);
+    const frameUnitCount = t.units.length;
+    frameUnits.length = frameUnitCount;
+    for (let i = 0; i < frameUnitCount; i++) frameUnits[i] = t.units[i];
+    for (let i = 0; i < frameUnitCount; i++) frameUnits[i].update(dt);
     t.clearFrameTargetContext();
     if (!t.game.over) t.separate();
     t.updateBolts(dt);

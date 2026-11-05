@@ -252,3 +252,11 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 ### Campanha Pesadelo com composições variadas — 2026-11-05
 - Composição sorteada Brute/Clériga/Anjo/Xamã, seed `20261105`: **24/24 vitórias, 63/72 estrelas e 7 quedas**. Ponte do Rio terminou com 3★; Ponte em Chamas, Duelo, Cemitério e Arauto das Asas ficaram com 1★; Noite sem Fim ficou com 2★.
 - Sem cura e só corpo a corpo (Campeão/Berserker/Assassino/Duelista), seed `20261106`: **4/24 missões**. Caiu em Fazendas, fase 6, após 7 quedas no total; o Rei ainda tinha 148/1363 de vida e três inimigos vivos. É uma falha de composição extrema, não uma trava da campanha para equipes variadas.
+
+### Resposta a ameaças, custo por quadro e direção visual — 2026-11-05
+- Heróis agora interrompem o foco anterior quando um inimigo já os escolheu como alvo durante a aproximação, sem mudar os limites de perseguição. A regressão reproduz esse intervalo antes do golpe; `rodada2.cjs`: **257 verificações passaram**.
+- `separatePair` compara distância ao quadrado e só calcula a raiz se houver sobreposição. `collision-separate.cjs` e `empurra.cjs` passaram antes e depois da alteração.
+- O simulador reutiliza o snapshot de unidades em cada quadro, preservando a fotografia inicial mesmo quando a lista muda durante a atualização. O perfil apontou `separate`, `separatePair` e `moveTo` como os principais custos. Uma simulação levou 42,15 s depois da mudança; sem comparação A/B controlada, não atribuí o tempo à otimização.
+- `run-all.cjs` agora anuncia cada teste antes de iniciá-lo e imprime sua duração; a ordem e a cobertura não mudaram. A suíte padrão com 50 simulações ainda não foi repetida após a interrupção anterior.
+- Direção visual: roupas texturizadas com acabamento fosco; silhuetas Mage ampliadas em 8% no corpo/pernas e 12% nas mangas, sem malhas adicionais; moldura azul e dourada no HUD; Agarrão Sísmico com anel convergente, fragmentos e onda de impacto.
+- `npm run test:rapido`: **42 passaram, 0 falharam**. Aba lateral continua aberta na missão 3, fase 3/4, com a escolha de evolução aguardando e nenhum inimigo restante.
