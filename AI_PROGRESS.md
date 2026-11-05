@@ -214,3 +214,8 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - O shader de raios de luz usado por curas, bênçãos e golpes santos ganhou faixas luminosas ascendentes e fios em espiral dentro da malha existente, sem draw calls adicionais.
 - `rodada2.cjs`: **252 verificações passaram**, incluindo 100 usos sequenciais que reaproveitam uma malha e um material por tipo. `simulacao-perfil.cjs` e `vfx-shaders.cjs` passaram; `npm run test:rapido`: **42 passaram, 0 falharam**.
 - A arena Normal foi aberta no browser em modo de teste (não salva); chegou à onda 3 e o Chrome exibiu o aviso interno de FPS baixo. Como o próprio aviso recomenda aceleração gráfica e a sessão não fornece FPS comparável, isso fica como observação do ambiente, não como medida de ganho ou regressão.
+
+### Reuso das marcas de chão — 2026-11-05
+- As marcas circulares de fogo, poções e áreas de habilidade agora reutilizam malhas e materiais em pools limitados a 128, reduzindo alocação por impacto e encerramento de efeitos.
+- Marcas ligadas a FX de acompanhamento ficam uma atualização fora do pool antes de serem reutilizadas; isso deixa o FX antigo detectar a remoção da base e evita que ele siga outra área.
+- `rodada2.cjs`: **252 verificações passaram**, incluindo 100 ciclos sequenciais de poças que reaproveitam uma única malha e um material. `simulacao-perfil.cjs` passou; `npm run test:rapido`: **42 passaram, 0 falharam**. O teste `run-terrain.mjs` também cobre o reinício com o helper de limpeza presente.

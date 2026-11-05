@@ -4301,6 +4301,28 @@ const beamGeo = new THREE.CylinderGeometry(0.045, 0.045, 1, 6);
 const ringMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, opacity: 0.65, depthWrite: false }), 128);
 const beamMaterials = materialPool(() => new THREE.MeshBasicMaterial({ transparent: true }), 32);
 const groundMarkMaterials = materialPool(() => new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, transparent: true, depthWrite: false }), 128);
+const groundMarkMeshes = [], deferredGroundMarkMeshes = [], GROUND_MARK_MESH_POOL_LIMIT = 128;
+function releaseGroundMark(mesh, defer = false) {
+  if (!mesh?.groundMarkPool) return false;
+  scene.remove(mesh);
+  releaseFxMaterial(mesh.material);
+  mesh.material = null;
+  mesh.visible = false;
+  if (groundMarkMeshes.length + deferredGroundMarkMeshes.length < GROUND_MARK_MESH_POOL_LIMIT) {
+    (defer ? deferredGroundMarkMeshes : groundMarkMeshes).push(mesh);
+  }
+  return true;
+}
+function flushGroundMarkReturns() {
+  while (deferredGroundMarkMeshes.length && groundMarkMeshes.length < GROUND_MARK_MESH_POOL_LIMIT)
+    groundMarkMeshes.push(deferredGroundMarkMeshes.pop());
+  deferredGroundMarkMeshes.length = 0;
+}
+function releaseFlameMesh(mesh) {
+  if (mesh?.groundMarkPool) { releaseGroundMark(mesh, true); return; }
+  scene.remove(mesh);
+  releaseFxMaterial(mesh.material);
+}
 const beamDirection = new THREE.Vector3(), beamUp = new THREE.Vector3(0, 1, 0), beamLift = new THREE.Vector3(0, 1.3, 0);
 const colors = { cook: 0xe0603a, pyro: 0xff883d, cryo: 0x8be8ff, arcane: 0xc999ff, oracle: 0xc6b4ff, viking: 0xd6e9ef, iceviking: 0x8be8ff, necro: 0x9fffb0, druid: 0xa8e07a, crossbow: 0xffed9e, ninja: 0xc7d0ff, archer: 0xe8f6ee, alchemist: 0xb8ff6a, vampire: 0xb0243c, flask: 0x9cff3a, tonic: 0xff8ad8 };
 const boltMats = Object.fromEntries(Object.entries(colors).map(([k, color]) => [k, new THREE.MeshBasicMaterial({ color })]));
@@ -4410,6 +4432,7 @@ const piercingHeightOffset = new THREE.Vector3(0, 1.3, 0);
 
 function updateBolts(dt) {
   if (dt <= 0) return;
+  flushGroundMarkReturns();   // a FX vinculado à marca antiga teve um quadro para encerrar antes de reutilizarmos sua base
   let targetSnapshot = null;
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i];
@@ -4447,11 +4470,7 @@ function updateBolts(dt) {
         relicBounce(b);
         if (b.kind === 'pyro') {
           // chão chamuscado; as brasas e as chamas em shader vêm de FX.fireField e apagam com ele
-          const mesh = new THREE.Mesh(groundGeo, groundMarkMaterials.take(0x3a1608, 0.45));
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.position.copy(b.target.pos).setY(b.target.pos.y + 0.06);
-          mesh.scale.setScalar(radius);
-          scene.add(mesh);
+          const mesh = groundMark(b.target.pos, radius, 0x3a1608, 0.45);
           flames.push({ mesh, radius, owner: b.owner, dmg: b.dmg * 0.3, t: (1.5 + b.level * 0.5) * b.power, tick: 0, follow: b.target });   // as chamas acompanham o alvo em movimento
           FX.fireField(mesh, radius);
         }
@@ -4485,7 +4504,7 @@ function updateBolts(dt) {
       else damageArea(f.mesh.position, f.radius, f.dmg * 0.5, f.owner);
       f.tick += f.every || 0.5;
     }
-    if (f.t <= 0) { scene.remove(f.mesh); releaseFxMaterial(f.mesh.material); flames.splice(i, 1); }
+    if (f.t <= 0) { releaseFlameMesh(f.mesh); flames.splice(i, 1); }
   }
   for (let i = blasts.length - 1; i >= 0; i--) {
     const bl = blasts[i];
@@ -4671,8 +4690,7 @@ function spiritTotemModel(kind) {
 
 function removeSpiritTotem(t) {
   scene.remove(t.root);
-  scene.remove(t.mark);
-  releaseFxMaterial(t.mark.material);
+  releaseGroundMark(t.mark);
   const index = spiritTotems.indexOf(t);
   if (index >= 0) spiritTotems.splice(index, 1);
 }
@@ -4760,7 +4778,11 @@ function updateFollowSpirits(dt) {
 const ARCHER_SHOT = 1.3;   // Flecha longa: dano de cada inimigo atravessado (× dano do herói)
 
 function groundMark(at, radius, color, opacity = 0.45) {
-  const mesh = new THREE.Mesh(groundGeo, groundMarkMaterials.take(color, opacity));
+  const material = groundMarkMaterials.take(color, opacity);
+  const mesh = groundMarkMeshes.pop() || new THREE.Mesh(groundGeo, material);
+  mesh.material = material;
+  mesh.groundMarkPool = true;
+  mesh.visible = true;
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.copy(at).setY(at.y + 0.06);
   mesh.scale.setScalar(radius);
@@ -12335,9 +12357,9 @@ function startGame(view = 'menu') {
   for (const list of [bolts, blasts, flames]) while (list.length) {
     const effect = list.pop();
     if (list === blasts) releaseBlast(effect);
+    else if (list === flames) releaseFlameMesh(effect.mesh);
     else {
       scene.remove(effect.mesh);
-      if (list === flames) releaseFxMaterial(effect.mesh.material);
     }
   }
   while (sentries.length) removeSentry(sentries[0]);
@@ -12345,6 +12367,7 @@ function startGame(view = 'menu') {
   followSpirits.length = 0;
   clearFx();
   FX.clear();
+  flushGroundMarkReturns();
   audio.stopMusic();
   popTextPool.clear();
   closeHeroPanel();

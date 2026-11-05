@@ -241,11 +241,11 @@ test('unidade clona cada material-fonte uma vez e mantém os bonecos isolados',(
     assert.equal(disposed.length,6,'cada material próprio é descartado uma vez, incluindo o herói usado na comparação');
   }finally{context.SkeletonUtils.clone=originalClone;clear();}
 });
-let fxMaterialCreates=0,beamVectorCreates=0;
+let fxMaterialCreates=0,beamVectorCreates=0,fxMeshCreates=0;
 class BeamVector3 extends Vector3 { constructor(...args){super(...args);beamVectorCreates++;} }
 const ringContext=vm.createContext({
   THREE:{DoubleSide:2,Vector3:BeamVector3,MeshBasicMaterial:class{constructor(options={}){fxMaterialCreates++;Object.assign(this,options);this.userData={};this.color={hex:0,setHex(hex){this.hex=hex}};this.opacity??=1;this.dispose=noop;}} ,
-    Mesh:class{constructor(geometry,material){this.geometry=geometry;this.material=material;this.visible=true;this.rotation={x:0,y:0,z:0};this.position={x:0,y:0,z:0,
+    Mesh:class{constructor(geometry,material){fxMeshCreates++;this.geometry=geometry;this.material=material;this.visible=true;this.rotation={x:0,y:0,z:0};this.position={x:0,y:0,z:0,
       copy(v){this.x=v.x;this.y=v.y;this.z=v.z;return this;},add(v){this.x+=v.x;this.y+=v.y;this.z+=v.z;return this;},multiplyScalar(k){this.x*=k;this.y*=k;this.z*=k;return this;},
       setY(y){this.y=y;return this;}};this.scale={x:1,y:1,z:1,setScalar:noop};this.quaternion={setFromUnitVectors:noop};}},
   Vector3,RingGeometry:class{}},ringGeo:{},beamGeo:{},groundGeo:{},blasts:[],flames:[],scene:{add:noop,remove:noop},
@@ -255,7 +255,7 @@ vm.runInContext(part(source,'const ringMaterials = materialPool(','const colors 
 vm.runInContext(part(source,'function ring(at, radius, color, life = 0.6) {','function fireBolt'),ringContext);
 vm.runInContext(part(source,'function groundMark(at, radius, color, opacity = 0.45) {','// um pulso da área'),ringContext);
 vm.runInContext(part(source,'function releaseFxMaterial(material) {','function clearFx()'),ringContext);
-vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,groundMark,groundMarkMaterials,releaseFxMaterial,releaseBlast,blasts};',ringContext);
+vm.runInContext('globalThis.ringApi={ring,ringMaterials,beam,beamMaterials,groundMark,groundMarkMaterials,groundMarkMeshes,releaseGroundMark,flushGroundMarkReturns,releaseFxMaterial,releaseBlast,blasts};',ringContext);
 test('anéis de impacto reutilizam o material e restauram sua opacidade ao reaparecer',()=>{
   const {ring,ringMaterials,releaseBlast,blasts}=ringContext.ringApi,used=[],usedMeshes=[];
   for(let i=0;i<100;i++){
@@ -292,23 +292,34 @@ test('raios curtos reutilizam material e vetores temporários',()=>{
   assert.strictEqual(blasts.at(-1).mesh,[...usedMeshes][0],'o feixe reutiliza a malha do seu tipo');
   releaseBlast(blasts.at(-1));blasts.pop();
 });
-test('marcas de fogo e poças reutilizam materiais sem manter opacidade ou cor antigas',()=>{
-  const {groundMark,groundMarkMaterials,releaseFxMaterial}=ringContext.ringApi;
-  const materialCount=fxMaterialCreates,used=new Set();
+test('marcas de fogo e poças reutilizam malhas e materiais sem vazar opacidade ou cor',()=>{
+  const {groundMark,groundMarkMaterials,releaseGroundMark,flushGroundMarkReturns}=ringContext.ringApi;
+  const materialCount=fxMaterialCreates,meshCount=fxMeshCreates,used=new Set(),usedMeshes=new Set();
   for(let i=0;i<100;i++){
     const mesh=groundMark(new Vector3(i,0,0),2,0x7a2a5a+i,.2);
     used.add(mesh.material);
+    usedMeshes.add(mesh);
     assert.equal(mesh.material.opacity,.2,'a poça conserva sua transparência inicial');
     mesh.material.opacity=.03;
-    releaseFxMaterial(mesh.material);
+    releaseGroundMark(mesh,true);
+    flushGroundMarkReturns();
   }
   assert.equal(used.size,1,'cem áreas sequenciais reutilizam um único material');
+  assert.equal(usedMeshes.size,1,'cem áreas sequenciais reutilizam uma única malha');
   assert.equal(fxMaterialCreates-materialCount,1,'as áreas deixam de criar e descartar um material por uso');
+  assert.equal(fxMeshCreates-meshCount,1,'as áreas deixam de criar uma malha por uso');
   const next=groundMark(new Vector3(),2,0x9cff3a,.45);
   assert.strictEqual(next.material,[...used][0],'a próxima marca recebe o material devolvido');
   assert.equal(next.material.opacity,.45,'a opacidade animada não vaza de uma área para outra');
   assert.equal(next.material.color.hex,0x9cff3a,'a cor da nova área substitui a anterior');
-  releaseFxMaterial(next.material);
+  releaseGroundMark(next,true);
+  const sameFrame=groundMark(new Vector3(1,0,0),2,0x9cff3a,.45);
+  assert.notStrictEqual(sameFrame,next,'a marca espera o FX antigo notar que sua base saiu da cena');
+  releaseGroundMark(sameFrame,true);
+  flushGroundMarkReturns();
+  const recycled=groundMark(new Vector3(2,0,0),2,0x9cff3a,.45);
+  assert.ok(recycled===next||recycled===sameFrame,'marcas voltam ao pool após a atualização do FX');
+  releaseGroundMark(recycled);
   assert.equal(groundMarkMaterials.free,1,'a marca ativa deixa de estar contada no estoque livre');
 });
 test('cache de emissive preserva glow base e só atualiza quando a cor muda',()=>{
