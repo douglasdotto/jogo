@@ -2179,15 +2179,20 @@ test('resgate fecha com herói grande: o raio acompanha a distância mínima da 
   const separation=vm.runInContext('UNIT_SEPARATION_FACTOR',context)*(1.856+1);
   assert.equal(reach(1.856)>separation,true,'brutamontes parado pela separação ainda alcança o prisioneiro');
 });
-test('atirador esqueleto recua só por um orçamento e depois para e atira',()=>{
-  clear();const mage=new t.Skeleton('Mage',1);
-  let allowed=0;
-  for(let i=0;i<600&&mage.mayRetreat(1/30);i++)allowed++;
-  assert.equal(allowed>40&&allowed<70,true,'recua no máximo ~1,8 s: '+allowed);
-  assert.ok(Math.abs(mage.standT-8)<.04,'depois do recuo, fica parado para atacar por 8 s: '+mage.standT);
-  assert.equal(mage.mayRetreat(1/30),false,'depois do orçamento não recua');
-  mage.update(10);   // o tempo de parada passa e o orçamento volta
-  assert.equal(mage.standT<=0,true);
+test('atirador esqueleto dá um passo curto de recuo e não corre em direção móvel',()=>{
+  clear();const mage=new t.Skeleton('Mage',1),victim=new t.Hero(cfg('paladin'));
+  mage.spawning=false;mage.pos.set(0,0,0);victim.pos.set(0,0,3);
+  const kite=vm.runInContext('kiteSkeletonFrom',context);
+  const goal=kite(mage,victim,.05),goalX=goal.x,goalZ=goal.z;
+  assert.ok(goal,'ameaça próxima dispara um recuo');
+  assert.ok(Math.abs(Math.hypot(goalX-mage.pos.x,goalZ-mage.pos.z)-.9)<.01,'o destino fica a menos de 1 m');
+  mage.pos.z=-.25;
+  const continued=kite(mage,victim,.05);
+  assert.equal(continued.z,goalZ,'o destino fica fixo enquanto o atirador anda');
+  mage.pos.set(goalX,0,goalZ);
+  assert.equal(kite(mage,victim,.05),null,'para ao concluir o passo');
+  assert.equal(kite(mage,victim,.05),null,'não encadeia fuga durante a recarga');
+  assert.ok(Math.hypot(mage.pos.x,mage.pos.z)<=.91,'o deslocamento total permanece curto');
 });
 test('heróis distribuem ataques contra alvos quase derrotados sem perder prioridades',()=>{
   clear();const focused=new t.Hero(cfg('berserker')),teammate=new t.Hero(cfg('paladin'));
@@ -4850,7 +4855,7 @@ test('unidades à distância abrem espaço de quem as ataca antes de levar golpe
   const melee=hero('paladin',0,3.2),archer=foe('Mage',0,0);archer.spawning=false;
   for(let i=0;i<120;i++)archer.update(.05);
   const enemyGap=Math.hypot(melee.pos.x-archer.pos.x,melee.pos.z-archer.pos.z);
-  assert.ok(enemyGap>4&&enemyGap<9,`o mago recua pouco e para para lutar (${enemyGap.toFixed(2)} m)`);
+  assert.ok(enemyGap>3.2&&enemyGap<4.5,`o mago dá um passo curto e para para lutar (${enemyGap.toFixed(2)} m)`);
   clear();
 });
 test('chefe abaixo de metade da vida se enfurece e recupera parte dela uma vez só',()=>{

@@ -1,5 +1,6 @@
 // Fases 1–12 (partida interna, sem missão): node cavaleiros/tests/simulacao.cjs [dificuldade|todas] [partidas] [grupo] [semente] [detalhe]
 // Campanha: node cavaleiros/tests/simulacao.cjs campanha <missao> <dificuldade|todas> [partidas] [grupo|recomendado|aleatorio] [semente] [detalhe] [reta]
+// Campanha contínua (mesma equipe, XP e evoluções): node cavaleiros/tests/simulacao.cjs campanha-continua <dificuldade> <grupo> <semente>
 // Exemplo rápido (2 por dificuldade): node cavaleiros/tests/simulacao.cjs campanha ponte todas 2 equilibrado 20261030 detalhe
 // Sem navegador. A campanha usa a estrada curva, terreno e navegação reais, com bloqueadores semeados.
 // Acrescente "reta" no fim para comparar com o cenário sem navegação.
@@ -24,6 +25,7 @@ const battleReport = fs.readFileSync(path.join(dir, 'battle-report.js'), 'utf8')
 const monsters = fs.readFileSync(path.join(dir, 'monsters.js'), 'utf8');
 const progression = fs.readFileSync(path.join(dir, 'progression.js'), 'utf8');
 const fxPool = fs.readFileSync(path.join(dir, 'fx-pool.js'), 'utf8');
+const continuousCampaignMode = process.argv[2] === 'campanha-continua';
 class Vector3 {
   constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
   set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
@@ -72,7 +74,8 @@ const simBlasts = [];
 const simRing = (_at, _radius, _color, life = 0.6) => simBlasts.push({
   mesh: { material: { opacity: 1, dispose: noop }, scale: { addScalar: noop } }, t: life, life,
 });
-const context = vm.createContext({ THREE, document: { createElement: el, body: el(), getElementById: el }, URLSearchParams, location: { search: '?tudo=1' },   // todas as variantes liberadas
+const context = vm.createContext({ THREE, document: { createElement: el, body: el(), getElementById: el }, URLSearchParams, location: { search: continuousCampaignMode ? '' : '?tudo=1' },   // campanha contínua usa as regras e os heróis desbloqueados do jogo
+  localStorage: { data: {}, getItem(key) { return this.data[key] ?? null; }, setItem(key, value) { this.data[key] = String(value); }, removeItem(key) { delete this.data[key]; } },
   addEventListener: noop, requestAnimationFrame: noop, hideTooltip: noop, logoSVG: () => "", tutorial: { on: noop, wants: () => false }, setTimeout: (fn) => fn(), clearTimeout: noop, innerWidth: 1440, innerHeight: 1000, aiming: null, battleGateId: 0, battleLoadingVisible: false,
   SkeletonUtils: { clone: root }, scene: { add: noop, remove: noop }, assets, ringGeo: {}, haloGeo: {}, goldMat: {}, starGeo: {}, puffGeo: {},
   boltGeo: {}, axeGeo: {}, bladeGeo: {}, handleGeo: {}, flameGeo: {}, groundGeo: {}, beamGeo: {}, boltMats: { viking: {}, iceviking: {}, arcane: {}, pyro: {} },
@@ -110,6 +113,7 @@ vm.runInContext(part(source, 'class Hero', '// ---------- fases'), context);
 vm.runInContext(part(source, '// ---------- fases', '// ---------- laço principal'), context);
 const t = vm.runInContext(`({ units, heroes, game, pick, XP_LEVELS, autoUpgrade, startGame, confirmPick, updateGame, showEvolution, separate, updateBolts, updateEnemyBolts, chooseHeroTarget,
   DIFFICULTIES, MISSIONS, VARIANTS, Unit, progress, nightmareTeamIds, nightmareTeamPlanIds, showDifficulty, setMission: (m) => { game.mission = m; },
+  setCampaignTeamRun: (value) => { campaignTeamRun = !!value; },
   setWorld: (next) => { world = next; },
   setDifficulty: (d) => { difficulty = d; },
   setFrameTargetContext: () => { activeTargetContext = game.state === 'fight' && !game.paused && !game.over ? makeTargetContext(frameTargetContext) : null; },
@@ -184,6 +188,7 @@ function play(diff, profile, mission = null) {
   t.startGame();
   if (mission) {
     // Ignora somente a interface do mapa; dificuldade, seleção, startMission e combate são reais.
+    if (continuousCampaignMode) t.setCampaignTeamRun(true);
     t.setMission(mission);
     t.showDifficulty();
     t.confirmPick(Math.max(0, t.DIFFICULTIES.indexOf(diff)));
@@ -201,6 +206,14 @@ function play(diff, profile, mission = null) {
   t.Unit.prototype.die = function () { if (this.team === 'hero') deaths++; return die.call(this); };
   while (!t.game.over && time < timeCap) {
     if (t.pick.open) {
+      if (continuousCampaignMode && mission && t.pick.mode === 'team') {
+        if (mission.goal.type === 'duel') {
+          const wantedId = profile?.[0];
+          const wanted = wantedId ? t.pick.options.findIndex((entry) => entry.id === wantedId) : 0;
+          t.confirmPick(wanted >= 0 ? wanted : 0);
+        } else t.pick.teamGo.onclick();
+        continue;
+      }
       if (t.pick.mode === 'hero') {
         const free = t.pick.options.map((_, i) => i).filter((i) => !t.heroes().some((h) => h.cfg.id === t.pick.options[i].id));
         const wantedId = profile?.[nextProfileHero++];
@@ -269,13 +282,13 @@ function play(diff, profile, mission = null) {
     damage: t.heroes().map((h) => [h.cfg.id, h.stats.dano, h.stats.dano / Math.max(1, h.stats.tempo), h.stats.cura]), ...(outcome || {}) };
 }
 
-const campaignMode = process.argv[2] === 'campanha';
-const missionId = campaignMode ? process.argv[3] : null;
-const which = campaignMode ? (process.argv[4] || 'todas') : (process.argv[2] || 'todas');
-const runs = +(campaignMode ? process.argv[5] : process.argv[3]) || 10;
-const profileName = campaignMode ? (process.argv[6] || 'aleatorio') : (process.argv[4] || 'aleatorio');
-const seedArg = campaignMode ? process.argv[7] : process.argv[5];
-const details = campaignMode ? process.argv[8] === 'detalhe' : process.argv[6] === 'detalhe';
+const campaignMode = process.argv[2] === 'campanha' || continuousCampaignMode;
+const missionId = campaignMode && !continuousCampaignMode ? process.argv[3] : null;
+const which = continuousCampaignMode ? (process.argv[3] || 'pesadelo') : campaignMode ? (process.argv[4] || 'todas') : (process.argv[2] || 'todas');
+const runs = continuousCampaignMode ? 1 : +(campaignMode ? process.argv[5] : process.argv[3]) || 10;
+const profileName = continuousCampaignMode ? (process.argv[4] || 'equilibrado') : campaignMode ? (process.argv[6] || 'aleatorio') : (process.argv[4] || 'aleatorio');
+const seedArg = continuousCampaignMode ? process.argv[5] : campaignMode ? process.argv[7] : process.argv[5];
+const details = continuousCampaignMode ? true : campaignMode ? process.argv[8] === 'detalhe' : process.argv[6] === 'detalhe';
 const explicitTeam = profileName.startsWith('equipe=')
   ? profileName.slice('equipe='.length).split(',').filter(Boolean)
   : null;
@@ -308,11 +321,13 @@ const profiles = {
   ruinas: ['paladin', 'pyro', 'cleric', 'guardian'],
 };
 const baseSeed = Number.isInteger(Number(seedArg)) ? Number(seedArg) >>> 0 : 20261028;
-const campaignMission = campaignMode ? t.MISSIONS.find((m) => m.id === missionId) : null;
-if (campaignMode && !campaignMission) throw new Error(`Missão desconhecida: ${missionId}. Use: ${t.MISSIONS.map((m) => m.id).join(', ')}`);
+const campaignMission = campaignMode && !continuousCampaignMode ? t.MISSIONS.find((m) => m.id === missionId) : null;
+if (campaignMode && !continuousCampaignMode && !campaignMission) throw new Error(`Missão desconhecida: ${missionId}. Use: ${t.MISSIONS.map((m) => m.id).join(', ')}`);
 if (campaignMode && !['todas', ...t.DIFFICULTIES.map((d) => d.id)].includes(which)) throw new Error(`Dificuldade desconhecida: ${which}. Use: todas, ${t.DIFFICULTIES.map((d) => d.id).join(', ')}`);
-const profile = campaignMode && profileName === 'recomendado'
+const profile = campaignMode && profileName === 'recomendado' && campaignMission
   ? t.nightmareTeamPlanIds(campaignMission)
+  : continuousCampaignMode && profileName === 'recomendado'
+    ? t.nightmareTeamPlanIds(t.MISSIONS[0])
   : explicitTeam || profiles[profileName];
 if (explicitTeam && (new Set(explicitTeam).size !== explicitTeam.length
   || explicitTeam.some((id) => !t.VARIANTS.some((hero) => hero.id === id))))
@@ -401,7 +416,33 @@ const damage = {};
 // "original" = o jogo antes das dificuldades, para comparar
 const original = { id: 'original', name: 'Original', hp: 1, dmg: 1, count: 1, interval: 1, boss: 1, heal: 0.35, revive: 0.4, reviveDelay: 0, behind: 0.25, behindFrom: 4, shooters: 0 };
 const difficulties = campaignMode ? t.DIFFICULTIES : [original, ...t.DIFFICULTIES];
-for (const diff of difficulties.filter((d) => which === 'todas' || d.id === which)) {
+if (continuousCampaignMode) {
+  const diff = difficulties.find((candidate) => candidate.id === which);
+  if (!diff) throw new Error(`Dificuldade desconhecida: ${which}. Use: ${t.DIFFICULTIES.map((d) => d.id).join(', ')}`);
+  context.localStorage.data = {};
+  t.setCampaignTeamRun(true);
+  let wins = 0, stars = 0, falls = 0, stoppedAt = null;
+  for (const [index, mission] of t.MISSIONS.entries()) {
+    const missionSeed = (baseSeed + index * 2654435761) >>> 0 || 1;
+    currentMapSeed = missionSeed;
+    useSeed(missionSeed);
+    const result = play(diff, profile, mission);
+    simPlays++;
+    for (const [id, dmg, dps, heal] of result.damage) (damage[id] ||= []).push([dmg, dps, heal, result.won ? 1 : 0]);
+    wins += Number(result.won);
+    stars += result.stars || 0;
+    falls += result.falls || 0;
+    console.log(`  ${String(index + 1).padStart(2, '0')}. ${mission.name}: ${result.won ? `vitória ${result.stars}★` : result.timedOut ? `timeout na fase ${result.phase}` : `derrota na fase ${result.phase}`} · ${result.falls} quedas · ${result.time.toFixed(1)} s · ${result.party.join(' + ')}`);
+    if (!result.won) {
+      stoppedAt = mission.name;
+      if (result.diagnostic) console.log(`    diagnóstico: ${JSON.stringify(result.diagnostic)}`);
+      break;
+    }
+  }
+  const savedTeam = JSON.parse(context.localStorage.getItem('cavaleiros-time-campanha') || '[]');
+  console.log(`Campanha contínua ${diff.name}: ${wins}/${t.MISSIONS.length} missões · ${stars} estrelas · ${falls} quedas${stoppedAt ? ` · parou em ${stoppedAt}` : ''}`);
+  console.log(`Equipe salva: ${savedTeam.map((entry) => `${entry.id} (${entry.xp} XP, ${entry.branches.length} evoluções)`).join(' + ') || 'vazia'}`);
+} else for (const diff of difficulties.filter((d) => which === 'todas' || d.id === which)) {
   const res = [];
   for (let i = 0; i < runs; i++) {
     const runSeed = (baseSeed + i * 2654435761) >>> 0;
@@ -429,7 +470,7 @@ for (const diff of difficulties.filter((d) => which === 'todas' || d.id === whic
       console.log(`  ${i + 1}: ${r.won ? 'vitória' : `fase ${r.phase}`} · ${r.deaths} quedas · ${r.party.join(' + ')}`);
   }
 }
-console.log(`${campaignMode ? `Missão: ${campaignMission.name} · vagas iniciais: ${campaignMission.heroes} · grupo: ${profileName} · mapa: ${straightMode ? 'reta' : 'curvo + terreno + obstáculos'}` : `Grupo: ${profileName}`} · semente: ${baseSeed}`);
+console.log(`${continuousCampaignMode ? `Campanha contínua · grupo: ${profileName} · mapa: curvo + terreno + obstáculos` : campaignMode ? `Missão: ${campaignMission.name} · vagas iniciais: ${campaignMission.heroes} · grupo: ${profileName} · mapa: ${straightMode ? 'reta' : 'curvo + terreno + obstáculos'}` : `Grupo: ${profileName}`} · semente: ${baseSeed}`);
 if (!campaignMode) console.log('Por herói (partidas em que estava no grupo): dano médio · dano por segundo em combate · cura média · vitórias · usos slot 1/2/3 por partida');
 const mean = (list, k) => list.reduce((s, x) => s + x[k], 0) / list.length;
 if (!campaignMode) for (const [id, list] of Object.entries(damage).sort((a, b) => mean(b[1], 1) - mean(a[1], 1)))
@@ -439,4 +480,4 @@ for (const [k, r] of Object.entries(simReady)) console.log(`Pronta e sem uso ${k
 if (process.env.SIM_ECLIPSE) console.log(`Eclipse por partida (${simPlays} partidas): explosões ${(simEclipse.blasts / simPlays).toFixed(1)} · cura ${(simEclipse.heal / simPlays).toFixed(0)}`);
 if (process.env.SIM_VENENO) console.log(`Veneno por partida (${simPlays} partidas): aplicações ${(simVenom.applied / simPlays).toFixed(1)} · tiques ${(simVenom.ticks / simPlays).toFixed(1)} · dano ${(simVenom.damage / simPlays).toFixed(0)}`);
 if (popWanted.length) console.log(`Efeitos por partida (${simPlays} partidas): ${popWanted.map((k) => `${k} ${((popCounts[k] || 0) / simPlays).toFixed(1)}`).join(' · ')}`);
-if (JSON.stringify(t.progress.snapshot()) !== progressAtStart) throw new Error('A simulação não pode acumular progressão entre partidas');
+if (!continuousCampaignMode && JSON.stringify(t.progress.snapshot()) !== progressAtStart) throw new Error('A simulação não pode acumular progressão entre partidas');

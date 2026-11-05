@@ -3695,19 +3695,30 @@ function kiteFrom(h, dt) {
   return h.kiteTo;
 }
 
-const SHOOTER_RETREAT_BUDGET = 1.8, SHOOTER_STAND = 8, SHOOTER_RETREAT_STEP = 1.5;
+const SHOOTER_RETREAT_TRIGGER = 3.4, SHOOTER_RETREAT_STEP = 0.9;
+const SHOOTER_RETREAT_WINDOW = 0.55, SHOOTER_RETREAT_COOLDOWN = 7;
 function kiteSkeletonFrom(shooter, target, dt) {
+  shooter.retreatCooldown = Math.max(0, (shooter.retreatCooldown || 0) - dt);
+  if (shooter.retreatMoveT > 0) {
+    shooter.retreatMoveT = Math.max(0, shooter.retreatMoveT - dt);
+    if (target && shooter.retreatMoveT > 0 && shooter.retreatTarget
+        && tacticalDistance(shooter.pos, shooter.retreatTarget) > 0.25) return shooter.retreatTarget;
+    shooter.retreatMoveT = 0;
+  }
   if (!target || target.ranged || target.structure || target.team === 'villager') return null;
   let dx = shooter.pos.x - target.pos.x, dz = shooter.pos.z - target.pos.z;
   let distance = Math.hypot(dx, dz);
-  if (distance >= KITE_TRIGGER || !shooter.mayRetreat(dt)) return null;
+  if (distance >= SHOOTER_RETREAT_TRIGGER || shooter.retreatCooldown > 0) return null;
   if (distance < 0.001) { dx = Math.sin(shooter.root.rotation.y); dz = Math.cos(shooter.root.rotation.y); distance = 1; }
-  shooter.kiteTarget ||= new THREE.Vector3();
-  return shooter.kiteTarget.set(
+  shooter.retreatTarget ||= new THREE.Vector3();
+  shooter.retreatTarget.set(
     shooter.pos.x + dx / distance * SHOOTER_RETREAT_STEP,
     shooter.pos.y,
     shooter.pos.z + dz / distance * SHOOTER_RETREAT_STEP,
   );
+  shooter.retreatMoveT = SHOOTER_RETREAT_WINDOW;
+  shooter.retreatCooldown = SHOOTER_RETREAT_COOLDOWN;
+  return shooter.retreatTarget;
 }
 
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
@@ -11158,21 +11169,9 @@ class Skeleton extends Unit {
     if (this.busy <= 0 && !this.pendingHit) this.busy = this.once('Taunt', 1.1);   // urra antes de voltar à luta
   }
 
-  // Orçamento do recuo de atiradores: depois de SHOOTER_RETREAT_BUDGET s recuando, para e atira por SHOOTER_STAND s
-  // (senão um corpo a corpo o persegue sem fim). Chamado uma vez por quadro em que o atirador quer recuar.
-  mayRetreat(dt) {
-    if (this.standT > 0) return false;
-    if ((this.retreatT = (this.retreatT || 0) + dt) > SHOOTER_RETREAT_BUDGET) { this.retreatT = 0; this.standT = SHOOTER_STAND; return false; }
-    this.retreatIdle = 0;
-    return true;
-  }
-
   update(dt) {
     if (dt <= 0) return;
     this.rootT = Math.max(0, this.rootT - dt);
-    if (this.standT > 0) this.standT -= dt;
-    // sem recuar por um tempo, o orçamento volta aos poucos
-    if (this.retreatT > 0 && (this.retreatIdle = (this.retreatIdle || 0) + dt) > 1.5) this.retreatT = Math.max(0, this.retreatT - dt);
     if (this.rootT > 0) this.vel.set(0, 0, 0);
     this.stunT = Math.max(0, this.stunT - dt);
     this.slowT = Math.max(0, this.slowT - dt);

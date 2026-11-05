@@ -157,3 +157,17 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Na Caçada, o alvo marcado só foge até 9 m adiante e a perseguição termina a 13 m do posto, mantendo dois interceptadores.
 - `rodada2.cjs`: **249 verificações**; `npm run test:rapido`: **42 passaram, 0 falharam**. A verificação mantém o recuo do herói à distância e limita a fuga do mago inimigo.
 - Pesadelo, missões isoladas e sem XP entre fases: Santuário, 10 equipes aleatórias de quatro heróis, **10/10 vitórias**, 5×3★, 3×2★, 2×1★, sem vazamentos; Caçada, 10 equipes aleatórias de três heróis, **10/10 vitórias e 3★ em todas**, sem quedas e com 90% de vida média no grupo.
+
+### Varredura com uma equipe sem cura — 2026-11-05
+- Nas 24 missões isoladas do Pesadelo, a mesma equipe determinística de quatro heróis (Lanceiro, Oráculo, Guardião e Geomante) venceu **20/24**. As quatro derrotas foram Torre de Ossos (fase 10), Lago Sombrio (fase 9, Carrasco com 225/1416 de vida), Cemitério (fase 11) e Coração do Castelo (fase 13, Lich ainda com vida cheia).
+- Repeti essas quatro missões no mesmo seed com a equipe equilibrada recomendada (Paladino, Guardião, Piromante e Clériga): venceu **4/4**, todas sem quedas exceto Cemitério (1 queda/1★). Isso confirma um risco alto da equipe sem cura nas fases longas, não um travamento geral da IA.
+- A varredura é isolada por missão, sem XP acumulado. Não alterei a dificuldade global; a campanha contínua foi reproduzida separadamente com a progressão real abaixo.
+
+### Recuo curto dos atiradores — 2026-11-05
+- O recuo era recalculado em relação à posição atual a cada quadro, transformando um pequeno passo em uma corrida contínua. Agora o atirador fixa um único destino a 0,9 m, só recua quando o herói chega a 3,4 m e espera 7 s antes de outro passo.
+- `rodada2.cjs`: **249 verificações passaram**, incluindo a distância curta e o fim do recuo ao chegar no destino.
+
+### Campanha contínua no Pesadelo — 2026-11-05
+- O simulador agora mantém a equipe e usa XP e evoluções salvos entre missões, incluindo a escolha de um herói no Duelo. Cenários usam estrada, terreno e obstáculos; o armazenamento fica isolado na VM de teste.
+- Com Paladino, Guardião, Piromante e Clériga, uma campanha reproduzível venceu **24/24 missões**, somou **70/72 estrelas** e teve **4 quedas**. Apenas Ponte em Chamas e Noite sem Fim ficaram em 2★; as outras 22 missões ficaram em 3★.
+- Ao fim, a equipe terminou entre 3.079 e 3.206 XP por herói, com quatro evoluções em cada um. A missão Noite sem Fim concentrou as quatro quedas da campanha; não impediu a vitória.
