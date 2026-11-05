@@ -140,9 +140,14 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Atualizei o backlog: o mapa gera posições determinísticas e sem sobreposição para 24, 25, 28 e 36 missões.
 
 ### Interceptação de ameaças aos objetivos — 2026-11-05
-- No Santuário, a regra anterior bloqueava todo alvo a mais de 12 m, inclusive arqueiros que já miravam um herói. Agora o guarda mais resistente/de suporte fica no cristal; até dois aliados interceptam arqueiros imóveis que estejam atacando um herói ou o objetivo, até 26 m. Um arqueiro distante que ainda não ameaça ninguém não puxa a formação.
+- No Santuário, a regra anterior bloqueava todo alvo a mais de 12 m, inclusive inimigos que já atacavam um herói. Agora o guarda mais resistente/de suporte fica no cristal; até dois aliados interceptam inimigos de qualquer tipo que já tenham um herói ou o objetivo como alvo, até 26 m. Um inimigo distante que ainda não ameaça ninguém não puxa a formação.
 - Na Ponte em Chamas, corredores marcados recebem um raio de interceptação de 16 m; inimigos comuns ficam limitados aos 12 m próximos do portão. A dupla responde aos corredores diretos, e equipes maiores mantêm uma âncora com até dois interceptores. Se todos estiverem ocupados, a âncora cobre a ameaça.
 - Reduzi de 30% para 20% a chance de um inimigo corpo a corpo virar corredor da ponte, para a equipe de dois não perder por sobrecarga de vazamentos.
 - `rodada2.cjs`: **249 verificações**; `npm run test:rapido`: **42 passaram, 0 falharam**.
 - Pesadelo, missão isolada, 10 sementes: Santuário com 2 heróis (Paladino + Guardião) **10/10 vitórias**, 6×3★ e 4×1★, sem quedas; vida média: 80% no grupo e 53% no santuário. Com os 4 heróis recomendados (Paladino, Guardião, Piromante e Clériga), **10/10 vitórias com 3★**, zero quedas ou vazamentos e 84% de vida média no santuário. Ponte em Chamas com 2 heróis **10/10 vitórias**, sem quedas; 5×1★ e 5×2★. A equipe alternativa Paladino + Piromante venceu **5/5**, com 1×3★. São amostras por missão, sem XP carregado entre fases.
 - `npm test` foi interrompido após mais de 11 minutos durante a bateria longa de simulações; não está registrado como aprovado. Os testes rápidos e as simulações direcionadas acima passaram após os ajustes.
+
+### Agressores móveis no Santuário — 2026-11-05
+- A defesa agora reconhece ataque ativo de inimigos móveis e corpo a corpo, além dos atiradores imóveis. A âncora continua junto ao cristal e a interceptação remota continua limitada a dois heróis dentro de 26 m; inimigos sem alvo ativo seguem sem atrair a formação.
+- `rodada2.cjs`: 249 verificações passaram, incluindo atirador e perseguidor móveis que atacam heróis; `npm run test:rapido`: **42 passaram, 0 falharam**.
+- Pesadelo, Santuário isolado, 10 sementes por amostra com quatro heróis, sem XP entre fases: equipe recomendada mais dois heróis sorteados venceu **10/10**, com 7×3★, 3×2★ e 80% de vida média no cristal; equipe totalmente aleatória venceu **10/10**, com 8×3★, 1×2★, 1×1★ e 70% de vida média no cristal. Houve 0 vazamentos nas duas amostras.

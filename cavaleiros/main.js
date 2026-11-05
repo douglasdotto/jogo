@@ -3529,7 +3529,10 @@ const isDefenseThreat = (target, objective) => {
   if (!objective || !target) return false;
   if (target.target === objective || target.pendingHit?.target === objective) return true;
   const targetsHero = target.target?.team === 'hero' || target.pendingHit?.target?.team === 'hero';
-  return target.ranged && !target.mobile && targetsHero;
+  // Na defesa, qualquer inimigo que já escolheu um herói como alvo é uma ameaça
+  // ativa. Os interceptores ainda respeitam RANGED_INTERCEPT e seus slots; isso
+  // evita que perseguidores móveis batam no grupo enquanto a formação os ignora.
+  return targetsHero;
 };
 
 const fixedDefenseGoal = (goal) => goal?.type === 'defend' || goal?.type === 'breach';

@@ -2497,7 +2497,18 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     shooter.mobile=true;
     if(goalType==='breach')shooter.pos.set(0,0,11);
     const mobileTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
-    if(goalType==='defend')assert.ok(mobileTargets.every(target=>target===null),goalType+': inimigo móvel remoto não ganha a exceção de atirador imóvel');
+    if(goalType==='defend'){
+      assert.ok(mobileTargets.every(target=>target===null),goalType+': inimigo móvel remoto sem ataque ativo não atrai o grupo');
+      shooter.target=guards[1];team=t.makeTargetContext();
+      const movingRangedTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+      assert.equal(movingRangedTargets[0],null,'santuário: a âncora mantém o posto contra um atirador móvel que ataca um herói');
+      assert.equal(movingRangedTargets.filter(Boolean).length,2,'santuário: dois interceptores respondem ao atirador móvel que ataca um herói');
+      shooter.ranged=false;team=t.makeTargetContext();
+      const movingMeleeTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+      assert.equal(movingMeleeTargets[0],null,'santuário: a âncora continua no posto contra um perseguidor que ataca um herói');
+      assert.equal(movingMeleeTargets.filter(Boolean).length,2,'santuário: dois interceptores respondem a um perseguidor que ataca um herói');
+      shooter.ranged=true;shooter.target=null;team=t.makeTargetContext();
+    }
     else assert.equal(mobileTargets.filter(Boolean).length,2,'ponte: dois interceptores alcançam uma ameaça móvel dentro da zona do portão');
     shooter.mobile=false;
 
