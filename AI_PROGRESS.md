@@ -233,4 +233,9 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - `rodada2.cjs`: **254 verificações passaram**, incluindo regressões com dois e quatro heróis para conferir a divisão de alvos. `npm run test:rapido`: **42 passaram, 0 falharam**.
 - Campanha contínua Pesadelo, seed `20261106`, Paladino/Guardião/Piromante/Clériga: **24/24 vitórias, 70/72 estrelas e 4 quedas**; Ponte em Chamas subiu de 1★ para 2★, e Noite sem Fim ficou em 2★. No mapa isolado seed `3688601093`, quatro heróis caíram de cinco para três vazamentos, ainda com 1★; vale manter a ponte na próxima calibração.
 - Três frentes visuais receberam mudanças de baixo custo: ombreiras facetadas mais largas no Paladino; copas de árvore em facetas maiores com paleta um pouco mais viva; moldura e relevo nos grupos da barra de habilidades, preservando os estados de recarga e ultimate.
-- Os agentes validaram `hero-identity.cjs`, `scene-perf.cjs`, `terrain.js`, `skill-slot4.cjs` e `skill-tooltip.cjs`, além de sintaxe e `git diff --check`. Inspeção visual no browser ainda pendente para esta rodada.
+- Os agentes validaram `hero-identity.cjs`, `scene-perf.cjs`, `terrain.js`, `skill-slot4.cjs` e `skill-tooltip.cjs`, além de sintaxe e `git diff --check`. A captura real do browser confirmou copas facetadas e grupos de habilidades coloridos pela identidade dos heróis; a ombreira do Paladino ainda precisa de conferência em câmera próxima.
+
+### Dez equipes variadas na Ponte e mock de simulação — 2026-11-05
+- Pesadelo, Ponte em Chamas, quatro heróis aleatórios, 10 sementes e sem XP acumulado: **10/10 vitórias**, com 4×3★, 3×2★ e 3×1★; média de 0,1 queda. A pior rodada teve quatro vazamentos, mas não perdeu a missão.
+- A primeira execução revelou que o mock de `Quaternion` do simulador não implementava `identity()`, chamado pelo disparo especial do Ninja. Completei o mock nos dois harnesses; era uma limitação dos testes, não um erro do jogo.
+- A aba real do jogo permaneceu em execução durante a conferência visual, sem abrir uma segunda sessão.

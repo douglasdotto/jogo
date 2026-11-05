@@ -58,7 +58,7 @@ const el = () => ({ style: { setProperty: noop }, classList: { add: noop, remove
 const color = () => ({ set: noop, setHex: noop, lerpColors: noop, copy: noop });
 const material = () => ({ color: color(), emissive: color(), userData: {}, opacity: 1, dispose: noop });
 const euler = () => ({ x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } });
-const root = () => ({ position: new Vector3(), rotation: euler(), scale: new Vector3(1, 1, 1), quaternion: { setFromUnitVectors: noop },
+const root = () => ({ position: new Vector3(), rotation: euler(), scale: new Vector3(1, 1, 1), quaternion: { setFromUnitVectors: noop, identity: noop },
   traverse: noop, add: noop, removeFromParent: noop, getObjectByName: () => ({ rotation: euler(), add: noop }), material: material(), children: [], rotateZ: noop, clone: root });
 const action = () => ({ reset() { return this; }, setLoop() { return this; }, play() { return this; }, crossFadeFrom: noop, getClip: () => ({ duration: 1, name: 'Idle' }) });
 const THREE = new Proxy({ Vector3, Mesh: class { constructor() { Object.assign(this, root()); } }, Group: class { constructor() { Object.assign(this, root()); } },
