@@ -4889,12 +4889,16 @@ function volatileFlask(owner, at, radius, dmg) {
 // Tiros inimigos independentes dos poderes dos heróis.
 const enemyBolts = [];
 const enemyOrbMat = new THREE.MeshBasicMaterial({ color: 0xc591ee });
+const enemyBoltMeshPool = { orb: [], arrow: [] }, ENEMY_BOLT_POOL_LIMIT = 32;
 function fireEnemyBolt(from, target) {
-  const mesh = from.enemyKind === 'Crossbow' ? assets.Skeleton_Arrow.scene.clone() : new THREE.Mesh(boltGeo, from.boltMat || enemyOrbMat);
+  const poolType = from.enemyKind === 'Crossbow' ? 'arrow' : 'orb', pool = enemyBoltMeshPool[poolType];
+  const mesh = pool.pop() || (poolType === 'arrow' ? assets.Skeleton_Arrow.scene.clone() : new THREE.Mesh(boltGeo, enemyOrbMat));
+  if (poolType === 'orb') mesh.material = from.boltMat || enemyOrbMat;
+  mesh.visible = true;
   mesh.position.copy(from.pos);
   mesh.position.y += 1.3;
   scene.add(mesh);
-  enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3 });
+  enemyBolts.push({ mesh, target, from, dmg: from.dmg, life: 3, poolType });
 }
 const enemyBoltGoal = new THREE.Vector3(), enemyBoltDir = new THREE.Vector3(), enemyBoltUp = new THREE.Vector3(0, 1, 0);
 function updateEnemyBolts(dt) {
@@ -4913,7 +4917,13 @@ function updateEnemyBolts(dt) {
         if (b.from.enemyKind === 'Crossbow' && b.target.hp >= hp) FX.brokenArrow(b.mesh.position, b.target.pos);   // esquiva, escudo ou imune: a seta quebra e cai
       }
     }
-    if (b.life <= 0 || b.target.dead) { scene.remove(b.mesh); enemyBolts.splice(i, 1); }
+    if (b.life <= 0 || b.target.dead) {
+      scene.remove(b.mesh);
+      b.mesh.visible = false;
+      const pool = enemyBoltMeshPool[b.poolType];
+      if (pool.length < ENEMY_BOLT_POOL_LIMIT) pool.push(b.mesh);
+      enemyBolts.splice(i, 1);
+    }
   }
   updateMonsterFx(dt);   // avisos no chão e golpes especiais dos monstros
 }
@@ -12926,7 +12936,7 @@ function spawnCastleBosses(lich, formation) {
 }
 
 // alvo da caçada: batedor resistente que foge de quem chega perto até ser encurralado no fim da clareira
-const HUNT_FLEE = 3.8, HUNT_EDGE = 6.5, HUNT_PURSUIT_LIMIT = 13, HUNT_INTERCEPTORS = 2;
+const HUNT_FLEE = 3.8, HUNT_EDGE = 5, HUNT_PURSUIT_LIMIT = 13, HUNT_INTERCEPTORS = 2;
 const huntDest = new THREE.Vector3();
 function huntThink(u, dt) {
   if (u.rootT > 0 || u.tauntT > 0) return false;   // preso ou provocado: luta onde está
@@ -12936,7 +12946,7 @@ function huntThink(u, dt) {
   const chased = (activeTargetContext?.party ?? heroes()).some((h) => !h.dead && h.pos.distanceTo(u.pos) < HUNT_FLEE);
   if (!chased || ahead >= HUNT_EDGE - 0.5) return false;   // sem perseguidor ou encurralado: volta a atacar
   const lateral = THREE.MathUtils.clamp(dx * side.x + dz * side.z, -(ROAD - 1), ROAD - 1);
-  u.moveTo(huntDest.copy(world.along(s0 + Math.min(HUNT_EDGE, ahead + 4), lateral)), dt);
+  u.moveTo(huntDest.copy(world.along(s0 + Math.min(HUNT_EDGE, ahead + 2.2), lateral)), dt);
   return true;
 }
 

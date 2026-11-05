@@ -188,3 +188,12 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - A Caçada limitava interceptores só quando o alvo estava além do alcance normal. No Arauto das Asas, os quatro heróis grudavam no alvo e ignoravam Sacerdotes e inimigos próximos. Agora dois interceptores são escolhidos em todas as distâncias; os demais não podem perseguir o alvo livremente e protegem o grupo.
 - Regressão cobre alvo perto da formação, dois interceptores, e a escolha de Sacerdote pelo defensor. `rodada2.cjs`: **250 verificações passaram**.
 - A equipe aleatória Brute/Clériga/Anjo/Xamã, seed `20261105`, passou de derrota na missão 19 para **24/24 vitórias, 64 estrelas e 7 quedas** na campanha contínua do Pesadelo. O Anjo entrou no Duelo por padrão; Resgate, Cemitério e Trono tiveram uma queda cada, e Noite sem Fim quatro.
+
+### Reuso de projéteis inimigos — 2026-11-05
+- Orbes e modelos clonados das flechas do Besteiro agora voltam para estoques limitados a 32 malhas por tipo depois do impacto, expiração ou morte do alvo. Reutilizar orbes também restaura o material próprio do atirador.
+- `rodada2.cjs` confirma reuso de identidade para ambos os tipos e troca correta do material; **251 verificações passaram**. `npm run test:rapido`: **42 passaram, 0 falharam**.
+- A alteração reduz criação de `Mesh` e clones GLTF em combate; ainda não há FPS estável que permita quantificar o ganho no quadro.
+
+### Menos corrida do alvo da Caçada — 2026-11-05
+- O alvo marcado agora recua só até 5 m à frente da âncora (antes 6,5 m) e dá passos menores quando alguém se aproxima, reduzindo o tempo de perseguição sem remover sua mecânica de fuga.
+- `rodada2.cjs`: **251 verificações passaram**; `npm run test:rapido`: **42 passaram, 0 falharam**. A regressão cobre o novo limite e a parada antecipada do alvo.

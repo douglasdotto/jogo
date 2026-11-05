@@ -57,7 +57,7 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 ## P3 — técnica e manutenção
 | # | Item | Área | Esf/Risco | Onde |
 |---|---|---|---|---|
-| 39 | Pools: `glow()`, `waterSplash`, material da queimadura, clones da torreta/`fireBolt` | Perf | M/B | main.js:2868,2927,3048,3137,3311 |
+| 39 | Pools restantes: material da queimadura, clones da torreta/`fireBolt`; orbes e flechas inimigos já reutilizam malhas | Perf | M/B | main.js:2868,2927,3048,3137,3311 |
 | 40 | Alinhamento das sombras e pixel ratio ≤1.5 já entregues; repetir a linha de base de FPS no Chrome acelerado com carga constante | Perf | P/B | `?bench=15&perfil=1`; há amostra visível exploratória, mas falta estabilidade entre execuções |
 | 41 | Remover CSS mobile morto e consolidar CSS inline no battle-hud.css | UI | M/M | index.html, battle-hud.css, campaign.css |
 | 42 | Extrair dados de heróis e física de main.js (ajustar marcadores dos testes) | Arquitetura | M/M | main.js, tests/* |

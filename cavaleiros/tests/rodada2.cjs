@@ -3918,6 +3918,30 @@ test('relatório de batalha registra golpes corpo a corpo e tiros inimigos',()=>
   const archer=foe('Mage',0,6);context.fireEnemyBolt(archer,h);for(let i=0;i<20&&total()<2;i++)context.updateEnemyBolts(.05);
   assert.equal(total(),2);assert.equal(h.lastHit,archer);clear();
 });
+test('tiros inimigos reutilizam malhas de orbe e flecha depois do impacto',()=>{
+  clear();const target=new t.Hero(cfg('king'));target.pos.set(0,0,0);target.hp=target.maxHp=1e6;
+  const previousArrow=context.assets.Skeleton_Arrow;
+  const shoot=(kind,boltMat)=>{
+    const shooter=new t.Skeleton(kind,1);shooter.spawning=false;shooter.pos.set(0,0,5);shooter.dmg=1;
+    if(boltMat)shooter.boltMat=boltMat;
+    t.fireEnemyBolt(shooter,target);const bolt=t.enemyBolts.at(-1),mesh=bolt.mesh;
+    for(let i=0;i<30&&t.enemyBolts.includes(bolt);i++)t.updateEnemyBolts(.05);
+    assert.equal(t.enemyBolts.includes(bolt),false,'o projétil sai da lista depois de acertar');
+    assert.equal(mesh.visible,false,'a malha sai de cena antes de voltar ao estoque');
+    return mesh;
+  };
+  try{
+    const orb=shoot('Mage'),customMaterial={};
+    assert.strictEqual(shoot('Mage',customMaterial),orb,'orbe é reutilizado');
+    assert.strictEqual(orb.material,customMaterial,'o material acompanha o próximo atirador');
+    context.assets.Skeleton_Arrow={scene:{clone:()=>root()}};
+    const arrow=shoot('Crossbow');
+    assert.strictEqual(shoot('Crossbow'),arrow,'modelo da flecha também é reutilizado');
+  }finally{
+    if(previousArrow)context.assets.Skeleton_Arrow=previousArrow;else delete context.assets.Skeleton_Arrow;
+    clear();
+  }
+});
 test('saves antigos mantêm liberada a missão que já tem estrelas',()=>{
   const previousLocation=context.location,previousStorage=context.localStorage.data;
   try {
@@ -4278,8 +4302,8 @@ test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abat
   mark.pos.copy(t.world.along(anchorS+3,0));
   const h=t.heroes()[0];h.pos.copy(mark.pos).add(new Vector3(0,0,2));
   assert.equal(context.huntThink(mark,.1),true);assert.ok(mark.vel.z<0,'corre para a frente da estrada');
-  assert.ok(ahead({x:mark.moveProgress.goalX,z:mark.moveProgress.goalZ})<=6.6,'a fuga termina perto do grupo, sem arrastar a equipe pelo mapa');
-  mark.pos.copy(t.world.along(anchorS+6.1,0));
+  assert.ok(ahead({x:mark.moveProgress.goalX,z:mark.moveProgress.goalZ})<=5.1,'a fuga termina a no máximo 5 m da âncora');
+  mark.pos.copy(t.world.along(anchorS+4.6,0));
   assert.equal(context.huntThink(mark,.1),false,'perto do novo limite, para de fugir e enfrenta o grupo');
   for(const hero of t.heroes()){hero.post.copy(anchor);hero.pos.copy(anchor);}
   mark.pos.copy(t.world.along(anchorS+3,0));
