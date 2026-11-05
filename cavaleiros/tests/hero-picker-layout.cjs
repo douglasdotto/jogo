@@ -4,11 +4,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+assert.match(html, /href="base\.css"/, 'index.html carrega a folha base externa');
+const baseCss = fs.readFileSync(path.join(__dirname, '..', 'base.css'), 'utf8');
 const marker = '/* Seletor desktop: cards de herói quadrados';
-const start = html.indexOf(marker);
-const end = html.indexOf('</style>', start);
-assert.ok(start >= 0 && end > start, 'regras de cards desktop precisam estar no estilo de index.html');
-const css = html.slice(start, end);
+const start = baseCss.indexOf(marker);
+assert.ok(start >= 0, 'regras de cards desktop ficam na folha base');
+const css = baseCss.slice(start);
 
 assert.match(css, /@media\s*\(min-width:\s*1001px\)\s*and\s*\(min-height:\s*821px\)/,
   'a regra vale somente para o layout desktop com altura suficiente');

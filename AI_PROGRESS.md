@@ -114,3 +114,9 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Os estilos gerais saíram do bloco inline de `index.html` para `base.css`, preservando a posição da folha na cascata. O HTML ficou dedicado à estrutura da página.
 - `AI_PDM.md` agora descreve o tamanho atual de `main.js` e as 24 missões da campanha.
 - A lógica do jogo não mudou nesta limpeza.
+
+### Critério de ameaça da IA — 2026-11-05
+- Centralizei a classificação de chefes, totens, sacerdotes, bombardeiros, inimigos prioritários e golpes mirando aliados em `isUrgentEnemy`; habilidades que podem interromper telegráfos pedem essa condição explicitamente.
+- Removi as seis cópias do predicado usadas na decisão de lançar habilidades. A lógica específica de defesa e a de alvos da Caçada em Matilha continuam separadas.
+- Atualizei os testes visuais para buscar regras em `base.css` após a extração da folha. `node tests/run-all.cjs --rapido`: **41 passaram, 0 falharam**.
+- A suíte completa iniciou as 50 simulações aleatórias, mas ficou vários minutos sem retorno e foi interrompida; não está registrada como aprovada.

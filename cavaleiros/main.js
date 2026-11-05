@@ -2158,7 +2158,11 @@ const SKILL_GLYPHS = {
 };
 const LADINO_ULTS = new Map([['blade-dance', 'area'], ['shadow-storm', 'area'], ['arrow-rain', 'area'], ['sentry-overcharge', 'area'], ['panic', 'area'], ['all-in', 'area'], ['execute', 'single'], ['hunter-mark', 'single']]);
 const SKILL_AI_ORDER = [2, 1, 3, 0];   // a IA tenta ultimate, técnica, segunda técnica e por fim a assinatura
-const isPriorityEnemy = (s) => !s.dead && !s.spawning && (s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || !!s.kind?.priority);   // alvo prioritário da Caçada em Matilha
+const hasPriorityEnemyRole = (s) => !!(s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority);
+const isPriorityEnemy = (s) => !s.dead && !s.spawning && hasPriorityEnemyRole(s);   // alvo prioritário da Caçada em Matilha
+const enemyThreatensAlly = (s) => ['hero', 'villager'].includes(s.pendingHit?.target?.team);
+const isUrgentEnemy = (s, includeInterruptible = false) => hasPriorityEnemyRole(s) || enemyThreatensAlly(s)
+  || (includeInterruptible && s.telegraph?.interruptible && s.telegraph.t > 0);
 const SHIELD_WEAK = 0.25;   // Escudo Ricochete: −25% de dano do inimigo contra aliados
 const MARCH_SPEED = 0.2, MARCH_HASTE = 0.3;   // Decreto de Marcha: +20% de velocidade e recargas 30% mais rápidas
 const SKILLS_USEFUL_WITHOUT_ENEMIES = new Set(['holy-nova', 'roots-heal', 'nature-storm', 'meditate', 'rewind', 'chi-transfer', 'oath-link', 'feast', 'ancestral-totem']);
@@ -7233,8 +7237,7 @@ class Hero extends Unit {
       if (!target || target.pos.distanceTo(this.pos) > this.range) return false;
       const fieldAt = target.pos.clone();
       const caught = attackables.filter((s) => !s.dead && !s.spawning && s.pos.distanceTo(fieldAt) <= radius + 0.4 * (s.size - 1));
-      const urgent = caught.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
-        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      const urgent = caught.some((s) => isUrgentEnemy(s));
       if (!force && caught.length < 2 && !urgent) return false;
       effect = () => {
         const duration = scaleBranchEffect(this, 'control', 2.3 + (level - 1) * 0.35) * power;
@@ -7253,8 +7256,7 @@ class Hero extends Unit {
       const reach = (2.6 + (level - 1) * 0.3) * power;
       const inReach = (s) => s.pos.distanceTo(this.pos) <= reach + 0.4 * (s.size - 1) && Math.abs(s.pos.y - this.pos.y) < 0.85;
       const caught = nearby.filter(inReach);
-      const urgent = caught.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
-        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      const urgent = caught.some((s) => isUrgentEnemy(s));
       if (!caught.length || (!force && caught.length < 2 && !urgent)) return false;
       target = nearest(this.pos, caught);
       effect = () => {
@@ -7284,8 +7286,7 @@ class Hero extends Unit {
           if (score > most) { most = score; line = hits; target = s; }
         }
       }
-      const urgent = line.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
-        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      const urgent = line.some((s) => isUrgentEnemy(s));
       if (!target || (!force && line.length < 2 && !urgent)) return false;
       effect = () => {
         const from = this.pos.clone(), dir = new THREE.Vector3().subVectors(target.pos, from).setY(0);
@@ -7311,8 +7312,7 @@ class Hero extends Unit {
     } else if (id === 'champion' || id === 'crusher') {
       if (manual && id === 'crusher') this.face(target.pos, 1);
       const skillTargets = nearby.filter((s) => id === 'champion' || inMeleeArc(this, s, 2.2 * power));
-      const urgent = skillTargets.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
-        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      const urgent = skillTargets.some((s) => isUrgentEnemy(s));
       if (!skillTargets.length || (!force && skillTargets.length < 2 && !urgent)) return false;
       if (id === 'crusher') this.vel.add(tmp.subVectors(target ? target.pos : this.pos, this.pos).setY(0).normalize().multiplyScalar(2.5));   // salta para a frente
       effect = () => {
@@ -7514,8 +7514,7 @@ class Hero extends Unit {
       const missing = friends.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
       const healAmount = scaleBranchEffect(this, 'support', 20) * power;
       const urgentHeal = friends.some((h) => h.hp / h.maxHp <= 0.6) || missing >= healAmount * 0.75;
-      const valuableControl = nearby.length >= 2 || nearby.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
-        || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+      const valuableControl = nearby.length >= 2 || nearby.some((s) => isUrgentEnemy(s));
       if (!friends.length && !nearby.length) return false;
       if (!force && !urgentHeal && !valuableControl) return false;
       effect = () => {
@@ -7588,9 +7587,7 @@ class Hero extends Unit {
     const wounded = friends.filter((h) => h.hp < h.maxHp);
     const missingHp = wounded.reduce((sum, h) => sum + h.maxHp - h.hp, 0);
     const criticalAlly = friends.some((h) => h.hp / h.maxHp <= 0.42);
-    const urgentEnemy = enemies.some((s) => s.boss || s.totem || ['Bomber', 'Priest'].includes(s.enemyKind) || s.kind?.priority
-      || s.telegraph?.interruptible && s.telegraph.t > 0
-      || s.pendingHit?.target?.team === 'hero' || s.pendingHit?.target?.team === 'villager');
+    const urgentEnemy = enemies.some((s) => isUrgentEnemy(s, true));
     target ||= highestPriorityHeroTarget(this, targetPool);
     if (target && !target.groundTarget && (target.dead || !units.includes(target))) target = null;
     if (skill.effect === 'meteor' && !target) target = highestPriorityHeroTarget(this, targetPool);

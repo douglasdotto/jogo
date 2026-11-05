@@ -186,6 +186,17 @@ const results=[];
 const failures=[];
 function test(name,fn){try{fn();results.push(name);console.log('OK:',name)}catch(e){failures.push(name);console.log('FALHOU:',name,'-',e.stack||e.message)}}
 function clear(){for(const u of [...t.units])u.remove();while(t.sentries?.length)t.removeSentry(t.sentries[0]);while(t.spiritTotems?.length)t.removeSpiritTotem(t.spiritTotems[0]);t.evolutions.length=0;t.pick.open=false;t.setCampaignTeamRun(false);Object.assign(t.game,{over:false,paused:false,state:'fight',guideS:10,mission:null,last:12,picksLeft:0,falls:0,fallLog:[],runTime:0,damageSources:{},missionT:0,villager:null,militia:null,rescueRunner:null,test:false,twinFocus:null});}
+test('critério central de urgência preserva chefes, objetivos e ameaças em preparo',()=>{
+  const urgent=vm.runInContext('isUrgentEnemy',context),priority=vm.runInContext('isPriorityEnemy',context);
+  for(const enemy of [{boss:true},{totem:true},{enemyKind:'Bomber'},{enemyKind:'Priest'},{kind:{priority:4}},
+    {pendingHit:{target:{team:'hero'}}},{pendingHit:{target:{team:'villager'}}}])assert.equal(urgent(enemy),true);
+  assert.equal(urgent({pendingHit:{target:{team:'skeleton'}}}),false);
+  const preparing={telegraph:{interruptible:true,t:0.5}};
+  assert.equal(urgent(preparing),false,'golpe em preparo só entra na checagem que considera interrupção');
+  assert.equal(urgent(preparing,true),true);
+  assert.equal(priority({boss:true}),true);
+  assert.equal(priority({boss:true,dead:true}),false);
+});
 test('barras de vida pausam sob overlays e só atualizam quando mudam',()=>{
   clear();const hero=new t.Hero(cfg('paladin'));hero.barHeight=0;hero.pos.set(0,0,-4);t.updateBars();
   const transform=hero.bar.style.transform,width=hero.bar.firstChild.style.width;

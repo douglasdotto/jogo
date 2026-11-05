@@ -222,7 +222,7 @@ function freshContext() {
   assert.equal(vm.runInContext('mBossWarnings.size', context), 3, 'avisos anunciados ficam no conjunto dedicado à barra');
   assert.equal(nodes.get('.boss-telegraph').hidden, false, 'o aviso continua visível na barra');
   assert.match(nodes.get('.warning-progress').style.transform, /^scaleX\(0?\.\d+\)$/, 'a contagem visual atualiza escala, não largura');
-  const hudCss = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const hudCss = fs.readFileSync(path.join(__dirname, '..', 'base.css'), 'utf8');
   assert.match(hudCss, /#bossBar \.warning-progress[^}]*width: 100%[^}]*transform-origin: left center[^}]*transition: transform/,
     'a barra usa largura fixa e anima a escala pela composição');
   vm.runInContext('updateMonsterFx(0.05)', context);
@@ -285,7 +285,7 @@ function freshContext() {
   assert.equal(node('Executioner:.boss-member-focus').textContent, 'Foco · 1', 'o foco dividido também fica visível');
   assert.equal(node('DarkKnight:.boss-member-focus').hidden, true, 'chefes sem heróis focando não recebem o destaque');
   assert.equal(node('.boss-warning-owner').textContent, 'Cavaleiro do Eclipse', 'o aviso identifica qual chefe vai atacar');
-  const hudCss = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const hudCss = fs.readFileSync(path.join(__dirname, '..', 'base.css'), 'utf8');
   assert.match(hudCss, /boss-roster[^}]*grid-template-columns: repeat\(3/, 'os três indicadores cabem lado a lado no HUD');
   lich.dead = true;
   vm.runInContext('updateMonsterFx(0.016)', context);

@@ -68,4 +68,4 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | 47 | Barra de skills: mini-retrato com anel de vida no lugar do nome | UI | M/B | main.js:1591 |
 | 48 | Barra de vida com rastro de dano atrasado | UI | P/B | main.js:1910, index.html:195 |
 | 49 | Vitória/derrota com sequência curta (slow-mo, câmera, Cheer) | VFX | M/B | main.js:7794,7844 |
-| 50 | Predicado "inimigo urgente" copiado em 5 lugares | Arquitetura | P/B | main.js:2596,2734,4810,4975,5028 |
+| 50 | ~~Predicado "inimigo urgente" copiado em cinco lugares — centralizado em `isUrgentEnemy`~~ | Arquitetura | P/B | main.js |
