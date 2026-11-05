@@ -12,6 +12,13 @@ vm.runInContext(`${percentileSource[0]}\nglobalThis.measurePercentile = percenti
 assert.equal(percentileContext.measurePercentile([4, 1, 3, 2], 0.5), 2, 'p50 usa o posto nearest-rank');
 assert.equal(percentileContext.measurePercentile(Array.from({ length: 100 }, (_, i) => i + 1), 0.95), 95,
   'p95 usa o 95º valor em uma amostra de 100');
+const profileSource = source.match(/function formatProfile\(perfilMs\) \{[\s\S]*?\n\}/);
+assert.ok(profileSource, 'benchmark deve formatar as seções do perfil');
+const profileContext = vm.createContext({});
+vm.runInContext(`${profileSource[0]}\nglobalThis.formatProfile = formatProfile`, profileContext);
+assert.equal(profileContext.formatProfile({ mixers: 1.2, sombra: 3.4, sombraDraws: 421 }),
+  'mixers 1.2 ms/quadro · sombra 3.4 ms/quadro · sombraDraws 421 draws/quadro',
+  'tempo e quantidade de chamadas de sombra usam unidades distintas');
 
 function makeHarness(search, { failOnJump = false } = {}) {
   const rafQueue = [];

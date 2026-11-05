@@ -7,15 +7,15 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 ## P0 — bugs e correções de base
 | # | Item | Área | Esf/Risco | Onde |
 |---|---|---|---|---|
-| 1 | Limiares de dificuldade inalcançáveis (`>=1.25`, `>1.2` com max 1.18): Golem aleatório, 3 crânios e limite de sacerdotes nunca valem | Combate | P/B | monsters.js:413,895,896,901,934 |
-| 2 | Engenheira e Oráculo herdam `splash` 1.4 do Mago (maior área do jogo) | Heróis | P/B | main.js:48,106,110,112 |
-| 3 | Ninja contado como "À distância" na cobertura de equipe | Heróis | P/B | class-info.js:45 |
-| 4 | `rootT`/`slowT` sobrescritos em vez de `Math.max` | Combate | P/B | main.js:4981,2937 |
-| 5 | Chefes podem ficar travados em atordoamento (sem resistência a controle) | Combate | M/M | main.js, monsters.js:847 |
-| 6 | `SKILL_GLYPHS` sem engineer, beast_tamer, oracle (+ teste que exija glifo de toda variante) | UI | P/B | main.js:1567 |
-| 7 | Dica de vitória descartada no relatório; fallback diz "24 estrelas" (máx 54) | Campanha | P/B | stats.js:121, battle-report.js:140 |
-| 8 | `BOSSES` sem DarkKnight; cálculo da fase de chefe `ceil(f/6)*6` frágil | Campanha | P/B | campaign.js:667, main.js:7539, battle-report.js:74 |
-| 9 | Recorde de tempo gravado em objetivos de duração fixa (defend, breach, survive, hunt) | Campanha | P/B | main.js:7639 |
+| 1 | ~~Limiares de dificuldade inalcançáveis (`>=1.25`, `>1.2` com max 1.18): Golem aleatório, 3 crânios e limite de sacerdotes nunca valem~~ | Combate | P/B | `HARD_COUNT` e os limites atuais ativam essas regras |
+| 2 | ~~Engenheira e Oráculo herdam `splash` 1.4 do Mago (maior área do jogo)~~ | Heróis | P/B | Cada variante declara a própria área |
+| 3 | ~~Ninja contado como "À distância" na cobertura de equipe~~ | Heróis | P/B | `ninja` tem papel `Área`, sem `À distância` |
+| 4 | ~~`rootT`/`slowT` sobrescritos em vez de `Math.max`~~ | Combate | P/B | Os efeitos estendem a duração com `Math.max` |
+| 5 | ~~Chefes podem ficar travados em atordoamento (sem resistência a controle)~~ | Combate | M/M | Retorno decrescente e imunidade temporária em `controlEnemy` |
+| 6 | ~~`SKILL_GLYPHS` sem engineer, beast_tamer, oracle (+ teste que exija glifo de toda variante)~~ | UI | P/B | Glifos presentes; teste `skill-glyphs.cjs` cobre as variantes |
+| 7 | ~~Dica de vitória descartada no relatório; fallback diz "24 estrelas" (máx 54)~~ | Campanha | P/B | Dica é preservada e o total vem dos dados da campanha |
+| 8 | ~~`BOSSES` sem DarkKnight; cálculo da fase de chefe `ceil(f/6)*6` frágil~~ | Campanha | P/B | `BOSSES` inclui DarkKnight; fase é resolvida por missão |
+| 9 | ~~Recorde de tempo gravado em objetivos de duração fixa (defend, breach, survive, hunt)~~ | Campanha | P/B | `missionHasTimeRecord` filtra esses objetivos |
 | 10 | Reino: `D.interval` ignorado, `/1.1` encolhe ondas, guarda do portal cresce por relógio e não por onda | Reino | P/B | kingdom.js:44,52,767 |
 | 11 | Reino: herói morto ocupa pop; obra destruída não devolve nada; relógio mostra 2:00 com onda aos 3:00 | Reino | P/B | kingdom.js:73,316,1003 |
 
@@ -29,7 +29,7 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | 16 | Shake/hit-stop respeitando `prefers-reduced-motion` | VFX | P/B | main.js:4439 |
 | 17 | Reino: reparar prédios com aldeão | Reino | P/B | kingdom.js:168,925 |
 | 18 | Reino: demolir prédio com devolução parcial | Reino | P/B | kingdom.js |
-| 19 | "Repetir" com mesma equipe e dificuldade; botão da Jornada que diz "Jogar de novo" mas volta ao menu | Campanha/UI | M/B | main.js:6776,7867,7909 |
+| 19 | ~~"Repetir" com mesma equipe e dificuldade; botão da Jornada que diz "Jogar de novo" mas volta ao menu~~ | Campanha/UI | M/B | Repetir preserva missão, cenário, dificuldade e equipe |
 | 20 | Assinaturas iguais ao ataque básico (Besteiro, Piromante, Criomante) | Heróis | P/M | main.js:2905-2960 |
 | 21 | Reino: fim do ouro trava o jogo (mercado/troca) | Reino | M/M | kingdom.js |
 | 22 | Reino: escolha de dificuldade própria + recorde/estrelas com recompensa na campanha | Reino | M/M | kingdom.js, main.js:777 |

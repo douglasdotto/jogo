@@ -12,4 +12,4 @@
 | 2026-10-30 | 10adb93 | 23/23 (simulação 139 s) | menu carrega sem erro no console |
 
 ## Métricas de performance
-`?bench=1` registra draw calls e triângulos (bench.js). Ainda sem medição registrada — fazer antes/depois do item 39/40.
+`?bench=1` registra draw calls, triângulos, memória e tempos do quadro. `?perfil=1` separa tempos em ms/quadro da contagem de draws de sombra por quadro. Ainda sem uma linha de base isolada: a medição exploratória de 2026-11-05 ocorreu enquanto outra aba do jogo estava aberta; repetir antes de concluir ganhos ou perdas.

@@ -120,3 +120,9 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Removi as seis cópias do predicado usadas na decisão de lançar habilidades. A lógica específica de defesa e a de alvos da Caçada em Matilha continuam separadas.
 - Atualizei os testes visuais para buscar regras em `base.css` após a extração da folha. `node tests/run-all.cjs --rapido`: **41 passaram, 0 falharam**.
 - A suíte completa iniciou as 50 simulações aleatórias, mas ficou vários minutos sem retorno e foi interrompida; não está registrada como aprovada.
+
+### Confiabilidade do perfil e revisão do backlog — 2026-11-05
+- O painel `?perfil=1` agora mostra `sombra` como ms/quadro e `sombraDraws` como draws/quadro; antes, a contagem recebia unidade de tempo incorreta.
+- Auditei os P0 1–9 e o item 19 contra o código atual e marquei as correções já entregues como concluídas.
+- `node tests/bench-timing.cjs`: passou, incluindo a regressão que distingue as unidades do perfil.
+- A medição exploratória de FPS foi feita com outra aba do jogo aberta; não serve como baseline comparável. Nova medição isolada segue pendente antes de decidir mudanças visuais de desempenho.

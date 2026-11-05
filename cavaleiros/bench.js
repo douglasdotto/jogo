@@ -26,6 +26,11 @@ const percentile = (list, p) => {
 };
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+function formatProfile(perfilMs) {
+  return Object.entries(perfilMs || {}).map(([name, value]) => name === 'sombraDraws'
+    ? `${name} ${value} draws/quadro`
+    : `${name} ${value} ms/quadro`).join(' · ');
+}
 
 function recordRafSample(state, timestamp, visibilityState) {
   state.rafFrames++;
@@ -251,7 +256,9 @@ async function runBenchBody(api) {
   console.log('BENCH ' + JSON.stringify(result));
   const box = document.createElement('pre');
   box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99999;background:#000c;color:#9f9;font:12px monospace;padding:8px;max-width:95vw;white-space:pre-wrap';
-  box.textContent = segments.map((s) => `fase ${s.fase}: ${s.fps} fps · ${s.framesMeasured} quadros · rAF p50/p95 ${s.rafIntervalP50Ms}/${s.rafIntervalP95Ms} ms · vis ${s.visibilityStart}→${s.visibilityEnd} · callback ${s.callbackMs} ms (manutenção ${s.keepMs}; jogo ${s.cpuMs}) · mundo p50/p95 ${s.worldUpdateP50Ms}/${s.worldUpdateP95Ms} ms · barras p50/p95 ${s.barsUpdateP50Ms}/${s.barsUpdateP95Ms} ms · envio CPU ${s.renderSubmitMs} ms · ${s.calls} draws · ${s.tris} tris · ${s.units} unid · geo ${s.geometries} tex ${s.textures} · heap ${s.heapMB} MB`).join('\n');
+  const summary = segments.map((s) => `fase ${s.fase}: ${s.fps} fps · ${s.framesMeasured} quadros · rAF p50/p95 ${s.rafIntervalP50Ms}/${s.rafIntervalP95Ms} ms · vis ${s.visibilityStart}→${s.visibilityEnd} · callback ${s.callbackMs} ms (manutenção ${s.keepMs}; jogo ${s.cpuMs}) · mundo p50/p95 ${s.worldUpdateP50Ms}/${s.worldUpdateP95Ms} ms · barras p50/p95 ${s.barsUpdateP50Ms}/${s.barsUpdateP95Ms} ms · envio CPU ${s.renderSubmitMs} ms · ${s.calls} draws · ${s.tris} tris · ${s.units} unid · geo ${s.geometries} tex ${s.textures} · heap ${s.heapMB} MB`).join('\n');
+  const profile = segments.map((s) => formatProfile(s.perfilMs)).filter(Boolean).join(' · ');
+  box.textContent = profile ? `${summary}\nperfil: ${profile}` : summary;
   document.body.appendChild(box);
   return result;
 }
