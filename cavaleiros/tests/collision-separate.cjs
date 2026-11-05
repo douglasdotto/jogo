@@ -67,13 +67,23 @@ const gap = (a, b) => Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z);
 // ---------- separate: unidades ----------
 {
   const c = harness();
-  const a = unit(0, 0), b = unit(0, 0);   // empilhados no mesmo ponto
+  const a = unit(0, 0, { team: 'ally' }), b = unit(0, 0, { team: 'ally' });   // aliados empilhados no mesmo ponto
   const foe = unit(-10, -10, { team: 'skeleton' }), hero = unit(-10, -10.2);
   c.units.push(a, b, foe, hero);
   c.api.separate();
   assert.ok(gap(a, b) >= 0.86 * 2 - 0.01, `aliados empilhados se afastam (dist=${gap(a, b)})`);
   assert.ok(gap(foe, hero) >= 0.68 * 2 - 0.01, `adversários se afastam até a distância de combate (dist=${gap(foe, hero)})`);
   assert.ok(gap(foe, hero) < 0.86 * 2 - 0.01, 'adversários podem ficar mais perto que aliados');
+}
+
+// Heróis que se cruzam usam a folga de combate: ainda se separam, mas sem o empurrão largo dos outros aliados.
+{
+  const c = harness();
+  const a = unit(0, 0), b = unit(0.1, 0);
+  c.units.push(a, b);
+  c.api.separate();
+  assert.ok(gap(a, b) >= 0.68 * 2 - 0.01, `heróis não se sobrepõem (dist=${gap(a, b)})`);
+  assert.ok(gap(a, b) < 0.86 * 2 - 0.01, `heróis usam espaço compacto (dist=${gap(a, b)})`);
 }
 
 // velocidade de aproximação é cancelada no contato
@@ -102,7 +112,7 @@ const gap = (a, b) => Math.hypot(b.pos.x - a.pos.x, b.pos.z - a.pos.z);
   c.units.push(a, b);
   c.api.separate();
   assert.ok(a.pos.x < 5 && b.pos.x < 5, `ninguém atravessa a parede ao se separar (${a.pos.x}, ${b.pos.x})`);
-  assert.ok(gap(a, b) >= 0.86 * 2 - 0.01, `escorregam ao longo da parede (dist=${gap(a, b)})`);
+  assert.ok(gap(a, b) >= 0.68 * 2 - 0.01, `heróis escorregam ao longo da parede sem se empurrar tanto (dist=${gap(a, b)})`);
 }
 
 // ---------- separate: obstáculos e fantasmas ----------

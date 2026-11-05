@@ -97,7 +97,8 @@ function measure({ party, diffId = 'normal', seconds = 70, seed = 7, horde = nul
           const a = alive[i], b = alive[j];
           if (Math.abs(a.pos.y - b.pos.y) >= 0.85) continue;
           const same = (a.team === 'skeleton') === (b.team === 'skeleton');
-          const min = (same ? ALLY : SEP) * (a.size + b.size);
+          const heroPair = a.team === 'hero' && b.team === 'hero';
+          const min = (heroPair ? SEP : same ? ALLY : SEP) * (a.size + b.size);
           const d = Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z);
           if (d < min * 1.2) { m.pairs++; if (d < min * 0.9) m.overlap++; }
         }

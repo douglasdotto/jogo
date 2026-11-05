@@ -2883,7 +2883,8 @@ class Unit {
       const u = nearby ? separationAlive[nearby[n]] : units[n];
       if (u === this || u.dead || u.phasing || u.pos === goal) continue;
       const sameFaction = (u.team === 'skeleton') === (this.team === 'skeleton');
-      const clear = UNIT_SEPARATION_FACTOR * (this.size + u.size);
+      const heroPair = this.team === 'hero' && u.team === 'hero' && !u.structure && !u.totem;
+      const clear = (heroPair ? UNIT_HERO_SEPARATION_FACTOR : UNIT_SEPARATION_FACTOR) * (this.size + u.size);
       const ox = u.pos.x - this.pos.x, oz = u.pos.z - this.pos.z;
       let movingThreat = false, closestX = ox, closestZ = oz;
       if (!isPlanted(u)) {
@@ -11247,6 +11248,8 @@ const separationSideA = { x: 0, z: 0 }, separationSideB = { x: 0, z: 0 };
 // Mantém espaço entre aliados da mesma facção, mas deixa os adversários entrar no alcance de combate.
 const UNIT_SEPARATION_FACTOR = 0.86;
 const UNIT_COMBAT_SEPARATION_FACTOR = 0.68;
+// Heróis se cruzam em corredores; a folga da formação ociosa continua maior.
+const UNIT_HERO_SEPARATION_FACTOR = UNIT_COMBAT_SEPARATION_FACTOR;
 const MELEE_CONTACT_SLACK = 0.12;   // folga para o contato contar como "no alcance" mesmo com a separação resolvendo no limite
 function collisionMove(unit, dx, dz) {
   const pos = unit.pos, fromX = pos.x, fromZ = pos.z;
@@ -11273,7 +11276,11 @@ function separatePair(a, b, ia, ib) {
   const movableA = !(a.structure || a.totem), movableB = !(b.structure || b.totem);
   if (!movableA && !movableB) return false;
   const sameFaction = (a.team === 'skeleton') === (b.team === 'skeleton');
-  const min = (sameFaction ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR) * (a.size + b.size);
+  const heroPair = a.team === 'hero' && b.team === 'hero'
+    && !(a.structure || a.totem || b.structure || b.totem);
+  const factor = heroPair ? UNIT_HERO_SEPARATION_FACTOR
+    : sameFaction ? UNIT_SEPARATION_FACTOR : UNIT_COMBAT_SEPARATION_FACTOR;
+  const min = factor * (a.size + b.size);
   let dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
   let distance = Math.hypot(dx, dz);
   if (distance >= min) return false;

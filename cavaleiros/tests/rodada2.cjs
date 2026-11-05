@@ -3640,9 +3640,21 @@ test('grupo misto não amontoa heróis e inimigos quando chegam ao mesmo ponto',
     for(let i=0;i<5;i++)t.separate();
     for(let a=0;a<group.length;a++)for(let b=a+1;b<group.length;b++){
       const sameFaction=(group[a].team==='skeleton')===(group[b].team==='skeleton');
-      const minimum=(sameFaction?t.UNIT_SEPARATION_FACTOR:t.UNIT_COMBAT_SEPARATION_FACTOR)*(group[a].size+group[b].size);
+      const heroPair=group[a].team==='hero'&&group[b].team==='hero';
+      const minimum=(heroPair?t.UNIT_COMBAT_SEPARATION_FACTOR:sameFaction?t.UNIT_SEPARATION_FACTOR:t.UNIT_COMBAT_SEPARATION_FACTOR)*(group[a].size+group[b].size);
       assert.ok(group[a].pos.distanceTo(group[b].pos)>=minimum-.02,`grupo mantém ${minimum.toFixed(2)}m entre as unidades ${a+1} e ${b+1}`);
     }
+  }finally{clear();t.world.obstacles=obstacles}
+});
+test('heróis sobrepostos se afastam só até a folga compacta para cruzar sem bloqueio',()=>{
+  clear();const obstacles=t.world.obstacles;
+  try{
+    t.world.obstacles=[];
+    const a=hero('paladin',0,0),b=hero('pyro',.1,0);
+    t.separate();
+    const gap=a.pos.distanceTo(b.pos);
+    assert.ok(gap>=t.UNIT_COMBAT_SEPARATION_FACTOR*(a.size+b.size)-.01,'heróis continuam sem se sobrepor');
+    assert.ok(gap<t.UNIT_SEPARATION_FACTOR*(a.size+b.size)-.01,`heróis usam folga compacta (${gap.toFixed(2)}m) em vez de se empurrar até a folga ampla`);
   }finally{clear();t.world.obstacles=obstacles}
 });
 test('separação afasta unidades sem deslocar totem, santuário ou marco da ponte',()=>{

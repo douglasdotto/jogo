@@ -104,3 +104,8 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - Regressões: `node tests/run-all.cjs --rapido` — **41 passaram, 0 falharam**. A suíte sem `--rapido` foi interrompida porque inclui 40 simulações aleatórias demoradas; essa bateria não foi registrada como aprovada.
 - Varredura independente, uma semente, equipe recomendada e dificuldade Pesadelo em cada missão: **24/24 vitórias**, sem fases incompletas. É uma verificação por missão, não uma campanha contínua com experiência acumulada.
 - Ruínas recomendada: **4/4 vitórias** no seed 20261105, três com 3★ e uma com 1★/uma queda. Duas equipes sem cura venceram **1/4 cada**; seguem capazes de vencer, com risco alto. Vila e Fazendas, que antes ficavam sem encerrar contra um atirador ou Golem isolado, venceram **2/2 cada** após os ajustes de perseguição.
+
+### Separação entre heróis — 2026-11-05
+- Heróis em movimento agora usam a folga compacta de combate entre si, tanto no desvio de rota quanto na resolução de colisões. A formação parada e o espaçamento entre outros aliados continuam com a folga maior.
+- `node cavaleiros/tests/run-all.cjs --rapido`: **41 passaram, 0 falharam**. `node cavaleiros/tests/empurra.cjs detalhe`: cinco equipes sem sobreposição persistente (0,0% overlaps).
+- Na repetição visual de Ponte em Chamas no Pesadelo, os heróis mantiveram posições distintas na ponte e no combate, sem bloqueio visível entre aliados.

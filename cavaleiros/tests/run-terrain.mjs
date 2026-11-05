@@ -124,7 +124,7 @@ const gridStart=main.indexOf('const SEPARATION_CELL_SIZE = 3;'),gridEnd=main.ind
 if(gridStart<0||gridEnd<0)throw Error('Grade espacial de obstáculos ausente');
 world.obstacles.push(...[5,9].map((p)=>({x:world.zoneOf(p).center.x,z:world.zoneOf(p).center.z,r:3.2})));
 const movementSandbox={
-  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),UNIT_SEPARATION_FACTOR:0.86,
+  THREE,world,units:[],tmp:new Vector3(),moveDir:new Vector3(),UNIT_SEPARATION_FACTOR:0.86,UNIT_HERO_SEPARATION_FACTOR:0.68,
   isPlanted:u=>u.busy>0||u.vel.x*u.vel.x+u.vel.z*u.vel.z<0.0625,gridCellKey:(x,z)=>x*65536+(z&0xffff),
 };
 const movementApi=runInNewContext(main.slice(gridStart,gridEnd)+'\nclass Walker {'+move+'}; ({Walker,queryObstacleCandidates})',movementSandbox);
