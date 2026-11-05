@@ -133,3 +133,16 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - No perfil da fase 12 (40 inimigos-alvo, qualidade alta), `sombraDraws` caiu de **450,6 para 292 draws/quadro**; o painel marcou 12,6 ms antes e 2,95 ms depois. O total foi de **588 para 433 draws**.
 - A execução posterior teve rAF em **1 Hz** e cerca de três unidades vivas a menos; portanto não valida FPS comparável. A próxima medida precisa ocorrer com a aba realmente em primeiro plano e carga constante.
 - Fechei as abas temporárias do benchmark. O browser voltou à vitória de teste de Ponte em Chamas na aba original.
+
+### Organização do mapa da campanha — 2026-11-05
+- Extraí a geometria pura da estrada, regiões e posições dos cartões para `campaign-layout.js`; `campaign.js` mantém a integração com as missões e reexporta a estrada usada pelo mapa 3D.
+- Centralizei o carregamento de fonte de campanha nos testes para incluir o novo módulo sem alterar os ambientes de teste.
+- Atualizei o backlog: o mapa gera posições determinísticas e sem sobreposição para 24, 25, 28 e 36 missões.
+
+### Interceptação de ameaças aos objetivos — 2026-11-05
+- No Santuário, a regra anterior bloqueava todo alvo a mais de 12 m, inclusive arqueiros que já miravam um herói. Agora o guarda mais resistente/de suporte fica no cristal; até dois aliados interceptam arqueiros imóveis que estejam atacando um herói ou o objetivo, até 26 m. Um arqueiro distante que ainda não ameaça ninguém não puxa a formação.
+- Na Ponte em Chamas, corredores marcados recebem um raio de interceptação de 16 m; inimigos comuns ficam limitados aos 12 m próximos do portão. A dupla responde aos corredores diretos, e equipes maiores mantêm uma âncora com até dois interceptores. Se todos estiverem ocupados, a âncora cobre a ameaça.
+- Reduzi de 30% para 20% a chance de um inimigo corpo a corpo virar corredor da ponte, para a equipe de dois não perder por sobrecarga de vazamentos.
+- `rodada2.cjs`: **249 verificações**; `npm run test:rapido`: **42 passaram, 0 falharam**.
+- Pesadelo, equipe recomendada, 10 sementes: Santuário **10/10 vitórias**, 6×3★ e 4×1★, sem quedas e com 80% de vida média do grupo (53% do santuário). Ponte em Chamas **10/10 vitórias**, sem quedas; 5×1★ e 5×2★. A equipe alternativa Paladino + Piromante venceu **5/5**, com 1×3★; amostras pequenas, não são campanha contínua.
+- `npm test` foi interrompido após mais de 11 minutos durante a bateria longa de simulações; não está registrado como aprovado. Os testes rápidos e as simulações direcionadas acima passaram após os ajustes.

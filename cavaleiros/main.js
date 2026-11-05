@@ -36,7 +36,8 @@ const ROAD = 5;             // metade da largura da estrada
 const PHASES = 12;          // a última fase fica no topo, no castelo
 const MAX_PARTY = 4;
 const LEASH = 5;            // quanto o herói se afasta do posto para lutar
-const BREACH_INTERCEPT_RADIUS = 12; // intercepta ameaças junto à ponte sem afastar a equipe do portão
+const BREACH_INTERCEPT_RADIUS = 12; // ameaças comuns permanecem na zona próxima à ponte
+const BREACH_RUNNER_INTERCEPT_RADIUS = 16; // corredores marcados ganham tempo extra para serem interceptados
 const DEFEND_INTERCEPT_RADIUS = 12; // mantém os defensores perto do objetivo
 const ENGAGE_SLACK = 3;     // folga extra para não largar um alvo já engajado (evita ir e voltar)
 const ESCORT_GUARD_REACH = 10;   // escolta/resgate: o guarda ataca quem chega a esta distância do protegido
@@ -3259,8 +3260,8 @@ function makeTargetContext(reuse = null) {
   context.rangedHeroes = rangedHeroes;
   context.friends = friends;
   context.villager = villager;
-  // santuário: o guarda (curandeiro/tanque) é a âncora da defesa; sozinho, o único herói vivo segue como âncora comum
-  const shrineGuard = goal?.type === 'defend' && villager ? escortGuardOf(party) : null;
+  // Defesas fixas deixam o herói mais resistente/de suporte como âncora; sozinho, o último vivo assume.
+  const shrineGuard = (goal?.type === 'defend' || goal?.type === 'breach') && villager ? escortGuardOf(party) : null;
   context.defenseAnchor = goal?.type === 'defend' || goal?.type === 'breach'
     ? shrineGuard || party.find((hero) => !hero.dead) || null : null;
   // escolta/resgate/santuário: um herói fica de guarda junto ao protegido; os demais caçam livremente
@@ -3521,6 +3522,15 @@ function nearest(from, list) {
 function tacticalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
+const isBreachRunner = (target, objective) => !!target && (target.raider || target.target === objective || target.pendingHit?.target === objective);
+const breachTargetRadius = (target, objective) => isBreachRunner(target, objective)
+  ? BREACH_RUNNER_INTERCEPT_RADIUS : BREACH_INTERCEPT_RADIUS;
+const isDefenseThreat = (target, objective) => {
+  if (!objective || !target) return false;
+  if (target.target === objective || target.pendingHit?.target === objective) return true;
+  const targetsHero = target.target?.team === 'hero' || target.pendingHit?.target?.team === 'hero';
+  return target.ranged && !target.mobile && targetsHero;
+};
 
 const fixedDefenseGoal = (goal) => goal?.type === 'defend' || goal?.type === 'breach';
 function defenseAnchor(context) {
@@ -3562,11 +3572,33 @@ function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
 
 function hasBreachInterceptSlot(hero, target, context) {
   const { party, villager } = context;
-  if (!villager || tacticalDistance(villager.pos, target.pos) > BREACH_INTERCEPT_RADIUS) return false;
+  if (!villager) return false;
+  const distanceToObjective = tacticalDistance(villager.pos, target.pos);
+  const radius = breachTargetRadius(target, villager);
+  if (distanceToObjective > radius) return false;
+  const anchor = defenseAnchor(context);
+  const fromPost = tacticalDistance(hero.post, target.pos);
+  // Um defensor protege o portão; um aliado intercepta, e em dupla ambos
+  // respondem aos corredores marcados como ameaça direta à ponte.
+  if (hero === anchor) {
+    let living = 0, anotherInterceptor = false;
+    for (const ally of party) {
+      if (ally.dead) continue;
+      living++;
+      if (ally !== anchor && ally.busy <= 0 && ally.kiteT <= 0
+        && tacticalDistance(ally.post, target.pos) <= Math.max(radius, LEASH + ally.range)) anotherInterceptor = true;
+    }
+    return fromPost <= hero.range + 0.5 || distanceToObjective <= LEASH + hero.range
+      || living === 1 && distanceToObjective <= BREACH_INTERCEPT_RADIUS
+      || living === 2 && isBreachRunner(target, villager) && distanceToObjective <= BREACH_RUNNER_INTERCEPT_RADIUS
+      || !anotherInterceptor && isBreachRunner(target, villager);
+  }
+  if (fromPost <= LEASH + hero.range || tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5) return true;
   let first = null, second = null, firstDistance = Infinity, secondDistance = Infinity;
   for (const candidate of party) {
-    if (candidate.dead || candidate.busy > 0 || candidate.kiteT > 0) continue;
+    if (candidate.dead || candidate === anchor || candidate.busy > 0 || candidate.kiteT > 0) continue;
     const distance = tacticalDistance(candidate.post, target.pos);
+    if (distance <= LEASH + candidate.range || distance > radius) continue;
     if (interceptorRanksBefore(candidate, distance, first, firstDistance)) {
       second = first; secondDistance = firstDistance;
       first = candidate; firstDistance = distance;
@@ -3586,7 +3618,7 @@ function anotherDefenseHeroCanIntercept(hero, target, context) {
     if (fromPost <= LEASH + ally.range
       || tacticalDistance(ally.pos, target.pos) <= ally.range + 1.5) return true;
     if (villager && fromPost <= LEASH + ally.range + 5
-      && (target.pendingHit?.target === villager || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
+      && (isDefenseThreat(target, villager) || tacticalDistance(villager.pos, target.pos) <= 10.5)) return true;
   }
   return false;
 }
@@ -3601,22 +3633,25 @@ function stillEngaged(hero, target, context = targetContext()) {
     if (game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
     if (hero === defenseAnchor(context)) {
       const onlyDefender = context.party.every((ally) => ally === hero || ally.dead);
-      const objectiveAttack = target.pendingHit?.target === villager
+      const objectiveAttack = isDefenseThreat(target, villager)
         && fromPost <= LEASH + hero.range + 5
         && !anotherDefenseHeroCanIntercept(hero, target, context);
       return fromPost <= hero.range + ENGAGE_SLACK || objectiveAttack
         || onlyDefender && tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
     }
-    return tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
+    const nearShrine = tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
+    const objectiveIntercept = isDefenseThreat(target, villager)
+      && (fromPost <= LEASH + hero.range || hasTacticalInterceptSlot(hero, target, context, RANGED_INTERCEPT, RANGED_INTERCEPTORS));
+    return nearShrine || objectiveIntercept;
   }
   const shrineCleanup = context.goal?.type === 'defend' && hero === defenseAnchor(context)
     && game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT;
   if (context.goal?.type === 'defend' && villager
     && tacticalDistance(villager.pos, target.pos) > DEFEND_INTERCEPT_RADIUS
-    && target.pendingHit?.target !== villager && !shrineCleanup) return false;
+    && !isDefenseThreat(target, villager) && !shrineCleanup) return false;
   if (hero === defenseAnchor(context)) {
     const canCoverFromPost = fromPost <= hero.range + 0.5;
-    const objectiveAttack = villager && target.pendingHit?.target === villager
+    const objectiveAttack = villager && isDefenseThreat(target, villager)
       && fromPost <= LEASH + hero.range + 5
       && !anotherDefenseHeroCanIntercept(hero, target, context);
     const lastDefenderKeepsThreat = hero.engagedWith === target
@@ -3726,23 +3761,25 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   if (goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
   const fromPost = tacticalDistance(hero.post, target.pos);
   const breachThreat = goal?.type === 'breach' && villager
-    && tacticalDistance(villager.pos, target.pos) <= BREACH_INTERCEPT_RADIUS;
-  // Na ponte os dois heróis podem abandonar a formação para eliminar ameaças
-  // dentro da zona do portão, antes que cheguem ao raio de vazamento.
+    && tacticalDistance(villager.pos, target.pos) <= breachTargetRadius(target, villager);
+  // Na ponte, corredores são interceptados dentro de um raio limitado do portão.
   if (breachThreat) return hasBreachInterceptSlot(hero, target, context);
   if (goal?.type === 'defend' && villager) {
     // Depois do cronômetro, todo o grupo limpa sobreviventes próximos sem voltar à caça pelo mapa.
     if (game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
     const nearShrine = tacticalDistance(villager.pos, target.pos) <= DEFEND_INTERCEPT_RADIUS;
+    const objectiveThreat = isDefenseThreat(target, villager);
     if (hero === defenseAnchor(context)) {
       if (fromPost <= hero.range + 0.5) return true;
       if (nearShrine && context.party.every((ally) => ally === hero || ally.dead)) return true;
-      return !!villager && target.pendingHit?.target === villager
+      return objectiveThreat
         && fromPost <= LEASH + hero.range + 5
         && !anotherDefenseHeroCanIntercept(hero, target, context);
     }
     if (nearShrine) return true;
-    return false;
+    if (!objectiveThreat) return false;
+    if (fromPost <= LEASH + hero.range) return true;
+    return hasTacticalInterceptSlot(hero, target, context, RANGED_INTERCEPT, RANGED_INTERCEPTORS);
   }
   // No resgate, o corredor precisa alcançar guardas junto ao prisioneiro mesmo fora do leash do grupo.
   if (goal?.type === 'rescue' && hero === game.rescueRunner && context.rescueThreats?.includes(target)) return true;
@@ -3865,14 +3902,16 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   if (villager) {
     distanceToVillager = tacticalDistance(villager.pos, target.pos);
     const toVillager = distanceToVillager;
-    if (target.pendingHit?.target === villager) score -= 11;
+    if (isDefenseThreat(target, villager)) score -= 11;
     else if (toVillager < 12) score -= (12 - toVillager) * 0.8;
-    if (goal?.type === 'breach' && distanceToVillager <= BREACH_INTERCEPT_RADIUS) {
-      score -= 20 + (BREACH_INTERCEPT_RADIUS - distanceToVillager) * 0.8;
+    if (goal?.type === 'breach' && distanceToVillager <= breachTargetRadius(target, villager)) {
+      const runnerBonus = isBreachRunner(target, villager) ? 12 : 0;
+      score -= 20 + runnerBonus + (breachTargetRadius(target, villager) - distanceToVillager) * 0.8;
       if (target.raider || target.target === villager || target.pendingHit?.target === villager) score -= 12;
     }
     // santuário: saqueador a caminho do cristal (ou já nele) e quem chega a SHRINE_CLOSE m dele vêm antes de tudo
     if (goal?.type === 'defend') {
+      if (target.ranged && !target.mobile && isDefenseThreat(target, villager)) score -= 12;
       if (target.raider || target.target === villager) score -= 14;
       if (toVillager < SHRINE_CLOSE) score -= 4;
     }
@@ -3884,7 +3923,8 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
   const healthRatio = target.maxHp > 0 ? Math.max(0, target.hp / target.maxHp) : 1;
   const urgentTarget = (goal?.type === 'hunt' && target === game.huntMark && target.hunted) || target.boss || target.totem || target.ranged
     || target.enemyKind === 'Priest' || target.enemyKind === 'Bomber' || target.kind?.priority || target.pendingHit
-    || (goal?.type === 'breach' && (target.raider || target.target === villager || distanceToVillager <= BREACH_INTERCEPT_RADIUS))
+    || (goal?.type === 'defend' && isDefenseThreat(target, villager))
+    || (goal?.type === 'breach' && (isBreachRunner(target, villager) || distanceToVillager <= BREACH_INTERCEPT_RADIUS))
     || (villager && distanceToVillager < 12)
     || (goal?.type === 'nofall' && distanceToVulnerable < 6);
   if (!urgentTarget && healthRatio < 0.55) {
@@ -4190,7 +4230,8 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
   const urgentObjectiveTarget = (bossGoal(goal) && best.boss)
     || (hasDestructionGoal(goal) && best.totem)
     || (goal?.type === 'hunt' && best === game.huntMark && best.hunted)
-    || (goal?.type === 'breach' && (best.raider || best.target === villager || best.pendingHit?.target === villager
+    || (goal?.type === 'defend' && isDefenseThreat(best, villager))
+    || (goal?.type === 'breach' && (isBreachRunner(best, villager)
       || villager && tacticalDistance(villager.pos, best.pos) <= BREACH_INTERCEPT_RADIUS))
     || urgentEscortTarget || urgentNoFallTarget || urgentAllyThreat || urgentPriest || urgentBomber;
   let criticalAllyNearFocus = false;
@@ -13300,7 +13341,7 @@ function spawnSkeleton() {
   const c = world.pointAt(s0);
   s.root.rotation.y = Math.atan2(c.x - s.pos.x, c.z - s.pos.z);   // de frente para os heróis
   if (game.mission?.goal.type === 'defend' && !lead && Math.random() < 0.45) s.raider = true;   // saqueadores correm para o santuário
-  if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.3) s.raider = true;   // corredores vão direto à ponte
+  if (game.mission?.goal.type === 'breach' && !lead && !s.ranged && Math.random() < 0.2) s.raider = true;   // corredores vão direto à ponte
   if (game.mission?.goal.type === 'elite' && !lead) makeElite(s);
   if (lead && boss && game.mission?.boss?.phase === p && game.mission.boss.mod) applyBossMod(s, game.mission.boss.mod);   // Rei Espectral, Carrasco Afogado
   if (twinMission) {

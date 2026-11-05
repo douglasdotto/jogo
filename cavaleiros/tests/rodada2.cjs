@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
+const loadCampaignSource = require('./campaign-source.cjs');
 const dir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(dir, 'main.js'), 'utf8');
 const recipes = fs.readFileSync(path.join(dir, 'characters.js'), 'utf8');
-const campaign = fs.readFileSync(path.join(dir, 'campaign.js'), 'utf8');
+const campaign = loadCampaignSource(dir);
 const classInfo = fs.readFileSync(path.join(dir, 'class-info.js'), 'utf8');
 const skillbook = fs.readFileSync(path.join(dir, 'skillbook.js'), 'utf8');
 const skillTargeting = fs.readFileSync(path.join(dir, 'skill-targeting.js'), 'utf8');
@@ -2465,7 +2466,14 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     let team=t.makeTargetContext();
     assert.equal(team.villager,objective,goalType+': o objetivo protegido entra no contexto tático');
     const remoteTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
-    if(goalType==='defend')assert.ok(remoteTargets.every(target=>target===null),'santuário: o grupo não sai para perseguir além do raio de proteção');
+    if(goalType==='defend'){
+      assert.ok(remoteTargets.every(target=>target===null),'santuário: inimigo distante sem ataque ativo não atrai o grupo');
+      shooter.target=guards[1];team=t.makeTargetContext();
+      const focusedTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
+      assert.equal(focusedTargets[0],null,'santuário: a âncora não abandona o cristal por um arqueiro');
+      assert.equal(focusedTargets.filter(Boolean).length,2,'santuário: dois aliados interceptam arqueiro que ataca um herói');
+      shooter.target=null;
+    }
     else {
       assert.equal(remoteTargets[0],null,goalType+': a âncora não sai para perseguir o atirador');
       assert.equal(remoteTargets[1],null,goalType+': o perseguidor mais veloz ocupa o segundo slot');
@@ -2478,7 +2486,7 @@ test('defesa fixa mantém a âncora e limita a interceptação de atiradores rem
     for(const h of guards){h.targetFocus=null;h.targetFocusT=0;}
     shooter.pos.set(4,0,goalType==='breach'?11:18.7);team=t.makeTargetContext();
     const diagonalTargets=guards.map(h=>t.chooseHeroTarget(h,[shooter],.016,team));
-    if(goalType==='defend')assert.ok(diagonalTargets.every(target=>target===null),'santuário: nem o atirador diagonal atrai o grupo para fora do raio');
+    if(goalType==='defend')assert.ok(diagonalTargets.every(target=>target===null),'santuário: atirador diagonal sem ataque ativo não atrai o grupo');
     else {
       assert.equal(diagonalTargets[0],null,goalType+': a âncora continua protegendo o objetivo contra atirador diagonal');
       assert.equal(diagonalTargets[1],null,goalType+': o slot restante não depende da ordem de seleção');
@@ -2580,10 +2588,10 @@ test('defesa fixa reserva uma âncora sem depender da ordem de atualização e t
   const threats=[-12,12].map((x,i)=>{const s=new t.Skeleton('Warrior',1);s.spawning=false;s.pos.set(x,0,0);s.enemyKind='Warrior'+i;return s;});
     const team=t.makeTargetContext(),results=new Map();team.arenaCenter.set(0,0,0);
     for(const i of orderIndices)results.set(guards[i],t.chooseHeroTarget(guards[i],threats,.016,team));
-    const anchor=goalType==='defend'?team.escortGuard:guards[0];   // santuário: a âncora é o guarda (curandeiro/tanque)
+    const anchor=goalType==='defend'?team.escortGuard:(vm.runInContext('escortGuardOf',context)(guards)||guards[0]);
     assert.strictEqual(team.defenseAnchor,anchor,goalType+': âncora é derivada da ordem estável da equipe, não da chamada');
     if(goalType==='defend')assert.equal(results.get(anchor),null,'santuário: a âncora conserva o posto enquanto os outros interceptam');
-    else assert.equal(results.get(anchor),threats[0],goalType+': a âncora entra nos dois slots da ponte');
+    else assert.equal(results.get(anchor),null,goalType+': a âncora permanece junto à ponte enquanto os aliados interceptam');
     assert.ok([...results.values()].filter(Boolean).length<=(goalType==='breach'?2:count),goalType+': só a equipe local do objetivo entra no combate');
     assert.ok([...results.values()].some(Boolean),goalType+': os demais ainda podem interceptar');
   }
@@ -4364,10 +4372,22 @@ test('ponte: ambos os heróis interceptam e priorizam corredores antes do portã
   runner.spawning=local.spawning=false;runner.raider=true;runner.target=gate;runner.pos.set(0,0,12);local.pos.set(0,0,21);
   let contextRef=t.makeTargetContext();
   for(const h of guards){
-    assert.equal(t.canHeroReachTarget(h,runner,contextRef),true,h.cfg.id+': alcança o corredor antes dos 2,6 m do vazamento');
+    assert.equal(t.canHeroReachTarget(h,runner,contextRef),true,h.cfg.id+': intercepta o corredor antes do vazamento');
     assert.ok(t.heroTargetScore(h,runner,h.pos,contextRef)<t.heroTargetScore(h,local,h.pos,contextRef),h.cfg.id+': corredor mais perto do portão tem prioridade sobre o Golem');
-    assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),runner,h.cfg.id+': os dois respondem ao objetivo da missão');
+    assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),runner,h.cfg.id+': a dupla responde ao corredor que ameaça a ponte');
   }
+  runner.pos.set(0,0,16);contextRef=t.makeTargetContext();
+  for(const h of guards){
+    if(h===contextRef.defenseAnchor){
+      assert.equal(t.canHeroReachTarget(h,runner,contextRef),true,h.cfg.id+': a dupla intercepta ameaça direta dentro do raio extra');
+      assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),runner,h.cfg.id+': corredor recebe prioridade até o limite ampliado');
+    }
+  }
+  runner.raider=false;runner.target=null;runner.pos.set(0,0,16);
+  for(const h of guards){h.pos.set(0,0,0);h.post.set(0,0,0);}
+  local.pos.set(0,0,1);
+  contextRef=t.makeTargetContext();
+  for(const h of guards)assert.equal(t.canHeroReachTarget(h,runner,contextRef),false,h.cfg.id+': inimigo comum fora da zona da ponte não atrai a equipe');
   runner.pos.set(0,0,42);contextRef=t.makeTargetContext();
   for(const h of guards){
     assert.equal(t.canHeroReachTarget(h,runner,contextRef),false,h.cfg.id+': não abandona a área por um corredor já distante demais');

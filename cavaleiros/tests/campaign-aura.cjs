@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const loadCampaignSource = require('./campaign-source.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -49,7 +50,7 @@ const auraSource = fs.readFileSync(path.join(dir, 'campaign-aura.js'), 'utf8');
 const auraContext = vm.createContext({ THREE, Math, WeakMap, Map, Object, Error });
 vm.runInContext(`${auraSource.replaceAll('export ', '')}\nthis.buildAura = createCampaignAura;`, auraContext);
 
-const campaignSource = fs.readFileSync(path.join(dir, 'campaign.js'), 'utf8').replaceAll('export ', '');
+const campaignSource = loadCampaignSource(dir);
 const campaignContext = vm.createContext({
   URLSearchParams,
   location: { search: '' },

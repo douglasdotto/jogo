@@ -1,4 +1,6 @@
 // Campanha: missões ao longo do caminho (trechos de fases), estrelas por desempenho e o mapa para escolher.
+import { CAMPAIGN_ROAD, campaignRoadX, layoutCampaign } from './campaign-layout.js';
+export { CAMPAIGN_ROAD, campaignRoadX };
 
 // goal: objetivo de cada missão (o HUD mostra e a missão falha se a regra quebrar)
 // win = vencer · escort = proteger o aldeão · rescue = salvar um prisioneiro · tower = derrubar torres
@@ -696,47 +698,8 @@ const medalSeal = (medal, tip = '') => medal.best
 // DarkKnight só é chefe no Coração do Castelo (goal.bosses); nas outras arenas é inimigo comum
 const BOSSES = ['King', 'Executioner', 'Lich', 'Golem', 'BoneDragon'];
 
-// Mapa da campanha: a estrada serpenteia de baixo (z = 0) para cima (z negativo, rumo ao castelo).
-// As posições saem da ordem das missões e dos capítulos; uma missão nova só alonga a estrada.
-export const CAMPAIGN_ROAD = { amplitude: 6, wavelength: 30, step: 6.5, chapterGap: 3.5, start: 3, end: 10 };
-export const campaignRoadX = (z, road = CAMPAIGN_ROAD) => road.amplitude * Math.sin(-z / road.wavelength * Math.PI * 2);
-export function campaignMapLayout(missions = MISSIONS, road = CAMPAIGN_ROAD) {
-  const chapters = [];
-  const marks = [];
-  let s = road.start, last = -1;
-  missions.forEach((m, i) => {
-    let chapter = chapters.indexOf(m.chapter);
-    if (chapter < 0) chapter = chapters.push(m.chapter) - 1;
-    if (i > 0) s += road.step + (chapter !== last ? road.chapterGap : 0);
-    last = chapter;
-    marks.push({ s, chapter });
-  });
-  const length = s + road.end;
-  // amostras da estrada por comprimento de arco (z sempre diminui)
-  const samples = [{ x: campaignRoadX(0, road), z: 0, s: 0 }];
-  while (samples.at(-1).s < length) {
-    const a = samples.at(-1), z = a.z - 0.2, x = campaignRoadX(z, road);
-    samples.push({ x, z, s: a.s + Math.hypot(x - a.x, z - a.z) });
-  }
-  let k = 0;
-  const nodes = marks.map(({ s: at, chapter }) => {
-    while (samples[k + 1].s < at) k++;
-    const a = samples[k], b = samples[k + 1], t = (at - a.s) / (b.s - a.s || 1);
-    return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, s: at, chapter };
-  });
-  const regions = chapters.map((name, index) => {
-    const own = nodes.filter((n) => n.chapter === index);
-    return { name, index, from: Math.min(...own.map((n) => n.s)), to: Math.max(...own.map((n) => n.s)) };
-  });
-  // mapa plano (sem WebGL): zigue-zague de três por linha, da base (94%) ao topo (6%)
-  const rows = Math.max(1, Math.ceil(nodes.length / 3) - 1);
-  nodes.forEach((n, i) => {
-    const row = Math.floor(i / 3), col = i % 3;
-    n.left = row % 2 ? 80 - 30 * col : 20 + 30 * col;
-    n.top = +(94 - 88 * row / rows).toFixed(2);
-  });
-  return { nodes, road: samples, regions, length };
-}
+// `campaign-layout.js` cuida da geometria; aqui ligamos as missões ao mapa.
+export const campaignMapLayout = (missions = MISSIONS, road = CAMPAIGN_ROAD) => layoutCampaign(missions, road);
 
 // "Capítulo IV · ..." → "IV"; sem algarismo romano no nome, usa a posição
 const chapterNumeral = (name, index) => /Cap[ií]tulo\s+([IVXLC]+)\b/.exec(name)?.[1] || String(index + 1);
