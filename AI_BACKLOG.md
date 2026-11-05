@@ -53,7 +53,7 @@ Modo Reino REMOVIDO do jogo por decisão do usuário: itens 10, 11, 17, 18, 21, 
 | 36 | Narrativa: antagonista "necromante" x Lich; tela curta por capítulo | Campanha | M/B | campaign.js |
 | 37 | ~~Mapa da campanha com posições geradas (hoje 18 fixas, missão 19 quebra)~~ | Campanha | M/B | Geometria isolada em `campaign-layout.js`; layout determinístico cobre 24, 25, 28 e 36 missões |
 | 38 | Farm de ouro repetindo a Vila | Economia | P/M | progression.js:123 |
-| 51 | Consolidar direção visual 3D mobile polida nos heróis, biomas, materiais, HUD e VFX | Visual | G/M | `characters.js`, `world.js`, `battle-hud.css`, `vfx-shaders.js` |
+| 51 | Consolidar direção Clash Royale: silhuetas legíveis, formas facetadas, cores fortes e feedback claro em heróis, cenário, HUD e VFX; conferir a leitura no browser | Visual | G/M | `characters.js`, `world.js`, `battle-hud.css`, `vfx-shaders.js` |
 
 ## P3 — técnica e manutenção
 | # | Item | Área | Esf/Risco | Onde |

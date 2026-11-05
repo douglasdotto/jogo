@@ -4477,6 +4477,13 @@ test('ponte: ambos os heróis interceptam e priorizam corredores antes do portã
     assert.ok(t.heroTargetScore(h,runner,h.pos,contextRef)<t.heroTargetScore(h,local,h.pos,contextRef),h.cfg.id+': corredor mais perto do portão tem prioridade sobre o Golem');
     assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),runner,h.cfg.id+': a dupla responde ao corredor que ameaça a ponte');
   }
+  const nearGate=new t.Skeleton('Warrior',1);
+  nearGate.spawning=false;nearGate.raider=true;nearGate.target=gate;nearGate.pos.set(0,0,4);runner.pos.set(0,0,11);
+  for(const h of guards){h.targetFocus=null;h.targetFocusT=0;}
+  contextRef=t.makeTargetContext();
+  const anchor=contextRef.defenseAnchor,interceptor=guards.find(h=>h!==anchor);
+  assert.strictEqual(t.chooseHeroTarget(anchor,[runner,nearGate],.016,contextRef),nearGate,'a âncora atende primeiro quem está mais perto de cruzar');
+  assert.strictEqual(t.chooseHeroTarget(interceptor,[nearGate,runner],.016,contextRef),runner,'o segundo defensor divide o foco e intercepta o próximo corredor');
   const intruder=new t.Skeleton('Warrior',1);intruder.spawning=false;intruder.pos.set(0,0,10);
   contextRef=t.makeTargetContext();
   for(const h of guards){
@@ -4500,6 +4507,17 @@ test('ponte: ambos os heróis interceptam e priorizam corredores antes do portã
     assert.equal(t.canHeroReachTarget(h,runner,contextRef),false,h.cfg.id+': não abandona a área por um corredor já distante demais');
     assert.strictEqual(t.chooseHeroTarget(h,[local,runner],.016,contextRef),local,h.cfg.id+': mantém defesa local quando o corredor está fora do alcance tático');
   }
+  clear();
+});
+test('ponte: equipe completa divide foco entre ameaças acessíveis',()=>{
+  context.location={search:''};begin('chamas',party(4));
+  const gate=t.game.gate,guards=t.heroes();gate.pos.set(0,0,0);gate.home.copy(gate.pos);
+  for(const h of guards){h.pos.set(0,0,8);h.post.set(0,0,8);h.busy=0;h.kiteT=0;h.targetFocus=null;h.targetFocusT=0;}
+  t.game.state='fight';
+  const threats=[2,4,6,8].map(distance=>{const enemy=new t.Skeleton('Warrior',1);enemy.spawning=false;enemy.raider=true;enemy.target=gate;enemy.pos.set(0,0,distance);return enemy;});
+  const contextRef=t.makeTargetContext();
+  const assigned=guards.map(hero=>t.chooseHeroTarget(hero,threats,.016,contextRef));
+  for(let i=0;i<guards.length;i++)assert.strictEqual(assigned[i],threats[i],guards[i].cfg.id+': cada defensor escolhe o próximo corredor sem deixar todos perseguirem o mesmo');
   clear();
 });
 test('duelo: um herói só, ondas menores e o chefe encerra; 3★ pede vida e tempo',()=>{

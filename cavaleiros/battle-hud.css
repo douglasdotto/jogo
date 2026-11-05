@@ -64,7 +64,10 @@
 
 /* ---------- barra de habilidades: retrato com anel de vida à esquerda + botões em linha ---------- */
 #skills { gap: 8px; padding: 8px 10px; border-radius: 18px; }
-.skillGroup { flex-direction: row; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 13px; }
+.skillGroup { flex-direction: row; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 13px;
+  border-color: color-mix(in srgb, var(--c) 34%, rgba(170, 202, 255, .3));
+  background: linear-gradient(150deg, color-mix(in srgb, var(--c) 12%, rgba(255,255,255,.08)), rgba(6,16,37,.38));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(3,10,25,.28), 0 3px 0 rgba(6,12,26,.55), 0 7px 16px rgba(0,0,0,.3); }
 .skillHero { position: relative; flex: 0 0 88px; width: 88px; height: 88px; min-height: 0; padding: 0; background: none; cursor: help; }
 /* anel de vida: --hp (0..1) só é escrito quando a vida muda; a cor vai de vermelho a verde */
 .skillHeroRing { --hp: 1; display: block; width: 100%; height: 100%; padding: 5px; box-sizing: border-box; border-radius: 50%;

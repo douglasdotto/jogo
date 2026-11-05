@@ -59,7 +59,7 @@ export const LOOKS = {
     },
     extras: [
       { type: 'plume', bone: 'head', color: 0xffffff, tall: true, y: 1.25 },
-      { type: 'pauldrons', bone: 'chest', color: 0xf2c94c, trim: 0xfff6dc },
+      { type: 'facetedPauldrons', bone: 'chest' },
       { type: 'emblem', bone: 'chest' },
     ],
   },

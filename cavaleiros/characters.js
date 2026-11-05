@@ -601,6 +601,25 @@ const ACCESSORIES = {
     if (studs.length) g.add(new THREE.Mesh(merged(studs), lambert(0xe8e0c8)));
     return g;
   },
+  // ombreiras facetadas do Paladino: placas largas e dois rebites claros, legíveis de longe
+  facetedPauldrons({ color = 0xf2c94c, trim = 0xfff6dc, size = 1 } = {}) {
+    const plates = [], accents = [];
+    for (const s of [-1, 1]) {
+      plates.push(piece(
+        new THREE.DodecahedronGeometry(0.27, 0),
+        [s * 0.41, 0.21, 0], [0, 0, -s * 0.18], [size * 1.2, size * 0.74, size * 1.04],
+      ));
+      accents.push(piece(
+        new THREE.OctahedronGeometry(0.095, 0),
+        [s * 0.43, 0.21, 0.19], [0, 0, -s * 0.18], [size, size * 0.9, size * 0.65],
+      ));
+      accents.push(piece(new THREE.SphereGeometry(0.027, 6, 4), [s * 0.59, 0.33, 0.1]));
+    }
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(merged(plates), lambert(color)));
+    g.add(new THREE.Mesh(merged(accents), lambert(trim)));
+    return g;
+  },
   // ombreira exclusiva do Campeão: placa arredondada, brasão esmaltado e rebites de bronze
   suncrestPauldron({ color = 0x8a5030, trim = 0xe8b14a, enamel = 0xd13b3b, side = 1 } = {}) {
     const x = side * 0.42;

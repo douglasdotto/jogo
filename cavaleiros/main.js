@@ -4228,6 +4228,46 @@ function chooseHeroTarget(hero, candidates, dt, context = targetContext()) {
       bestScore = urgentBossScore;
     }
   }
+  // Na Ponte em Chamas, a âncora atende a ameaça mais perto de cruzar e os
+  // demais defensores distribuem o foco por corredores ainda sem marcação.
+  // Se só houver um alvo acessível, a equipe continua podendo concentrar dano.
+  if (goal?.type === 'breach' && villager) {
+    const anchor = defenseAnchor(context);
+    let primary = null, primaryDistance = Infinity, primaryScore = Infinity;
+    for (const target of candidates) {
+      if (target.dead || target.spawning || !canHeroReachTarget(anchor, target, context)) continue;
+      const distance = tacticalDistance(villager.pos, target.pos);
+      if (distance > breachTargetRadius(target, villager)) continue;
+      const score = heroTargetScore(anchor, target, anchor.pos, context);
+      if (distance < primaryDistance || (distance === primaryDistance && score < primaryScore)) {
+        primary = target; primaryDistance = distance; primaryScore = score;
+      }
+    }
+    if (primary && hero === anchor) {
+      best = primary;
+      bestScore = heroTargetScore(hero, best, hero.pos, context);
+    } else if (primary && hero !== anchor) {
+      let secondary = null, secondaryDistance = Infinity, secondaryScore = Infinity;
+      for (const target of candidates) {
+        if (target === primary || target.dead || target.spawning || !canHeroReachTarget(hero, target, context)) continue;
+        const distance = tacticalDistance(villager.pos, target.pos);
+        if (distance > breachTargetRadius(target, villager)) continue;
+        let claimed = false;
+        for (const ally of party) {
+          if (ally !== hero && !ally.dead && ally.targetFocus === target) { claimed = true; break; }
+        }
+        if (claimed) continue;
+        const score = heroTargetScore(hero, target, hero.pos, context);
+        if (distance < secondaryDistance || (distance === secondaryDistance && score < secondaryScore)) {
+          secondary = target; secondaryDistance = distance; secondaryScore = score;
+        }
+      }
+      if (secondary) {
+        best = secondary;
+        bestScore = heroTargetScore(hero, best, hero.pos, context);
+      }
+    }
+  }
   if (!best) {
     hero.targetFocus = null;
     hero.targetFocusT = 0;

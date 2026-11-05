@@ -1560,17 +1560,19 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
   inst([new THREE.ConeGeometry(0.13, 0.4, 5).translate(0, 2.1, 0), [0xffffff]], torches, lantern, false);
 
   const trunks = [0x7a4a26, 0x6a3f20, 0x8a5a30];
-  const limes = biome.canopy;   // copas variam conforme o bioma sorteado
+  // Copas mantêm a identidade do bioma, com um pouco mais de saturação e luz solar.
+  const canopySun = new THREE.Color(biome.accent ?? 0xfff0a0);
+  const limes = biome.canopy.map((hex) => new THREE.Color(hex).offsetHSL(0, 0.07, 0.025).lerp(canopySun, 0.045).getHex());
   // árvore redonda da referência: tronco fino e alto, copa de vários blocos facetados
   const roundTrunk = mergeGeometries([
     new THREE.CylinderGeometry(0.14, 0.24, 2.6, 6).translate(0, 1.3, 0),
     new THREE.CylinderGeometry(0.07, 0.1, 1.1, 5).rotateZ(0.7).translate(0.45, 2.1, 0),
   ].map((g) => g.toNonIndexed()));
   const roundTop = mergeGeometries([   // copas redondinhas (detalhe 1 = bolinhas facetadas)
-    new THREE.IcosahedronGeometry(1.35, 1).translate(0, 3.2, 0),
-    new THREE.IcosahedronGeometry(0.95, 1).translate(0.9, 2.8, 0.3),
-    new THREE.IcosahedronGeometry(0.85, 1).translate(-0.8, 2.9, -0.4),
-    new THREE.IcosahedronGeometry(0.8, 1).translate(0.1, 4.1, 0.2),
+    new THREE.IcosahedronGeometry(1.35, 0).translate(0, 3.2, 0),
+    new THREE.IcosahedronGeometry(0.95, 0).translate(0.9, 2.8, 0.3),
+    new THREE.IcosahedronGeometry(0.85, 0).translate(-0.8, 2.9, -0.4),
+    new THREE.IcosahedronGeometry(0.8, 0).translate(0.1, 4.1, 0.2),
   ].map((g) => g.toNonIndexed()));
   const pineTrunk = new THREE.CylinderGeometry(0.15, 0.22, 1.2, 6).translate(0, 0.6, 0);
   const pineTop = mergeGeometries([
@@ -1616,10 +1618,10 @@ export function createWorld(parentScene, ROAD, PHASES, seedValue = 11, options =
     new THREE.CylinderGeometry(0.06, 0.09, 1, 5).rotateZ(-0.8).translate(-0.4, 2.5, 0.1),
   ].map((g) => g.toNonIndexed()));
   const roundTop2 = mergeGeometries([   // copa mais alta e oval
-    new THREE.IcosahedronGeometry(1.15, 1).translate(0, 3.7, 0),
-    new THREE.IcosahedronGeometry(0.9, 1).translate(0.45, 4.6, -0.2),
-    new THREE.IcosahedronGeometry(0.85, 1).translate(-0.65, 3.4, 0.45),
-    new THREE.IcosahedronGeometry(0.7, 1).translate(0.75, 3.1, -0.55),
+    new THREE.IcosahedronGeometry(1.15, 0).translate(0, 3.7, 0),
+    new THREE.IcosahedronGeometry(0.9, 0).translate(0.45, 4.6, -0.2),
+    new THREE.IcosahedronGeometry(0.85, 0).translate(-0.65, 3.4, 0.45),
+    new THREE.IcosahedronGeometry(0.7, 0).translate(0.75, 3.1, -0.55),
   ].map((g) => g.toNonIndexed()));
   const pineTop3 = mergeGeometries([   // pinheiro alto de três andares
     new THREE.ConeGeometry(1.25, 1.9, 7).translate(0, 1.6, 0),
