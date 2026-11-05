@@ -1490,9 +1490,9 @@ const ROSTER = [['Shieldbearer', 2, 0.11, 0.025], ['Bomber', 3, 0.1, 0.025], ['G
 const BOSS_PHASES = [6, 9, 12, 13];
 export const isBossPhase = (p) => BOSS_PHASES.includes(p);
 // próxima fase de chefe a partir de `p` (inclusive): fonte única para HUD e dica de derrota
-// `override` (mission.boss) pode pôr um chefe numa fase fora da lista (o dragão na fase 11)
-export const nextBossPhase = (p, override = null) => [...BOSS_PHASES, override?.phase].filter((phase) => phase >= p).sort((a, b) => a - b)[0] ?? null;
-export const missionBossPhase = (p, override = null) => isBossPhase(p) || override?.phase === p;
+// `override` (mission.boss) pode trocar a fase; `afterTotems` também suprime chefes base até a fase escolhida.
+export const nextBossPhase = (p, override = null) => (override?.afterTotems ? [override.phase] : [...BOSS_PHASES, override?.phase]).filter((phase) => phase >= p).sort((a, b) => a - b)[0] ?? null;
+export const missionBossPhase = (p, override = null) => override?.afterTotems ? override.phase === p : isBossPhase(p) || override?.phase === p;
 const GOLEM_PHASES = [4, 8];
 // inimigos próprios de uma missão (mission.foes): estreiam na primeira onda e entram no sorteio só ali
 const MISSION_FOES = { Burrower: { rate: 0.08, cap: 2 }, Bannerbearer: { rate: 0.06, cap: 1 } };
@@ -1571,7 +1571,7 @@ export function campaignThreats(from, to, goal = null, mission = null) {
   for (const [kind, debut] of ROSTER) if (last >= debut) add(kind, debut, false, first > debut);
   for (const phase of GOLEM_PHASES) if (phase >= first && phase <= last) add('Golem', phase);
   if (last >= 9 && !found.has('Golem')) add('Golem', 9, true); // só pode surgir aleatoriamente nas dificuldades altas
-  for (const phase of new Set([...BOSS_PHASES, override?.phase])) if (phase >= first && phase <= last && missionBossPhase(phase, override)) {
+  for (const phase of new Set(override?.afterTotems ? [override.phase] : [...BOSS_PHASES, override?.phase])) if (phase >= first && phase <= last && missionBossPhase(phase, override)) {
     add(waveLeader(phase, true, override), phase, false, false, override?.phase === phase ? BOSS_MODS[override.mod] : null);
   }
   for (const kind of mission?.foes || []) if (MISSION_FOES[kind]) add(kind, first);

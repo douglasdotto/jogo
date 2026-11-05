@@ -2037,7 +2037,7 @@ test('totens e torre dividem o grupo entre objetivo e inimigos até a onda acaba
     let context=t.makeTargetContext();
     assert.equal(context.hasNonTotemTarget,true,goal.type+': inimigos na fila ainda contam como pressão');
     assert.strictEqual(context.objectiveTarget,target,goal.type+': escolhe um objetivo principal');
-    assert.equal(context.objectiveRunners.length,2,goal.type+': metade do grupo avança enquanto a outra metade segura os inimigos');
+    assert.equal(context.objectiveRunners.length,goal.type==='totems'?3:2,goal.type+': o grupo mantém três corredores para totens e dois para a torre');
     for(const hero of party){
       const runner=context.objectiveRunners.includes(hero);
       assert.equal(t.canHeroReachTarget(hero,target,context),runner,goal.type+': só os corredores perseguem o objetivo');
@@ -2050,7 +2050,7 @@ test('totens e torre dividem o grupo entre objetivo e inimigos até a onda acaba
     const incoming=new t.Skeleton('Warrior',1);incoming.spawning=true;incoming.pos.set(0,0,-4);
     context=t.makeTargetContext();
     assert.equal(context.hasNonTotemTarget,true,goal.type+': inimigo em animação de surgimento ainda conta');
-    assert.equal(context.objectiveRunners.length,2,goal.type+': mantém dois corredores enquanto a onda ameaça o grupo');
+    assert.equal(context.objectiveRunners.length,goal.type==='totems'?3:2,goal.type+': mantém a divisão tática enquanto a onda ameaça o grupo');
     for(const hero of party)assert.equal(t.canHeroReachTarget(hero,target,context),context.objectiveRunners.includes(hero),goal.type+': só os corredores seguem até o objetivo');
 
     const phaseBoss=new t.Skeleton('Minion',1);phaseBoss.spawning=false;phaseBoss.phaseBoss=true;phaseBoss.boss=true;
@@ -2096,6 +2096,22 @@ test('no fim da onda só dois heróis interceptam os últimos inimigos móveis a
   context=t.makeTargetContext();
   assert.equal(party.filter(hero=>t.canHeroReachTarget(hero,first,context)).length,0,
     'uma onda com mais de dois inimigos continua usando a formação tática normal');
+  clear();
+});
+test('a limpeza final alcança inimigos comuns isolados e a missão de chefe alcança o Golem empurrado para trás',()=>{
+  clear();const party=['paladin','viking'].map(id=>{const h=new t.Hero(cfg(id));h.pos.set(0,0,0);h.post.set(0,0,0);return h;});
+  t.game.mission={goal:{type:'totems',count:1}};t.game.state='fight';t.game.toSpawn=0;
+  const last=new t.Skeleton('Minion',2);last.spawning=false;last.pos.set(0,0,28);
+  let context=t.makeTargetContext();
+  assert.ok(party.some(hero=>t.canHeroReachTarget(hero,last,context)),'dois heróis podem procurar o último inimigo a até 30 m');
+  last.pos.set(0,0,31);context=t.makeTargetContext();
+  assert.ok(party.every(hero=>!t.canHeroReachTarget(hero,last,context)),'a limpeza não vira uma perseguição pelo mapa');
+  t.game.mission={goal:{type:'boss'}};
+  const golem=new t.Skeleton('Golem',4);golem.spawning=false;golem.pos.set(0,0,27);
+  context=t.makeTargetContext();
+  assert.ok(party.every(hero=>t.canHeroReachTarget(hero,golem,context)),'o grupo pode alcançar o Golem na missão de chefe');
+  golem.pos.set(0,0,31);context=t.makeTargetContext();
+  assert.ok(party.every(hero=>!t.canHeroReachTarget(hero,golem,context)),'o alcance ao chefe continua limitado');
   clear();
 });
 test('priorização de habilidades pontua cada alvo uma vez e preserva empates estáveis',()=>{
@@ -3270,6 +3286,28 @@ test('objetivos: sobreviver com ondas contínuas, totens e chefe',()=>{
   boss.die();t.updateGame(.1);assert.equal(t.game.bossDown,true);assert.equal(t.skeletonsAlive().length,0);
   t.updateGame(.1);t.game.timer=0;t.updateGame(.1);assert.equal(t.game.over,true);assert.ok(elements.get('overlayText').textContent.startsWith('Missão cumprida'));
 });
+test('Ruínas: os três totens vêm antes do Rei Espectral',()=>{
+  context.location={search:''};begin('ruinas',['paladin','pyro','cleric']);
+  const boss=t.game.mission.boss,goal=t.game.mission.goal;
+  assert.equal(t.game.mission.from,8);assert.equal(t.game.mission.to,11);
+  for(let phase=8;phase<=10;phase++){
+    for(const enemy of t.skeletonsAlive())enemy.remove();
+    t.game.phase=phase;t.game.totemsPlaced=phase-8;t.game.totemsDown=phase-8;
+    t.startPhase();
+    assert.equal(t.game.bossPending,false,`fase ${phase} não deve chamar chefe antes de concluir os três totens`);
+    assert.equal(t.skeletonsAlive().filter(enemy=>enemy.totem).length,1,`fase ${phase} recebe o próximo totem`);
+  }
+  for(const enemy of t.skeletonsAlive())enemy.remove();
+  t.game.phase=11;t.game.totemsPlaced=3;t.game.totemsDown=2;t.startPhase();
+  assert.equal(t.game.bossPending,false,'o chefe espera mesmo se a última fase começar com um totem pendente');
+  for(const enemy of t.skeletonsAlive())enemy.remove();
+  t.game.totemsDown=goal.count;t.startPhase();
+  assert.equal(t.game.bossPending,true,'o chefe só fica pendente após destruir o terceiro totem');
+  t.game.toSpawn=1;t.spawnSkeleton();
+  const king=t.skeletonsAlive().at(-1);
+  assert.equal(king.enemyKind,'King');assert.equal(king.bossMod,'spectral');assert.equal(king.phaseBoss,true);
+  clear();
+});
 test('resgate: prisioneiro longe e guardado, fora do alvo dos esqueletos e libertado só após segurar perto',()=>{
   context.location={search:''};
   begin('resgate',['paladin','pyro','berserker']);
@@ -3366,7 +3404,7 @@ test('trechos da campanha variam, crescem e os capítulos do dragão e da brasa 
     assert.ok(!ranges.has(range),`${m.id} repete trecho`);ranges.add(range);
     assert.ok(!icons.has(m.icon),`${m.id} repete ícone`);icons.add(m.icon);
     // fase de chefe: Rei/Lich/Coração, ou um chefe próprio da missão numa fase que normalmente não tem chefe
-    const bossPhase=[6,12,13,16].some(p=>p>=m.from&&p<=m.to)||(!!m.boss&&![6,9,12,13].includes(m.boss.phase));
+    const bossPhase=[6,12,13,16].some(p=>p>=m.from&&p<=m.to)||(!!m.boss&&!m.boss.afterTotems&&![6,9,12,13].includes(m.boss.phase));
     assert.equal(bossPhase,['boss','duel','twin','bosses'].includes(m.goal.type),m.id);
     if(m.boss)assert.ok(m.boss.phase>=m.from&&m.boss.phase<=m.to&&t.MONSTER_TYPES[m.boss.kind],`${m.id}: chefe próprio dentro do trecho`);
     if(m.goal.type==='survive')assert.ok(m.goal.phase>=m.from&&m.goal.phase<=m.to);
@@ -4930,9 +4968,12 @@ test('inimigo que foge sem se aproximar some e volta pela fila; quem apanha ou c
   const hurt=foe('Minion',30,0);hurt.spawning=false;
   for(let i=0;i<40;i++){hurt.hp-=0.01;t.reapStuckEnemies(1,[hurt],party);}   // apanhando de vez em quando: fica
   assert.ok(!hurt.dead,'quem perde vida não é removido');
-  const near=foe('Minion',5,0);near.spawning=false;
-  for(let i=0;i<40;i++)t.reapStuckEnemies(1,[near],party);   // colado no herói: fica
-  assert.ok(!near.dead,'quem está perto de um herói não é removido');
+  const near=foe('Minion',2,0);near.spawning=false;
+  for(let i=0;i<40;i++)t.reapStuckEnemies(1,[near],party);   // dentro do alcance de ataque: fica
+  assert.ok(!near.dead,'quem pode ser atingido não é removido');
+  const unreachable=foe('Minion',5,0);unreachable.spawning=false;
+  for(let i=0;i<20;i++)t.reapStuckEnemies(1,[unreachable],party);
+  assert.ok(unreachable.dead,'inimigo fora do alcance e sem progresso não bloqueia a fase por ficar visualmente perto');
   const closing=foe('Minion',60,0);closing.spawning=false;
   for(let i=0;i<40;i++){closing.pos.x=60-i*1.2;t.reapStuckEnemies(1,[closing],party);}   // vem em direção ao herói: fica
   assert.ok(!closing.dead,'quem se aproxima não é removido');

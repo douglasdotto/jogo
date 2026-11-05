@@ -3685,7 +3685,8 @@ function planDestructionObjective(context) {
   // só um herói fica livre para enfrentá-lo enquanto os demais quebram o totem.
   let alive = 0;
   for (const hero of party) if (!hero.dead) alive++;
-  const maxRunners = Math.min(alive, context.phaseBossAlive ? Math.max(1, alive - 1) : Math.floor(alive / 2));
+  const focusedObjective = context.goal?.type === 'totems' || context.phaseBossAlive;
+  const maxRunners = Math.min(alive, focusedObjective ? Math.max(1, alive - 1) : Math.floor(alive / 2));
   const slots = context.hasNonTotemTarget ? maxRunners : 0;
   for (let slot = 0; slot < slots; slot++) {
     let runner = null, runnerDistance = Infinity;
@@ -3759,6 +3760,9 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
     if (!context.hasNonTotemTarget) return true;
     return target === context.objectiveTarget && context.objectiveRunners?.includes(hero);
   }
+  // Um Golem pode ser empurrado para trás da formação. Nas missões de chefe,
+  // o grupo tem autorização para fechar a distância e não deixar a fase presa.
+  if (goal?.type === 'boss' && target.boss && fromPost <= PHASE_CLEANUP_INTERCEPT) return true;
   const postReach = fromPost <= LEASH + hero.range;
   const nearTarget = tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
   const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
@@ -12329,9 +12333,10 @@ function startPhase() {
   tutorial.on('battleStart');
   for (const h of heroes()) h.kiteT = 0;   // recuo da fase anterior não continua
   game.toSpawn = Math.round((2 + game.phase * 2) * difficulty.count * partyCount());
-  game.bossPending = missionBossPhase(game.phase, game.mission?.boss);   // Rei (6), Carrasco (9) e Lich (12); a missão pode trocar (mission.boss)
-  game.spawnTimer = 0.5;
   const goal = game.mission?.goal;
+  game.bossPending = missionBossPhase(game.phase, game.mission?.boss)
+    && (!game.mission?.boss?.afterTotems || goal?.type === 'totems' && game.totemsDown >= goal.count);   // missões podem adiar o chefe até concluir um objetivo
+  game.spawnTimer = 0.5;
   const waveScale = ['duel', 'rescue', 'totems', 'tower', 'boss', 'hunt', 'nofall', 'timer'].includes(goal?.type)
     ? goal.waves : (goal?.type === 'elite' || goal?.type === 'twin' || goal?.type === 'bosses') ? goal.scale : 0;   // a escala reduz apenas a onda comum; chefes e guardas permanecem garantidos
   if (goal?.type === 'bosses') game.toSpawn = 1;   // na câmara final, a primeira e única entrada já é o trio de chefes
@@ -13208,9 +13213,9 @@ function missionEnd(won) {
   return stars;
 }
 
-// Inimigo comum trancado ou fugindo sem fim (preso no terreno, do outro lado do rio ou correndo em círculos): sem apanhar, sem se aproximar e longe de qualquer herói
-// por STUCK_ENEMY_TIME s some e volta pela fila de spawn, para a fase não ficar presa nele.
-const STUCK_ENEMY_TIME = 15, STUCK_ENEMY_PROGRESS = 3, STUCK_ENEMY_HERO_GAP = 7;
+// Inimigo comum trancado ou fugindo sem fim (preso no terreno, do outro lado do rio ou correndo em círculos): sem apanhar,
+// sem se aproximar e fora do alcance de ataque por STUCK_ENEMY_TIME s volta à fila de spawn.
+const STUCK_ENEMY_TIME = 15, STUCK_ENEMY_PROGRESS = 3, STUCK_ENEMY_ATTACK_MARGIN = 0.8;
 const ADVANCE_WAIT = 4;   // espera máxima pela formação ao chegar numa fase
 function reapStuckEnemies(dt, skeletons, party) {
   for (const s of skeletons) {
@@ -13218,11 +13223,17 @@ function reapStuckEnemies(dt, skeletons, party) {
     const stuckSpawn = s.spawning && (s.spawnAge = (s.spawnAge || 0) + dt) > 8;
     if (s.dead || (s.spawning && !stuckSpawn) || s.boss || s.totem || s === game.huntMark || !party.length) { s.stuckT = 0; continue; }
     // sem progresso: não perdeu vida e não chegou mais perto de nenhum herói (parado, preso ou fugindo sem fim)
-    const gap = party.reduce((min, h) => Math.min(min, h.pos.distanceTo(s.pos)), Infinity);
+    let gap = Infinity, canBeAttacked = false;
+    for (const hero of party) {
+      if (hero.dead) continue;
+      const distance = hero.pos.distanceTo(s.pos);
+      gap = Math.min(gap, distance);
+      if (distance <= (hero.range || 1.5) + STUCK_ENEMY_ATTACK_MARGIN + 0.4 * ((s.size || 1) - 1)) canBeAttacked = true;
+    }
     if (s.stuckRef === undefined) { s.stuckRef = gap; s.stuckHp = s.hp; s.stuckT = 0; continue; }
     const hurt = s.hp < s.stuckHp, closing = gap < s.stuckRef - STUCK_ENEMY_PROGRESS;
     s.stuckHp = s.hp;
-    if (hurt || closing || gap < STUCK_ENEMY_HERO_GAP) { s.stuckRef = gap; s.stuckT = 0; continue; }
+    if (hurt || closing || canBeAttacked) { s.stuckRef = gap; s.stuckT = 0; continue; }
     if ((s.stuckT += dt) < STUCK_ENEMY_TIME) continue;
     s.dead = true;   // sai sem contar abate nem dar XP
     s.hp = 0;

@@ -97,3 +97,10 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - `npm run test:rapido`: **41 passaram, 0 falharam**; `git diff --check` limpo.
 - Reteste de Ruínas com a semente que antes variava por ordem: Ilusionista primeiro e Paladino primeiro venceram **2/2 cada**, todos com 3★ e zero quedas (171 s e 160 s de média, respectivamente).
 - Limite encontrado: Lâminas (Campeão, Berserker, Assassino, Duelista) ainda perdeu **2/2** em Ruínas no nível recomendado; o grupo caiu na fase 9 com dois de três totens destruídos e o Rei Espectral vivo. A simulação dessa missão não inclui XP acumulado de campanha. Na Horda, a mesma equipe venceu **2/2**, mas com 1★ após média de 86 s e quatro quedas. A escalação sem cura/alcance continua sendo um caso difícil que precisa ser avaliado em campanha contínua.
+
+### Rei Espectral e avanço da campanha — 2026-11-05
+- Ruínas agora distribui um totem por fase entre 8 e 10 e agenda o Rei Espectral para a fase 11; a missão, HUD e painel de ameaças concordam. A IA manda três de quatro heróis ao totem durante a onda, deixando um para conter os inimigos.
+- Inimigos comuns que não sofrem dano, não se aproximam e ficam fora do alcance de ataque por 15 s voltam à fila de surgimento; unidades ao alcance e chefes não são removidos. Nas missões de chefe, a equipe alcança um Golem que tenha sido empurrado até 30 m do posto.
+- Regressões: `node tests/run-all.cjs --rapido` — **41 passaram, 0 falharam**. A suíte sem `--rapido` foi interrompida porque inclui 40 simulações aleatórias demoradas; essa bateria não foi registrada como aprovada.
+- Varredura independente, uma semente, equipe recomendada e dificuldade Pesadelo em cada missão: **24/24 vitórias**, sem fases incompletas. É uma verificação por missão, não uma campanha contínua com experiência acumulada.
+- Ruínas recomendada: **4/4 vitórias** no seed 20261105, três com 3★ e uma com 1★/uma queda. Duas equipes sem cura venceram **1/4 cada**; seguem capazes de vencer, com risco alto. Vila e Fazendas, que antes ficavam sem encerrar contra um atirador ou Golem isolado, venceram **2/2 cada** após os ajustes de perseguição.

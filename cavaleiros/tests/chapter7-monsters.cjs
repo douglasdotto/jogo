@@ -173,8 +173,14 @@ function world() {
   const ids = threats.map((t) => t.id);
   assert.ok(ids.includes('BoneDragon') && ids.includes('Burrower') && ids.includes('Bannerbearer'), 'o painel lista o dragão e os inimigos novos');
   assert.ok(!ids.includes('Lich'), 'a fase 12 não está no trecho');
-  const ruins = M("campaignThreats(8, 10, { type: 'totems' }, { boss: { phase: 9, kind: 'King', mod: 'spectral' } })");
+  const ruinsMission = { from: 8, to: 11, goal: { type: 'totems', count: 3 }, boss: { phase: 11, kind: 'King', mod: 'spectral', afterTotems: true } };
+  context.ruinsMission = ruinsMission;
+  assert.equal(M('missionBossPhase(9, ruinsMission.boss)'), false, 'Ruínas não chama outro chefe enquanto ainda há totens');
+  assert.equal(M('missionBossPhase(11, ruinsMission.boss)'), true, 'o chefe de Ruínas entra na fase após os totens');
+  assert.equal(M('nextBossPhase(8, ruinsMission.boss)'), 11, 'o HUD mostra a fase em que a névoa se dissipa');
+  const ruins = M('campaignThreats(ruinsMission.from, ruinsMission.to, ruinsMission.goal, ruinsMission)');
   const king = ruins.find((t) => t.id === 'King');
+  assert.equal(king.phase, 11, 'o painel só lista o Rei Espectral depois dos totens');
   assert.equal(king.name, 'Rei Espectral', 'a variação aparece com nome próprio');
   assert.ok(!ruins.some((t) => t.id === 'Executioner'), 'Ruínas não repete o Carrasco');
   assert.ok(!M("campaignThreats(8, 10, { type: 'totems' })").some((t) => t.id === 'Burrower'), 'inimigos do capítulo VII ficam só nas missões dele');
