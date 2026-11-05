@@ -100,7 +100,8 @@ function objectiveTip(mission, heroes = []) {
   }
   if (goal.type === 'endless') {
     const seconds = Math.floor(number(mission.endlessTime));
-    return `A horda venceu após ${seconds} s; a 1ª estrela pede ${number(goal.marks?.[0]) || 60} s.`;
+    const thirdMark = number(goal.marks?.[2]) || 180;
+    return `A horda venceu após ${seconds} s. Os marcos de 60 e 120 s podem dar até 2 estrelas; a 3ª pede ${thirdMark} s e ao menos um herói de pé no fim.`;
   }
   if (goal.type === 'survive' && number(mission.surviveRemaining) > 0) {
     return `Faltavam ${Math.ceil(number(mission.surviveRemaining))} s: fique na formação.`;

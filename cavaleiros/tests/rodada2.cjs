@@ -1437,6 +1437,8 @@ test('Brutamontes: couraça contra golpes pequenos, Pancada, Agarrão Sísmico, 
   // posto: o Brutamontes ocupa a frente mesmo entrando depois de outro corpo a corpo
   clear();const first=new t.Hero(cfg('paladin')),tank=new t.Hero(brute),mage=new t.Hero(cfg('pyro'));t.arrangeParty();
   assert.deepEqual(Array.from(tank.formation),[0,-1.2],'Brutamontes na frente');assert.notDeepEqual(Array.from(first.formation),[0,-1.2]);
+  const posts=Object.fromEntries(t.heroes().map(h=>[h.cfg.id,Array.from(h.formation)]));t.units.reverse();t.arrangeParty();
+  for(const h of t.heroes())assert.deepEqual(Array.from(h.formation),posts[h.cfg.id],`${h.cfg.id}: inverter a ordem de seleção conserva o posto`);
 });
 
 test('Brutamontes avança durante a Pancada e o Auto aguarda um alvo para invocar ou instalar torre',()=>{
@@ -2050,6 +2052,15 @@ test('totens e torre dividem o grupo entre objetivo e inimigos até a onda acaba
     assert.equal(context.hasNonTotemTarget,true,goal.type+': inimigo em animação de surgimento ainda conta');
     assert.equal(context.objectiveRunners.length,2,goal.type+': mantém dois corredores enquanto a onda ameaça o grupo');
     for(const hero of party)assert.equal(t.canHeroReachTarget(hero,target,context),context.objectiveRunners.includes(hero),goal.type+': só os corredores seguem até o objetivo');
+
+    const phaseBoss=new t.Skeleton('Minion',1);phaseBoss.spawning=false;phaseBoss.phaseBoss=true;phaseBoss.boss=true;
+    context=t.makeTargetContext();
+    assert.equal(context.objectiveRunners.length,3,goal.type+': com chefe ativo, três heróis aceleram o objetivo e um o enfrenta');
+    for(const runner of context.objectiveRunners){runner.targetFocus=null;runner.targetFocusT=0;assert.strictEqual(t.chooseHeroTarget(runner,context.skeletons,1/30,context),target,goal.type+': corredores mantêm foco no totem mesmo com chefe ativo');}
+    const defender=party.find(hero=>!context.objectiveRunners.includes(hero));
+    defender.targetFocus=null;defender.targetFocusT=0;
+    assert.strictEqual(t.chooseHeroTarget(defender,context.skeletons,1/30,context),phaseBoss,goal.type+': o herói reservado segura o chefe');
+    phaseBoss.remove();
 
     incoming.remove();context=t.makeTargetContext();
     assert.equal(context.hasNonTotemTarget,false,goal.type+': libera o objetivo quando não há inimigos comuns');
@@ -4193,7 +4204,8 @@ test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s 
   begin('horda',party(4));t.startPhase();Object.assign(t.game,{toSpawn:0});for(const s of t.skeletonsAlive())s.die();
   t.updateGame(.5);assert.ok(t.game.toSpawn>0||t.skeletonsAlive().length>0,'a horda repõe esqueletos');assert.ok(t.game.endlessT>0);
   const goal=mission('horda').goal;
-  assert.equal(context.starsFor({won:true,goal,endlessTime:61}),1);assert.equal(context.starsFor({won:true,goal,endlessTime:185}),3);
+  assert.equal(context.starsFor({won:true,goal,endlessTime:61,aliveHeroes:0}),1);assert.equal(context.starsFor({won:true,goal,endlessTime:185,aliveHeroes:1}),3);
+  assert.equal(context.starsFor({won:true,goal,endlessTime:185,aliveHeroes:0}),2,'a equipe toda cair limita a Horda a duas estrelas');
   begin('horda',party(4));t.startPhase();t.game.endlessT=180;t.updateGame(.01);
   assert.ok(Math.abs(t.missionProgress(goal)-.6)<.001,'o progresso acompanha os cinco minutos até o amanhecer');
   assert.equal(elements.get('goal').classList.contains('done'),false,'três estrelas não encerram a missão antes do amanhecer');
@@ -4204,7 +4216,7 @@ test('noite sem fim: a horda engrossa, estrelas por tempo e cair depois de 60 s 
   assert.equal(t.game.over,true);assert.match(context.document.getElementById('overlayText').textContent,/contida/);assert.equal(t.starsOf('horda'),2);
   assert.equal(t.game.falls,4,'a vitória por tempo mantém as quedas reais no resultado');assert.equal(t.game.fallLog.length,4);
   assert.equal(endedRun?.falls,4,'o resumo enviado à progressão inclui as quedas da horda');
-  assert.equal(context.starsFor({won:true,falls:4,goal,endlessTime:125}),2,'as estrelas da horda continuam dependendo só do tempo');
+  assert.equal(context.starsFor({won:true,falls:4,aliveHeroes:0,goal,endlessTime:125}),2,'os dois primeiros marcos continuam valendo pelo tempo mesmo após a queda do grupo');
   const cleanProgress=context.createProgression(null),cleanReward=cleanProgress.recordMatch(endedRun);
   assert.ok(!cleanReward.unlocked.some(a=>a.id==='muralha'),'quem caiu não desbloqueia Muralha intacta');
   assert.match(elements.get('overlayStars').innerHTML,/Cosmético novo/,'a derrota que cruza o limite de estrelas avisa do cosmético recém-desbloqueado');

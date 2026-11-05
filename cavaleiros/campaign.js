@@ -31,7 +31,7 @@ export const MISSIONS = [
   { id: 'torre', name: 'Torre de Ossos', desc: 'Um farol sombrio reúne o exército do necromante.', chapter: 'Capítulo IV · A marcha final', story: 'A torre marca o caminho até o castelo. Derrube sua estrutura antes que mais reforços cheguem.', tip: 'Concentre os ataques na torre e elimine os guardiões que tentarem afastar o grupo.', icon: '☠', from: 9, to: 10, heroes: 4, level: 3, goal: { type: 'tower', count: 1, waves: 0.45 } },
   { id: 'lago-sombrio', name: 'Lago Sombrio', desc: 'Atravesse; a missão só termina se todo o grupo cair.', chapter: 'Capítulo IV · A marcha final', story: 'A torre caiu, mas o lago escuro guarda o último caminho. Atravesse mantendo ao menos um herói de pé; a névoa vem do cemitério.', tip: 'Uma queda não encerra a missão; heróis caídos podem voltar conforme a dificuldade. Para 2★, termine sem quedas e com 75%+ de vida; para 3★, sem quedas e com 90%+.', icon: '☽', from: 9, to: 11, heroes: 4, level: 3, goal: { type: 'nofall', waves: 0.65 }, boss: { phase: 9, kind: 'Executioner', mod: 'drowned' } },
   { id: 'cemiterio', name: 'Cemitério', desc: 'Os mortos não descansam.', chapter: 'Capítulo IV · A marcha final', story: 'O cemitério inteiro se ergue em resposta ao chamado. Atravesse antes que os mortos cheguem ao castelo.', tip: 'O limite é de quatro minutos. Elimine rapidamente inimigos que curam ou trazem esqueletos de volta.', icon: '✝', from: 10, to: 11, heroes: 4, level: 3, goal: { type: 'timer', time: 240, waves: 0.55 } },
-  { id: 'horda', name: 'Noite sem Fim', desc: 'A horda não para de chegar.', chapter: 'Capítulo IV · A marcha final', story: 'Antes do castelo, o necromante solta a horda inteira. Segure a estrada o máximo que puder até o amanhecer.', tip: 'Não há cura entre fases: cada minuto vale uma estrela. Guarde as ultimates para quando a horda engrossar.', icon: '❂', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'endless', marks: [60, 120, 180], dawn: 300 } },
+  { id: 'horda', name: 'Noite sem Fim', desc: 'A horda não para de chegar.', chapter: 'Capítulo IV · A marcha final', story: 'Antes do castelo, o necromante solta a horda inteira. Segure a estrada o máximo que puder até o amanhecer.', tip: 'Os marcos de 60 e 120 s garantem até duas estrelas pelo tempo. Para a terceira, aguente 180 s com ao menos um herói vivo no fim. Guarde as ultimates para quando a horda engrossar.', icon: '❂', from: 10, to: 10, heroes: 4, level: 3, goal: { type: 'endless', marks: [60, 120, 180], dawn: 300 } },
   { id: 'castelo', name: 'Castelo do Necromante', desc: 'Os portões guardam o necromante.', chapter: 'Capítulo IV · A marcha final', story: 'O necromante é ferido e recua para dentro do castelo. A Cripta guarda o caminho até o trono.', tip: 'Observe os círculos de perigo, saia deles antes do impacto e concentre o dano no chefe quando houver abertura.', icon: '♜', from: 11, to: 12, heroes: 4, level: 3, foeScale: { hp: 0.9, dmg: 0.75 }, goal: { type: 'boss', waves: 0.35 }, ending: 'Ferido, o necromante recua para o salão do trono. A maldição continua viva.' },
   { id: 'cripta', name: 'Cripta Sombria', desc: 'A guarda de elite desperta.', chapter: 'Capítulo V · Além do Castelo', story: 'Sob o castelo, a guarda de elite do necromante ainda marcha.', tip: 'Três ondas de elite com uma breve pausa para se recuperar. Concentre o dano num alvo por vez e aproveite a cura entre as ondas.', icon: '⚰', from: 11, to: 11, heroes: 4, level: 3, foeScale: { hp: 0.68, dmg: 0.55 }, goal: { type: 'elite', waves: 3, scale: 0.4 } },
   { id: 'trono', name: 'Trono de Ossos', desc: 'O Lich guarda o trono.', chapter: 'Capítulo V · Além do Castelo', story: 'O Lich ergue o Carrasco. Atrás do trono, uma porta revela o coração da maldição.', tip: 'O Lich e o Carrasco chegam juntos. Derrube um de cada vez e fuja das áreas marcadas.', icon: '♔', from: 12, to: 12, heroes: 4, level: 3, goal: { type: 'twin', scale: 0.12 }, ending: 'O Lich cai, mas sua sombra escapa para uma câmara sem luz.' },
@@ -557,14 +557,23 @@ export const variantOpen = () => true;
 
 // Critérios cumulativos servem tanto para calcular estrelas quanto para
 // explicar o resultado no fim da missão.
-export function starConditions({ won, falls, hpRatio, goal, shrineRatio, villagerRatio, timeLeft, endlessTime, leaks, seconds }) {
+export function starConditions({ won, falls, hpRatio, goal, shrineRatio, villagerRatio, timeLeft, endlessTime, leaks, seconds, aliveHeroes }) {
   const completed = Boolean(won);
   const hpPercent = Math.floor(Math.max(0, Math.min(1, Number(hpRatio) || 0)) * 100);
   const fallCount = Math.max(0, Number(falls) || 0);
   const noFalls = completed && fallCount === 0;
   if (goal?.type === 'endless') {
     const seconds = Math.floor(Math.max(0, Number(endlessTime) || 0));
-    return goal.marks.map((mark) => ({ label: `Aguentar ${mark} s (atual ${seconds} s)`, achieved: seconds >= mark }));
+    const standing = Math.max(0, Math.floor(Number(aliveHeroes) || 0));
+    const finalMark = goal.marks.length - 1;
+    return goal.marks.map((mark, index) => {
+      const needsSurvivor = index === finalMark;
+      const survivorText = needsSurvivor ? `; ${standing} ${standing === 1 ? 'herói' : 'heróis'} de pé` : '';
+      return {
+        label: `Aguentar ${mark} s${needsSurvivor ? ' e manter alguém de pé' : ''} (atual ${seconds} s${survivorText})`,
+        achieved: seconds >= mark && (!needsSurvivor || standing > 0),
+      };
+    });
   }
   if (goal?.type === 'defend') {
     const shrineHp = Math.max(0, Math.min(1, Number(shrineRatio) || 0));
@@ -664,7 +673,7 @@ export function starTargetsFor(goal) {
   if (goal.type === 'nofall') return ['1★ Concluir a missão', '2★ Sem quedas e 75%+ de vida', '3★ Sem quedas e 90%+ de vida'];
   if (goal.type === 'escort') return ['1★ Concluir a escolta', '2★ Aldeão com 50%+ de vida', '3★ Aldeão com 75%+ de vida e sem quedas'];
   if (goal.type === 'rescue') return ['1★ Concluir o resgate', '2★ Pessoa resgatada com 50%+ de vida', '3★ Pessoa resgatada com 75%+ de vida e sem quedas'];
-  if (goal.type === 'endless') return goal.marks.map((mark, i) => `${i + 1}★ Aguentar ${mark} s`);
+  if (goal.type === 'endless') return goal.marks.map((mark, i) => `${i + 1}★ Aguentar ${mark} s${i === goal.marks.length - 1 ? ' e terminar com alguém de pé' : ''}`);
   if (goal.type === 'defend') return ['1★ Defender o santuário', '2★ Santuário com 50%+ de vida', '3★ Santuário 50%+ e sem quedas'];
   if (goal.type === 'hunt') return ['1★ Abater o alvo', '2★ Sem quedas', '3★ Sem quedas e metade do tempo sobrando'];
   if (goal.type === 'breach') return ['1★ Segurar a ponte', '2★ No máximo 2 passam', '3★ Ninguém passa'];

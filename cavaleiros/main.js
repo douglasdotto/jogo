@@ -1965,13 +1965,17 @@ function applyUpgrade(h, option) {
 
 function arrangeParty() {
   const party = heroes(), slots = [0, 1, 2, 3];
-  // A ordem de entrada resolve os empates; os arqueiros preferem o fundo.
-  // quem tem frontline (Brutamontes) pega o primeiro posto, o da frente
-  const melee = party.filter((h) => !h.ranged);
+  // A posição não depende da ordem em que o jogador escolheu a mesma equipe:
+  // os corpos frágeis ficam atrás, os mais resistentes cobrem a frente.
+  const stableId = (hero) => String(hero.cfg?.id || '');
+  const durability = (hero) => (hero.maxHp || 0) + (hero.armor || 0) * 30;
+  const backline = party.filter((h) => h.ranged).sort((a, b) => durability(a) - durability(b) || stableId(a).localeCompare(stableId(b)));
+  const melee = party.filter((h) => !h.ranged).sort((a, b) => Number(!!b.cfg.frontline) - Number(!!a.cfg.frontline)
+    || durability(b) - durability(a) || stableId(a).localeCompare(stableId(b)));
   // escolta/resgate: o guarda do protegido fica no posto de trás, colado no aldeão
   const goal = game.mission?.goal.type;
   const guard = goal === 'escort' || goal === 'rescue' || goal === 'defend' ? escortGuardOf(party) : null;
-  const order = [...party.filter((h) => h.ranged), ...melee.filter((h) => h.cfg.frontline), ...melee.filter((h) => !h.cfg.frontline)];
+  const order = [...backline, ...melee];
   if (guard) { guard.formation = POSTS[3]; guard.setAnchor(game.guideS); slots.pop(); }
   for (const h of order) {
     if (h === guard) continue;
@@ -3292,14 +3296,20 @@ function makeTargetContext(reuse = null) {
 
 const targetContext = () => activeTargetContext || makeTargetContext();
 
-// guarda do protegido: o curandeiro do grupo, senão o mais resistente (empate: ordem de entrada); só com 2+ heróis vivos
+// guarda do protegido: o curandeiro do grupo, senão o mais resistente; empates usam id estável; só com 2+ heróis vivos
 const isSupportHero = (hero) => pickGroupId(hero.cfg) === 'suporte';
+const guardDurability = (hero) => (hero.maxHp || 0) + (hero.armor || 0) * 30;
+const stableHeroId = (hero) => String(hero.cfg?.id || '');
 function escortGuardOf(party) {
   let best = null, alive = 0;
   for (const hero of party) {
     if (hero.dead) continue;
     alive++;
-    if (!best || (isSupportHero(hero) !== isSupportHero(best) ? isSupportHero(hero) : hero.maxHp > best.maxHp)) best = hero;
+    if (!best) { best = hero; continue; }
+    const supportRank = Number(isSupportHero(hero)) - Number(isSupportHero(best));
+    const durabilityRank = guardDurability(hero) - guardDurability(best);
+    if (supportRank > 0 || (supportRank === 0
+      && (durabilityRank > 0 || (durabilityRank === 0 && stableHeroId(hero).localeCompare(stableHeroId(best)) < 0)))) best = hero;
   }
   return alive >= 2 ? best : null;
 }
@@ -3657,6 +3667,7 @@ function kiteSkeletonFrom(shooter, target, dt) {
 }
 
 const hasDestructionGoal = (goal) => goal?.type === 'totems' || goal?.type === 'tower';
+const DESTRUCTION_OBJECTIVE_FOCUS = 60;
 function planDestructionObjective(context) {
   if (!hasDestructionGoal(context.goal)) return;
   const { party, attackableSkeletons, objectiveRunners } = context;
@@ -3670,10 +3681,11 @@ function planDestructionObjective(context) {
   context.objectiveTarget = target;
   if (!target || !context.hasNonTotemTarget) return;
 
-  // Mantém metade do grupo pressionando o objetivo enquanto a outra metade segura a onda.
+  // Mantém o grupo dividido entre o objetivo e a onda; quando surge um chefe,
+  // só um herói fica livre para enfrentá-lo enquanto os demais quebram o totem.
   let alive = 0;
   for (const hero of party) if (!hero.dead) alive++;
-  const maxRunners = Math.min(2, Math.floor(alive / 2));
+  const maxRunners = Math.min(alive, context.phaseBossAlive ? Math.max(1, alive - 1) : Math.floor(alive / 2));
   const slots = context.hasNonTotemTarget ? maxRunners : 0;
   for (let slot = 0; slot < slots; slot++) {
     let runner = null, runnerDistance = Infinity;
@@ -3813,7 +3825,10 @@ function heroTargetScore(hero, target, from = hero.pos, context = targetContext(
 
   if (target.boss) score -= bossGoal(goal) ? 12 : 3.5;
   if (goal?.type === 'hunt' && target === game.huntMark && target.hunted) score -= 32;
-  if (target.totem) score -= hasDestructionGoal(goal) ? 24 : 1;
+  if (target.totem) {
+    const assignedObjective = hasDestructionGoal(goal) && target === context.objectiveTarget && context.objectiveRunners?.includes(hero);
+    score -= assignedObjective ? DESTRUCTION_OBJECTIVE_FOCUS : hasDestructionGoal(goal) ? 24 : 1;
+  }
   if (target.enemyKind === 'Priest') score -= 5; // interrompe cura e ressurreição
   if (target.kind?.priority) score -= target.kind.priority; // xamã: derrubá-lo desfaz o escudo de ossos
   if (target.ward) score += 1.5; // protegido pelo escudo: melhor atacar quem o sustenta
@@ -13100,7 +13115,7 @@ function campaignTick(dt, skeletons, party = heroes()) {
     case 'hunt': left = game.surviveT; text = game.huntDown ? 'Alvo abatido!' : `Alvo marcado · foge em ${clockText(left)}`; break;
     case 'endless': {
       const next = goal.marks.find((mark) => game.endlessT < mark);
-      text = `Noite ${clockText(game.endlessT)}${next ? ` · ★ em ${clockText(next - game.endlessT)}` : ` · ★★★ · amanhece em ${clockText(Math.max(0, goal.dawn - game.endlessT))}`}`;
+      text = `Noite ${clockText(game.endlessT)}${next ? ` · ★ em ${clockText(next - game.endlessT)}` : ` · 3ª ★: mantenha alguém de pé · amanhece em ${clockText(Math.max(0, goal.dawn - game.endlessT))}`}`;
       break;
     }
     default: text = goalText(goal);
@@ -13156,7 +13171,8 @@ function missionEnd(won) {
   const villagerRatio = ['escort', 'rescue'].includes(game.mission.goal.type)
     ? (game.missionVillagerRatio ?? currentVillagerRatio)
     : currentVillagerRatio;
-  const result = { won, falls: game.falls, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, villagerRatio, timeLeft: game.surviveT, endlessTime: game.endlessT, leaks: game.leaks, seconds: game.missionT };
+  const aliveHeroes = party.reduce((count, hero) => count + Number(!hero.dead), 0);
+  const result = { won, falls: game.falls, aliveHeroes, hpRatio, goal: game.mission.goal, shrineRatio: shrine ? Math.max(0, shrine.hp) / shrine.maxHp : 0, villagerRatio, timeLeft: game.surviveT, endlessTime: game.endlessT, leaks: game.leaks, seconds: game.missionT };
   const stars = starsFor(result);
   const conditions = starConditions(result);
   const before = totalStars();
