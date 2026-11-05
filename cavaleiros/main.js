@@ -645,6 +645,14 @@ const CAMPAIGN_TEAM_KEY = 'cavaleiros-time-campanha';
 let campaignTeamRun = false;   // ligado pelo mapa e pela "Próxima"; simulações e atalhos seguem o grupo de cada missão
 const campaignTeamMode = () => campaignTeamRun && !!game.mission && !game.test;
 const missionPartySize = (m) => campaignTeamMode() ? (m.goal.type === 'duel' ? 1 : MAX_PARTY) : m.heroes;   // Duelo segue com um herói
+const DUEL_PICK_PRIORITY = ['paladin', 'angel', 'cleric'];   // cura/sustento primeiro; opções validadas para o Rei
+function duelPickIndex(team) {
+  for (const id of DUEL_PICK_PRIORITY) {
+    const index = team.findIndex((entry) => entry.id === id);
+    if (index >= 0) return index;
+  }
+  return 0;
+}
 function loadCampaignTeam() {
   try {
     const saved = JSON.parse(localStorage.getItem(CAMPAIGN_TEAM_KEY));
@@ -727,7 +735,7 @@ function showTeam() {
     list.appendChild(pick.teamGo);
     paintTeamGo();
   }
-  selectCard(0);
+  selectCard(duel ? duelPickIndex(team) : 0);
   pick.open = true;
   game.paused = true;
   $('pick').classList.remove('hidden');
@@ -3553,14 +3561,14 @@ function interceptorRanksBefore(hero, distance, other, otherDistance) {
   return String(hero.cfg?.id || '') < String(other.cfg?.id || '');
 }
 
-function hasTacticalInterceptSlot(hero, target, context, limit, slots) {
+function hasTacticalInterceptSlot(hero, target, context, limit, slots, includeNormalReach = false) {
   const { goal, party } = context;
   let first = null, second = null, firstDistance = Infinity, secondDistance = Infinity;
   for (const candidate of party) {
     if (candidate.dead || (fixedDefenseGoal(goal) && candidate === defenseAnchor(context))) continue;
     const distance = tacticalDistance(candidate.post, target.pos);
     const normalReach = distance <= LEASH + candidate.range;
-    if (normalReach || distance > limit) continue;
+    if ((!includeNormalReach && normalReach) || distance > limit) continue;
     if (interceptorRanksBefore(candidate, distance, first, firstDistance)) {
       second = first; secondDistance = firstDistance;
       first = candidate; firstDistance = distance;
@@ -3632,6 +3640,8 @@ function stillEngaged(hero, target, context = targetContext()) {
   if (hero.engagedWith !== target) return false;
   const { villager } = context;
   const fromPost = tacticalDistance(hero.post, target.pos);
+  if (context.goal?.type === 'hunt' && target === game.huntMark && target.hunted)
+    return fromPost <= HUNT_PURSUIT_LIMIT && hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS, true);
   if (context.goal?.type === 'defend' && villager) {
     if (game.surviveT <= 0 && fromPost <= DEFENSE_CLEANUP_INTERCEPT) return true;
     if (hero === defenseAnchor(context)) {
@@ -3820,13 +3830,13 @@ function canHeroReachTarget(hero, target, context = targetContext()) {
   // Um Golem pode ser empurrado para trás da formação. Nas missões de chefe,
   // o grupo tem autorização para fechar a distância e não deixar a fase presa.
   if (goal?.type === 'boss' && target.boss && fromPost <= PHASE_CLEANUP_INTERCEPT) return true;
+  const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
+  if (huntTarget) {
+    if (fromPost > HUNT_PURSUIT_LIMIT) return false;
+    return hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS, true);
+  }
   const postReach = fromPost <= LEASH + hero.range;
   const nearTarget = tacticalDistance(hero.pos, target.pos) <= hero.range + 1.5;
-  const huntTarget = goal?.type === 'hunt' && target === game.huntMark && target.hunted;
-  if (huntTarget && !postReach) {
-    if (fromPost > HUNT_PURSUIT_LIMIT) return false;
-    return hasTacticalInterceptSlot(hero, target, context, HUNT_PURSUIT_LIMIT, HUNT_INTERCEPTORS);
-  }
   // No Trono, o grupo inteiro pode pressionar o chefe móvel dentro do alcance curto.
   // No Coração, o salão fechado também permite que toda a equipe avance.
   if (groupedBossGoal(goal) && target.phaseBoss && !postReach) {
@@ -4146,6 +4156,7 @@ const FREE_HERO_HUNT_RADIUS = 24;
 const FREE_HERO_HUNT_WAIT = 2.5, FREE_HERO_HUNT_HOLD = 4, HERO_CHASE_GIVEUP = 3.5, HERO_CHASE_SKIP = 5;
 function heroFreeHunt(hero, target, context) {
   if (!(hero.freeHuntT > 0) || game.state !== 'fight' || hero === context.escortGuard || context.huntLimited || target.team !== 'skeleton' || target.totem) return false;   // defesa de objetivo não abre caça livre pelo mapa
+  if (context.goal?.type === 'hunt' && target === game.huntMark) return false;   // o alvo segue os dois slots próprios da missão
   if (context.goal?.type === 'bosses' && target.phaseBoss && !castleBossInsideRoom(target)) return false;
   return !target.untargetable && tacticalDistance(hero.post, target.pos) <= FREE_HERO_HUNT_RADIUS;
 }

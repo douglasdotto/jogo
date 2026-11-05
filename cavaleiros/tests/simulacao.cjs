@@ -209,7 +209,7 @@ function play(diff, profile, mission = null) {
       if (continuousCampaignMode && mission && t.pick.mode === 'team') {
         if (mission.goal.type === 'duel') {
           const wantedId = profile?.[0];
-          const wanted = wantedId ? t.pick.options.findIndex((entry) => entry.id === wantedId) : 0;
+          const wanted = wantedId ? t.pick.options.findIndex((entry) => entry.id === wantedId) : t.pick.sel;
           t.confirmPick(wanted >= 0 ? wanted : 0);
         } else t.pick.teamGo.onclick();
         continue;

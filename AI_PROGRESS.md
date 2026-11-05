@@ -182,3 +182,9 @@ Heróis Brutamontes e Invocador, 4ª habilidade para todos, barra de skills nova
 - `bench.js` agora varia pixel ratio em 1, 1,25 ou 1,5 e tamanho de sombra em 512, 1024 ou 2048 px; restaura o renderer mesmo se o benchmark falhar.
 - O benchmark foi rodado visivelmente com uma fase, quatro heróis e carga de 40 inimigos. As amostras variaram de 16,9 a 21,7 FPS em alta qualidade, então não justificam mudar os padrões gráficos. A execução ainda não forma uma linha de base estável sem throttling.
 - `bench-timing.cjs` confere os valores e a restauração após sucesso e falha; incluído nos **42 testes rápidos aprovados**.
+
+### Interceptação dividida na Caçada — 2026-11-05
+- No Duelo, a seleção da equipe destaca Paladino; sem ele, Anjo e depois Clériga. A simulação contínua agora confirma a opção destacada, como o teclado/clique do jogo.
+- A Caçada limitava interceptores só quando o alvo estava além do alcance normal. No Arauto das Asas, os quatro heróis grudavam no alvo e ignoravam Sacerdotes e inimigos próximos. Agora dois interceptores são escolhidos em todas as distâncias; os demais não podem perseguir o alvo livremente e protegem o grupo.
+- Regressão cobre alvo perto da formação, dois interceptores, e a escolha de Sacerdote pelo defensor. `rodada2.cjs`: **250 verificações passaram**.
+- A equipe aleatória Brute/Clériga/Anjo/Xamã, seed `20261105`, passou de derrota na missão 19 para **24/24 vitórias, 64 estrelas e 7 quedas** na campanha contínua do Pesadelo. O Anjo entrou no Duelo por padrão; Resgate, Cemitério e Trono tiveram uma queda cada, e Noite sem Fim quatro.

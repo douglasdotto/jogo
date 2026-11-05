@@ -3540,6 +3540,15 @@ test('campanha contínua: a equipe de 4 leva XP e evoluções, quem entra herda 
     assert.equal(t.heroes().map(h=>h.cfg.id).join(),'berserker');assert.deepEqual(saved().map(e=>e.id),order);
   }finally{context.setTimeout=noop;t.startGame();t.setDifficulty(1);context.localStorage.data={};}
 });
+test('Duelo destaca Paladino, Anjo ou Clériga da equipe em vez de escolher o primeiro herói',()=>{
+  clear();context.localStorage.data={'cavaleiros-time-campanha':JSON.stringify([
+    {id:'brute',xp:0,branches:[]},{id:'cleric',xp:0,branches:[]},{id:'angel',xp:0,branches:[]},{id:'shaman',xp:0,branches:[]},
+  ])};
+  t.setCampaignTeamRun(true);t.setMission(mission('duelo'));vm.runInContext('showTeam()',context);
+  assert.equal(t.pick.sel,2,'Anjo vence a prioridade quando Paladino não está no grupo; Cleriga vem em seguida');
+  assert.equal(t.pick.cards[2].classList.contains('sel'),true,'a escolha sugerida também fica marcada no cartão');
+  clear();t.setCampaignTeamRun(false);
+});
 test('campanha contínua: Repetir volta com XP e evoluções salvos, menu da primeira vez abre a Vila e Esc na equipe volta ao mapa',()=>{
   context.location={search:''};context.localStorage.data={'cavaleiros-campanha':JSON.stringify({vila:1})};
   let after,modeTimer;context.setTimeout=(fn,ms)=>{if(ms===550)after=fn;if(ms===450)modeTimer=fn};
@@ -4272,6 +4281,14 @@ test('caçada: o alvo marcado foge de quem chega perto e a missão acaba ao abat
   assert.ok(ahead({x:mark.moveProgress.goalX,z:mark.moveProgress.goalZ})<=6.6,'a fuga termina perto do grupo, sem arrastar a equipe pelo mapa');
   mark.pos.copy(t.world.along(anchorS+6.1,0));
   assert.equal(context.huntThink(mark,.1),false,'perto do novo limite, para de fugir e enfrenta o grupo');
+  for(const hero of t.heroes()){hero.post.copy(anchor);hero.pos.copy(anchor);}
+  mark.pos.copy(t.world.along(anchorS+3,0));
+  const nearHuntContext=t.makeTargetContext(),nearInterceptors=t.heroes().filter(hero=>t.canHeroReachTarget(hero,mark,nearHuntContext));
+  assert.equal(nearInterceptors.length,2,'mesmo perto, só dois heróis saem para interceptar o alvo');
+  const defender=t.heroes().find(hero=>!nearInterceptors.includes(hero)),priest=foe('Priest',defender.pos.x,defender.pos.z-2);
+  priest.spawning=false;priest.target=defender;
+  const protectContext=t.makeTargetContext();
+  assert.equal(t.chooseHeroTarget(defender,[mark,priest],.016,protectContext),priest,'os demais respondem a quem ameaça o grupo');
   mark.pos.copy(t.world.along(anchorS+12.5,0));
   const huntContext=t.makeTargetContext(),interceptors=t.heroes().filter(hero=>t.canHeroReachTarget(hero,mark,huntContext));
   assert.ok(interceptors.length>0&&interceptors.length<=2,'só até dois heróis perseguem o alvo dentro do alcance curto');
